@@ -1,0 +1,14 @@
+TyCHO, Typed Celestial HTML Observer
+Copyright 2026 The TyCHO Authors, listed in the file AUTHORS
+
+Licensed under the Apache License, Version 2.0 (the "License"). You may not use this
+work except in compliance with the License. A copy of the License is in the file LICENSE.
+
+The browser runtime bundle (tycho.js and tycho.esm.js in the npm package @beeson-group/tycho,
+and pytycho/_static/tycho.js in the Python package, which pytycho inlines into every page it
+writes) contains these third-party works, whose full license texts are in THIRD_PARTY_NOTICES.md:
+
+- three.js 0.180.0, Copyright 2010-2025 three.js authors, MIT License,
+  https://github.com/mrdoob/three.js
+- mp4-muxer 5.2.2, Copyright 2023 Vanilagy, MIT License,
+  https://github.com/Vanilagy/mp4-muxer

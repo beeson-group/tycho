@@ -103,3 +103,21 @@ A frame also carries a `label` (the name shown for the frame), an `axes` list of
 ### 2.4 Bodies
 
 A body, e.g. a primary of the three-body problem, has a `frame` and a `position` (e.g. `["x", "y", "z"]`) in this frame, each a number or an attribute (see section 2.2). We always assume point mass bodies, i.e. the body does not have a radius or a shape. Its `label` and `color` are used only for drawing.
+
+### 2.5 Variables and references
+
+A variable is a piece of the animation state that the viewer can change through a control (section 2.9), with a `default` value and a `scope`, which is either `scene` (the default) or `panel`. A scene-scoped variable has one value for the whole page. A panel-scoped variable has one value per panel, so that two panels side by side can show, e.g., two different members of a family. There are three kinds of variable.
+
+- A `selector` holds a finite number and selects one track from a track set. With the `by: "nearest"` option selected, the default, the selector must specify a `parameter` (see section 2.1), and its number is a value of this parameter (e.g. a Jacobi constant). Where a member reference or a highlight (the orbit proximity "glow" effect) refers to the selector, the number is resolved to the track whose parameter value is nearest to it (e.g. the orbit from the periodic orbit family with the closest Jacobi constant). Distances are compared in float64 to resolve ties we pick the track with the lowest index. With the `by: "index"` option selected, the number `x` is a track index itself, rounded to `floor(x + 0.5)` in float64 (i.e. to the nearest integer, with halves rounded up) and then clipped to the range `[0, tracks - 1]`.
+- The `choice` variable contains one of the strings in its `values`, e.g. the name of a frame or of a colormap. Its `labels` variable, when present, has one entry per value, the text shown for the value.
+- The `toggle` variable contains a boolean, e.g. whether a layer is visible or not.
+
+A value that is not of its variable's kind (e.g. a boolean or a string for a selector, or a number for a toggle) throws an error, and it is never cast to the right kind.
+
+Where a scene needs a value, the value is written either as a literal or as `{"var": id}`, which reads the variable with this id as a key-value pair.
+
+The rules for variables and references follow (we use the letter "V" as a shorthand for "Variable"):
+
+- V1. In a panel, the dictionary `{"var": id}` reads the panel's value when the variable is panel-scoped, and the scene's value otherwise. A missing value is the variable's default. A panel's value for a scene-scoped variable is never read, and a writer rejects such a value in `initial` (see section 2.8).
+- V2. A set query is the way a scene refers to a track set. It is either `{"set": id}`, which refers to a declared set directly, or `{"tags": {name: value, ...}}`, which matches every track set whose tags (see section 2.1) contain all the given key-value pairs (e.g. `{"family": 7}`). Where one set is needed (a layer's `sets`, or a driver), a query that does not match any set makes the layer empty, and more than one match is an error there, which a writer must rule out for every value the variables can take. Where several sets are allowed (a slider's domain, section 2.9), all matches are used.
+- V3. A member reference is the way a layer specifies which tracks of a set to draw. It is `"all"`, `{"index": k}` (the track with number `k`), `{"count": n}` (an evenly spaced selection of `n` tracks, defined below), or `{"var": id}` referring to a selector. A literal index `k` at or past the number of tracks of the set it is resolved in is an error, not clamped (you can not select an index out of bounds). The parameter of a selector by `nearest` must be carried by the same set, under the same condition. A count `{"count": n}`, with `n` an integer of at least 1, denotes a sparse context of a set of `N` tracks, i.e. a selection that keeps every `m`-th track. This sparse context holds the tracks `0, m, 2m, ...` below `N` and also the last track `N - 1`, each once and in increasing order. Its step is `m = floor(N / n + 0.5)`, computed in float64, or `m = 1` when `n` is at least `N`, which then selects every track.

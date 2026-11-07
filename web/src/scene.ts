@@ -20,10 +20,10 @@ export type VariableValue = number | string | boolean;
 
 /** The scene format version this reader implements. */
 export const SCENE_MAJOR = 0;
-export const SCENE_MINOR = 2;
+export const SCENE_MINOR = 3;
 
-/** Features from `requires` that this reader implements. Version 0.2 of the format does not include any feature of section 4. */
-export const SUPPORTED_FEATURES: ReadonlySet<string> = new Set();
+/** Features from `requires` that this reader implements, i.e. the features of section 4 that version 0.3 of the format includes. */
+export const SUPPORTED_FEATURES: ReadonlySet<string> = new Set(['layers.driver_context']);
 
 export const TOP_LEVEL_KEYS: ReadonlySet<string> = new Set([
   'format',

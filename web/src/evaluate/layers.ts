@@ -71,3 +71,79 @@ export function vertexPosition(v: Vertex, set: SetData, track: number, f: (ctx: 
   const w = v.w;
   return [(1 - w) * a[0] + w * b[0], (1 - w) * a[1] + w * b[1], (1 - w) * a[2] + w * b[2]];
 }
+
+export interface LayerEnv {
+  scope: PanelScope;
+  frames: Frames;
+  clock: Clock;
+  channel: string;
+  q: number;
+  display: string;
+}
+
+export function trackLayer(env: LayerEnv, layer: TrackLayer, set: SetData | null): TrackLayerResult {
+  if (set === null) return { kind: 'track', set: null, members: [] };
+  const reveal = layer.reveal ?? 'none';
+  if (!['none', 'grow', 'trail'].includes(reveal)) fail('2.7', `a track layer's reveal is ${JSON.stringify(reveal)}, not none, grow, or trail`);
+  for (const key of ['before', 'after'] as const) {
+    if (layer[key] !== undefined && layer[key] !== 'clamp' && layer[key] !== 'hidden')
+      fail('C3', `a track layer's ${key} is ${JSON.stringify(layer[key])}, not clamp or hidden`);
+  }
+  if (reveal === 'trail') layerTrailFraction(layer);
+  const laps = clockLaps(env.clock);
+  const f = (ctx: Context): Vec3 => env.frames.transform(set.position(ctx.track, ctx.sample), set.def.frame, env.display, ctx);
+  const head = hasHead(layer);
+  const needsReading = reveal !== 'none' || head || (env.clock.mode === 'value' && (layer.before === 'hidden' || layer.after === 'hidden'));
+  if (needsReading && laps > 1 && !set.periodic) fail('C6', `a reading is taken on track set ${set.id}, which is not periodic, and the clock has ${laps} laps`);
+  const out: MemberResult[] = [];
+  for (const t of members(env.scope, layer.members, set)) {
+    const vertices: Vertex[] = [];
+    let u: number | null = null;
+    let tc: TrackClock | null = null;
+    if (needsReading) {
+      tc = new TrackClock(set, t, env.channel);
+      u = bound(tc.reading(env.clock, env.q), layer.before, layer.after);
+    }
+    const hidden = needsReading && u === null;
+    const loopReading = laps * (u ?? 0);
+    if (!hidden) {
+      if (reveal === 'none') vertices.push(...whole(set.count(t), laps, set.periodic));
+      else if (reveal === 'grow') vertices.push(...loopPolyline(tc!, 0, loopReading, laps));
+      else vertices.push(...trail(tc!, loopReading, laps, layerTrailFraction(layer), set.periodic));
+    }
+    const m: MemberResult = { index: t, line: vertices.map((v) => vertexPosition(v, set, t, f)) };
+    if (head) {
+      const at = lapOf(loopReading, laps);
+      m.head = hidden ? null : vertexPosition(point(tc!, at.u, false, at.lap), set, t, f);
+    }
+    out.push(m);
+  }
+  return { kind: 'track', set: set.id, members: out };
+}
+
+function layerTrailFraction(layer: TrackLayer | BodyLayer): number {
+  if (layer.trail === undefined) fail('2.7', 'a layer draws a trail but lacks a trail fraction');
+  const f = layer.trail.fraction;
+  if (typeof f !== 'number' || !(f > 0 && f <= 1)) fail('2.7', `the trail fraction ${String(f)} is not in (0, 1]`);
+  return f;
+}
+
+/** The position and trail of a body layer (rule L4). The driver's reading is clamped to [0, 1], since a body layer does not have `before` or `after`. */
+export function bodyLayer(env: LayerEnv, layer: BodyLayer, driver: { set: SetData; track: number } | null): BodyLayerResult {
+  const result: BodyLayerResult = { kind: 'body', body: layer.body, position: null };
+  if (driver === null) {
+    if (layer.trail !== undefined) result.trail = [];
+    return result;
+  }
+  const { set, track } = driver;
+  const laps = clockLaps(env.clock);
+  const tc = new TrackClock(set, track, env.channel);
+  const loopReading = laps * bound(tc.reading(env.clock, env.q))!;
+  const at = lapOf(loopReading, laps);
+  const f = (ctx: Context): Vec3 => env.frames.bodyPosition(layer.body, env.display, ctx);
+  result.position = vertexPosition(point(tc, at.u, false, at.lap), set, track, f);
+  if (layer.trail !== undefined) {
+    result.trail = trail(tc, loopReading, laps, layerTrailFraction(layer), set.periodic).map((v) => vertexPosition(v, set, track, f));
+  }
+  return result;
+}

@@ -87,3 +87,96 @@ A scene that cannot be read shows its error in place of the panels, with the num
 The viewer keeps the state in the browser's local storage, the storage that a site keeps in the browser across visits. The key of a stored state is built from a hash of `scene.tys` (a short code computed from its text), so that a state saved for one scene is not applied to another. Two pages of the same scene on one site therefore share their state. A stored state is repaired against the scene before use, and only the parts that do not fit the scene are dropped.
 
 The class is exported as `TychoViewerElement`, for a type annotation or an `instanceof` check. The function `define(tag = 'tycho-viewer')` registers the element under another name when the default name is taken. It does not do anything when an element of this name is already defined, or where custom elements do not exist.
+
+## Video export
+
+```js
+import { exportVideo } from '@beeson-group/tycho';
+
+const blob = await exportVideo(viewer, { size: '1080p', fps: 30, loops: 2 });
+```
+
+The function `exportVideo(element, options)`, the same as `element.exportVideo(options)`, freezes the current state and resolves to an MP4 blob of H.264 video. Freezing the state means that the state does not change during the recording. A blob is the bytes of a file held in memory. VP9 is not used in place of H.264, because QuickTime, the video player of every Mac, rejects VP9 in an MP4.
+
+The returned promise rejects with an `AbortError` when `options.signal` aborts, as it does when the caller cancels the export. It rejects with an error that gives the reason in three other cases.
+
+- The browser lacks a WebCodecs encoder. WebCodecs is the browser API that encodes video frames.
+- The browser lacks an H.264 encoder that takes the size.
+- The export would pass the ceiling of `EXPORT_LIMITS`, `{frames: 2000, seconds: 90}`.
+
+The options are an `ExportOptions` object, with the keys below.
+
+| Option | Default | Meaning |
+|---|---|---|
+| `size` | `'720p'` | a `SizePreset`, i.e. `'720p'`, `'1080p'`, or `'stage'`, or an `ExportSize`, `{width, height, pixelRatio}`, with the width and the height in video pixels and the pixel ratio in video pixels per CSS pixel. The picture is laid out at a width of the width divided by the pixel ratio, in CSS pixels, hence with a higher ratio the same layout is drawn at a higher pixel density |
+| `fps` | 30 | frames per second |
+| `loops` | 1 | the number of loops of the clock that the video holds |
+| `speed` | the speed of the viewer | the playback speed, at which a lap of the clock (one traversal of a track, rule C6) lasts 8 s divided by the speed |
+| `start` | 0 | the frame index of the first frame |
+| `bitrate` | 0.08 bits per pixel per frame, within 1 to 40 Mbit/s | the target bitrate in bits per second. The default is ample for lines on a plain background |
+| `onConfig` | | a function called before the first frame with the encoder configuration that the browser accepted |
+| `onProgress` | | a function called after each frame with the number of frames done and the total |
+| `signal` | | an `AbortSignal` that cancels the export |
+
+The function `sizePreset(preset, stage, devicePixelRatio, fps)` returns the `ExportSize` that a preset gives, which an export dialog you build can show before the export starts. The three presets give the following sizes.
+
+- The preset `720p` is 1280 by 720 at a pixel ratio of 1.
+- The preset `1080p` is the same layout at 1920 by 1080 and a pixel ratio of 1.5, i.e. the picture of 720p drawn at 1.5 times the pixel density.
+- The preset `stage` follows the stage, the area of the viewer in which the panels are tiled, in three steps.
+  1. It takes the size `{w, h}` of the stage in CSS pixels, given as `stage` and 1280 by 720 by default, and rounds it down to even pixels, since H.264 requires both sides even.
+  2. It then scales the size by the whole pixel ratio nearest `devicePixelRatio` (the number of physical pixels per CSS pixel of the screen), at most 2.
+  3. It lowers this ratio in eighths until H.264 holds the size at `fps`, 30 by default, i.e. until a level of H.264 up to 5.2 takes the size and the rate and neither side exceeds 4096 pixels.
+
+When the viewer exports a video, it passes the size of its stage to `sizePreset`.
+
+## Reading and evaluating
+
+The exports below do not require a DOM, hence they run anywhere, in a browser or under Node.js.
+
+| Export | What it does |
+|---|---|
+| `Container.parse(bytes)` | parses `data.tyd` from an `ArrayBuffer` or a typed array into a promise of a `Container`. It checks rules D1 to D3 and D5 for every view, and it decodes the encoded (compressed) views with `DecompressionStream`. On the container, `view(name)` returns one array, `has(name)` and `names()` report which arrays it holds, and `header` is the parsed JSON header |
+| `decodeEmbedded(text, encoding)` | decodes the text of a `<script>` element embedded in the page into bytes, for `base64`, the only encoding |
+| `validate(scene, data?, state?)` | checks a scene, and also its data and a state when they are given. It throws a `TychoError` for the first broken rule, and it returns the warnings as a list of strings |
+| `evaluate(scene, data, state, frameIndex)` | the pure evaluator of section 3 of the spec, which returns what each panel draws at a frame index as an `EvaluateResult`. It gives the same answer as {func}`pytycho.evaluate`, which is checked case by case through the conformance corpus |
+| `TychoError` | the only error type that a reader throws, with `rule` set to the broken rule, e.g. `"F5"`, or to the section number of a requirement stated without a rule number, e.g. `"2.3"` |
+| `SCENE_MAJOR`, `SCENE_MINOR`, `DATA_VERSION` | the scene and container versions this runtime reads |
+
+```js
+import { Container, evaluate, validate } from '@beeson-group/tycho';
+
+const scene = JSON.parse(sceneText);
+const data = await Container.parse(dataBytes);
+validate(scene, data, scene.initial);
+const result = evaluate(scene, data, scene.initial, 100);
+console.log(result.panels.p1.layers[1].members[0].head);
+```
+
+The functions `validate` and `evaluate` read arrays through a `DataStore`, i.e. any object with the two methods `has(name)` and `view(name)`. A `Container` implements these methods, and arrays already in memory can implement them as well, so that a scene can be evaluated without a `data.tyd`. The method `view` returns an `ArrayView`, which holds the `name` of the array, its `dtype` (a `Dtype`, e.g. `'float32'`), its `shape`, and its elements as a `TypedArray`. The elements are flat in C order, i.e. one row after another with the last index varying fastest.
+
+The `header` of a container is a `DataHeader`, whose `views` give the `ViewInfo` of each array. A `ViewInfo` describes how one array is stored. It holds the `dtype`, the `shape`, and the `encoding` of the array, and it is one of two kinds (section 1 of the spec).
+
+- A `RawViewInfo` adds the byte `offset` and `length` of the array in the payload, the part of the file that follows the header.
+- An `EncodedViewInfo` adds `chunk_rows` and `chunks`, the `[offset, length]` of each chunk, for an array that is compressed in chunks of `chunk_rows` rows.
+
+The TypeScript types of the scene (`Scene`, `State`, `View`, `Layer`, and the rest) are generated from the JSON Schema. Aliases name the parts that the schema describes in place without a name. They are the layers `TrackLayer`, `BodyLayer`, and `MarkLayer`, the variables `Selector`, `Choice`, and `Toggle`, the `ChannelDef` and `ParameterDef` of a track set, and the `PanelState` of one panel. The alias `VariableValue` is a number, a string, or a boolean, i.e. the value of a selector, a choice, or a toggle.
+
+The `EvaluateResult` of the evaluator maps each panel to a `PanelResult`, which holds the display `frame` of the panel (the frame it draws in) and one `LayerResult` per layer. A layer result is one of three kinds.
+
+- A `TrackLayerResult` holds one `MemberResult` per drawn member, with its `line`, the polyline that is drawn (rule L1), and its `head`, the position of the moving point.
+- A `BodyLayerResult` holds the `position` and the `trail` of the body.
+- A `MarkLayerResult` stands for axes and a grid, for which the evaluator does not compute anything.
+
+Every position is a `Vec3` of three numbers.
+
+## Readout numbers and colormaps
+
+The function `formatNumber(x, digits)` writes a number as a readout shows it, where a readout is a piece of text on the page that shows current values (section 2.9 of the spec). It follows three rules.
+
+- When `digits` is given, the number is written to `digits` significant digits with trailing zeros kept.
+- Otherwise an integer is written as it is, and any other number is written to six significant digits with trailing zeros dropped.
+- An exponent is written as `e` followed by the exponent, and a minus sign as U+2212, the typographic minus sign, in place of the hyphen.
+
+The function `colormap(name, t)` returns the color of one of the viewer's colormaps at the position `t` in [0, 1], clamped, meaning that a `t` outside [0, 1] is moved to the nearer end. The color is returned as three numbers in [0, 1], its red, green, and blue components. The colormaps are `'viridis'`, `'plasma'`, `'cividis'`, `'blues'`, and `'reds'` (the scene type `ColormapName`). The color is written into the optional third argument when one is given. The function `colormapCss(name, t)` gives the same color as a CSS `rgb()` string. A legend or a plot outside the viewer drawn with these functions thus matches the colors of the viewer. The maps `blues` and `reds` are the lighter part of matplotlib's `Blues` and `Reds`, from a mid blue or a mid red up to the lightest tint and without the near-black end of the full maps, so that their low end still shows on black.
+
+The package does not export anything else.

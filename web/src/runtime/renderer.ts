@@ -219,3 +219,92 @@ void main() {
   gl_FragColor = vColor;
 }
 `;
+
+function discTexture(): THREE.Texture {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#fff';
+  g.beginPath();
+  g.arc(32, 32, 28, 0, Math.PI * 2);
+  g.fill();
+  const t = new THREE.CanvasTexture(c);
+  t.needsUpdate = true;
+  return t;
+}
+
+/** A pleasant round step near `range / target`, which is 1, 2 or 5 times a power of ten. */
+export function niceStep(range: number, target = 6): number {
+  if (!(range > 0) || !Number.isFinite(range)) return 1;
+  const raw = range / target;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const r = raw / mag;
+  return (r < 1.5 ? 1 : r < 3.5 ? 2 : r < 7.5 ? 5 : 10) * mag;
+}
+
+/** The screen axes of a camera (right, up, and toward the user) in the display frame. */
+function cameraBasis(cam: Camera): { right: THREE.Vector3; up: THREE.Vector3; normal: THREE.Vector3 } {
+  const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+  if (cam.kind === 'plane') {
+    if (cam.plane === 'xz') return { right: v(1, 0, 0), up: v(0, 0, 1), normal: v(0, -1, 0) };
+    if (cam.plane === 'yz') return { right: v(0, 1, 0), up: v(0, 0, 1), normal: v(1, 0, 0) };
+    return { right: v(1, 0, 0), up: v(0, 1, 0), normal: v(0, 0, 1) };
+  }
+  // an oblique view, above the plane normal to `up`
+  const [e1, e2, e3] =
+    cam.up === 'x' ? [v(0, 1, 0), v(0, 0, 1), v(1, 0, 0)] : cam.up === 'y' ? [v(0, 0, 1), v(1, 0, 0), v(0, 1, 0)] : [v(1, 0, 0), v(0, 1, 0), v(0, 0, 1)];
+  const normal = e1.clone().addScaledVector(e2, -1.6).addScaledVector(e3, 0.9).normalize();
+  const right = new THREE.Vector3().crossVectors(e3, normal).normalize();
+  return { right, up: e3, normal };
+}
+
+/** The display-frame axes a plane camera shows across and up the screen, as indices into a frame's `axes`. */
+function planeAxes(cam: Camera & { kind: 'plane' }): [number, number] {
+  return cam.plane === 'xz' ? [0, 2] : cam.plane === 'yz' ? [1, 2] : [0, 1];
+}
+
+/** The quad of a segment, with four corners and two triangles, drawn once per instance. */
+function quadGeometry(): THREE.InstancedBufferGeometry {
+  const g = new THREE.InstancedBufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute([-1, 0, 0, 1, 0, 0, -1, 1, 0, 1, 1, 0], 3));
+  g.setIndex([0, 1, 2, 2, 1, 3]);
+  return g;
+}
+
+const material = (vertexShader: string, uniforms: Record<string, THREE.IUniform>, defines: Record<string, string> = {}) =>
+  new THREE.ShaderMaterial({
+    vertexShader,
+    fragmentShader: FRAGMENT,
+    uniforms,
+    defines,
+    transparent: true,
+    depthTest: false,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+
+const clamp01 = (x: number): number => Math.min(1, Math.max(0, x));
+
+// buffers shared by every panel
+
+/** Arrays and GPU buffers built once and shared by every geometry that draws them, kept for the renderer's life. */
+export class Shared {
+  private readonly cache = new Map<string, unknown>();
+
+  get<T>(key: string, make: () => T): T {
+    let v = this.cache.get(key) as T | undefined;
+    if (v === undefined) {
+      v = make();
+      this.cache.set(key, v);
+    }
+    return v;
+  }
+}
+
+interface DrawContext {
+  scene: Scene;
+  geometry: GeometryCache;
+  shared: Shared;
+  theme: Theme;
+  disc: THREE.Texture;
+}

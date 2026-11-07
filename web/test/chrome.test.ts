@@ -142,3 +142,34 @@ describe('keys', () => {
     expect(keyAction('End', false, 480)).toBeNull();
   });
 });
+
+describe('chrome tokens', () => {
+  it('give the palette of the controls on the default theme', () => {
+    const t = chromeTokens(DEFAULT_THEME);
+    expect(t).toMatchObject({
+      '--bg': '#000000',
+      '--surface': '#0b0b0b',
+      '--raised': '#272727',
+      '--line': '#2b2b2b',
+      '--fg': '#d8d8d8',
+      '--dim': '#9a9a9a',
+      '--accent': '#f0a050',
+      '--accent-hover': '#ffb366',
+      '--accent-press': '#d98a3a',
+      '--accent-tint': '#302316',
+      '--accent-2': '#c050f0',
+      '--accent-2-text': '#d98cff',
+      '--accent-2-tint': 'rgba(192, 80, 240, 0.16)',
+      '--track': '#5c5c5c',
+      '--error': '#ff7a7a',
+      '--highlight': '#ffffff',
+    });
+  });
+  it('follow a light theme, and pass only colors', () => {
+    const t = chromeTokens({ background: '#ffffff', foreground: '#000000', grid: '#cccccc' });
+    expect(t['--highlight']).toBe('#000000');
+    expect(t['--surface']).toBe('#f2f2f2');
+    const bad = chromeTokens({ background: 'red;}x{', foreground: '#000000', grid: '#cccccc' });
+    for (const v of Object.values(bad)) expect(v).toMatch(/^(#[0-9a-f]{6}(cc)?|rgba\([0-9., ]+\))$/);
+  });
+});

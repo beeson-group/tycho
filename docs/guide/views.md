@@ -75,6 +75,8 @@ The option `head=True` also draws the point at the reading, i.e. the current pos
 
 Under a clock in value mode, a reading can fall before the first sample or after the last sample of a track. The options `before` and `after` then set what the track shows outside its span (rule C3). The value `"clamp"`, the default, holds the track at its first or its last sample, and `"hidden"` does not draw the track.
 
+With `context="driver"`, every sample of the layer's tracks is transformed into the display frame in the driver's context, i.e. with the attributes and channels of the driver's track at its current reading, rather than in the context of the sample itself (rule L6). A static drawing of one frame then moves with this frame in the display frame. For instance, a grid stored in the rotating-pulsating frame of the elliptic problem breathes with the separation of the primaries when the rotating frame is shown, and it also turns with the true anomaly when an inertial frame is shown. The track set of such a layer does not need to carry the channels of the frames, since these are read on the driver's track set. A layer that grows, trails, or draws a head still takes a reading on its own tracks, hence its set must then carry the clock channels.
+
 The other options of a track layer serve drawing only, and they do not change any position.
 
 

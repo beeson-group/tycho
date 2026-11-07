@@ -1015,6 +1015,12 @@
                 "xz",
                 "yz"
               ]
+            },
+            "aspect": {
+              "enum": [
+                "equal",
+                "free"
+              ]
             }
           }
         },

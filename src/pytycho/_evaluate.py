@@ -370,3 +370,76 @@ class SetData:
     def track(self, i: int) -> Track:
         a, b = self.offsets[i], self.offsets[i + 1]
         return Track(self.positions[a:b], {k: v[a:b] for k, v in self.channels.items()}, self.attrs, self.periodic)
+
+
+# readings, points, and polylines
+
+# A vertex ("sample", i, lap) is stored sample i, and a vertex ("blend", k, w, lap) is the point at weight w between
+# samples k and k + 1. Both are taken in the context of lap `lap` of rule C6, where lap -1 is the shifted context of rule L2.
+Vertex = tuple
+
+
+def segment(u_samples: np.ndarray, u: float) -> tuple[int, float]:
+    """The segment ``k`` and the weight ``w`` of rule C4, where ``k`` is the last index with ``u_k <= u``, and at most ``m - 2``."""
+    m = len(u_samples)
+    k = int(np.searchsorted(u_samples, u, side="right")) - 1
+    k = min(max(k, 0), m - 2)
+    span = u_samples[k + 1] - u_samples[k]
+    w = (u - u_samples[k]) / span if span != 0.0 else 0.0
+    return k, float(w)
+
+
+def polyline(u_samples: np.ndarray, ua: float, ub: float, lap: int = 0) -> list[Vertex]:
+    """The polyline of rule L1 between readings ``ua <= ub`` in one lap."""
+    first = ("blend", *segment(u_samples, ua), lap)
+    if ua == ub:
+        return [first]
+    inner = [("sample", int(i), lap) for i in np.flatnonzero((u_samples > ua) & (u_samples < ub))]
+    return [first, *inner, ("blend", *segment(u_samples, ub), lap)]
+
+
+def lap_of(loop_reading: float, laps: int) -> tuple[int, float]:
+    """The lap of a loop reading, and the reading within this lap (rule C6)."""
+    j = min(math.floor(loop_reading), laps - 1)
+    return j, loop_reading - j
+
+
+def loop_polyline(u_samples: np.ndarray, ua: float, ub: float, laps: int) -> list[Vertex]:
+    """The polyline of rule C6 between loop readings ``ua <= ub``, joined across laps."""
+    ja, a = lap_of(ua, laps)
+    jb, b = lap_of(ub, laps)
+    if ja == jb:
+        return polyline(u_samples, a, b, ja)
+    # the closing sample of a lap and the first sample of the next lap make one vertex. the first sample is kept
+    out = polyline(u_samples, a, 1.0, ja)[:-1]
+    for j in range(ja + 1, jb):
+        out += polyline(u_samples, 0.0, 1.0, j)[:-1]
+    return out + polyline(u_samples, 0.0, b, jb)
+
+
+def whole(m: int, laps: int, periodic: bool) -> list[Vertex]:
+    """Every sample of every lap, joined (rule C6). A track set that is not periodic has one lap."""
+    if laps == 1 or not periodic:
+        return [("sample", i, 0) for i in range(m)]
+    return [("sample", i, j) for j in range(laps) for i in range(m - 1)] + [("sample", m - 1, laps - 1)]
+
+
+def trail(u_samples: np.ndarray, loop_reading: float, laps: int, fraction: float, periodic: bool) -> list[Vertex]:
+    """The trail of rules L1, L2 and C6, from loop reading ``loop_reading - laps * fraction`` to ``loop_reading``."""
+    tail = loop_reading - laps * fraction
+    if tail < 0.0 and not periodic:
+        tail = 0.0
+    return loop_polyline(u_samples, tail, loop_reading, laps)
+
+
+def resolve_vertices(vertices: Iterable[Vertex], table: Callable[[int], np.ndarray]) -> list[list[float]]:
+    """The positions of the vertices, read from ``table(lap)``, which holds the samples already transformed in the context of each lap."""
+    out = []
+    for vertex in vertices:
+        t = table(vertex[-1])
+        if vertex[0] == "sample":
+            out.append(t[vertex[1]])
+        else:
+            _, k, w, _ = vertex
+            out.append((1.0 - w) * t[k] + w * t[k + 1])
+    return [[float(x) for x in p] for p in out]

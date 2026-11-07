@@ -1510,6 +1510,155 @@ export class TychoViewerElement extends Base {
     const values = v.scope === 'panel' ? scope.panel.variables : scope.state.variables;
     return values !== undefined && Object.hasOwn(values, id) ? values[id]! : v.default;
   }
+
+  // panels and layout
+
+  private syncPanels(): void {
+    const st = this.store!.state;
+    for (const pid of [...this.panelDom.keys()]) if (!Object.hasOwn(st.panels, pid)) this.removePanelDom(pid);
+    for (const pid of Object.keys(st.panels)) {
+      const dom = this.panelDom.get(pid);
+      if (dom !== undefined && dom.view === st.panels[pid]!.view) continue;
+      if (dom !== undefined) this.removePanelDom(pid);
+      this.createPanelDom(pid, st.panels[pid]!);
+    }
+  }
+
+  private createPanelDom(pid: string, panel: PanelState): void {
+    const scene = this.scene!;
+    const host = el('div', 'panel');
+    host.dataset.id = pid;
+    const body = el('div', 'pbody');
+    const readouts = (scene.readouts ?? []).filter((r) => r.place === 'panel').map((r) => buildReadout(r.parts, 'stack'));
+    const preadout = el('div', 'preadout');
+    preadout.append(...readouts.map((r) => r.root));
+    const error = el('div', 'perror');
+    const bars = el('div', 'cbars');
+    const drop = el('div', 'drop');
+    const dropLabel = el('span');
+    drop.appendChild(dropLabel);
+    drop.hidden = true;
+    body.append(preadout, error, bars, drop);
+    body.addEventListener('dblclick', () => this.fitPanel(pid));
+    const head = el('div', 'phead');
+    const title = el('span', 't');
+    const choice = this.choice;
+    const chip = buildChip('', choice === null ? 'none' : 'select');
+    chip.body.title = 'Drag to move the panel: onto an edge of another to place it there, onto its center to swap';
+    if (choice !== null && chip.select !== null) {
+      const select = chip.select;
+      select.setAttribute('aria-label', choice.label);
+      choice.def.values.forEach((value, i) => {
+        const o = el('option', undefined, choice.def.labels?.[i] ?? value);
+        o.value = value;
+        select.appendChild(o);
+      });
+      select.addEventListener('change', () => this.store!.update((s) => withVariable(scene, s, choice.id, select.value, pid)));
+    }
+    const meta = el('span', 'm');
+    const pc = el('span', 'pc mini');
+    const widgets: Widget[] = [];
+    for (const c of scene.controls ?? []) {
+      if (c.kind === 'transport' || variableDef(scene, c.variable)?.scope !== 'panel') continue;
+      if (choice !== null && c.kind === 'tabs' && c.variable === choice.id) continue;
+      const w = this.makeWidget(c, pid);
+      if (w) {
+        widgets.push(w);
+        pc.appendChild(w.el);
+      }
+    }
+    const home = iconButton('house', 'Reset view', 'Reset view: fit to what this panel draws (F resets every panel)');
+    home.addEventListener('click', () => this.fitPanel(pid));
+    const close = iconButton('x', 'Close panel', 'Close panel');
+    close.addEventListener('click', () => this.store!.update((s) => withoutPanel(s, pid)));
+    head.append(title, chip.root, meta, pc, el('span', 'sp'), home, close);
+    head.addEventListener('pointerdown', (ev) => this.startDrag(ev, { kind: 'panel', id: pid }, head, chip.root));
+    host.append(body, head);
+    this.panelsEl.appendChild(host);
+    this.panelDom.set(pid, {
+      host,
+      body,
+      head,
+      title,
+      chip: chip.root,
+      chipLabel: chip.label,
+      select: chip.select,
+      meta,
+      close,
+      readouts,
+      error,
+      drop,
+      dropLabel,
+      bars,
+      barDom: [],
+      barsFor: null,
+      widgets,
+      view: panel.view,
+    });
+    this.renderer?.bind(pid, body);
+  }
+
+  private removePanelDom(pid: string): void {
+    const dom = this.panelDom.get(pid);
+    if (!dom) return;
+    this.renderer?.bind(pid, null);
+    dom.host.remove();
+    this.panelDom.delete(pid);
+  }
+
+  /** Places panels and gutters where the layout tiles the stage. */
+  private layoutDom(): void {
+    if (this.store === null) return;
+    const { w, h } = this.stageSize;
+    const tiles = tile(this.store.state.layout, { x: 0, y: 0, w, h }, GUTTER);
+    for (const [pid, r] of tiles.panels) {
+      const dom = this.panelDom.get(pid);
+      if (!dom) continue;
+      Object.assign(dom.host.style, { left: `${r.x}px`, top: `${r.y}px`, width: `${r.w}px`, height: `${r.h}px` });
+    }
+    this.gutters = tiles.gutters;
+    const seen = new Set<string>();
+    for (const g of tiles.gutters) {
+      seen.add(g.path);
+      let d = this.gutterDom.get(g.path);
+      if (!d) {
+        d = el('div', 'gutter');
+        const path = g.path;
+        d.addEventListener('pointerdown', (ev) => this.startResize(ev, path, d!));
+        this.gutterDom.set(g.path, d);
+        this.panelsEl.appendChild(d);
+      }
+      d.className = `gutter ${g.dir}`;
+      Object.assign(d.style, { left: `${g.rect.x}px`, top: `${g.rect.y}px`, width: `${g.rect.w}px`, height: `${g.rect.h}px` });
+    }
+    for (const [path, d] of [...this.gutterDom]) {
+      if (seen.has(path)) continue;
+      d.remove();
+      this.gutterDom.delete(path);
+    }
+  }
+
+  private startResize(ev: PointerEvent, path: string, handle: HTMLDivElement): void {
+    const g = this.gutters.find((x) => x.path === path);
+    if (!g || ev.button !== 0) return;
+    ev.preventDefault();
+    handle.classList.add('active');
+    handle.setPointerCapture(ev.pointerId);
+    const move = (e: PointerEvent) => {
+      const r = this.stage.getBoundingClientRect();
+      const ratio = ratioAt(g, e.clientX - r.left, e.clientY - r.top, GUTTER);
+      this.store!.update((s) => withLayout(s, withRatio(s.layout, path, ratio)));
+    };
+    const up = () => {
+      handle.classList.remove('active');
+      handle.removeEventListener('pointermove', move);
+      handle.removeEventListener('pointerup', up);
+      handle.removeEventListener('pointercancel', up);
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', up);
+    handle.addEventListener('pointercancel', up);
+  }
 }
 
 /**

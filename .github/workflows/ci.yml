@@ -96,3 +96,51 @@ jobs:
           name: runtime
           path: src/pytycho/_static/tycho.js
           if-no-files-found: error
+
+  dist:
+    name: Distributions
+    needs: [web]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: runtime
+          path: src/pytycho/_static
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - run: python3 .github/check_versions.py
+      - run: uv build
+      - run: uvx twine check --strict dist/*
+      - name: The wheel carries the runtime and the notices, and the sdist does not carry example data
+        run: |
+          unzip -l dist/*.whl | tee wheel.txt
+          for f in pytycho/_static/tycho.js licenses/LICENSE licenses/NOTICE licenses/THIRD_PARTY_NOTICES.md; do
+            grep -q "$f" wheel.txt || { echo "::error::the wheel has no $f"; exit 1; }
+          done
+          if tar -tzf dist/*.tar.gz | grep -E '^[^/]+/examples/.*\.(csv|tys|tyd|html)$'; then
+            echo "::error::the sdist carries example data"; exit 1
+          fi
+      - name: The installed wheel writes a page that carries the runtime and its notices
+        run: |
+          uv venv /tmp/wheel-env
+          uv pip install --python /tmp/wheel-env/bin/python dist/*.whl
+          /tmp/wheel-env/bin/python - <<'EOF'
+          import numpy as np
+          import pytycho as ty
+
+          scene = ty.Scene(title="smoke")
+          frame = scene.frame("f", axes=("x", "y", "z"))
+          loop = scene.track_set("loop", frame=frame, periodic=True)
+          t = np.linspace(0.0, 2.0 * np.pi, 50)
+          loop.add(np.column_stack([np.cos(t), np.sin(t)]))
+          scene.clock(channels=["@index"], steps=50)
+          scene.view("main", frame=frame, driver=ty.driver(loop, 0), layers=[ty.track(loop)])
+          scene.panel("p", "main")
+          scene.write_html("smoke.html")
+          page = open("smoke.html", encoding="utf-8").read()
+          assert "This bundle contains" in page and "three 0." in page, "the page has no notice banner"
+          EOF

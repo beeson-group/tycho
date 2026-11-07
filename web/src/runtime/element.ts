@@ -940,6 +940,72 @@ export class TychoViewerElement extends Base {
     this.store!.update((s) => withVariable(scene, s, control.variable, stops[i]!));
     return true;
   }
+
+  private buildFooter(): void {
+    const scene = this.scene!;
+    this.footer.replaceChildren();
+    this.transport = null;
+    if (this.hasTransport()) {
+      const cap = capsule('Playback', 'playback');
+      const play = iconButton('play', 'Play (k)', 'Play (k)', 'icon play');
+      play.addEventListener('click', () => this.store!.setPlaying(!this.store!.playing));
+      const scrub = el('input', 'scrub');
+      scrub.type = 'range';
+      scrub.min = '0';
+      scrub.max = String(scene.clock.steps - 1);
+      scrub.step = '1';
+      scrub.setAttribute('aria-label', 'Frame');
+      scrub.addEventListener('pointerdown', stop);
+      scrub.addEventListener('input', () => {
+        this.pause();
+        this.store!.setFrame(Number(scrub.value));
+      });
+      const frame = el('span', 'frame');
+      frame.style.minWidth = `${2 * String(scene.clock.steps).length + 3}ch`;
+      frame.title = 'Frame index of the loop. Left and right step, Home goes to 0';
+      const speed = el('select', 'speed');
+      speed.setAttribute('aria-label', 'Playback speed');
+      speed.title = 'Playback speed';
+      for (const s of SPEEDS) {
+        const o = el('option', undefined, `${s}×`);
+        o.value = String(s);
+        o.selected = s === this.speed;
+        speed.appendChild(o);
+      }
+      speed.addEventListener('change', () => {
+        const store = this.store!;
+        this.speed = Number(speed.value);
+        // playback goes on from playProgress, between two frame indices, so that the picture does not jump back to the frame index
+        const at = this.playProgress === null ? store.frame : this.playProgress * scene.clock.steps;
+        this.anchor = { index: at, time: performance.now() };
+        this.refreshExport?.();
+      });
+      cap.append(play, scrub, frame, speed);
+      let channel: { el: HTMLDivElement; set(id: string): void } | null = null;
+      if (scene.clock.channels.length > 1) {
+        channel = seg(
+          scene.clock.channels.map((c, i) => ({ id: c, label: scene.clock.labels?.[i] ?? c })),
+          (c) => this.store!.update((s) => withChannel(s, c)),
+          'Clock',
+        );
+        channel.el.title = 'What the frame index runs along';
+        cap.append(channel.el);
+      }
+      const fps = el('span', 'fps', fpsText(null));
+      fps.title = fpsTitle(null);
+      cap.append(fps);
+      this.footer.append(cap);
+      this.transport = { play, scrub, frame, fps, channel };
+    }
+    const view = capsule('View');
+    const fit = iconButton('house', 'Reset every view', 'Reset every view: fit each panel to what it draws (F)');
+    fit.addEventListener('click', () => this.fitAll());
+    const reset = iconButton('rotateCcw', 'Reset scene', 'Reset scene: panels, layout, and controls as written');
+    reset.addEventListener('click', () => this.reset());
+    view.append(fit, reset);
+    this.footer.append(view);
+    this.buildExport();
+  }
 }
 
 /**

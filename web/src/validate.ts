@@ -50,7 +50,7 @@ const BODY_KEYS = ['label', 'frame', 'position', 'color'];
 const SET_KEYS = ['label', 'frame', 'tags', 'attrs', 'tracks', 'offsets', 'positions', 'channels', 'parameters', 'periodic'];
 const VIEW_KEYS = ['label', 'frame', 'camera', 'driver', 'layers'];
 const LAYER_KEYS: Record<string, readonly string[]> = {
-  track: ['kind', 'sets', 'members', 'reveal', 'trail', 'head', 'before', 'after', 'color', 'opacity', 'width', 'highlight', 'visible'],
+  track: ['kind', 'sets', 'members', 'reveal', 'trail', 'head', 'before', 'after', 'context', 'color', 'opacity', 'width', 'highlight', 'visible'],
   body: ['kind', 'body', 'trail', 'size', 'visible'],
   axes: ['kind', 'span', 'visible'],
   grid: ['kind', 'labels', 'visible'],
@@ -141,6 +141,8 @@ function checkTrackLayer(scene: Scene, id: string, layer: TrackLayer): void {
     if (layer[key] !== undefined && layer[key] !== 'clamp' && layer[key] !== 'hidden')
       fail('C3', `view ${id}: a track layer's ${key} is ${JSON.stringify(layer[key])}, not clamp or hidden`);
   }
+  if (layer.context !== undefined && layer.context !== 'own' && layer.context !== 'driver')
+    fail('L6', `view ${id}: a track layer's context is ${JSON.stringify(layer.context)}, not own or driver`);
   if (layer.opacity !== undefined && !unit(layer.opacity)) fail('2.7', `view ${id}: a track layer's opacity is ${layer.opacity}, not in [0, 1]`);
   if (layer.width !== undefined && !(layer.width > 0)) fail('2.7', `view ${id}: a track layer's width is ${layer.width}, not positive`);
   if (layer.color !== undefined && typeof layer.color === 'object') {
@@ -345,7 +347,8 @@ function validateState(scene: Scene, frames: Frames, state: State, warnings: str
     const view = scene.views[panel!.view]!;
     const scope: PanelScope = { scene, state, panel: panel! };
     const display = displayFrame(scope, view);
-    const need = (setId: string, req: { channels: Set<string>; attrs: Set<string> }, what: string) => {
+    /** Rules F5 and F2 for the path from `from` to the display frame, or for `req` when given, evaluated in the contexts of track set `setId`. */
+    const need = (setId: string, from: string, what: string, req = frames.requirements(from, display)) => {
       const set = scene.track_sets[setId]!;
       const ch = [...req.channels].filter((c) => c !== INDEX_CHANNEL && !Object.hasOwn(set.channels ?? {}, c));
       const at = [...req.attrs].filter((a) => !Object.hasOwn(set.attrs ?? {}, a));
@@ -356,7 +359,7 @@ function validateState(scene: Scene, frames: Frames, state: State, warnings: str
         );
       }
       // rule F2 for an attribute scale on the path, which is constant per track set
-      for (const fid of edgesUsed(frames, scene, set.frame, display)) {
+      for (const fid of edgesUsed(frames, scene, from, display)) {
         const s = scene.frames[fid]!.scale;
         if (s !== undefined && typeof s === 'object' && 'attr' in s && (s.factor ?? 1) * (set.attrs?.[s.attr] ?? NaN) + (s.offset ?? 0) === 0) {
           fail('F2', `panel ${pid}: the scale of frame ${fid} is zero for track set ${setId}`);
@@ -383,7 +386,7 @@ function validateState(scene: Scene, frames: Frames, state: State, warnings: str
     };
     const driver = oneSet(scope, view.driver.sets);
     if (driver !== null) {
-      need(driver, frames.requirements(scene.track_sets[driver]!.frame, display), 'the driver');
+      need(driver, scene.track_sets[driver]!.frame, 'the driver');
       clocked(driver, 'the driver');
       member(driver, view.driver.member);
       const set = scene.track_sets[driver]!;
@@ -405,7 +408,9 @@ function validateState(scene: Scene, frames: Frames, state: State, warnings: str
       if (layer.kind === 'track') {
         const id = oneSet(scope, layer.sets);
         if (id === null) continue;
-        need(id, frames.requirements(scene.track_sets[id]!.frame, display), 'its tracks');
+        // a layer in the driver's context reads the edges from the frame of its set on the driver's set (rule L6)
+        if (layer.context !== 'driver') need(id, scene.track_sets[id]!.frame, 'its tracks');
+        else if (driver !== null) need(driver, scene.track_sets[id]!.frame, `a layer of track set ${id} in the driver's context`);
         member(id, layer.members);
         if (layer.highlight !== undefined) member(id, { var: layer.highlight.var });
         const set = scene.track_sets[id]!;
@@ -418,7 +423,7 @@ function validateState(scene: Scene, frames: Frames, state: State, warnings: str
         const hides = scene.clock.mode === 'value' && (layer.before === 'hidden' || layer.after === 'hidden');
         if ((layer.reveal ?? 'none') !== 'none' || hasHead(layer) || hides) clocked(id, 'on which a reading is taken');
       } else if (layer.kind === 'body' && driver !== null) {
-        need(driver, frames.bodyRequirements(layer.body, display), `body ${layer.body}`);
+        need(driver, scene.track_sets[driver]!.frame, `body ${layer.body}`, frames.bodyRequirements(layer.body, display));
       }
     }
     if (pid === first) {

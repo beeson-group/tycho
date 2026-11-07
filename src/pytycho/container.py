@@ -20,6 +20,7 @@ meaning is given in the scene document, ``scene.tys``.
 
 from __future__ import annotations
 
+import zlib
 from typing import Any
 
 import numpy as np
@@ -97,3 +98,40 @@ def stored_array(array: Any, dtype: str | None = None) -> np.ndarray:
         elif stored.dtype.kind == "f" and not np.array_equal(np.isfinite(stored), np.isfinite(a)):
             raise ContainerError(f"D1: finite values overflow {name}")
     return stored
+
+
+def _bits(stored: np.ndarray) -> np.ndarray:
+    """The bit patterns of a stored array as unsigned little-endian integers, one row per row of the view."""
+    rows = stored.shape[0]
+    width = int(np.prod(stored.shape[1:], dtype=np.int64))
+    return stored.reshape(rows, width).view(f"<u{stored.dtype.itemsize}")
+
+
+def _encode_chunk(bits: np.ndarray) -> bytes:
+    """One chunk of a shuffle-delta-deflate view (rule D5), from its rows of bit patterns."""
+    delta = bits.copy()
+    np.subtract(bits[1:], bits[:-1], out=delta[1:])  # the subtraction wraps around, since the integers are unsigned
+    shuffled = delta.reshape(-1).view(np.uint8).reshape(-1, bits.dtype.itemsize).T
+    return zlib.compress(shuffled.tobytes(), LEVEL)
+
+
+def _decode_chunk(chunk: bytes | memoryview, rows: int, width: int, out: np.ndarray, where: str) -> None:
+    """Decodes one chunk of ``rows`` rows of ``width`` elements into ``out``, its rows of bit patterns (rule D5)."""
+    size = out.dtype.itemsize
+    expected = rows * width * size
+    inflater = zlib.decompressobj()
+    try:
+        raw = inflater.decompress(chunk, expected + 1)
+    except zlib.error as exc:
+        raise ContainerError(f"D5: {where} does not inflate: {exc}") from None
+    if len(raw) > expected:
+        raise ContainerError(f"D5: {where} inflates to more than the {expected} bytes of its rows")
+    if not inflater.eof:
+        raise ContainerError(f"D5: {where} ends before its zlib stream does")
+    if inflater.unused_data:
+        raise ContainerError(f"D5: {where} has {len(inflater.unused_data)} bytes after its zlib stream")
+    if len(raw) != expected:
+        raise ContainerError(f"D5: {where} inflates to {len(raw)} bytes, not the {expected} of its rows")
+    planes = np.frombuffer(raw, np.uint8).reshape(size, rows * width)
+    delta = np.ascontiguousarray(planes.T).view(out.dtype).reshape(rows, width)
+    np.cumsum(delta, axis=0, dtype=out.dtype, out=out)  # the integers are unsigned, hence the cumulative sum wraps around

@@ -1181,6 +1181,86 @@ export class TychoViewerElement extends Base {
     bar.append(size, fps, loops, info, start, progress, cancel, close);
     this.footer.append(bar);
   }
+
+  // the top bar
+
+  private makeWidget(control: Exclude<Control, { kind: 'transport' }>, panel: string | undefined): Widget | null {
+    const scene = this.scene!;
+    const v = variableDef(scene, control.variable);
+    if (v === undefined) return null;
+    const write = (value: VariableValue) => this.store!.update((s) => withVariable(scene, s, control.variable, value, panel));
+    const current = (scope: PanelScope): VariableValue => {
+      const values = v.scope === 'panel' ? scope.panel.variables : scope.state.variables;
+      return values !== undefined && Object.hasOwn(values, control.variable) ? values[control.variable]! : v.default;
+    };
+    const field = (): HTMLLabelElement => {
+      const f = el('label', 'field');
+      f.appendChild(el('span', 'k', control.label));
+      f.addEventListener('pointerdown', stop);
+      return f;
+    };
+    if (control.kind === 'tabs' && v.kind === 'choice' && panel !== undefined && v.values.length > 3) {
+      // a compact select in a panel header, where a row of tabs would not fit
+      const c = v as Choice;
+      const select = el('select');
+      c.values.forEach((value, i) => {
+        const o = el('option', undefined, c.labels?.[i] ?? value);
+        o.value = value;
+        select.appendChild(o);
+      });
+      select.addEventListener('change', () => write(select.value));
+      const f = field();
+      f.appendChild(select);
+      return { el: f, sync: (scope) => void (select.value = String(current(scope))) };
+    }
+    if (control.kind === 'tabs' && v.kind === 'choice') {
+      const c = v as Choice;
+      const s = seg(
+        c.values.map((value, i) => ({ id: value, label: c.labels?.[i] ?? value })),
+        (value) => write(value),
+        control.label,
+      );
+      const wrapper = el('span', 'field');
+      wrapper.append(el('span', 'k', control.label), s.el);
+      wrapper.addEventListener('pointerdown', stop);
+      return { el: wrapper, sync: (scope) => s.set(String(current(scope))) };
+    }
+    if (control.kind === 'toggle' && v.kind === 'toggle') {
+      const box = el('input');
+      box.type = 'checkbox';
+      box.addEventListener('change', () => write(box.checked));
+      const f = field();
+      f.prepend(box);
+      return { el: f, sync: (scope) => void (box.checked = current(scope) === true) };
+    }
+    if (control.kind === 'slider' && v.kind === 'selector') {
+      const range = el('input');
+      range.type = 'range';
+      range.min = '0';
+      range.step = '1';
+      const out = el('output');
+      let stops: number[] = [];
+      range.addEventListener('input', () => {
+        setRange(range, Number(range.value));
+        const value = stops[Number(range.value)];
+        if (value !== undefined) write(value);
+      });
+      const f = field();
+      f.append(range, out);
+      return {
+        el: f,
+        sync: (scope) => {
+          stops = sliderStops(scope, this.geometry!.sets, control as Extract<Control, { kind: 'slider' }>);
+          range.disabled = stops.length === 0;
+          range.max = String(Math.max(0, stops.length - 1));
+          const value = current(scope) as number;
+          setRange(range, Math.max(0, nearestStop(stops, value)));
+          out.textContent = formatNumber(value);
+        },
+      };
+    }
+    return null;
+  }
 }
 
 /**

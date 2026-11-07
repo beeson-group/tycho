@@ -219,3 +219,15 @@ def test_d2_rejects_a_view_key_an_encoding_and_a_missing_key():
     del header["views"]["a"]["length"]
     with pytest.raises(ContainerError, match=r"D2: view 'a' lacks the keys \['length'\]"):
         Container(_rebuilt(header, data[_payload_start(data) :]))
+
+
+@pytest.mark.parametrize("version", [0, 2, 3])
+def test_d3_rejects_every_other_version(version):
+    data = bytearray(_one())
+    data[4:8] = struct.pack("<I", version)
+    with pytest.raises(ContainerError, match="D3: data container version"):
+        Container(bytes(data))
+    header = _header(bytes(data))
+    header["version"] = version
+    with pytest.raises(ContainerError, match="D3: header version"):
+        Container(_rebuilt(header, bytes(data[_payload_start(bytes(data)) :])))

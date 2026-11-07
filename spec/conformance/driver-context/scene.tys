@@ -1,0 +1,216 @@
+{
+ "format": "tycho-scene",
+ "version": "0.3",
+ "requires": [
+  "layers.driver_context"
+ ],
+ "generator": "pytycho 0.2.0",
+ "title": "a grid of the pulsating frame in the driver's context",
+ "frames": {
+  "pulsating": {
+   "label": "rotating-pulsating",
+   "axes": [
+    "x",
+    "y",
+    "z"
+   ],
+   "unit": "DU"
+  },
+  "rotating": {
+   "label": "rotating",
+   "axes": [
+    "xi",
+    "eta",
+    "z"
+   ],
+   "parent": "pulsating",
+   "scale": {
+    "channel": "rho"
+   }
+  },
+  "inertial": {
+   "label": "inertial",
+   "axes": [
+    "X",
+    "Y",
+    "Z"
+   ],
+   "parent": "rotating",
+   "rotation": {
+    "axis": "z",
+    "angle": {
+     "channel": "f"
+    }
+   }
+  },
+  "inertial-m1": {
+   "label": "inertial, centered on the primary",
+   "axes": [
+    "X",
+    "Y",
+    "Z"
+   ],
+   "parent": "inertial",
+   "origin": {
+    "body": "m1"
+   }
+  }
+ },
+ "bodies": {
+  "m1": {
+   "frame": "pulsating",
+   "position": [
+    {
+     "attr": "mu",
+     "factor": -1.0
+    },
+    0.0,
+    0.0
+   ]
+  }
+ },
+ "track_sets": {
+  "orbit": {
+   "frame": "rotating",
+   "tags": {
+    "family": "a"
+   },
+   "attrs": {
+    "mu": 0.25
+   },
+   "tracks": 1,
+   "offsets": "orbit/offsets",
+   "positions": "orbit/positions",
+   "channels": {
+    "f": {
+     "view": "orbit/channels/f"
+    },
+    "rho": {
+     "view": "orbit/channels/rho"
+    }
+   },
+   "periodic": true
+  },
+  "grid": {
+   "frame": "pulsating",
+   "tracks": 3,
+   "offsets": "grid/offsets",
+   "positions": "grid/positions",
+   "periodic": false
+  },
+  "ring": {
+   "frame": "pulsating",
+   "tracks": 1,
+   "offsets": "ring/offsets",
+   "positions": "ring/positions",
+   "channels": {
+    "f": {
+     "view": "ring/channels/f"
+    }
+   },
+   "periodic": false
+  }
+ },
+ "variables": {
+  "frame": {
+   "kind": "choice",
+   "values": [
+    "pulsating",
+    "rotating",
+    "inertial",
+    "inertial-m1"
+   ],
+   "default": "inertial",
+   "scope": "panel"
+  },
+  "family": {
+   "kind": "choice",
+   "values": [
+    "a",
+    "b"
+   ],
+   "default": "a",
+   "scope": "scene"
+  }
+ },
+ "clock": {
+  "mode": "fraction",
+  "channels": [
+   "f",
+   "@index"
+  ],
+  "steps": 8
+ },
+ "views": {
+  "v": {
+   "frame": {
+    "var": "frame"
+   },
+   "driver": {
+    "sets": {
+     "tags": {
+      "family": {
+       "var": "family"
+      }
+     }
+    },
+    "member": {
+     "index": 0
+    }
+   },
+   "layers": [
+    {
+     "kind": "track",
+     "sets": {
+      "set": "grid"
+     },
+     "members": "all",
+     "reveal": "none",
+     "context": "driver",
+     "color": "#3a4150"
+    },
+    {
+     "kind": "track",
+     "sets": {
+      "set": "ring"
+     },
+     "members": "all",
+     "reveal": "grow",
+     "head": true,
+     "context": "driver"
+    },
+    {
+     "kind": "track",
+     "sets": {
+      "set": "orbit"
+     },
+     "members": "all",
+     "reveal": "none",
+     "head": true
+    },
+    {
+     "kind": "axes"
+    }
+   ],
+   "camera": {
+    "kind": "plane",
+    "plane": "xy"
+   }
+  }
+ },
+ "initial": {
+  "variables": {},
+  "clock": {
+   "channel": "f"
+  },
+  "panels": {
+   "p1": {
+    "view": "v"
+   }
+  },
+  "layout": {
+   "kind": "panel",
+   "id": "p1"
+  }
+ }
+}

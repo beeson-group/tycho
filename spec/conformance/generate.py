@@ -1234,6 +1234,199 @@ def laps():
     print(f"laps: {len(cases)} cases with the reference ones, {len(rejections)} rejections")
 
 
+def driver_context():
+    """A grid of a pulsating frame drawn in the driver's context (rule L6), whose set does not carry any channel (rule C5)."""
+    import pytycho as ty
+
+    e, mu = 0.5, 0.25
+    f = np.array([0.0, 1.0, 3.0, 4.5, 2.0 * np.pi])
+    rho = (1.0 - e**2) / (1.0 + e * np.cos(f))
+    orbit_rot = np.array([[0.9, 0.0], [0.8, 0.1], [0.7, 0.0], [0.8, -0.1], [0.9, 0.0]])
+    grid_lines = [
+        np.array([[-0.5, -1.0], [-0.5, 0.0], [-0.5, 1.0]]),
+        np.array([[0.5, -1.0], [0.5, 0.0], [0.5, 1.0]]),
+        np.array([[-1.0, 0.0], [1.0, 0.0]]),
+    ]
+    ring = np.array([[1.2, 0.0], [0.0, 1.2], [-1.2, 0.0], [0.0, -1.2], [1.2, 0.0]])
+
+    scene = ty.Scene(title="a grid of the pulsating frame in the driver's context")
+    pulsating = scene.frame("pulsating", label="rotating-pulsating", axes=("x", "y", "z"), unit="DU")
+    rot = scene.frame("rotating", parent=pulsating, scale=ty.channel("rho"), label="rotating", axes=("xi", "eta", "z"))
+    inertial = scene.frame("inertial", parent=rot, rotation=ty.rotation("z", ty.channel("f")), label="inertial", axes=("X", "Y", "Z"))
+    m1 = scene.body("m1", frame=pulsating, position=[-ty.attr("mu"), 0.0, 0.0])
+    scene.frame("inertial-m1", parent=inertial, origin=m1, label="inertial, centered on the primary", axes=("X", "Y", "Z"))
+    # mu is carried by the driver's set alone, and the frame inertial-m1 reads it through the origin at the body m1
+    orbit = scene.track_set("orbit", frame=rot, tags={"family": "a"}, attrs={"mu": mu}, periodic=True, dtype="float64")
+    orbit.add(orbit_rot, channels={"f": f, "rho": rho})
+    grid = scene.track_set("grid", frame=pulsating, dtype="float64")
+    for line in grid_lines:
+        grid.add(line)
+    # the ring carries the clock channel f, hence a layer may take a reading on it, and its values are its own
+    ring_set = scene.track_set("ring", frame=pulsating, dtype="float64")
+    ring_set.add(ring, channels={"f": [0.0, 0.5, 1.0, 1.5, 2.0]})
+    frame = scene.choice("frame", ["pulsating", "rotating", "inertial", "inertial-m1"], default="inertial", scope="panel")
+    family = scene.choice("family", ["a", "b"], default="a")
+    scene.clock("fraction", channels=["f", "@index"], steps=8)
+    scene.view(
+        "v",
+        frame=frame,
+        driver=ty.driver(ty.sets(family=family), 0),
+        camera={"kind": "plane", "plane": "xy"},
+        layers=[
+            ty.track(grid, context="driver", color="#3a4150"),
+            ty.track(ring_set, reveal="grow", head=True, context="driver"),
+            ty.track(orbit, head=True),
+            ty.axes(),
+        ],
+    )
+    scene.panel("p1", "v")
+
+    def to(display, k, p):
+        """A point of the pulsating frame in the display frame, in the context of sample k of the orbit."""
+        p = np.array([p[0], p[1], 0.0])
+        if display == "pulsating":
+            return p
+        if display == "rotating":
+            return rho[k] * p
+        if display == "inertial":
+            return rz(f[k]) @ (rho[k] * p)
+        return rz(f[k]) @ (rho[k] * (p - np.array([-mu, 0.0, 0.0])))
+
+    def orbit_at(display, k):
+        """Sample k of the orbit, stored in the rotating frame, in the display frame in its own context."""
+        return to(display, k, orbit_rot[k] / rho[k])
+
+    def reading(u):
+        """The segment k and the weight w of the reading u on the orbit, whose sample readings are f / (2 pi) on f (rules C1 and C4)."""
+        ui = (f - f[0]) / (f[-1] - f[0])
+        k = min(int(np.searchsorted(ui, u, side="right")) - 1, 3)
+        return k, (u - ui[k]) / (ui[k + 1] - ui[k])
+
+    def blend(display, u, p):
+        k, w = reading(u)
+        return (1.0 - w) * to(display, k, p) + w * to(display, k + 1, p)
+
+    def pts_(x):
+        return [list(map(float, q)) for q in x]
+
+    def state(display="inertial", channel="f", fam="a"):
+        return {
+            "variables": {"family": fam},
+            "clock": {"channel": channel},
+            "panels": {"p1": {"view": "v", "variables": {"frame": display}}},
+            "layout": {"kind": "panel", "id": "p1"},
+        }
+
+    cases = []
+    for display, i in (("inertial", 1), ("rotating", 3), ("inertial-m1", 6), ("pulsating", 5)):
+        u = i / 8
+        grid_out = [{"index": j, "line": pts_([blend(display, u, q) for q in line])} for j, line in enumerate(grid_lines)]
+        # the ring's own readings are 0, 0.25, 0.5, 0.75, and 1 on f, where the orbit's differ
+        rk = min(int(u * 4), 3)
+        rw = (u - rk / 4) / 0.25
+        ring_head = (1.0 - rw) * blend(display, u, ring[rk]) + rw * blend(display, u, ring[rk + 1])
+        # a grown line ends at the head, which is not repeated when the reading falls on a sample
+        ring_line = [blend(display, u, ring[j]) for j in range(rk + 1)] + ([ring_head] if rw > 0 else [])
+        k, w = reading(u)
+        orbit_head = (1.0 - w) * orbit_at(display, k) + w * orbit_at(display, k + 1)
+        cases.append(
+            {
+                "name": f"L6: in {display} at frame {i}, every grid vertex is transformed in the blended context of the driver's reading, "
+                "a grown ring with a head is blended at its own reading, and the orbit is drawn in its own context",
+                "source": "analytic",
+                "state": state(display),
+                "frame_index": i,
+                "tolerance": TOL,
+                "expected": {
+                    "panels": {
+                        "p1": {
+                            "frame": display,
+                            "layers": [
+                                {"kind": "track", "set": "grid", "members": grid_out},
+                                {
+                                    "kind": "track",
+                                    "set": "ring",
+                                    "members": [{"index": 0, "line": pts_(ring_line), "head": list(map(float, ring_head))}],
+                                },
+                                {
+                                    "kind": "track",
+                                    "set": "orbit",
+                                    "members": [
+                                        {
+                                            "index": 0,
+                                            "line": pts_([orbit_at(display, j) for j in range(5)]),
+                                            "head": list(map(float, orbit_head)),
+                                        }
+                                    ],
+                                },
+                                {"kind": "axes"},
+                            ],
+                        }
+                    }
+                },
+            }
+        )
+    cases.append(
+        {
+            "name": "L6: when the driver's set query does not match any set, every member of a layer in the driver's context is empty",
+            "source": "analytic",
+            "state": state(fam="b"),
+            "frame_index": 1,
+            "tolerance": TOL,
+            "expected": {
+                "panels": {
+                    "p1": {
+                        "frame": "inertial",
+                        "layers": [
+                            {"kind": "track", "set": "grid", "members": [{"index": j, "line": []} for j in range(3)]},
+                            {"kind": "track", "set": "ring", "members": [{"index": 0, "line": [], "head": None}]},
+                            None,
+                            {"kind": "axes"},
+                        ],
+                    }
+                }
+            },
+        }
+    )
+    doc, data = _write_scene("driver-context", scene, cases)
+    for display in ("pulsating", "rotating", "inertial", "inertial-m1"):
+        for channel in ("f", "@index"):
+            for i in range(-1, 9):
+                st = state(display, channel)
+                cases.append(
+                    {
+                        "name": f"{display}, {channel}, frame {i}",
+                        "source": "reference",
+                        "state": st,
+                        "frame_index": i,
+                        "tolerance": TOL,
+                        "expected": evaluate(doc, data, st, i),
+                    }
+                )
+    (HERE / "driver-context" / "cases.json").write_text(json.dumps(cases, indent=1) + "\n")
+
+    def with_layer(k, **changes):
+        layers = copy.deepcopy(doc["views"]["v"]["layers"])
+        layers[k].update(changes)
+        return {"views": {"v": {"layers": layers}}}
+
+    rejections = [
+        {"name": "L6: a context that is neither own nor driver", "rule": "L6", "scene": with_layer(0, context="sample")},
+        {
+            "name": "C5: a head on a layer in the driver's context whose set lacks the clock channel f",
+            "rule": "C5",
+            "scene": with_layer(0, head=True),
+        },
+        {
+            "name": "F5: the driver's set lacks the channel rho, which only the layer in the driver's context reads in the inertial frame",
+            "rule": "F5",
+            "scene": {"track_sets": {"orbit": {"channels": {"rho": None}}}},
+        },
+    ]
+    (HERE / "driver-context" / "rejections.json").write_text(json.dumps(rejections, indent=1) + "\n")
+    print(f"driver-context: {len(cases)} cases with the reference ones, {len(rejections)} rejections")
+
+
 def containers():
     """The same views written twice, with the encodings the writer picks and all raw, for a reader to decode bit for bit."""
     rng = np.random.default_rng(78)
@@ -1280,4 +1473,5 @@ if __name__ == "__main__":
     edge_fraction()
     edge_value()
     laps()
+    driver_context()
     containers()

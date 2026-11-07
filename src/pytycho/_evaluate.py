@@ -252,3 +252,50 @@ def _rotate(p: np.ndarray, axis: str, angle: np.ndarray, *, inverse: bool) -> np
     if axis == "y":
         return np.hstack([c * x + s * z, y, -s * x + c * z])
     raise EvaluationError(f"rotation axis {axis!r} is not x, y, or z")
+
+
+# track data
+
+
+class Track:
+    """One track of a track set, with its positions as an ``(m, 3)`` array, its channels, and the attributes of its track set."""
+
+    def __init__(self, positions: np.ndarray, channels: Mapping[str, np.ndarray], attrs: Mapping[str, float], periodic: bool) -> None:
+        self.positions = positions
+        self.channels = channels
+        self.attrs = attrs
+        self.periodic = periodic
+        self.m = len(positions)
+
+    def channel(self, name: str) -> np.ndarray | None:
+        if name == INDEX:
+            return np.arange(self.m, dtype=np.float64)
+        return self.channels.get(name)
+
+    def context(self, lap: int = 0) -> Context:
+        """The context of every sample in lap ``lap`` of rule C6. Lap -1 is the shifted context of rule L2."""
+
+        def channel(name: str) -> np.ndarray | None:
+            values = self.channel(name)
+            if values is None or lap == 0:
+                return values
+            return values + lap * (values[-1] - values[0])
+
+        return Context(self.attrs, channel, self.m)
+
+    def clock_values(self, name: str) -> np.ndarray:
+        """The clock channel's values along the track, checked against rule T3."""
+        if name == INDEX:
+            return np.arange(self.m, dtype=np.float64)
+        c = self.channel(name)
+        if c is None:
+            raise EvaluationError(f"C5: the track lacks clock channel {name!r}")
+        d = np.diff(c)
+        if not np.all(np.isfinite(c)) or not (np.all(d > 0) or np.all(d < 0)) or not np.isfinite(c[-1] - c[0]):
+            raise EvaluationError(f"T3: clock channel {name!r} is not strictly monotone with a finite span along a track")
+        return c
+
+    def sample_readings(self, name: str) -> np.ndarray:
+        """The sample readings ``u_i`` of rule C1 for clock channel ``name``."""
+        c = self.clock_values(name)
+        return (c - c[0]) / (c[-1] - c[0])

@@ -195,7 +195,8 @@ describe('reveal, pieces, and the GPU comparison give the evaluator line (C3, L1
           }
         }
         expect(compared).toBeGreaterThan(0);
-      });
+        // broucke-mini takes about 2.5 s on a laptop and over the default 5 s on a CI runner
+      }, 60_000);
     }
   }
 });

@@ -288,6 +288,29 @@ def test_a_plane_camera_takes_an_aspect_and_an_orbit_camera_does_not():
         scene.view("w", frame="root", driver=ty.driver(moving, 0), layers=[], camera={"kind": "orbit", "aspect": "free"})
 
 
+def test_an_orbit_camera_takes_a_stretch_and_a_turn_and_a_plane_camera_does_not():
+    jsonschema = pytest.importorskip("jsonschema")
+    scene, moving, _ = small()
+    scene.view(
+        "v",
+        frame="root",
+        driver=ty.driver(moving, 0),
+        layers=[ty.track(moving)],
+        camera={"kind": "orbit", "stretch": [1, 1, 5], "turn": -90},
+    )
+    scene.panel("p", "v")
+    doc = scene.to_document()
+    assert doc["views"]["v"]["camera"] == {"kind": "orbit", "stretch": [1.0, 1.0, 5.0], "turn": -90.0}
+    jsonschema.Draft202012Validator(json.loads((CORPUS.parent / "scene.schema.json").read_text())).validate(doc)
+    for stretch in ([1, 1], [1, 0, 1], [1, 1, float("inf")], "5"):
+        with pytest.raises(ty.SceneError, match=r"2\.7: a camera stretch"):
+            scene.view("w", frame="root", driver=ty.driver(moving, 0), layers=[], camera={"kind": "orbit", "stretch": stretch})
+    with pytest.raises(ty.SceneError, match=r"2\.7: a camera turn"):
+        scene.view("w", frame="root", driver=ty.driver(moving, 0), layers=[], camera={"kind": "orbit", "turn": float("nan")})
+    with pytest.raises(ty.SceneError, match=r"2\.7: .* camera has unknown keys \['stretch', 'turn'\]"):
+        scene.view("w", frame="root", driver=ty.driver(moving, 0), layers=[], camera={"kind": "plane", "stretch": [1, 1, 5], "turn": 90})
+
+
 def test_a_clock_takes_the_seconds_of_one_loop_in_either_mode():
     jsonschema = pytest.importorskip("jsonschema")
     scene, moving, _ = small()

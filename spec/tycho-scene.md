@@ -213,7 +213,7 @@ The example shows one panel `p1` in the frame `inertial` with three layers: a tr
 
 ## 4. Features
 
-A feature is a named part of the format that is listed in `requires` (rule S1) by a scene that uses it, so that a reader that does not implement the part rejects the scene instead of drawing it wrongly. Two keys are added in version 0.3, of which the `context` of a track layer (rule L6) is the feature `layers.driver_context`. The other, the `aspect` of a plane camera, is not a feature, since a reader that ignores it still draws every track in its place (section 2.7).
+A feature is a named part of the format that is listed in `requires` (rule S1) by a scene that uses it, so that a reader that does not implement the part rejects the scene instead of drawing it wrongly. Five keys are added in version 0.3, of which the `context` of a track layer (rule L6) is the feature `layers.driver_context`. The other four are the `aspect` of a plane camera, the `stretch` and the `turn` of an orbit camera, and the `seconds` of the clock. None of the four is a feature, since a reader that ignores one of them still draws every track, only at another scale, from another side, or at another pace (sections 2.6 and 2.7).
 
 The following features do not exist yet. They are reserved here so that they can be listed in `requires` once they exist. They are `layers.arrows` (vector channels drawn as directions or displacements), `layers.points`, `layers.label`, `panels.plot`, `frames.quaternion` (an orientation from a quaternion channel), `frames.body_axis` (an axis from one body to another), `frames.origin_channel`, `bodies.track`, `bodies.radius`, and `clock.epoch`. They are not part of version 0.3.
 

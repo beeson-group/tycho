@@ -186,3 +186,18 @@ A readout is a piece of text on the page that shows current values. It is made o
 ### 2.10 Export
 
 A reader that exports a video (the runtime records the animation to an MP4 file) freezes the state for the whole recording, and starts at frame index 0. At each video frame, it samples the progress that live playback at the viewer's playback speed would reach at the time of this video frame, so that a lap lasts as long in the video as it does live on screen. The export runs through one or more loops. Every video frame is drawn at a fixed logical size and pixel ratio (the number of physical pixels per CSS pixel), through the same camera fit that the panels start with, so that the video does not depend on the size of the viewer's window. The picture holds the panels with their layers, axis titles, body labels, colorbars, and panel readouts, as well as the caption. It leaves out the title, the panel headers, and every control. A 1080p export is the 720p layout at a pixel ratio of 1.5, i.e. the same picture rendered at 1.5 times the pixel density rather than a larger layout. An export has a stated ceiling in frames and seconds, and it is refused beyond this ceiling.
+
+## 3. What an evaluator returns
+
+Both implementations expose the same evaluator, a function `evaluate(scene, data, state, frame_index)` that is pure, i.e. its result depends only on its four arguments and it does not have side effects, which is what makes the two implementations comparable case by case through the corpus. For every panel in the state, it returns the display frame and one entry per layer, in the order of the view's layers. All positions have three components and are float64.
+
+```json
+{"panels": {"p1": {"frame": "inertial", "layers": [
+  {"kind": "track", "set": "family-7-periapsis", "members": [
+    {"index": 3, "line": [[x, y, z], ...], "head": [x, y, z]}]},
+  {"kind": "body", "body": "m1", "position": [x, y, z], "trail": [[x, y, z], ...]},
+  {"kind": "axes"}
+]}}}
+```
+
+The example shows one panel `p1` in the frame `inertial` with three layers: a track layer that draws member 3 of the set `family-7-periapsis` as the polyline `line` with a `head`, a body layer that gives the position of the body `m1` and its trail, and an axes layer, for which the evaluator does not compute anything. When the set query of a track layer does not match any set, the layer's `set` is `null` and its `members` is empty. A member's `line` is the polyline that the layer's `reveal` defines, and it is empty when the track is hidden (rule C3). The `head` and `trail` keys are present only when the layer carries a head or a trail, respectively, and `head` is `null` when the track is hidden. When the driver's set query does not match any set, a body layer's `position` is `null` and its `trail` is empty. A layer omitted by rule L5 does not appear in the list.

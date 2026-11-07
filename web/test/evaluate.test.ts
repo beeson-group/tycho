@@ -106,6 +106,62 @@ describe('clock and reveal (C1 to C4, L1, L3)', () => {
   });
 });
 
+const rotating = (periodic: boolean): [Scene, MemoryStore] => {
+  const data = new MemoryStore()
+    .add('off', [0, 5], 'uint32')
+    .add('pos', [
+      [1, 0, 0],
+      [1, 0, 0],
+      [1, 0, 0],
+      [1, 0, 0],
+      [1, 0, 0],
+    ])
+    .add('time', [0, 1, 2, 3, 4])
+    .add('f', [0, 0.5, 1, 1.5, 2]);
+  const scene = baseScene({
+    frames: { rot: {}, inertial: { parent: 'rot', rotation: { axis: 'z', angle: { channel: 'f' } } } },
+    bodies: { m: { frame: 'rot', position: [{ attr: 'x', factor: 2, offset: 1 }, 0, 0] } },
+  });
+  scene.track_sets.s = {
+    frame: 'rot',
+    tracks: 1,
+    offsets: 'off',
+    positions: 'pos',
+    periodic,
+    attrs: { x: 1 },
+    channels: { time: { view: 'time' }, f: { view: 'f' } },
+  };
+  scene.views.main = {
+    frame: 'inertial',
+    driver: { sets: { set: 's' }, member: { index: 0 } },
+    layers: [
+      { kind: 'track', sets: { set: 's' }, members: 'all', reveal: 'trail', trail: { fraction: 0.5 } },
+      { kind: 'body', body: 'm', trail: { fraction: 0.5 } },
+    ],
+  };
+  return [scene, data];
+};
+const unit = (f: number) => [Math.cos(f), Math.sin(f), 0];
+
+describe('trails (L2, L4)', () => {
+  it('a periodic trail wraps in the shifted context and keeps the joint once', () => {
+    const [scene, data] = rotating(true);
+    validate(scene, data, state());
+    const r = evaluate(scene, data, state(), 1);
+    close(track(r).members[0]!.line, [unit(-0.5), unit(0), unit(0.5)]);
+    const body = r.panels.p1!.layers[1] as BodyLayerResult;
+    close([body.position!], [unit(0.5).map((x) => 3 * x)]);
+    close(
+      body.trail!,
+      [unit(-0.5), unit(0), unit(0.5)].map((p) => p.map((x) => 3 * x)),
+    );
+  });
+  it('a nonperiodic trail is cut at the first sample', () => {
+    const [scene, data] = rotating(false);
+    close(track(evaluate(scene, data, state(), 1)).members[0]!.line, [unit(0), unit(0.5)]);
+  });
+});
+
 describe('origin at a body (F2)', () => {
   it('a body in a frame other than the edge parent', () => {
     const data = new MemoryStore()

@@ -83,3 +83,45 @@ filterwarnings = ["error"]
 log_level = "INFO"
 testpaths = ["tests"]
 markers = ["pydylan: requires a built PyDyLAN"]
+
+[tool.ruff]
+line-length = 140  # the width of the code base. the default of 88 would rewrap most of it
+show-fixes = true
+src = ["src", "tests"]  # the helpers in tests/ are imported as first-party
+
+[tool.ruff.lint]
+# E and W, plus a subset of the rules that the Scientific Python Development Guide recommends. EM (flake8-errmsg) is left out, since
+# the messages of pytycho put the rule number in an f-string by design
+extend-select = [
+  "E",    # pycodestyle errors, E501 at the line length above
+  "W",    # pycodestyle warnings
+  "B",    # flake8-bugbear
+  "I",    # isort
+  "ARG",  # flake8-unused-arguments
+  "C4",   # flake8-comprehensions
+  "EXE",  # flake8-executable
+  "ICN",  # flake8-import-conventions
+  "ISC",  # flake8-implicit-str-concat
+  "NPY",  # NumPy-specific rules
+  "PGH",  # pygrep-hooks
+  "PIE",  # flake8-pie
+  "PL",   # pylint
+  "PT",   # flake8-pytest-style
+  "RET",  # flake8-return
+  "RUF",  # Ruff-specific
+  "SIM",  # flake8-simplify
+  "T20",  # flake8-print
+  "UP",   # pyupgrade
+  "YTT",  # flake8-2020
+]
+ignore = [
+  "PLC0415",  # import outside top level, which the lazy optional imports (e.g. jsonschema) need
+  "PLR09",    # too many arguments, branches, or statements
+  "PLR2004",  # magic value in a comparison
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["T20"]
+"examples/**" = ["T20"]
+"spec/conformance/*.py" = ["T20"]
+"noxfile.py" = ["T20"]

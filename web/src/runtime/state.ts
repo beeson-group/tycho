@@ -87,3 +87,56 @@ export class Store {
     this.emit('playing');
   }
 }
+
+// pure updates of a snapshot
+
+/**
+ * Sets a variable in the panel when the variable is panel-scoped, and in the scene otherwise
+ * (rule V1). A value that does not fit the variable leaves the state as it is.
+ */
+export function withVariable(scene: Scene, state: State, id: string, value: VariableValue, panel?: string): State {
+  const v = variableDef(scene, id);
+  if (v === undefined || !fits(v, value)) return state;
+  if (v.scope === 'panel') {
+    if (panel === undefined || !Object.hasOwn(state.panels, panel)) return state;
+    const p = state.panels[panel]!;
+    if (p.variables !== undefined && Object.hasOwn(p.variables, id) && p.variables[id] === value) return state;
+    return withPanel(state, panel, { ...p, variables: put(p.variables, id, value) });
+  }
+  if (state.variables !== undefined && Object.hasOwn(state.variables, id) && state.variables[id] === value) return state;
+  return { ...state, variables: put(state.variables, id, value) };
+}
+
+export function withChannel(state: State, channel: string): State {
+  return state.clock.channel === channel ? state : { ...state, clock: { channel } };
+}
+
+export function withPanel(state: State, id: string, panel: PanelState): State {
+  return { ...state, panels: put(state.panels, id, panel) };
+}
+
+export function withLayout(state: State, layout: Layout): State {
+  return { ...state, layout };
+}
+
+/** Removes a panel and its layout leaf, collapsing its split. The last panel stays. */
+export function withoutPanel(state: State, id: string): State {
+  if (!Object.hasOwn(state.panels, id) || Object.keys(state.panels).length < 2) return state;
+  const layout = removePanel(state.layout, id);
+  if (layout === null) return state;
+  return { ...state, panels: put(state.panels, id, undefined), layout };
+}
+
+/** A panel id of the form p1, p2, and so on that the state does not use yet. */
+export function newPanelId(state: State): string {
+  for (let n = Object.keys(state.panels).length + 1; ; n++) {
+    const id = `p${n}`;
+    if (!Object.hasOwn(state.panels, id)) return id;
+  }
+}
+
+/** The layout with two leaves exchanged. */
+export function swapLeaves(node: Layout, a: string, b: string): Layout {
+  if (node.kind === 'panel') return node.id === a ? { kind: 'panel', id: b } : node.id === b ? { kind: 'panel', id: a } : node;
+  return { ...node, a: swapLeaves(node.a, a, b), b: swapLeaves(node.b, a, b) };
+}

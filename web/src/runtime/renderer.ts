@@ -1630,4 +1630,119 @@ export class StageRenderer {
     this.region.max.set(r.z, r.w);
     this.gl.copyTextureToTexture(s.texture, target.texture, this.region, this.corner.set(r.x, r.y));
   }
+
+  private disposePanel(p: PanelRender): void {
+    for (const d of p.draws.values()) d.dispose();
+    p.draws.clear();
+    p.controls?.dispose();
+    p.labels?.remove();
+    this.panels.delete(p.id);
+  }
+
+  /** Re-resolves a panel against a new state, rebuilding only the draws whose inputs changed. */
+  private replan(p: PanelRender, state: State): void {
+    const scene = this.ctx.scene;
+    let plan: PanelPlan;
+    try {
+      plan = planPanel(scene, this.ctx.geometry, state, p.id);
+      p.error = null;
+    } catch (e) {
+      if (!(e instanceof TychoError)) throw e;
+      p.error = e.message;
+      p.plan = null;
+      for (const d of p.draws.values()) d.group.visible = false;
+      return;
+    }
+    const prev = p.plan;
+    const spec: Camera = plan.view.camera ?? { kind: 'plane', plane: 'xy' };
+    if (prev === null || prev.viewId !== plan.viewId || cameraKey(spec) !== cameraKey(p.cameraSpec)) this.setCamera(p, spec);
+    // a new display frame, driver's track set, or track layer's track set refits the camera. otherwise the camera stays where the user left it
+    const content = contentKey(plan);
+    if (content !== p.content) {
+      p.content = content;
+      p.needsFit = true;
+      p.userMoved = false;
+    }
+    p.plan = plan;
+    const keep = new Set<number>();
+    try {
+      for (const lp of plan.layers) {
+        let key: string;
+        if (lp.kind === 'track') {
+          if (lp.set === null) continue;
+          key = `track\0${plan.viewId}\0${lp.index}\0${lp.set.id}\0${plan.display}\0${lp.channel ?? ''}\0${JSON.stringify(lp.color ?? null)}`;
+        } else key = `${lp.kind}\0${plan.viewId}\0${lp.index}\0${plan.display}`;
+        keep.add(lp.index);
+        const old = p.draws.get(lp.index);
+        if (old !== undefined && old.key === key) {
+          old.group.visible = true;
+          continue;
+        }
+        if (old !== undefined) {
+          old.group.removeFromParent();
+          old.dispose();
+          p.draws.delete(lp.index);
+        }
+        const draw: Draw =
+          lp.kind === 'track'
+            ? new TrackDraw(this.ctx, lp as TrackPlan & { set: SetData }, plan.display, key)
+            : lp.kind === 'body'
+              ? new BodyDraw(this.ctx, lp.layer, key)
+              : new MarkDraw(this.ctx, lp.layer, p.cameraSpec, key);
+        // layers stack in their order, and within a layer its objects in the order they were added
+        draw.group.renderOrder = lp.index;
+        let k = 0;
+        for (const o of draw.group.children) o.renderOrder = 16 * lp.index + k++;
+        p.draws.set(lp.index, draw);
+        if (draw instanceof MarkDraw && p.box !== null) draw.layout(p.box, p.cameraSpec);
+      }
+    } catch (e) {
+      if (!(e instanceof TychoError)) throw e;
+      p.error = e.message;
+      p.plan = null;
+      for (const d of p.draws.values()) d.group.visible = false;
+      return;
+    }
+    for (const [index, d] of [...p.draws]) {
+      if (keep.has(index)) continue;
+      d.group.removeFromParent();
+      d.dispose();
+      p.draws.delete(index);
+    }
+    // the bottom run of layers that do not take a reading is cached. a static layer above a moving one is drawn live
+    const keys: string[] = [];
+    let below = true;
+    for (const lp of plan.layers) {
+      const d = p.draws.get(lp.index);
+      if (d === undefined) continue;
+      below &&= d instanceof TrackDraw && d.isStatic;
+      (below ? p.staticScene : p.scene).add(d.group);
+      if (below) keys.push(d.key);
+    }
+    const staticKey = keys.join('\n');
+    if (staticKey !== p.staticKey) {
+      p.staticKey = staticKey;
+      p.underlayDirty = true;
+    }
+  }
+
+  /** Updates a panel's draws for progress `q`. */
+  private advance(p: PanelRender, state: State, q: number): void {
+    const plan = p.plan;
+    if (plan === null) return;
+    const scene = this.ctx.scene;
+    const env: LayerEnv = { scope: plan.scope, frames: this.ctx.geometry.frames, clock: scene.clock, channel: state.clock.channel, q, display: plan.display };
+    p.error = null;
+    try {
+      for (const lp of plan.layers) {
+        const d = p.draws.get(lp.index);
+        if (d instanceof TrackDraw && lp.kind === 'track') {
+          if (d.update(lp, scene, q) && d.isStatic) p.underlayDirty = true;
+        } else if (d instanceof BodyDraw && lp.kind === 'body') d.update(env, lp.layer, plan.driver);
+      }
+    } catch (e) {
+      if (!(e instanceof TychoError)) throw e;
+      p.error = e.message;
+    }
+  }
 }

@@ -160,3 +160,36 @@ function checkTrackLayer(scene: Scene, id: string, layer: TrackLayer): void {
     if ('parameter' in layer.color === 'channel' in layer.color) fail('2.7', `view ${id}: a colormap color names both or neither of parameter and channel`);
   }
 }
+
+/** Checks a scene, and its data and a state when given. Returns the warnings. */
+export function validate(scene: Scene, data?: DataStore, state?: State): string[] {
+  const warnings: string[] = [];
+  checkVersion(scene);
+  for (const k of Object.keys(scene))
+    if (!TOP_LEVEL_KEYS.has(k)) warnings.push(`the scene has a top-level key ${JSON.stringify(k)} that this reader does not know`);
+  unknownKeys(scene.theme, THEME_KEYS, 'the theme', warnings);
+  for (const [k, v] of Object.entries(scene.theme ?? {}))
+    if (typeof v !== 'string' || !COLOR.test(v)) fail('2', `theme ${k} is ${JSON.stringify(v)}, not a #rrggbb color`);
+  unknownKeys(scene.clock, CLOCK_KEYS, 'the clock', warnings);
+  for (const [id, f] of Object.entries(scene.frames)) unknownKeys(f, FRAME_KEYS, `frame ${id}`, warnings);
+  for (const [id, b] of Object.entries(scene.bodies ?? {})) {
+    unknownKeys(b, BODY_KEYS, `body ${id}`, warnings);
+    if (b!.color !== undefined && !COLOR.test(b!.color)) fail('2.4', `body ${id} has color ${JSON.stringify(b!.color)}, not #rrggbb`);
+  }
+  for (const [id, s] of Object.entries(scene.track_sets)) unknownKeys(s, SET_KEYS, `track set ${id}`, warnings);
+  for (const [id, v] of Object.entries(scene.views)) {
+    unknownKeys(v, VIEW_KEYS, `view ${id}`, warnings);
+    for (const layer of v!.layers)
+      if (Object.hasOwn(LAYER_KEYS, layer.kind)) unknownKeys(layer, LAYER_KEYS[layer.kind]!, `a ${layer.kind} layer of view ${id}`, warnings);
+  }
+  for (const [what, table] of [
+    ['frame', scene.frames],
+    ['body', scene.bodies],
+    ['track set', scene.track_sets],
+    ['variable', scene.variables],
+    ['view', scene.views],
+  ] as const) {
+    for (const id of Object.keys(table ?? {})) checkId(id, what);
+  }
+  return warnings;
+}

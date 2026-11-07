@@ -100,6 +100,9 @@ describe('validate', () => {
     scene.views.main!.layers = [{ ...layer, context: 'sample' } as unknown as Layer];
     expect(rule(() => validate(scene, data(), state()))).toBe('L6');
     expect(rule(() => evaluate(scene, data(), state(), 0))).toBe('L6');
+    // without validate, the reveal is still checked before the context, in the order of the NumPy evaluator
+    scene.views.main!.layers = [{ ...layer, reveal: 'sweep', context: 'sample' } as unknown as Layer];
+    expect(rule(() => evaluate(scene, data(), state(), 0))).toBe('2.7');
   });
   it('a reader implements the feature layers.driver_context of version 0.3 and rejects any other (S1)', () => {
     validate(baseScene({ version: '0.3', requires: ['layers.driver_context'] }));

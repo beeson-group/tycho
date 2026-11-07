@@ -73,3 +73,94 @@ export function mixHex(a: string, b: string, t: number): string {
       .padStart(2, '0');
   return `#${c(0)}${c(1)}${c(2)}`;
 }
+
+/**
+ * A value's position on a colormap. The interval `range` maps to [0, 1], a value outside it is
+ * clamped, and the result maps onto the part of the colormap that `clip` specifies.
+ */
+export function colormapPosition(value: number, range: readonly [number, number], clip: readonly [number, number] = [0, 1]): number {
+  const [lo, hi] = range;
+  const t = hi === lo ? 0.5 : Math.min(1, Math.max(0, (value - lo) / (hi - lo)));
+  return clip[0] + t * (clip[1] - clip[0]);
+}
+
+function extent(values: ArrayLike<number>): [number, number] {
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (let i = 0; i < values.length; i++) {
+    const v = values[i]!;
+    if (v < lo) lo = v;
+    if (v > hi) hi = v;
+  }
+  return lo <= hi ? [lo, hi] : [0, 1];
+}
+
+/** A colormapped color's values over a set, one per track or one per sample, with its range and clip. */
+export interface ColorScale {
+  id: ColormapId;
+  name: string;
+  perTrack: boolean;
+  values: ArrayLike<number>;
+  range: [number, number];
+  clip: [number, number];
+}
+
+/** A function from which a color reads a choice. It returns the current value of `variable`, or undefined when `variable` does not have one. */
+export type ChoiceValue = (variable: string) => string | undefined;
+
+/**
+ * The colormap given by `colormap`, or for a map keyed by a choice, its entry for the choice's
+ * current value. The map's first entry is used without a value or for a value that the map lacks.
+ */
+export function colormapName(colormap: ColormapName | ColormapByChoice, value?: ChoiceValue): ColormapId {
+  if (typeof colormap === 'string') return colormap;
+  const v = value?.(colormap.var);
+  const named = v !== undefined && Object.hasOwn(colormap.map, v) ? colormap.map[v] : undefined;
+  return (named ?? Object.values(colormap.map).find((c) => c !== undefined) ?? 'viridis') as ColormapId;
+}
+
+export function colorScale(spec: Exclude<ColorSpec, string>, set: SetData, value?: ChoiceValue): ColorScale {
+  const perTrack = 'parameter' in spec;
+  const name = 'parameter' in spec ? spec.parameter : spec.channel;
+  const values = 'parameter' in spec ? set.parameter(spec.parameter, '2.7') : set.channel(spec.channel, '2.7');
+  return { id: colormapName(spec.colormap, value), name, perTrack, values, range: spec.range ?? extent(values), clip: spec.clip ?? [0, 1] };
+}
+
+/** A layer's color on its set, either one constant or one color per sample (a track's color repeated over its samples). */
+export type Coloring = { kind: 'constant'; rgb: Rgb } | { kind: 'sample'; rgb: Float32Array };
+
+export function coloring(spec: ColorSpec | undefined, set: SetData, fallback: Rgb, value?: ChoiceValue): Coloring {
+  if (spec === undefined) return { kind: 'constant', rgb: fallback };
+  if (typeof spec === 'string') return { kind: 'constant', rgb: hexRgb(spec) };
+  const scale = colorScale(spec, set, value);
+  const out = new Float32Array(3 * set.samples);
+  const rgb = [0, 0, 0];
+  if (scale.perTrack) {
+    for (let t = 0; t < set.tracks; t++) {
+      colormap(scale.id, colormapPosition(scale.values[t]!, scale.range, scale.clip), rgb);
+      for (let i = set.start(t); i < set.start(t) + set.count(t); i++) out.set(rgb, 3 * i);
+    }
+  } else {
+    for (let i = 0; i < set.samples; i++) out.set(colormap(scale.id, colormapPosition(scale.values[i]!, scale.range, scale.clip), rgb), 3 * i);
+  }
+  return { kind: 'sample', rgb: out };
+}
+
+/** Colors along the part of a colormap that a scale uses, from 0 at the low end to 1 at the high end. */
+export function gradientStops(scale: ColorScale, stops = 12): [number, string][] {
+  const out: [number, string][] = [];
+  const rgb = [0, 0, 0];
+  for (let i = 0; i < stops; i++) {
+    const t = i / (stops - 1);
+    colormap(scale.id, scale.clip[0] + t * (scale.clip[1] - scale.clip[0]), rgb);
+    out.push([t, `rgb(${rgb.map((v) => Math.round(255 * v)).join(',')})`]);
+  }
+  return out;
+}
+
+/** A CSS gradient from the bottom up over the part of a colormap that a scale uses. */
+export function gradientCss(scale: ColorScale, stops = 12): string {
+  return `linear-gradient(to top, ${gradientStops(scale, stops)
+    .map(([t, css]) => `${css} ${(100 * t).toFixed(1)}%`)
+    .join(', ')})`;
+}

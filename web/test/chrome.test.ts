@@ -2,7 +2,7 @@
 // stand-in of dom-shim.ts, without a renderer, since WebGL is not available under Node.
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { chromeTokens, colormapName, DEFAULT_THEME } from '../src/runtime/colors';
+import { chromeTokens, colormapName, cssColorHex, DEFAULT_THEME, hostTheme, PALETTES } from '../src/runtime/colors';
 import { buildChip, buildReadout, dropText, fillReadout, TychoViewerElement } from '../src/runtime/element';
 import { GeometryCache } from '../src/runtime/geometry';
 import { GLYPHS, icon } from '../src/runtime/icons';
@@ -640,6 +640,59 @@ describe('a viewer embedded on a page, under a DOM stand-in', () => {
   const titled = (title: string) => JSON.stringify({ ...dressedBroucke().scene, title });
   const titleOf = (v: { titleEl: { textContent: string } }) => v.titleEl.textContent;
   const loaded = (v: { scene: unknown }) => vi.waitFor(() => expect(v.scene).not.toBeNull());
+
+  describe('theme', () => {
+    it('takes a palette in place of the scene theme, and a custom property of the host over both', () => {
+      const none = () => '';
+      const scene = { background: '#102030', foreground: '#405060', grid: '#708090' };
+      expect(hostTheme(scene, null, none)).toEqual(scene);
+      expect(hostTheme(scene, 'sepia', none)).toEqual(scene);
+      expect(hostTheme(scene, 'dark', none)).toEqual({ background: '#050505', foreground: '#f2f2ef', grid: '#232320' });
+      expect(hostTheme(scene, 'light', none)).toEqual({ background: '#faf8f3', foreground: '#141413', grid: '#e3e0d8' });
+      const set = (p: string) => (p === '--tycho-grid' ? ' #ABC ' : '');
+      expect(hostTheme(scene, 'light', set)).toEqual({ ...PALETTES.light, grid: '#aabbcc' });
+      expect(hostTheme(scene, null, set)).toEqual({ ...scene, grid: '#aabbcc' });
+    });
+    it('reads a form of a color it cannot parse only through a canvas, and ignores what is not a color', () => {
+      expect(cssColorHex('#AbCdEf')).toBe('#abcdef');
+      expect(cssColorHex('')).toBeNull();
+      expect(cssColorHex('rgb(1, 2, 3)')).toBeNull();
+    });
+    it('recolors a live viewer when the attribute changes, without loading the scene again', async () => {
+      const { v, host } = await live();
+      const { scene, geometry, store } = v;
+      expect(host.style['--bg']).toBe(sceneThemeBackground(scene));
+      const accent = host.style['--accent'];
+      host.setAttribute('theme', 'light');
+      v.attributeChangedCallback();
+      expect(v.renderer.setTheme).toHaveBeenLastCalledWith(PALETTES.light);
+      expect(host.style['--bg']).toBe('#faf8f3');
+      expect(host.style['--fg']).toBe('#141413');
+      expect(host.style['--highlight']).toBe('#000000');
+      expect(host.style['--accent']).toBe(accent);
+      expect(v.dirty).toBe(true);
+      host.setAttribute('theme', 'dark');
+      v.attributeChangedCallback();
+      expect(host.style['--bg']).toBe('#050505');
+      host.removeAttribute('theme');
+      v.attributeChangedCallback();
+      expect(host.style['--bg']).toBe(sceneThemeBackground(scene));
+      expect([v.scene, v.geometry, v.store]).toEqual([scene, geometry, store]);
+      expect(v.geometry).toBe(geometry);
+    });
+    it('lets the custom properties of the host win, read when the attribute changes', async () => {
+      const { v, host } = await live({ theme: 'dark' });
+      g.getComputedStyle = () => ({ getPropertyValue: (p: string) => (p === '--tycho-background' ? '#123456' : '') });
+      host.setAttribute('theme', 'light');
+      v.attributeChangedCallback();
+      expect(host.style['--bg']).toBe('#123456');
+      expect(host.style['--fg']).toBe('#141413');
+    });
+    it('observes the attribute and does not need a scene to be set', () => {
+      expect(TychoViewerElement.observedAttributes).toEqual(['theme']);
+      expect(() => viewer({ theme: 'dark' }).v.attributeChangedCallback()).not.toThrow();
+    });
+  });
 
   describe('loading', () => {
     it('gives two viewers on one page the scene and the data of their own blocks', async () => {

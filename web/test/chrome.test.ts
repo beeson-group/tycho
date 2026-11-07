@@ -1,7 +1,7 @@
 // Tests the viewer's controls (its chrome), first the pure helpers behind them, then the shell built under Node on the DOM
 // stand-in of dom-shim.ts, without a renderer, since WebGL is not available under Node.
 import { readFileSync } from 'node:fs';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { chromeTokens, colormapName, DEFAULT_THEME } from '../src/runtime/colors';
 import { buildChip, buildReadout, dropText, fillReadout, TychoViewerElement } from '../src/runtime/element';
 import { GeometryCache } from '../src/runtime/geometry';
@@ -24,7 +24,7 @@ import { chipMenu, withAdd, withPlacement } from '../src/runtime/state';
 import type { Control, Readout, Scene, State } from '../src/scene';
 import { validate } from '../src/validate';
 import { loadCorpus } from './corpus';
-import { byClass, byTag, FakeElement, installDom } from './dom-shim';
+import { byClass, byTag, FakeDocument, FakeElement, installDom } from './dom-shim';
 
 const BROUCKE_CAPTION: Readout['parts'] = [
   'e = ',
@@ -580,6 +580,125 @@ describe('the chrome under a DOM stand-in', () => {
 });
 
 // every node the shell builds is an element. scene strings thus reach the DOM as text and never as markup
+describe('a viewer embedded on a page, under a DOM stand-in', () => {
+  const g = globalThis as Record<string, unknown>;
+  let doc: FakeDocument;
+  let uninstall: () => void;
+  beforeEach(() => {
+    ({ doc, uninstall } = installDom() as { doc: FakeDocument; uninstall: () => void });
+  });
+  afterEach(() => {
+    delete g.getComputedStyle;
+    vi.unstubAllGlobals();
+    uninstall();
+  });
+
+  const base64 = (bytes: Uint8Array | string) => Buffer.from(bytes).toString('base64');
+
+  function block(attributes: Record<string, string>, payload: Uint8Array | string): FakeElement {
+    const b = new FakeElement(doc as never, 'script');
+    for (const [k, v] of Object.entries(attributes)) b.setAttribute(k, v);
+    b.textContent = base64(payload);
+    return b;
+  }
+
+  /** A viewer on the stand-in, without a renderer. `connected` stays false, hence start() leaves the canvas out. */
+  function viewer(attributes: Record<string, string> = {}, children: FakeElement[] = []) {
+    const host = new FakeElement(doc as never, 'tycho-viewer');
+    for (const [k, v] of Object.entries(attributes)) host.setAttribute(k, v);
+    host.append(...children);
+    const v = new TychoViewerElement() as any;
+    Object.assign(v, {
+      shadowRoot: null,
+      isConnected: false,
+      style: host.style,
+      children: host.children,
+      hasAttribute: (k: string) => host.hasAttribute(k),
+      getAttribute: (k: string) => host.getAttribute(k),
+      addEventListener: host.addEventListener.bind(host),
+      getRootNode: () => doc,
+      attachShadow: () => {
+        v.shadowRoot = new FakeElement(doc as never, '#shadow-root');
+        return v.shadowRoot;
+      },
+    });
+    return { v, host };
+  }
+
+  const titled = (title: string) => JSON.stringify({ ...dressedBroucke().scene, title });
+  const titleOf = (v: { titleEl: { textContent: string } }) => v.titleEl.textContent;
+  const loaded = (v: { scene: unknown }) => vi.waitFor(() => expect(v.scene).not.toBeNull());
+
+  describe('loading', () => {
+    it('gives two viewers on one page the scene and the data of their own blocks', async () => {
+      const { bytes } = dressedBroucke();
+      const own = (title: string) => [block({ 'data-tycho': 'scene' }, titled(title)), block({ 'data-tycho': 'data' }, bytes)];
+      const a = viewer({}, own('first')).v;
+      const b = viewer({}, own('second')).v;
+      a.connectedCallback();
+      b.connectedCallback();
+      await Promise.all([loaded(a), loaded(b)]);
+      expect([titleOf(a), titleOf(b)]).toEqual(['first', 'second']);
+    });
+    it('prefers its own blocks to the attributes and to the blocks of an older page', async () => {
+      const { bytes } = dressedBroucke();
+      doc.body.append(block({ id: 'tycho-scene' }, titled('page')), block({ id: 'tycho-data' }, bytes));
+      const { v } = viewer({ scene: '#tycho-scene', data: '#tycho-data' }, [
+        block({ 'data-tycho': 'scene' }, titled('own')),
+        block({ 'data-tycho': 'data' }, bytes),
+      ]);
+      v.connectedCallback();
+      await loaded(v);
+      expect(titleOf(v)).toBe('own');
+    });
+    it('falls back to the blocks with the old ids, with or without the selectors that older pages hold', async () => {
+      const { bytes } = dressedBroucke();
+      doc.body.append(block({ id: 'tycho-scene' }, titled('old page')), block({ id: 'tycho-data' }, bytes));
+      for (const attributes of [{}, { scene: '#tycho-scene', data: '#tycho-data' }] as Record<string, string>[]) {
+        const { v } = viewer(attributes);
+        v.connectedCallback();
+        await loaded(v);
+        expect(titleOf(v)).toBe('old page');
+      }
+    });
+    it('fetches the attributes that are URLs', async () => {
+      const { bytes } = dressedBroucke();
+      const files: Record<string, Uint8Array> = { 'https://x.test/a.tys': new TextEncoder().encode(titled('fetched')), './a.tyd': bytes };
+      const fetched = vi.fn(async (url: string) => ({ ok: true, status: 200, arrayBuffer: async () => files[url]!.slice().buffer }));
+      vi.stubGlobal('fetch', fetched);
+      const { v } = viewer({ scene: 'https://x.test/a.tys', data: './a.tyd' });
+      v.connectedCallback();
+      await loaded(v);
+      expect(titleOf(v)).toBe('fetched');
+      expect(fetched).toHaveBeenCalledTimes(2);
+    });
+    it('shows the reason when a file is missing, and stays empty for a caller of load() when the page gives neither', async () => {
+      const shown = (v: { statusEl: FakeElement }) => v.statusEl.textContent;
+      vi.stubGlobal('fetch', async () => ({ ok: false, status: 404 }));
+      const missing = viewer({ scene: 'a.tys', data: 'a.tyd' }).v;
+      missing.connectedCallback();
+      await vi.waitFor(() => expect(shown(missing)).toBe('the scene did not load: a.tys answered 404'));
+      const selector = viewer({ scene: '#nope', data: '#nope' }).v;
+      selector.connectedCallback();
+      await vi.waitFor(() => expect(shown(selector)).toContain('the scene selector #nope does not match an element'));
+      const half = viewer({}, [block({ 'data-tycho': 'scene' }, titled('half'))]).v;
+      half.connectedCallback();
+      await vi.waitFor(() => expect(shown(half)).toContain('the data is missing'));
+      const empty = viewer().v;
+      empty.connectedCallback();
+      await Promise.resolve();
+      expect(shown(empty)).toBe('loading…');
+      expect(empty.loading).toBe(false);
+    });
+  });
+
+});
+
+/** The background of the chrome for a scene without a `theme` attribute. */
+function sceneThemeBackground(scene: Scene): string {
+  return chromeTokens({ ...DEFAULT_THEME, ...(scene.theme ?? {}) })['--bg']!;
+}
+
 it('the runtime does not use innerHTML', () => {
   for (const f of ['element.ts', 'icons.ts', 'readouts.ts', 'state.ts', 'colors.ts']) {
     expect(readFileSync(new URL(`../src/runtime/${f}`, import.meta.url), 'utf8')).not.toMatch(/innerHTML|outerHTML|insertAdjacentHTML/);

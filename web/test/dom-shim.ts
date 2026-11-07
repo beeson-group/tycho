@@ -187,6 +187,22 @@ export class FakeElement {
 export class FakeDocument {
   activeElement: FakeElement | null = null;
   readyState = 'complete';
+  hidden = false;
+  readonly body = new FakeElement(this, 'body');
+  /** The type of every listener added and not removed. */
+  readonly listening: string[] = [];
+  addEventListener(type: string): void {
+    this.listening.push(type);
+  }
+  removeEventListener(type: string): void {
+    const i = this.listening.indexOf(type);
+    if (i >= 0) this.listening.splice(i, 1);
+  }
+  /** Finds an element under `body` by `#id`, and throws on a string with a slash or a colon, as a browser does for most URLs. */
+  querySelector(selector: string): FakeElement | null {
+    if (/[/:]/.test(selector)) throw new SyntaxError(`${selector} is not a valid selector`);
+    return walk(this.body).find((e) => `#${e.id}` === selector) ?? null;
+  }
   createElement(tag: string): FakeElement {
     return new FakeElement(this, tag);
   }

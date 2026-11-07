@@ -171,3 +171,20 @@ describe('a panel plan of the grammar of 0.2', () => {
     }
   });
 });
+
+describe('a highlight kernel (2.7)', () => {
+  it('gives max(o, a exp(-(d / (w extent))^2)), and the floor where the kernel is weaker', () => {
+    const k = { width: 0.05, opacity: 0.55 };
+    expect(kernelOpacity(0.05, k, 2, 0)).toBe(0.55);
+    expect(kernelOpacity(0.05, k, 2, 0.1)).toBeCloseTo(0.55 * Math.exp(-1), 15);
+    expect(kernelOpacity(0.05, k, 2, 0.3)).toBe(0.05);
+    // the ratio is 0 when the extent is zero
+    expect(kernelOpacity(0.05, k, 0, 5)).toBe(0.55);
+    expect(kernelOpacity(0.8, k, 2, 0)).toBe(0.8);
+  });
+  it('merged colorbars keep the first marker and the first band that any of them has', () => {
+    const bar = (marker: number | null, band: [number, number] | null): Colorbar => ({ label: 'e', gradient: 'g', stops: [], lo: 0, hi: 1, marker, band });
+    expect(mergeColorbars([bar(null, null), bar(0.5, [0.4, 0.6]), bar(0.7, null)])).toEqual([bar(0.5, [0.4, 0.6])]);
+    expect(mergeColorbars([bar(null, null), { ...bar(null, null), label: 'f' }])).toHaveLength(2);
+  });
+});

@@ -853,6 +853,93 @@ export class TychoViewerElement extends Base {
     const walk = (n: Layout): string => (n.kind === 'panel' ? n.id : walk(n.a));
     return this.store === null ? null : walk(this.store.state.layout);
   }
+
+  // transport
+
+  private hasTransport(): boolean {
+    return (this.scene?.controls ?? []).some((c) => c.kind === 'transport');
+  }
+
+  /** Starts the clock. It does not do anything before a scene loads. */
+  play(): void {
+    this.store?.setPlaying(true);
+  }
+
+  /** Stops the clock. It does not do anything before a scene loads. */
+  pause(): void {
+    this.store?.setPlaying(false);
+  }
+
+  private step(by: number): void {
+    const store = this.store;
+    if (store === null) return;
+    this.pause();
+    store.setFrame(store.frame + by);
+  }
+
+  /** Goes to a frame, playing on from there when playing. */
+  private seek(frame: number): void {
+    const store = this.store!;
+    store.setFrame(frame);
+    if (store.playing) this.anchor = { index: store.frame, time: performance.now() };
+  }
+
+  private onKey(ev: KeyboardEvent): void {
+    if (this.store === null || ev.metaKey || ev.ctrlKey || ev.altKey) return;
+    if (ev.key === 'Escape') {
+      if (this.menu !== null) {
+        this.closeMenu(true);
+        ev.preventDefault();
+      } else if (this.closeExport?.()) ev.preventDefault();
+      return;
+    }
+    const target = ev.composedPath()[0] as Element | undefined;
+    if (target !== undefined && ['INPUT', 'SELECT', 'BUTTON', 'TEXTAREA'].includes(target.tagName)) return;
+    const action = keyAction(ev.key, ev.shiftKey, this.scene!.clock.steps);
+    if (action === null) return;
+    if (action.kind === 'fit') {
+      ev.preventDefault();
+      this.fitAll();
+      return;
+    }
+    if (action.kind === 'slider') {
+      if (this.stepSlider(action.by)) ev.preventDefault();
+      return;
+    }
+    if (!this.hasTransport() && !this.kiosk) return;
+    ev.preventDefault();
+    if (action.kind === 'toggle') this.store.setPlaying(!this.store.playing);
+    else if (action.kind === 'step') this.step(action.by);
+    else this.seek(action.frame);
+  }
+
+  /** Fits every panel's camera to what it draws. */
+  fitAll(): void {
+    this.renderer?.refitAll();
+    this.invalidate();
+  }
+
+  private fitPanel(pid: string): void {
+    this.renderer?.refit(pid);
+    this.invalidate();
+  }
+
+  /** Moves the first scene-scoped slider by `by` stops, and returns false when there is not a slider with stops to move. */
+  private stepSlider(by: number): boolean {
+    const scene = this.scene!;
+    const st = this.store!.state;
+    const first = this.firstPanel();
+    const control = (scene.controls ?? []).find((c) => c.kind === 'slider' && variableDef(scene, c.variable)?.scope !== 'panel') as
+      Extract<Control, { kind: 'slider' }> | undefined;
+    if (control === undefined || first === null) return false;
+    const scope: PanelScope = { scene, state: st, panel: st.panels[first]! };
+    const stops = sliderStops(scope, this.geometry!.sets, control);
+    if (stops.length === 0) return false;
+    const value = this.panelValue(scope, control.variable) as number;
+    const i = Math.min(stops.length - 1, Math.max(0, nearestStop(stops, value) + by));
+    this.store!.update((s) => withVariable(scene, s, control.variable, stops[i]!));
+    return true;
+  }
 }
 
 /**

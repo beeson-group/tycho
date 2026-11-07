@@ -276,3 +276,13 @@ describe('body trails from the per-lap table are the evaluator trail (L4, C6)', 
     }
   });
 });
+
+describe('the corpus sweep above', () => {
+  it('met periodic wraps, trails across lap joints and below lap -1, hidden tracks, and end pieces', () => {
+    expect(seen.wraps).toBeGreaterThan(0);
+    expect(seen.laps).toBeGreaterThan(0);
+    expect(seen.deep).toBeGreaterThan(0);
+    expect(seen.hidden).toBeGreaterThan(0);
+    expect(seen.pieces).toBeGreaterThan(0);
+  });
+});

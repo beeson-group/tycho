@@ -6,6 +6,10 @@ The two file formats are versioned apart from the packages, i.e. either format v
 
 ## [Unreleased]
 
+### Added
+
+- A plane camera can be given `"aspect": "free"`, under which the two axes are scaled separately in the fit, so that a diagram such as a residual against an iteration count is drawn across the whole panel in both directions. Each axis of the axes and grid layers is then ticked at a step for its scale. Under the default, `"equal"`, one unit stays as long across the panel as up it. The scene format is at version 0.3, which adds this key.
+
 ### Fixed
 
 - The static layers of a panel are no longer lost at a fractional device pixel ratio, e.g. 1.25. At such a ratio, the viewport was rounded up past the end of the drawing buffer, and the copy of these layers was refused by WebGL, which left the panel gray.

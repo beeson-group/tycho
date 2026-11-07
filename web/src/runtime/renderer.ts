@@ -1222,7 +1222,8 @@ class MarkDraw implements Draw {
       this.full = false;
       this.ticks = plane && (layer.labels ?? plane);
     }
-    this.follows = this.ticks;
+    // under a free aspect a grid without numbers is laid out across the view too, at a step for each axis, since one step from the box suits only one of them
+    this.follows = this.ticks || (layer.kind === 'grid' && freeAspect(cam));
     const mat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, depthTest: false, depthWrite: false });
     this.lines = new THREE.LineSegments(new THREE.BufferGeometry(), mat);
     this.lines.frustumCulled = false;
@@ -1249,9 +1250,10 @@ class MarkDraw implements Draw {
       col.push(...rgb, alpha, ...rgb, alpha);
     };
     if (this.kind === 'axes') {
-      const len = niceStep(ext, 2);
+      // under a free aspect each axis is as long as a round fraction of the box along it, or of the box's largest side where it is flat
+      const len = (e: number) => niceStep(freeAspect(cam) && e > 1e-9 * ext ? e : ext, 2);
       const fg = hexRgb(this.theme.foreground);
-      this.tips = [new THREE.Vector3(len, 0, 0), new THREE.Vector3(0, len, 0), new THREE.Vector3(0, 0, len)];
+      this.tips = [new THREE.Vector3(len(size.x), 0, 0), new THREE.Vector3(0, len(size.y), 0), new THREE.Vector3(0, 0, len(size.z))];
       for (const tip of this.tips) add(this.full ? tip.clone().negate() : new THREE.Vector3(), tip, fg, 0.8);
     } else {
       const { right, up, normal } = cameraBasis(cam.kind === 'plane' ? cam : { kind: 'plane', plane: cam.up === 'x' ? 'yz' : cam.up === 'y' ? 'xz' : 'xy' });

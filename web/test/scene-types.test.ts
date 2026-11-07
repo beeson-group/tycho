@@ -83,6 +83,28 @@ describe('validate', () => {
     scene.views.main!.driver.sets = { set: 'u' };
     expect(rule(() => validate(scene, data(), state()))).toBe('C5');
   });
+  it('a track layer in the driver context reads the frame edges on the driver, and still needs the clock channels for a reading (L6, F5, C5)', () => {
+    const scene = second();
+    scene.frames = { a: {}, b: { parent: 'a', rotation: { axis: 'z', angle: { channel: 'time' } } } };
+    scene.views.main!.frame = 'b';
+    expect(rule(() => validate(scene, data(), state()))).toBe('F5');
+    const layer: TrackLayer = { kind: 'track', sets: { set: 'u' }, members: 'all', context: 'driver' };
+    scene.views.main!.layers = [layer];
+    validate(scene, data(), state());
+    // at frame 1 of 4 the driver reads time = 0.25, between the angles 0 and 1, and the set u does not carry any channel
+    const line = (evaluate(scene, data(), state(), 1).panels.p1!.layers[0] as TrackLayerResult).members[0]!.line;
+    const want = [0, 0, 0, 0.75 + 0.25 * Math.cos(1), 0.25 * Math.sin(1), 0];
+    line.flat().forEach((x, i) => expect(x).toBeCloseTo(want[i]!, 15));
+    scene.views.main!.layers = [{ ...layer, head: true }];
+    expect(rule(() => validate(scene, data(), state()))).toBe('C5');
+    scene.views.main!.layers = [{ ...layer, context: 'sample' } as unknown as Layer];
+    expect(rule(() => validate(scene, data(), state()))).toBe('L6');
+    expect(rule(() => evaluate(scene, data(), state(), 0))).toBe('L6');
+  });
+  it('a reader implements the feature layers.driver_context of version 0.3 and rejects any other (S1)', () => {
+    validate(baseScene({ version: '0.3', requires: ['layers.driver_context'] }));
+    expect(rule(() => validate(baseScene({ version: '0.3', requires: ['layers.arrows'] })))).toBe('S1');
+  });
   it('a literal index past the last track and a selector whose parameter the track set lacks are rejected (V3)', () => {
     const scene = second();
     scene.views.main!.layers = [{ kind: 'track', sets: { set: 'u' }, members: { index: 1 } }];

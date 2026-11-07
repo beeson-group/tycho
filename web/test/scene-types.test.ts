@@ -104,4 +104,40 @@ describe('validate', () => {
     scene.views.main!.layers = [{ kind: 'track', sets: { tags: { kind: 'x' } }, members: 'all' }];
     expect(rule(() => evaluate(scene, data(), state(), 0))).toBe('V2');
   });
+
+  it('ids that are Object.prototype member names are unknown, not inherited (S3, 2.8, 2.4, 2.9)', () => {
+    const scene = baseScene({ bodies: { b1: { frame: 'a', position: [0, 0, 0] } } });
+    const st = state();
+    st.variables = { toString: 1 };
+    expect(validate(scene, data(), st)).toEqual([]);
+    expect(rule(() => validate(scene, data(), state('constructor')))).toBe('2.8');
+    scene.views.main!.layers.push({ kind: 'body', body: 'toString' });
+    expect(rule(() => validate(scene, data()))).toBe('L4');
+    scene.views.main!.layers.pop();
+    scene.readouts = [{ place: 'caption', parts: [{ var: 'valueOf' }] }];
+    expect(rule(() => validate(scene))).toBe('2.9');
+    const proto = JSON.parse('{"clock":{"channel":"time"},"panels":{"__proto__":{"view":"main"}},"layout":{"kind":"panel","id":"__proto__"}}') as State;
+    const r = evaluate(baseScene(), data(), proto, 0);
+    expect(Object.keys(r.panels)).toEqual(['__proto__']);
+  });
+  it('nonfinite values and an infinite span break T3, and a noninteger frame index breaks 2.6', () => {
+    expect(rule(() => validate(baseScene(), data().add('time', [0, Infinity])))).toBe('T3');
+    expect(rule(() => validate(baseScene(), data().add('time', [-1e308, 1e308])))).toBe('T3');
+    expect(rule(() => evaluate(baseScene(), data().add('time', [0, Infinity]), state(), 0))).toBe('no error');
+    const scene = baseScene();
+    scene.views.main!.layers = [{ kind: 'track', sets: { set: 's' }, members: 'all', head: true }];
+    expect(rule(() => evaluate(scene, data().add('time', [0, Infinity]), state(), 0))).toBe('T3');
+    expect(rule(() => evaluate(baseScene(), data(), state(), 0.5))).toBe('2.6');
+    expect(rule(() => evaluate(baseScene(), data(), state(), NaN))).toBe('2.6');
+  });
+  it('a zero scale, a two-element origin, and an edge field on the root are rejected at load (F2, 2.3)', () => {
+    expect(rule(() => validate(baseScene({ frames: { a: {}, b: { parent: 'a', scale: 0 } } })))).toBe('F2');
+    expect(rule(() => validate(baseScene({ frames: { a: {}, b: { parent: 'a', scale: { attr: 'k', factor: 0 } } } })))).toBe('F2');
+    expect(rule(() => validate(baseScene({ frames: { a: {}, b: { parent: 'a', origin: [1, 2] as unknown as [number, number, number] } } })))).toBe('F2');
+    expect(rule(() => validate(baseScene({ frames: { a: { scale: 2 } } })))).toBe('2.3');
+    const scene = baseScene({ frames: { a: {}, b: { parent: 'a', scale: { attr: 'k' } } } });
+    scene.track_sets.s!.attrs = { k: 0 };
+    scene.views.main!.frame = 'b';
+    expect(rule(() => validate(scene, data(), state()))).toBe('F2');
+  });
 });

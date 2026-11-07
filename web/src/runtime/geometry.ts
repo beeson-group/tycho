@@ -300,3 +300,62 @@ export function loopSpan(tc: TrackClock, ua: number, ub: number, laps: number, r
   const same = first[0] === final[0] && first[1] === final[1];
   return { range, laps: same ? null : [first[0], final[1] === 0 ? final[0] - 1 : final[0]], pieces };
 }
+
+export interface Reveal extends LoopSpan {
+  /** The track is not drawn at this reading (rule C3). */
+  hidden: boolean;
+  /** The track's reading u, bounded by rule C3, or null when the layer does not take a reading or the track is hidden. */
+  reading: number | null;
+  /** The loop reading U = n u of rule C6, null when `reading` is null. */
+  loop: number | null;
+  /** The point at the reading, i.e. the head of rule L3, when the layer draws a head and the track is shown. */
+  head: Vertex | null;
+}
+
+export interface RevealSpec {
+  reveal: 'none' | 'grow' | 'trail';
+  fraction: number;
+  before?: 'clamp' | 'hidden';
+  after?: 'clamp' | 'hidden';
+  head: boolean;
+  periodic: boolean;
+  /** The number of laps n of rule C6 on this set, taken from the clock for a periodic set and one otherwise. */
+  laps: number;
+}
+
+/** Whether a layer takes a reading on its tracks (rule C5), by the same test as the evaluator. */
+export function needsReading(layer: TrackLayer, clock: Clock): boolean {
+  return (layer.reveal ?? 'none') !== 'none' || hasHead(layer) || (clock.mode === 'value' && (layer.before === 'hidden' || layer.after === 'hidden'));
+}
+
+export function revealSpec(layer: TrackLayer, periodic: boolean, laps = 1): RevealSpec {
+  return {
+    reveal: layer.reveal ?? 'none',
+    fraction: layer.trail?.fraction ?? 1,
+    before: layer.before,
+    after: layer.after,
+    head: hasHead(layer),
+    periodic,
+    laps: periodic ? laps : 1,
+  };
+}
+
+/**
+ * The revealed part of one track at progress `q` (rules C2, C3, C6, L1, L2 and L3). The track clock
+ * `tc` is null only for a layer that does not take a reading, which shows every sample of every lap.
+ */
+export function revealTrack(tc: TrackClock | null, clock: Clock, q: number, spec: RevealSpec, round: (x: number) => number = identity): Reveal {
+  const n = spec.laps;
+  const full = { range: fullRange(n - 1), laps: [0, n - 1] as [number, number], pieces: [] };
+  if (tc === null) return { hidden: false, reading: null, loop: null, head: null, ...full };
+  const u = bound(tc.reading(clock, q), spec.before, spec.after);
+  if (u === null) return { hidden: true, reading: null, loop: null, head: null, range: [...EMPTY_RANGE], laps: null, pieces: [] };
+  const U = n * u;
+  const at = lapOf(U, n);
+  const head = spec.head ? point(tc, at.u, false, at.lap) : null;
+  if (spec.reveal === 'none') return { hidden: false, reading: u, loop: U, head, ...full };
+  // the tail of rule L2 is computed in float64 with the product first, and cut at 0 unless the set is periodic
+  let tail = spec.reveal === 'grow' ? 0 : U - n * spec.fraction;
+  if (tail < 0 && !spec.periodic) tail = 0;
+  return { hidden: false, reading: u, loop: U, head, ...loopSpan(tc, tail, U, n, round) };
+}

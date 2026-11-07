@@ -550,3 +550,33 @@ def test_v3_every_names_a_sparse_context():
     doc = scene.to_document()
     out = evaluate(doc, scene.to_container(), doc["initial"], 0)
     assert [m["index"] for m in out["panels"]["p"]["layers"][0]["members"]] == [0, 3, 4]
+
+
+def test_a_colormap_keyed_on_a_choice_names_every_value_and_nothing_else():
+    def write(cmap, choice_values=("closed", "open")):
+        scene = ty.Scene()
+        root = scene.frame("root")
+        ts = scene.track_set("s", frame=root, dtype="float64")
+        ts.add(np.zeros((2, 2)), channels={"t": [0.0, 1.0]}, parameters={"e": 0.1})
+        look = scene.choice("look", list(choice_values), scope="panel")
+        scene.selector("sel", by="index")
+        scene.clock(channels=["t"], steps=4)
+        spec = {"parameter": "e", "colormap": {"var": look if cmap.pop("handle", False) else cmap.pop("var", "look"), "map": cmap["map"]}}
+        scene.view("v", frame=root, driver=ty.driver(ts, 0), layers=[ty.track(ts, color=spec)])
+        scene.panel("p", "v")
+        return scene.to_document()
+
+    doc = write({"map": {"closed": "viridis", "open": "reds"}, "handle": True})
+    assert doc["views"]["v"]["layers"][0]["color"]["colormap"] == {"var": "look", "map": {"closed": "viridis", "open": "reds"}}
+    with pytest.raises(ty.SceneError, match=r"2.7: a colormap of view 'v' keyed on 'look' does not name a colormap for \['open'\]"):
+        write({"map": {"closed": "viridis"}})
+    with pytest.raises(ty.SceneError, match=r"maps \['shut'\], which are not its values"):
+        write({"map": {"closed": "viridis", "open": "reds", "shut": "blues"}})
+    with pytest.raises(ty.SceneError, match="names 'sel', which is a selector, not a choice"):
+        write({"var": "sel", "map": {"closed": "viridis", "open": "reds"}})
+    with pytest.raises(ty.SceneError, match="not one of viridis"):
+        write({"map": {"closed": "jet", "open": "reds"}})
+    scene, _ = periodic_pair()
+    e = scene.selector("e", parameter="e")
+    with pytest.raises(ty.SceneError, match="selector, not a choice"):
+        ty.track("closed", color={"parameter": "e", "colormap": {"var": e, "map": {"x": "viridis"}}})

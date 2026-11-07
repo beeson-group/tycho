@@ -236,5 +236,56 @@ export function validate(scene: Scene, data?: DataStore, state?: State): string[
   if (clock.labels !== undefined && clock.labels.length !== clock.channels.length)
     fail('2.6', `the clock has ${clock.labels.length} labels for ${clock.channels.length} channels`);
   clockLaps(clock);
+  for (const [id, view] of Object.entries(scene.views)) {
+    if (typeof view!.frame === 'string') {
+      if (!isFrame(view!.frame)) fail('2.7', `view ${id} displays ${view!.frame}, which is not a frame`);
+    } else {
+      checkVariableRef(scene, view!.frame.var, 'choice', '2.7');
+      const v = variableDef(scene, view!.frame.var)!;
+      if (v.kind === 'choice') for (const f of v.values) if (!isFrame(f)) fail('2.7', `the frame of view ${id} can be ${f}, which is not a frame`);
+    }
+    checkQuery(scene, view!.driver.sets);
+    if ((view!.driver.member as unknown) === 'all') fail('V3', `view ${id}: the driver's member is "all", but a driver resolves to one track`);
+    if ('count' in (view!.driver.member as object)) fail('V3', `view ${id}: the driver's member is a count, but a driver resolves to one track`);
+    if ('var' in view!.driver.member) checkVariableRef(scene, view!.driver.member.var, 'selector', 'V3');
+    if (view!.camera !== undefined && view!.camera.kind !== 'plane' && view!.camera.kind !== 'orbit')
+      fail('2.7', `view ${id}: a camera kind is ${JSON.stringify((view!.camera as { kind: unknown }).kind)}, not plane or orbit`);
+    for (const layer of view!.layers) {
+      if (!LAYER_KINDS.includes(layer.kind)) fail('S1', `view ${id}: layer kind ${JSON.stringify(layer.kind)} is not implemented`);
+      if (layer.visible !== undefined) checkVariableRef(scene, layer.visible.var, 'toggle', 'L5');
+      if (layer.kind === 'track') checkTrackLayer(scene, id, layer);
+      else if (layer.kind === 'body') {
+        if (!Object.hasOwn(scene.bodies ?? {}, layer.body)) fail('L4', `view ${id} draws ${layer.body}, which is not a body`);
+        if (layer.trail !== undefined) checkTrail(id, layer.trail);
+        if (layer.size !== undefined && !(layer.size > 0)) fail('2.7', `view ${id}: a body layer's size is ${layer.size}, not positive`);
+      } else if (layer.kind === 'axes') {
+        if (layer.span !== undefined && layer.span !== 'full' && layer.span !== 'positive')
+          fail('2.7', `view ${id}: an axes layer's span is ${JSON.stringify(layer.span)}, not full or positive`);
+      } else if (layer.labels !== undefined && typeof layer.labels !== 'boolean')
+        fail('2.7', `view ${id}: a grid layer's labels is ${JSON.stringify(layer.labels)}, not a boolean`);
+    }
+  }
+  for (const c of scene.controls ?? []) {
+    if (!CONTROL_KINDS.includes(c.kind)) fail('S1', `control kind ${JSON.stringify(c.kind)} is not implemented`);
+    if (c.kind === 'slider') {
+      checkVariableRef(scene, c.variable, 'selector', '2.9');
+      const sel = variableDef(scene, c.variable);
+      if (sel?.kind === 'selector' && sel.by === 'index')
+        fail('2.9', `the slider over ${c.variable} needs a selector by nearest, and the selector is by index`);
+      checkQuery(scene, c.domain);
+    } else if (c.kind === 'tabs') checkVariableRef(scene, c.variable, 'choice', '2.9');
+    else if (c.kind === 'toggle') checkVariableRef(scene, c.variable, 'toggle', '2.9');
+  }
+  for (const r of scene.readouts ?? []) {
+    if (r.place !== 'caption' && r.place !== 'panel') fail('2.9', `readout place ${JSON.stringify(r.place)} is not caption or panel`);
+    for (const p of r.parts) {
+      if (typeof p === 'string') continue;
+      if ('var' in p) checkVariableRef(scene, p.var, null, '2.9');
+      if ('channel' in p && p.channel === INDEX_CHANNEL) fail('2.9', `a readout channel part names ${INDEX_CHANNEL}, which is not allowed in a readout`);
+      if ('attr' in p && (!finite(p.factor ?? 1) || !finite(p.offset ?? 0))) fail('S4', 'a readout attr part has a factor or offset that is not finite');
+      if ('digits' in p && p.digits !== undefined && !(Number.isInteger(p.digits) && p.digits >= 1 && p.digits <= 17))
+        fail('2.9', `readout digits is ${String(p.digits)}, not in 1 to 17`);
+    }
+  }
   return warnings;
 }

@@ -1,0 +1,68 @@
+"""Writes the analytic and reference scenes of the conformance corpus, and depends only on pytycho and NumPy.
+
+Run it from anywhere: ``python spec/conformance/generate.py``. The script writes ``scene.tys``,
+``data.tyd``, and ``cases.json`` into each scene directory. The ``analytic`` cases are computed here from
+closed forms written independently of ``pytycho._evaluate``. The ``reference`` cases are produced
+by ``pytycho._evaluate`` itself, for behavior that TyCHO defines and that does not come from a dynamical model.
+
+The documents of ``rotating-loop`` and ``value-clock`` are written as plain dicts, with the container
+writer for their data. The scenes ``two-panels``, ``edge-fraction``, ``edge-value``, and ``laps`` are
+built through the Scene API, and ``edge-fraction`` and ``laps`` also carry ``rejections.json``, the
+scenes that a reader must reject. The directory ``containers`` does not hold a scene. It holds the same
+views in ``encoded.tyd``, with the encodings that the writer picks and several chunks to a view, and in
+``raw.tyd``, all raw. A reader must decode both to the same bits.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import numpy as np
+
+import pytycho
+from pytycho.container import ContainerWriter
+
+HERE = Path(__file__).resolve().parent
+
+
+def containers():
+    """The same views written twice, with the encodings the writer picks and all raw, for a reader to decode bit for bit."""
+    rng = np.random.default_rng(78)
+    t = np.linspace(0.0, 2.0 * np.pi, 401)
+    special = np.array([np.nan, -0.0, np.inf, -np.inf, 5e-324, np.finfo(np.float64).max])
+    orbit = np.stack([np.cos(t), np.sin(t)], axis=1)
+    orbit[50:56, 0] = special
+    orbit[200, 1] = np.frombuffer(np.array([0x7FF8DEADBEEF0001], "<u8").tobytes(), "<f8")[0]  # a NaN with a payload
+    views = [
+        # a chunk_rows of None selects the writer's default, which gives one chunk to each view below that passes None
+        ("float64/orbit", orbit, None, 64),  # 401 rows make six chunks of 64 and one of 17
+        ("float32/orbit", orbit.astype(np.float32), None, 401),  # one chunk of all 401 rows
+        ("float32/still", np.full((6, 4), 1.5, np.float32), None, 10),  # its 6 rows are fewer than one chunk of 10
+        ("uint32/offsets", np.array([0, 170, 401]), "uint32", None),  # too short to gain from an encoding, thus written raw
+        ("uint32/fall", np.arange(4_000_000_000, 0, -40_000_000), "uint32", 7),  # its deltas wrap
+        ("int32/steps", np.repeat(np.arange(-20, 20), 3).reshape(-1, 3) * 1000, "int32", 9),
+        ("uint16/ramp", np.arange(100) * 655, "uint16", 30),
+        ("int16/wave", np.round(np.sin(np.arange(600) / 200.0) * 32000).reshape(200, 3), "int16", 64),
+        ("uint8/bytes", np.arange(200) % 256, "uint8", 64),
+        ("int8/wave", np.round(np.sin(np.arange(800) / 200.0) * 127).reshape(400, 2), "int8", 150),
+        ("uint8/noise", rng.integers(0, 256, 64), "uint8", None),  # noise does not compress, and the writer keeps it raw
+        ("float64/cube", np.linspace(-1.0, 1.0, 60).reshape(5, 3, 4), None, 2),
+        ("int16/empty", np.zeros((0, 3)), "int16", None),
+    ]
+    generator = f"pytycho {pytycho.__version__}, spec/conformance/generate.py"
+    encoded, raw = ContainerWriter(generator=generator), ContainerWriter(generator=generator, raw=True)
+    for name, array, dtype, rows in views:
+        encoded.add_view(name, array, dtype, chunk_rows=rows)
+        raw.add_view(name, array, dtype)
+    kinds = {name: v["encoding"] for name, v in encoded.views.items()}
+    assert kinds["uint32/offsets"] == kinds["uint8/noise"] == kinds["int16/empty"] == "raw", kinds
+    assert sum(k == "shuffle-delta-deflate" for k in kinds.values()) == len(views) - 3, kinds
+    out = HERE / "containers"
+    out.mkdir(exist_ok=True)
+    encoded.write(out / "encoded.tyd")
+    raw.write(out / "raw.tyd")
+    print(f"containers: {len(views)} views, {len(encoded.to_bytes())} bytes encoded, {len(raw.to_bytes())} raw")
+
+
+if __name__ == "__main__":
+    containers()

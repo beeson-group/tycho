@@ -1,0 +1,8384 @@
+[
+ {
+  "name": "edge equation, inertial, reveal none",
+  "source": "analytic",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "@index"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "inertial"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 0,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "inertial",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -0.479425538604203,
+           0.8775825618903728,
+           0.0
+          ],
+          [
+           -0.5403023058681398,
+           -0.8414709848078965,
+           0.0
+          ],
+          [
+           0.9974949866040544,
+           -0.0707372016677029,
+           0.0
+          ],
+          [
+           -0.8011436155469337,
+           0.5984721441039564,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      null,
+      null,
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "edge equation, scaled, reveal none",
+  "source": "analytic",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "@index"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "scaled"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 0,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "scaled",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           1.9378248434212895,
+           0.4948079185090459
+          ],
+          [
+           -3.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           -1.9378248434212895,
+           -0.4948079185090459
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      null,
+      null,
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "periodic trail wrap in a rotating frame, angle advance 2.5 rad, @index",
+  "source": "analytic",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "@index"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "inertial"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 1,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "inertial",
+     "layers": [
+      null,
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           -0.4561040932377997,
+           0.22859634036795734,
+           0.0
+          ],
+          [
+           -0.8414709848078965,
+           -0.5403023058681398,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.2602872306978985,
+           0.4387912809451864,
+           0.0
+          ]
+         ],
+         "head": [
+          0.2602872306978985,
+          0.4387912809451864,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.4693956404725932,
+        0.11985638465105075,
+        0.0
+       ],
+       "trail": [
+        [
+         0.15275987688396067,
+         -0.4597414928529877,
+         0.0
+        ],
+        [
+         0.2701511529340699,
+         -0.42073549240394825,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.4693956404725932,
+         0.11985638465105075,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "rot, @index, frame -1",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "@index"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "rot"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": -1,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "rot",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           1.0,
+           0.0
+          ],
+          [
+           -1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           -0.5,
+           0.5,
+           0.0
+          ],
+          [
+           -1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           0.5,
+           -0.5,
+           0.0
+          ]
+         ],
+         "head": [
+          0.5,
+          -0.5,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.5,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "rot, @index, frame 0",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "@index"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "rot"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 0,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "rot",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           1.0,
+           0.0
+          ],
+          [
+           -1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           -1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          1.0,
+          0.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.5,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "rot, @index, frame 1",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "@index"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "rot"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 1,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "rot",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           1.0,
+           0.0
+          ],
+          [
+           -1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           -0.5,
+           -0.5,
+           0.0
+          ],
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.5,
+           0.5,
+           0.0
+          ]
+         ],
+         "head": [
+          0.5,
+          0.5,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.5,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "rot, @index, frame 2",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "@index"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "rot"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 2,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "rot",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           1.0,
+           0.0
+          ],
+          [
+           -1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           1.0,
+           0.0
+          ]
+         ],
+         "head": [
+          0.0,
+          1.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.5,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "rot, @index, frame 3",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "@index"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "rot"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 3,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "rot",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           1.0,
+           0.0
+          ],
+          [
+           -1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.5,
+           -0.5,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           1.0,
+           0.0
+          ],
+          [
+           -0.5,
+           0.5,
+           0.0
+          ]
+         ],
+         "head": [
+          -0.5,
+          0.5,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.5,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "rot, @index, frame 4",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "@index"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "rot"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 4,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "rot",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           1.0,
+           0.0
+          ],
+          [
+           -1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           1.0,
+           0.0
+          ],
+          [
+           -1.0,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          -1.0,
+          0.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.5,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "rot, @index, frame 5",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "@index"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "rot"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 5,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "rot",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           1.0,
+           0.0
+          ],
+          [
+           -1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.5,
+           0.5,
+           0.0
+          ],
+          [
+           0.0,
+           1.0,
+           0.0
+          ],
+          [
+           -1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -0.5,
+           -0.5,
+           0.0
+          ]
+         ],
+         "head": [
+          -0.5,
+          -0.5,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.5,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "rot, @index, frame 6",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "@index"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "rot"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 6,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "rot",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           1.0,
+           0.0
+          ],
+          [
+           -1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           1.0,
+           0.0
+          ],
+          [
+           -1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           -1.0,
+           0.0
+          ]
+         ],
+         "head": [
+          0.0,
+          -1.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.5,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "rot, @index, frame 7",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "@index"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "rot"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 7,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "rot",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           1.0,
+           0.0
+          ],
+          [
+           -1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           -0.5,
+           0.5,
+           0.0
+          ],
+          [
+           -1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           0.5,
+           -0.5,
+           0.0
+          ]
+         ],
+         "head": [
+          0.5,
+          -0.5,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.5,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "rot, @index, frame 8",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "@index"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "rot"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 8,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "rot",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           1.0,
+           0.0
+          ],
+          [
+           -1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           -1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          1.0,
+          0.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.5,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "rot, a, frame -1",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "a"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "rot"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": -1,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "rot",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           1.0,
+           0.0
+          ],
+          [
+           -1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           -0.8749999999999999,
+           0.1250000000000001,
+           0.0
+          ],
+          [
+           -1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           0.6875,
+           -0.3125,
+           0.0
+          ]
+         ],
+         "head": [
+          0.6875,
+          -0.3125,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.5,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "rot, a, frame 0",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "a"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "rot"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 0,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "rot",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           1.0,
+           0.0
+          ],
+          [
+           -1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           -0.5,
+           -0.5,
+           0.0
+          ],
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          1.0,
+          0.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.5,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "rot, a, frame 1",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "a"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "rot"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 1,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "rot",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           1.0,
+           0.0
+          ],
+          [
+           -1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.06250000000000006,
+           -0.9375,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.375,
+           0.625,
+           0.0
+          ]
+         ],
+         "head": [
+          0.375,
+          0.625,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.5,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "rot, a, frame 2",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "a"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "rot"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 2,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "rot",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           1.0,
+           0.0
+          ],
+          [
+           -1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.37500000000000006,
+           -0.625,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           1.0,
+           0.0
+          ],
+          [
+           -0.24999999999999994,
+           0.75,
+           0.0
+          ]
+         ],
+         "head": [
+          -0.24999999999999994,
+          0.75,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.5,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "rot, a, frame 3",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "a"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "rot"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 3,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "rot",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           1.0,
+           0.0
+          ],
+          [
+           -1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.6875,
+           -0.3125,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           1.0,
+           0.0
+          ],
+          [
+           -0.8749999999999999,
+           0.1250000000000001,
+           0.0
+          ]
+         ],
+         "head": [
+          -0.8749999999999999,
+          0.1250000000000001,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.5,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "rot, a, frame 4",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "a"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "rot"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 4,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "rot",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           1.0,
+           0.0
+          ],
+          [
+           -1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           1.0,
+           0.0
+          ],
+          [
+           -1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -0.5,
+           -0.5,
+           0.0
+          ]
+         ],
+         "head": [
+          -0.5,
+          -0.5,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.5,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "rot, a, frame 5",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "a"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "rot"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 5,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "rot",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           1.0,
+           0.0
+          ],
+          [
+           -1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.375,
+           0.625,
+           0.0
+          ],
+          [
+           0.0,
+           1.0,
+           0.0
+          ],
+          [
+           -1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           0.06250000000000006,
+           -0.9375,
+           0.0
+          ]
+         ],
+         "head": [
+          0.06250000000000006,
+          -0.9375,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.5,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "rot, a, frame 6",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "a"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "rot"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 6,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "rot",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           1.0,
+           0.0
+          ],
+          [
+           -1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           -0.24999999999999994,
+           0.75,
+           0.0
+          ],
+          [
+           -1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           0.37500000000000006,
+           -0.625,
+           0.0
+          ]
+         ],
+         "head": [
+          0.37500000000000006,
+          -0.625,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.5,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "rot, a, frame 7",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "a"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "rot"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 7,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "rot",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           1.0,
+           0.0
+          ],
+          [
+           -1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           -0.8749999999999999,
+           0.1250000000000001,
+           0.0
+          ],
+          [
+           -1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           0.6875,
+           -0.3125,
+           0.0
+          ]
+         ],
+         "head": [
+          0.6875,
+          -0.3125,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.5,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "rot, a, frame 8",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "a"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "rot"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 8,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "rot",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           1.0,
+           0.0
+          ],
+          [
+           -1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           -0.5,
+           -0.5,
+           0.0
+          ],
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          1.0,
+          0.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.5,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "inertial, @index, frame -1",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "@index"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "inertial"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": -1,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "inertial",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -0.479425538604203,
+           0.8775825618903728,
+           0.0
+          ],
+          [
+           -0.5403023058681398,
+           -0.8414709848078965,
+           0.0
+          ],
+          [
+           0.9974949866040544,
+           -0.0707372016677029,
+           0.0
+          ],
+          [
+           -0.8011436155469337,
+           0.5984721441039564,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           -0.5098639222361714,
+           0.018055788541238127,
+           0.0
+          ],
+          [
+           -0.5403023058681398,
+           -0.8414709848078965,
+           0.0
+          ],
+          [
+           0.9974949866040544,
+           -0.0707372016677029,
+           0.0
+          ],
+          [
+           0.09817568552856037,
+           0.26386747121812676,
+           0.0
+          ]
+         ],
+         "head": [
+          0.09817568552856037,
+          0.26386747121812676,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        -0.1826016034698077,
+        0.39899178267700275,
+        0.0
+       ],
+       "trail": [
+        [
+         0.35447121693962813,
+         0.3302241308530249,
+         0.0
+        ],
+        [
+         0.2701511529340699,
+         0.42073549240394825,
+         0.0
+        ],
+        [
+         0.03536860083385145,
+         0.4987474933020272,
+         0.0
+        ],
+        [
+         -0.1826016034698077,
+         0.39899178267700275,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "inertial, @index, frame 0",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "@index"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "inertial"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 0,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "inertial",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -0.479425538604203,
+           0.8775825618903728,
+           0.0
+          ],
+          [
+           -0.5403023058681398,
+           -0.8414709848078965,
+           0.0
+          ],
+          [
+           0.9974949866040544,
+           -0.0707372016677029,
+           0.0
+          ],
+          [
+           -0.8011436155469337,
+           0.5984721441039564,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           -0.0707372016677029,
+           0.9974949866040544,
+           0.0
+          ],
+          [
+           -0.8414709848078965,
+           -0.5403023058681398,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          1.0,
+          0.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.5,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.03536860083385145,
+         -0.4987474933020272,
+         0.0
+        ],
+        [
+         0.2701511529340699,
+         -0.42073549240394825,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "inertial, @index, frame 1",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "@index"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "inertial"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 1,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "inertial",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -0.479425538604203,
+           0.8775825618903728,
+           0.0
+          ],
+          [
+           -0.5403023058681398,
+           -0.8414709848078965,
+           0.0
+          ],
+          [
+           0.9974949866040544,
+           -0.0707372016677029,
+           0.0
+          ],
+          [
+           -0.8011436155469337,
+           0.5984721441039564,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           -0.4561040932377997,
+           0.22859634036795734,
+           0.0
+          ],
+          [
+           -0.8414709848078965,
+           -0.5403023058681398,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.2602872306978985,
+           0.4387912809451864,
+           0.0
+          ]
+         ],
+         "head": [
+          0.2602872306978985,
+          0.4387912809451864,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.4693956404725932,
+        0.11985638465105075,
+        0.0
+       ],
+       "trail": [
+        [
+         0.15275987688396067,
+         -0.4597414928529877,
+         0.0
+        ],
+        [
+         0.2701511529340699,
+         -0.42073549240394825,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.4693956404725932,
+         0.11985638465105075,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "inertial, @index, frame 2",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "@index"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "inertial"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 2,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "inertial",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -0.479425538604203,
+           0.8775825618903728,
+           0.0
+          ],
+          [
+           -0.5403023058681398,
+           -0.8414709848078965,
+           0.0
+          ],
+          [
+           0.9974949866040544,
+           -0.0707372016677029,
+           0.0
+          ],
+          [
+           -0.8011436155469337,
+           0.5984721441039564,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           -0.8414709848078965,
+           -0.5403023058681398,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -0.479425538604203,
+           0.8775825618903728,
+           0.0
+          ]
+         ],
+         "head": [
+          -0.479425538604203,
+          0.8775825618903728,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.4387912809451864,
+        0.2397127693021015,
+        0.0
+       ],
+       "trail": [
+        [
+         0.2701511529340699,
+         -0.42073549240394825,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.4387912809451864,
+         0.2397127693021015,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "inertial, @index, frame 3",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "@index"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "inertial"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 3,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "inertial",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -0.479425538604203,
+           0.8775825618903728,
+           0.0
+          ],
+          [
+           -0.5403023058681398,
+           -0.8414709848078965,
+           0.0
+          ],
+          [
+           0.9974949866040544,
+           -0.0707372016677029,
+           0.0
+          ],
+          [
+           -0.8011436155469337,
+           0.5984721441039564,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.07926450759605175,
+           -0.2701511529340699,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -0.479425538604203,
+           0.8775825618903728,
+           0.0
+          ],
+          [
+           -0.5098639222361714,
+           0.018055788541238127,
+           0.0
+          ]
+         ],
+         "head": [
+          -0.5098639222361714,
+          0.018055788541238127,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.35447121693962813,
+        0.3302241308530249,
+        0.0
+       ],
+       "trail": [
+        [
+         0.38507557646703494,
+         -0.21036774620197413,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.4387912809451864,
+         0.2397127693021015,
+         0.0
+        ],
+        [
+         0.35447121693962813,
+         0.3302241308530249,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "inertial, @index, frame 4",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "@index"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "inertial"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 4,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "inertial",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -0.479425538604203,
+           0.8775825618903728,
+           0.0
+          ],
+          [
+           -0.5403023058681398,
+           -0.8414709848078965,
+           0.0
+          ],
+          [
+           0.9974949866040544,
+           -0.0707372016677029,
+           0.0
+          ],
+          [
+           -0.8011436155469337,
+           0.5984721441039564,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -0.479425538604203,
+           0.8775825618903728,
+           0.0
+          ],
+          [
+           -0.5403023058681398,
+           -0.8414709848078965,
+           0.0
+          ]
+         ],
+         "head": [
+          -0.5403023058681398,
+          -0.8414709848078965,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.2701511529340699,
+        0.42073549240394825,
+        0.0
+       ],
+       "trail": [
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.4387912809451864,
+         0.2397127693021015,
+         0.0
+        ],
+        [
+         0.2701511529340699,
+         0.42073549240394825,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "inertial, @index, frame 5",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "@index"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "inertial"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 5,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "inertial",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -0.479425538604203,
+           0.8775825618903728,
+           0.0
+          ],
+          [
+           -0.5403023058681398,
+           -0.8414709848078965,
+           0.0
+          ],
+          [
+           0.9974949866040544,
+           -0.0707372016677029,
+           0.0
+          ],
+          [
+           -0.8011436155469337,
+           0.5984721441039564,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.2602872306978985,
+           0.4387912809451864,
+           0.0
+          ],
+          [
+           -0.479425538604203,
+           0.8775825618903728,
+           0.0
+          ],
+          [
+           -0.5403023058681398,
+           -0.8414709848078965,
+           0.0
+          ],
+          [
+           0.22859634036795734,
+           -0.4561040932377997,
+           0.0
+          ]
+         ],
+         "head": [
+          0.22859634036795734,
+          -0.4561040932377997,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.15275987688396067,
+        0.4597414928529877,
+        0.0
+       ],
+       "trail": [
+        [
+         0.4693956404725932,
+         0.11985638465105075,
+         0.0
+        ],
+        [
+         0.4387912809451864,
+         0.2397127693021015,
+         0.0
+        ],
+        [
+         0.2701511529340699,
+         0.42073549240394825,
+         0.0
+        ],
+        [
+         0.15275987688396067,
+         0.4597414928529877,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "inertial, @index, frame 6",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "@index"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "inertial"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 6,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "inertial",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -0.479425538604203,
+           0.8775825618903728,
+           0.0
+          ],
+          [
+           -0.5403023058681398,
+           -0.8414709848078965,
+           0.0
+          ],
+          [
+           0.9974949866040544,
+           -0.0707372016677029,
+           0.0
+          ],
+          [
+           -0.8011436155469337,
+           0.5984721441039564,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           -0.479425538604203,
+           0.8775825618903728,
+           0.0
+          ],
+          [
+           -0.5403023058681398,
+           -0.8414709848078965,
+           0.0
+          ],
+          [
+           0.9974949866040544,
+           -0.0707372016677029,
+           0.0
+          ]
+         ],
+         "head": [
+          0.9974949866040544,
+          -0.0707372016677029,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.03536860083385145,
+        0.4987474933020272,
+        0.0
+       ],
+       "trail": [
+        [
+         0.4387912809451864,
+         0.2397127693021015,
+         0.0
+        ],
+        [
+         0.2701511529340699,
+         0.42073549240394825,
+         0.0
+        ],
+        [
+         0.03536860083385145,
+         0.4987474933020272,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "inertial, @index, frame 7",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "@index"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "inertial"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 7,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "inertial",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -0.479425538604203,
+           0.8775825618903728,
+           0.0
+          ],
+          [
+           -0.5403023058681398,
+           -0.8414709848078965,
+           0.0
+          ],
+          [
+           0.9974949866040544,
+           -0.0707372016677029,
+           0.0
+          ],
+          [
+           -0.8011436155469337,
+           0.5984721441039564,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           -0.5098639222361714,
+           0.018055788541238127,
+           0.0
+          ],
+          [
+           -0.5403023058681398,
+           -0.8414709848078965,
+           0.0
+          ],
+          [
+           0.9974949866040544,
+           -0.0707372016677029,
+           0.0
+          ],
+          [
+           0.09817568552856037,
+           0.26386747121812676,
+           0.0
+          ]
+         ],
+         "head": [
+          0.09817568552856037,
+          0.26386747121812676,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        -0.1826016034698077,
+        0.39899178267700275,
+        0.0
+       ],
+       "trail": [
+        [
+         0.35447121693962813,
+         0.3302241308530249,
+         0.0
+        ],
+        [
+         0.2701511529340699,
+         0.42073549240394825,
+         0.0
+        ],
+        [
+         0.03536860083385145,
+         0.4987474933020272,
+         0.0
+        ],
+        [
+         -0.1826016034698077,
+         0.39899178267700275,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "inertial, @index, frame 8",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "@index"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "inertial"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 8,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "inertial",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -0.479425538604203,
+           0.8775825618903728,
+           0.0
+          ],
+          [
+           -0.5403023058681398,
+           -0.8414709848078965,
+           0.0
+          ],
+          [
+           0.9974949866040544,
+           -0.0707372016677029,
+           0.0
+          ],
+          [
+           -0.8011436155469337,
+           0.5984721441039564,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           -0.0707372016677029,
+           0.9974949866040544,
+           0.0
+          ],
+          [
+           -0.8414709848078965,
+           -0.5403023058681398,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          1.0,
+          0.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.5,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.03536860083385145,
+         -0.4987474933020272,
+         0.0
+        ],
+        [
+         0.2701511529340699,
+         -0.42073549240394825,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "inertial, a, frame -1",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "a"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "inertial"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": -1,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "inertial",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -0.479425538604203,
+           0.8775825618903728,
+           0.0
+          ],
+          [
+           -0.5403023058681398,
+           -0.8414709848078965,
+           0.0
+          ],
+          [
+           0.9974949866040544,
+           -0.0707372016677029,
+           0.0
+          ],
+          [
+           -0.8011436155469337,
+           0.5984721441039564,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           -0.5326927099601477,
+           -0.6265892914706126,
+           0.0
+          ],
+          [
+           -0.5403023058681398,
+           -0.8414709848078965,
+           0.0
+          ],
+          [
+           0.9974949866040544,
+           -0.0707372016677029,
+           0.0
+          ],
+          [
+           -0.2390690523747499,
+           0.3893442235503129,
+           0.0
+          ]
+         ],
+         "head": [
+          -0.2390690523747499,
+          0.3893442235503129,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        -0.26434043008367986,
+        0.3615833911926185,
+        0.0
+       ],
+       "trail": [
+        [
+         0.2912311689354595,
+         0.39810765201621734,
+         0.0
+        ],
+        [
+         0.2701511529340699,
+         0.42073549240394825,
+         0.0
+        ],
+        [
+         0.03536860083385145,
+         0.4987474933020272,
+         0.0
+        ],
+        [
+         -0.26434043008367986,
+         0.3615833911926185,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "inertial, a, frame 0",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "a"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "inertial"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 0,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "inertial",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -0.479425538604203,
+           0.8775825618903728,
+           0.0
+          ],
+          [
+           -0.5403023058681398,
+           -0.8414709848078965,
+           0.0
+          ],
+          [
+           0.9974949866040544,
+           -0.0707372016677029,
+           0.0
+          ],
+          [
+           -0.8011436155469337,
+           0.5984721441039564,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           -0.4561040932377997,
+           0.22859634036795734,
+           0.0
+          ],
+          [
+           -0.8414709848078965,
+           -0.5403023058681398,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          1.0,
+          0.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.5,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.15275987688396067,
+         -0.4597414928529877,
+         0.0
+        ],
+        [
+         0.2701511529340699,
+         -0.42073549240394825,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "inertial, a, frame 1",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "a"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "inertial"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 1,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "inertial",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -0.479425538604203,
+           0.8775825618903728,
+           0.0
+          ],
+          [
+           -0.5403023058681398,
+           -0.8414709848078965,
+           0.0
+          ],
+          [
+           0.9974949866040544,
+           -0.0707372016677029,
+           0.0
+          ],
+          [
+           -0.8011436155469337,
+           0.5984721441039564,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           -0.7263790482574028,
+           -0.506533411751381,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.07535903837237312,
+           0.548489101181483,
+           0.0
+          ]
+         ],
+         "head": [
+          0.07535903837237312,
+          0.548489101181483,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.4617445505907415,
+        0.14982048081381344,
+        0.0
+       ],
+       "trail": [
+        [
+         0.28451670587569056,
+         -0.3944395241287015,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.4617445505907415,
+         0.14982048081381344,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "inertial, a, frame 2",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "a"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "inertial"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 2,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "inertial",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -0.479425538604203,
+           0.8775825618903728,
+           0.0
+          ],
+          [
+           -0.5403023058681398,
+           -0.8414709848078965,
+           0.0
+          ],
+          [
+           0.9974949866040544,
+           -0.0707372016677029,
+           0.0
+          ],
+          [
+           -0.8011436155469337,
+           0.5984721441039564,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           -0.1509193655049353,
+           -0.33768894116758735,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -0.479425538604203,
+           0.8775825618903728,
+           0.0
+          ],
+          [
+           -0.4946447304201872,
+           0.4478191752158055,
+           0.0
+          ]
+         ],
+         "head": [
+          -0.4946447304201872,
+          0.4478191752158055,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.39663124894240726,
+        0.28496845007756316,
+        0.0
+       ],
+       "trail": [
+        [
+         0.3563444705837937,
+         -0.26295968275246767,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.4387912809451864,
+         0.2397127693021015,
+         0.0
+        ],
+        [
+         0.39663124894240726,
+         0.28496845007756316,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "inertial, a, frame 3",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "a"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "inertial"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 3,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "inertial",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -0.479425538604203,
+           0.8775825618903728,
+           0.0
+          ],
+          [
+           -0.5403023058681398,
+           -0.8414709848078965,
+           0.0
+          ],
+          [
+           0.9974949866040544,
+           -0.0707372016677029,
+           0.0
+          ],
+          [
+           -0.8011436155469337,
+           0.5984721441039564,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.42454031724753233,
+           -0.16884447058379368,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -0.479425538604203,
+           0.8775825618903728,
+           0.0
+          ],
+          [
+           -0.5326927099601477,
+           -0.6265892914706126,
+           0.0
+          ]
+         ],
+         "head": [
+          -0.5326927099601477,
+          -0.6265892914706126,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.2912311689354595,
+        0.39810765201621734,
+        0.0
+       ],
+       "trail": [
+        [
+         0.42817223529189685,
+         -0.13147984137623384,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.4387912809451864,
+         0.2397127693021015,
+         0.0
+        ],
+        [
+         0.2912311689354595,
+         0.39810765201621734,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "inertial, a, frame 4",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "a"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "inertial"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 4,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "inertial",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -0.479425538604203,
+           0.8775825618903728,
+           0.0
+          ],
+          [
+           -0.5403023058681398,
+           -0.8414709848078965,
+           0.0
+          ],
+          [
+           0.9974949866040544,
+           -0.0707372016677029,
+           0.0
+          ],
+          [
+           -0.8011436155469337,
+           0.5984721441039564,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -0.479425538604203,
+           0.8775825618903728,
+           0.0
+          ],
+          [
+           -0.5403023058681398,
+           -0.8414709848078965,
+           0.0
+          ],
+          [
+           0.22859634036795734,
+           -0.4561040932377997,
+           0.0
+          ]
+         ],
+         "head": [
+          0.22859634036795734,
+          -0.4561040932377997,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.15275987688396067,
+        0.4597414928529877,
+        0.0
+       ],
+       "trail": [
+        [
+         0.5,
+         0.0,
+         0.0
+        ],
+        [
+         0.4387912809451864,
+         0.2397127693021015,
+         0.0
+        ],
+        [
+         0.2701511529340699,
+         0.42073549240394825,
+         0.0
+        ],
+        [
+         0.15275987688396067,
+         0.4597414928529877,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "inertial, a, frame 5",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "a"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "inertial"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 5,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "inertial",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -0.479425538604203,
+           0.8775825618903728,
+           0.0
+          ],
+          [
+           -0.5403023058681398,
+           -0.8414709848078965,
+           0.0
+          ],
+          [
+           0.9974949866040544,
+           -0.0707372016677029,
+           0.0
+          ],
+          [
+           -0.8011436155469337,
+           0.5984721441039564,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.07535903837237312,
+           0.548489101181483,
+           0.0
+          ],
+          [
+           -0.479425538604203,
+           0.8775825618903728,
+           0.0
+          ],
+          [
+           -0.5403023058681398,
+           -0.8414709848078965,
+           0.0
+          ],
+          [
+           0.9974949866040544,
+           -0.0707372016677029,
+           0.0
+          ],
+          [
+           0.8850800739696176,
+           -0.02891161755697417,
+           0.0
+          ]
+         ],
+         "head": [
+          0.8850800739696176,
+          -0.02891161755697417,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.008122325295894042,
+        0.48627802947389914,
+        0.0
+       ],
+       "trail": [
+        [
+         0.4617445505907415,
+         0.14982048081381344,
+         0.0
+        ],
+        [
+         0.4387912809451864,
+         0.2397127693021015,
+         0.0
+        ],
+        [
+         0.2701511529340699,
+         0.42073549240394825,
+         0.0
+        ],
+        [
+         0.03536860083385145,
+         0.4987474933020272,
+         0.0
+        ],
+        [
+         0.008122325295894042,
+         0.48627802947389914,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "inertial, a, frame 6",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "a"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "inertial"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 6,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "inertial",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -0.479425538604203,
+           0.8775825618903728,
+           0.0
+          ],
+          [
+           -0.5403023058681398,
+           -0.8414709848078965,
+           0.0
+          ],
+          [
+           0.9974949866040544,
+           -0.0707372016677029,
+           0.0
+          ],
+          [
+           -0.8011436155469337,
+           0.5984721441039564,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           -0.4946447304201872,
+           0.4478191752158055,
+           0.0
+          ],
+          [
+           -0.5403023058681398,
+           -0.8414709848078965,
+           0.0
+          ],
+          [
+           0.9974949866040544,
+           -0.0707372016677029,
+           0.0
+          ],
+          [
+           0.32300551079743384,
+           0.18021630299666938,
+           0.0
+          ]
+         ],
+         "head": [
+          0.32300551079743384,
+          0.18021630299666938,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        -0.12810905239389295,
+        0.42393071033325885,
+        0.0
+       ],
+       "trail": [
+        [
+         0.39663124894240726,
+         0.28496845007756316,
+         0.0
+        ],
+        [
+         0.2701511529340699,
+         0.42073549240394825,
+         0.0
+        ],
+        [
+         0.03536860083385145,
+         0.4987474933020272,
+         0.0
+        ],
+        [
+         -0.12810905239389295,
+         0.42393071033325885,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "inertial, a, frame 7",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "a"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "inertial"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 7,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "inertial",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -0.479425538604203,
+           0.8775825618903728,
+           0.0
+          ],
+          [
+           -0.5403023058681398,
+           -0.8414709848078965,
+           0.0
+          ],
+          [
+           0.9974949866040544,
+           -0.0707372016677029,
+           0.0
+          ],
+          [
+           -0.8011436155469337,
+           0.5984721441039564,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           -0.5326927099601477,
+           -0.6265892914706126,
+           0.0
+          ],
+          [
+           -0.5403023058681398,
+           -0.8414709848078965,
+           0.0
+          ],
+          [
+           0.9974949866040544,
+           -0.0707372016677029,
+           0.0
+          ],
+          [
+           -0.2390690523747499,
+           0.3893442235503129,
+           0.0
+          ]
+         ],
+         "head": [
+          -0.2390690523747499,
+          0.3893442235503129,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        -0.26434043008367986,
+        0.3615833911926185,
+        0.0
+       ],
+       "trail": [
+        [
+         0.2912311689354595,
+         0.39810765201621734,
+         0.0
+        ],
+        [
+         0.2701511529340699,
+         0.42073549240394825,
+         0.0
+        ],
+        [
+         0.03536860083385145,
+         0.4987474933020272,
+         0.0
+        ],
+        [
+         -0.26434043008367986,
+         0.3615833911926185,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "inertial, a, frame 8",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "a"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "inertial"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 8,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "inertial",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -0.479425538604203,
+           0.8775825618903728,
+           0.0
+          ],
+          [
+           -0.5403023058681398,
+           -0.8414709848078965,
+           0.0
+          ],
+          [
+           0.9974949866040544,
+           -0.0707372016677029,
+           0.0
+          ],
+          [
+           -0.8011436155469337,
+           0.5984721441039564,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           -0.4561040932377997,
+           0.22859634036795734,
+           0.0
+          ],
+          [
+           -0.8414709848078965,
+           -0.5403023058681398,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          1.0,
+          0.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.5,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.15275987688396067,
+         -0.4597414928529877,
+         0.0
+        ],
+        [
+         0.2701511529340699,
+         -0.42073549240394825,
+         0.0
+        ],
+        [
+         0.5,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "scaled, @index, frame -1",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "@index"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "scaled"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": -1,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "scaled",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           1.9378248434212895,
+           0.4948079185090459
+          ],
+          [
+           -3.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           -1.9378248434212895,
+           -0.4948079185090459
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           -2.0,
+           0.9689124217106447,
+           0.24740395925452294
+          ],
+          [
+           -3.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           -1.9378248434212895,
+           -0.4948079185090459
+          ],
+          [
+           0.0,
+           -0.9689124217106447,
+           -0.24740395925452294
+          ]
+         ],
+         "head": [
+          0.0,
+          -0.9689124217106447,
+          -0.24740395925452294
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "scaled, @index, frame 0",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "@index"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "scaled"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 0,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "scaled",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           1.9378248434212895,
+           0.4948079185090459
+          ],
+          [
+           -3.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           -1.9378248434212895,
+           -0.4948079185090459
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           -3.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           -1.9378248434212895,
+           -0.4948079185090459
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          1.0,
+          0.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "scaled, @index, frame 1",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "@index"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "scaled"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 1,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "scaled",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           1.9378248434212895,
+           0.4948079185090459
+          ],
+          [
+           -3.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           -1.9378248434212895,
+           -0.4948079185090459
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           -2.0,
+           -0.9689124217106447,
+           -0.24740395925452294
+          ],
+          [
+           -1.0,
+           -1.9378248434212895,
+           -0.4948079185090459
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           0.9689124217106447,
+           0.24740395925452294
+          ]
+         ],
+         "head": [
+          0.0,
+          0.9689124217106447,
+          0.24740395925452294
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "scaled, @index, frame 2",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "@index"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "scaled"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 2,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "scaled",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           1.9378248434212895,
+           0.4948079185090459
+          ],
+          [
+           -3.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           -1.9378248434212895,
+           -0.4948079185090459
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           -1.0,
+           -1.9378248434212895,
+           -0.4948079185090459
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           1.9378248434212895,
+           0.4948079185090459
+          ]
+         ],
+         "head": [
+          -1.0,
+          1.9378248434212895,
+          0.4948079185090459
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "scaled, @index, frame 3",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "@index"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "scaled"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 3,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "scaled",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           1.9378248434212895,
+           0.4948079185090459
+          ],
+          [
+           -3.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           -1.9378248434212895,
+           -0.4948079185090459
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           -0.9689124217106447,
+           -0.24740395925452294
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           1.9378248434212895,
+           0.4948079185090459
+          ],
+          [
+           -2.0,
+           0.9689124217106447,
+           0.24740395925452294
+          ]
+         ],
+         "head": [
+          -2.0,
+          0.9689124217106447,
+          0.24740395925452294
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "scaled, @index, frame 4",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "@index"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "scaled"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 4,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "scaled",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           1.9378248434212895,
+           0.4948079185090459
+          ],
+          [
+           -3.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           -1.9378248434212895,
+           -0.4948079185090459
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           1.9378248434212895,
+           0.4948079185090459
+          ],
+          [
+           -3.0,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          -3.0,
+          0.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "scaled, @index, frame 5",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "@index"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "scaled"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 5,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "scaled",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           1.9378248434212895,
+           0.4948079185090459
+          ],
+          [
+           -3.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           -1.9378248434212895,
+           -0.4948079185090459
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.9689124217106447,
+           0.24740395925452294
+          ],
+          [
+           -1.0,
+           1.9378248434212895,
+           0.4948079185090459
+          ],
+          [
+           -3.0,
+           0.0,
+           0.0
+          ],
+          [
+           -2.0,
+           -0.9689124217106447,
+           -0.24740395925452294
+          ]
+         ],
+         "head": [
+          -2.0,
+          -0.9689124217106447,
+          -0.24740395925452294
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "scaled, @index, frame 6",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "@index"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "scaled"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 6,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "scaled",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           1.9378248434212895,
+           0.4948079185090459
+          ],
+          [
+           -3.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           -1.9378248434212895,
+           -0.4948079185090459
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           -1.0,
+           1.9378248434212895,
+           0.4948079185090459
+          ],
+          [
+           -3.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           -1.9378248434212895,
+           -0.4948079185090459
+          ]
+         ],
+         "head": [
+          -1.0,
+          -1.9378248434212895,
+          -0.4948079185090459
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "scaled, @index, frame 7",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "@index"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "scaled"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 7,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "scaled",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           1.9378248434212895,
+           0.4948079185090459
+          ],
+          [
+           -3.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           -1.9378248434212895,
+           -0.4948079185090459
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           -2.0,
+           0.9689124217106447,
+           0.24740395925452294
+          ],
+          [
+           -3.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           -1.9378248434212895,
+           -0.4948079185090459
+          ],
+          [
+           0.0,
+           -0.9689124217106447,
+           -0.24740395925452294
+          ]
+         ],
+         "head": [
+          0.0,
+          -0.9689124217106447,
+          -0.24740395925452294
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "scaled, @index, frame 8",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "@index"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "scaled"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 8,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "scaled",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           1.9378248434212895,
+           0.4948079185090459
+          ],
+          [
+           -3.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           -1.9378248434212895,
+           -0.4948079185090459
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           -3.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           -1.9378248434212895,
+           -0.4948079185090459
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          1.0,
+          0.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "scaled, a, frame -1",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "a"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "scaled"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": -1,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "scaled",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           1.9378248434212895,
+           0.4948079185090459
+          ],
+          [
+           -3.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           -1.9378248434212895,
+           -0.4948079185090459
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           -2.7499999999999996,
+           0.2422281054276614,
+           0.06185098981363079
+          ],
+          [
+           -3.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           -1.9378248434212895,
+           -0.4948079185090459
+          ],
+          [
+           0.375,
+           -0.605570263569153,
+           -0.15462747453407683
+          ]
+         ],
+         "head": [
+          0.375,
+          -0.605570263569153,
+          -0.15462747453407683
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "scaled, a, frame 0",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "a"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "scaled"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 0,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "scaled",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           1.9378248434212895,
+           0.4948079185090459
+          ],
+          [
+           -3.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           -1.9378248434212895,
+           -0.4948079185090459
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           -2.0,
+           -0.9689124217106447,
+           -0.24740395925452294
+          ],
+          [
+           -1.0,
+           -1.9378248434212895,
+           -0.4948079185090459
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          1.0,
+          0.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "scaled, a, frame 1",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "a"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "scaled"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 1,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "scaled",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           1.9378248434212895,
+           0.4948079185090459
+          ],
+          [
+           -3.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           -1.9378248434212895,
+           -0.4948079185090459
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           -0.875,
+           -1.816710790707459,
+           -0.46388242360223053
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -0.25,
+           1.211140527138306,
+           0.30925494906815365
+          ]
+         ],
+         "head": [
+          -0.25,
+          1.211140527138306,
+          0.30925494906815365
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "scaled, a, frame 2",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "a"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "scaled"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 2,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "scaled",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           1.9378248434212895,
+           0.4948079185090459
+          ],
+          [
+           -3.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           -1.9378248434212895,
+           -0.4948079185090459
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           -0.24999999999999994,
+           -1.211140527138306,
+           -0.30925494906815365
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           1.9378248434212895,
+           0.4948079185090459
+          ],
+          [
+           -1.4999999999999998,
+           1.4533686325659672,
+           0.3711059388817844
+          ]
+         ],
+         "head": [
+          -1.4999999999999998,
+          1.4533686325659672,
+          0.3711059388817844
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "scaled, a, frame 3",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "a"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "scaled"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 3,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "scaled",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           1.9378248434212895,
+           0.4948079185090459
+          ],
+          [
+           -3.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           -1.9378248434212895,
+           -0.4948079185090459
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.375,
+           -0.605570263569153,
+           -0.15462747453407683
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           1.9378248434212895,
+           0.4948079185090459
+          ],
+          [
+           -2.7499999999999996,
+           0.2422281054276614,
+           0.06185098981363079
+          ]
+         ],
+         "head": [
+          -2.7499999999999996,
+          0.2422281054276614,
+          0.06185098981363079
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "scaled, a, frame 4",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "a"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "scaled"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 4,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "scaled",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           1.9378248434212895,
+           0.4948079185090459
+          ],
+          [
+           -3.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           -1.9378248434212895,
+           -0.4948079185090459
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           1.9378248434212895,
+           0.4948079185090459
+          ],
+          [
+           -3.0,
+           0.0,
+           0.0
+          ],
+          [
+           -2.0,
+           -0.9689124217106447,
+           -0.24740395925452294
+          ]
+         ],
+         "head": [
+          -2.0,
+          -0.9689124217106447,
+          -0.24740395925452294
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "scaled, a, frame 5",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "a"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "scaled"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 5,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "scaled",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           1.9378248434212895,
+           0.4948079185090459
+          ],
+          [
+           -3.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           -1.9378248434212895,
+           -0.4948079185090459
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           -0.25,
+           1.211140527138306,
+           0.30925494906815365
+          ],
+          [
+           -1.0,
+           1.9378248434212895,
+           0.4948079185090459
+          ],
+          [
+           -3.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           -1.9378248434212895,
+           -0.4948079185090459
+          ],
+          [
+           -0.875,
+           -1.816710790707459,
+           -0.46388242360223053
+          ]
+         ],
+         "head": [
+          -0.875,
+          -1.816710790707459,
+          -0.46388242360223053
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "scaled, a, frame 6",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "a"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "scaled"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 6,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "scaled",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           1.9378248434212895,
+           0.4948079185090459
+          ],
+          [
+           -3.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           -1.9378248434212895,
+           -0.4948079185090459
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           -1.4999999999999998,
+           1.4533686325659672,
+           0.3711059388817844
+          ],
+          [
+           -3.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           -1.9378248434212895,
+           -0.4948079185090459
+          ],
+          [
+           -0.24999999999999994,
+           -1.211140527138306,
+           -0.30925494906815365
+          ]
+         ],
+         "head": [
+          -0.24999999999999994,
+          -1.211140527138306,
+          -0.30925494906815365
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "scaled, a, frame 7",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "a"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "scaled"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 7,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "scaled",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           1.9378248434212895,
+           0.4948079185090459
+          ],
+          [
+           -3.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           -1.9378248434212895,
+           -0.4948079185090459
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           -2.7499999999999996,
+           0.2422281054276614,
+           0.06185098981363079
+          ],
+          [
+           -3.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           -1.9378248434212895,
+           -0.4948079185090459
+          ],
+          [
+           0.375,
+           -0.605570263569153,
+           -0.15462747453407683
+          ]
+         ],
+         "head": [
+          0.375,
+          -0.605570263569153,
+          -0.15462747453407683
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "scaled, a, frame 8",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "a"
+   },
+   "panels": {
+    "p1": {
+     "view": "v",
+     "variables": {
+      "frame": "scaled"
+     }
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  },
+  "frame_index": 8,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "scaled",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           1.9378248434212895,
+           0.4948079185090459
+          ],
+          [
+           -3.0,
+           0.0,
+           0.0
+          ],
+          [
+           -1.0,
+           -1.9378248434212895,
+           -0.4948079185090459
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "loop",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           -2.0,
+           -0.9689124217106447,
+           -0.24740395925452294
+          ],
+          [
+           -1.0,
+           -1.9378248434212895,
+           -0.4948079185090459
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          1.0,
+          0.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "position": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "trail": [
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ],
+        [
+         0.0,
+         0.0,
+         0.0
+        ]
+       ]
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ }
+]

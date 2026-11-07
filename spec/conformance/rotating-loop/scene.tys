@@ -1,0 +1,149 @@
+{
+ "format": "tycho-scene",
+ "version": "0.2",
+ "generator": "pytycho 0.2.0, spec/conformance/generate.py",
+ "frames": {
+  "rot": {
+   "label": "rotating"
+  },
+  "inertial": {
+   "parent": "rot",
+   "rotation": {
+    "axis": "z",
+    "angle": {
+     "channel": "a"
+    }
+   }
+  },
+  "scaled": {
+   "parent": "rot",
+   "origin": [
+    {
+     "attr": "d"
+    },
+    0.0,
+    0.0
+   ],
+   "rotation": {
+    "axis": "x",
+    "angle": 0.25
+   },
+   "scale": {
+    "attr": "k"
+   }
+  }
+ },
+ "bodies": {
+  "b1": {
+   "frame": "rot",
+   "position": [
+    {
+     "attr": "d"
+    },
+    0.0,
+    0.0
+   ]
+  }
+ },
+ "track_sets": {
+  "loop": {
+   "frame": "rot",
+   "tracks": 1,
+   "offsets": "loop/offsets",
+   "positions": "loop/positions",
+   "channels": {
+    "a": {
+     "view": "loop/a",
+     "interp": "linear"
+    }
+   },
+   "attrs": {
+    "d": 0.5,
+    "k": 2.0
+   },
+   "periodic": true
+  }
+ },
+ "variables": {
+  "frame": {
+   "kind": "choice",
+   "values": [
+    "rot",
+    "inertial",
+    "scaled"
+   ],
+   "default": "rot",
+   "scope": "panel"
+  }
+ },
+ "clock": {
+  "mode": "fraction",
+  "channels": [
+   "@index",
+   "a"
+  ],
+  "steps": 8
+ },
+ "views": {
+  "v": {
+   "frame": {
+    "var": "frame"
+   },
+   "driver": {
+    "sets": {
+     "set": "loop"
+    },
+    "member": {
+     "index": 0
+    }
+   },
+   "layers": [
+    {
+     "kind": "track",
+     "sets": {
+      "set": "loop"
+     },
+     "members": "all",
+     "reveal": "none"
+    },
+    {
+     "kind": "track",
+     "sets": {
+      "set": "loop"
+     },
+     "members": "all",
+     "reveal": "trail",
+     "trail": {
+      "fraction": 0.5
+     },
+     "head": true
+    },
+    {
+     "kind": "body",
+     "body": "b1",
+     "trail": {
+      "fraction": 0.5
+     }
+    },
+    {
+     "kind": "axes"
+    }
+   ]
+  }
+ },
+ "initial": {
+  "variables": {},
+  "clock": {
+   "channel": "@index"
+  },
+  "panels": {
+   "p1": {
+    "view": "v"
+   }
+  },
+  "layout": {
+   "kind": "panel",
+   "id": "p1"
+  }
+ }
+}

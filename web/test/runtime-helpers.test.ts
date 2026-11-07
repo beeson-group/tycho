@@ -151,3 +151,83 @@ describe('colors', () => {
     expect(colormapPosition(3, [3, 3])).toBe(0.5);
   });
 });
+
+describe('readouts (section 2.9)', () => {
+  const corpus = () => {
+    const c = loadCorpus('two-panels');
+    const parts: Readout['parts'] = [
+      'e=',
+      { member: 'e', digits: 3 },
+      ' d=',
+      { attr: 'd', factor: 2, offset: 1 },
+      ' t=',
+      { channel: 't', digits: 4 },
+      ' i=',
+      { clock: 'index' },
+      '/',
+      { clock: 'steps' },
+      ' ',
+      { var: 'frame' },
+      ' ',
+      { var: 'e' },
+    ];
+    c.scene.readouts = [{ place: 'panel', parts }];
+    validate(c.scene, c.data);
+    return { ...c, parts, geometry: new GeometryCache(c.scene, c.data) };
+  };
+  it('reads the driver, its channel at the reading, the clock, and the variables', () => {
+    const c = corpus();
+    const st = c.scene.initial;
+    // p1 drives orbits track 1 (k = 0.5 rounds to 1)
+    const set = c.geometry.sets.get('orbits');
+    const e = set.parameter('e')[1]!;
+    const tc = c.geometry.readings('orbits', 't').clocks[1]!;
+    const t = set.channel('t');
+    const s = set.start(1);
+    const { k, w } = tc.locate(2 / 6);
+    const tv = (1 - w) * t[s + k]! + w * t[s + k + 1]!;
+    const text = readoutText({ scene: c.scene, geometry: c.geometry, state: st, panel: 'p1', frameIndex: 8 }, c.parts);
+    expect(text).toBe(`e=${formatNumber(e, 3)} d=2 t=${formatNumber(tv, 4)} i=2/6 shift ${formatNumber(0.2)}`);
+  });
+  it('gives a dash for a part that a driver without a matching track set cannot give', () => {
+    const c = corpus();
+    const st = withVariable(c.scene, c.scene.initial, 'group', 'absent');
+    const text = readoutText({ scene: c.scene, geometry: c.geometry, state: st, panel: 'p2', frameIndex: 0 }, c.parts);
+    expect(text).toBe('e=— d=— t=— i=0/6 tilt 0.2');
+  });
+  it('shows a choice by its label and a toggle as on or off', () => {
+    const s = baseScene({
+      variables: { f: { kind: 'choice', values: ['a', 'b'], labels: ['first', 'second'], default: 'b' }, show: { kind: 'toggle', default: true } },
+    });
+    const data = new MemoryStore()
+      .add('off', [0, 2], 'uint32')
+      .add('pos', [
+        [0, 0],
+        [1, 0],
+      ])
+      .add('time', [0, 1]);
+    const text = readoutText({ scene: s, geometry: new GeometryCache(s, data), state: state(), panel: 'p1', frameIndex: 0 }, [
+      { var: 'f' },
+      ' ',
+      { var: 'show' },
+    ]);
+    expect(text).toBe('second on');
+  });
+  it("reads a channel in the driver's lap (C6)", () => {
+    // the laps scene runs 3 laps of 24 steps over a loop whose channel a is 0, 0.5, 1, 1.5, 2.5, an advance of 2.5 per lap
+    const c = loadCorpus('laps');
+    c.scene.readouts = [{ place: 'panel', parts: [{ channel: 'a' }] }];
+    validate(c.scene, c.data);
+    const geometry = new GeometryCache(c.scene, c.data);
+    const read = (channel: string, frameIndex: number) =>
+      readoutText({ scene: c.scene, geometry, state: { ...c.scene.initial, clock: { channel } }, panel: 'p1', frameIndex }, c.scene.readouts![0]!.parts);
+    // by @index, lap 2 runs from frame 16, and frame 21 is halfway between samples 2 and 3 of lap 2
+    expect([4, 8, 12, 16, 20, 21, 22, 23].map((i) => read('@index', i))).toEqual(['1', '2.5', '3.5', '5', '6', '6.25', '6.5', '7']);
+    // read by channel a itself, the readout is the loop value 2.5 U = 7.5 q, with loop reading U and progress q
+    for (const i of [17, 20, 23]) expect(read('a', i)).toBe(formatNumber((7.5 * i) / 24));
+    // during playback, the channel is read at the progress between frames 20 and 21, and the clock part shows the frame index
+    const parts: Readout['parts'] = [{ channel: 'a' }, ' at ', { clock: 'index' }];
+    const st = { ...c.scene.initial, clock: { channel: '@index' } };
+    expect(readoutText({ scene: c.scene, geometry, state: st, panel: 'p1', frameIndex: 20, progress: 20.5 / 24 }, parts)).toBe('6.125 at 20');
+  });
+});

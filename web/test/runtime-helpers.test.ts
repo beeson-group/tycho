@@ -81,3 +81,31 @@ describe('slider stops (section 2.9)', () => {
     expect(nearestStop([], 1)).toBe(-1);
   });
 });
+
+describe('wall time to loop position', () => {
+  // `at` models live playback, with milliseconds since the anchor, 64 steps, and one lap
+  const at = (start: number, ms: number, speed = 1, seconds = 8) => loopPosition(start, ms, 1000, 64, speed, seconds);
+  it('runs a lap in 8 s at speed 1, and a loop of n laps in 8 n s', () => {
+    expect(LAP_SECONDS).toBe(8);
+    expect(loopSeconds({ mode: 'fraction', channels: ['@index'], steps: 64 })).toBe(8);
+    expect(loopSeconds({ mode: 'fraction', channels: ['@index'], steps: 4320, laps: 9 })).toBe(72);
+    expect(at(0, 1000)).toBe(8);
+    expect(at(0, 1000, 0.5)).toBe(4);
+    expect(at(0, 1000, 1, 72)).toBeCloseTo(64 / 72, 15);
+    expect(at(3, -50)).toBe(3);
+  });
+  it('lies between two frame indices, the index its integer part and the progress its exact place', () => {
+    const x = at(0, 1062.5, 0.25);
+    expect(x).toBe(2.125);
+    expect([positionIndex(x, 64), positionProgress(x, 64)]).toEqual([2, 2.125 / 64]);
+    expect([positionIndex(at(5, 8000), 64), positionProgress(at(5, 8000), 64)]).toEqual([5, 5 / 64]);
+  });
+  it('wraps past the end of the loop and below its start, as stepping back from frame 0 does', () => {
+    expect([positionIndex(at(60, 1000), 64), positionProgress(at(60, 1000), 64)]).toEqual([4, 4 / 64]);
+    expect([positionIndex(-1, 64), positionProgress(-1, 64)]).toEqual([63, 63 / 64]);
+    expect([positionIndex(-0.5, 64), positionProgress(-0.5, 64)]).toEqual([63, 63.5 / 64]);
+    expect([positionIndex(-129.25, 64), positionProgress(-129.25, 64)]).toEqual([62, 62.75 / 64]);
+    // a position a hair below a multiple of the loop wraps to a progress below 1
+    expect(positionProgress(-1e-17, 64)).toBe(0);
+  });
+});

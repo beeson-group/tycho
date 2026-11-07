@@ -1139,3 +1139,70 @@ class Scene:
             if np.any(np.maximum(error[:-1], error[1:]) > 0.01 * np.abs(np.diff(exact))):
                 return "float64"
         return ts.dtype
+
+    def _check_var(self, vid: Any, kind: str | None, what: str) -> list[str]:
+        spec = self._variables.get(vid)
+        if spec is None:
+            return [f"{what} names {vid!r}, which is not a variable"]
+        if kind is not None and spec["kind"] != kind:
+            return [f"{what} names {vid!r}, which is a {spec['kind']}, not a {kind}"]
+        return []
+
+    def _check_query(self, query: Mapping[str, Any], what: str) -> list[str]:
+        if "set" in query:
+            return [] if query["set"] in self._sets else [f"{what} names {query['set']!r}, which is not a track set"]
+        out = []
+        for value in query["tags"].values():
+            if isinstance(value, Mapping):
+                out += self._check_var(value["var"], "choice", what)
+        return out
+
+    def _check_references(self, vid: str, view: Mapping[str, Any]) -> list[str]:
+        """Checks that every name in a view refers to a declared frame, body, track set, or variable of the right kind."""
+        out = []
+        where = f"view {vid!r}"
+        if isinstance(view["frame"], Mapping):
+            out += self._check_var(view["frame"]["var"], "choice", f"2.7: the frame of {where}")
+            for value in self._variables.get(view["frame"]["var"], {}).get("values", []):
+                if value not in self._frames:
+                    out.append(f"2.7: the frame of {where} can be {value!r}, which is not a frame")
+        elif view["frame"] not in self._frames:
+            out.append(f"2.7: {where} displays {view['frame']!r}, which is not a frame")
+        out += self._check_query(view["driver"]["sets"], f"V2: the driver of {where}")
+        if "var" in view["driver"]["member"]:
+            out += self._check_var(view["driver"]["member"]["var"], "selector", f"V3: the driver of {where}")
+        for layer in view["layers"]:
+            if "visible" in layer:
+                out += self._check_var(layer["visible"]["var"], "toggle", f"L5: a layer of {where}")
+            if layer["kind"] == "track":
+                out += self._check_query(layer["sets"], f"V2: a track layer of {where}")
+                if isinstance(layer["members"], Mapping) and "var" in layer["members"]:
+                    out += self._check_var(layer["members"]["var"], "selector", f"V3: a track layer of {where}")
+                if "highlight" in layer:
+                    broken = self._check_var(layer["highlight"]["var"], "selector", f"2.7: a highlight of {where}")
+                    out += broken
+                    if not broken and "kernel" in layer["highlight"] and self._variables[layer["highlight"]["var"]].get("by") == "index":
+                        out.append(
+                            f"2.7: a highlight kernel of {where} needs a selector by nearest, and {layer['highlight']['var']!r} is by index"
+                        )
+                color = layer.get("color")
+                if isinstance(color, Mapping) and isinstance(color["colormap"], Mapping):
+                    out += self._check_colormap(color["colormap"], where)
+            elif layer["kind"] == "body" and layer["body"] not in self._bodies:
+                out.append(f"L4: {where} draws {layer['body']!r}, which is not a body")
+        return out
+
+    def _check_colormap(self, cmap: Mapping[str, Any], where: str) -> list[str]:
+        """Checks that a colormap keyed on a variable refers to a choice, and that its map gives a colormap for every value
+        of the choice and only for these values (section 2.7)."""
+        what = f"2.7: a colormap of {where}"
+        broken = self._check_var(cmap["var"], "choice", what)
+        if broken:
+            return broken
+        values = self._variables[cmap["var"]]["values"]
+        out = []
+        if missing := [v for v in values if v not in cmap["map"]]:
+            out.append(f"{what} keyed on {cmap['var']!r} does not name a colormap for {missing}")
+        if extra := [k for k in cmap["map"] if k not in values]:
+            out.append(f"{what} keyed on {cmap['var']!r} maps {extra}, which are not its values")
+        return out

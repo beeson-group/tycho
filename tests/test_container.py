@@ -231,3 +231,56 @@ def test_d3_rejects_every_other_version(version):
     header["version"] = version
     with pytest.raises(ContainerError, match="D3: header version"):
         Container(_rebuilt(header, bytes(data[_payload_start(bytes(data)) :])))
+
+
+def _encoded(rows: int | None = None) -> bytes:
+    w = ContainerWriter()
+    w.add_view("a", np.linspace(0.0, 1.0, 600).reshape(200, 3), chunk_rows=rows)
+    assert w.views["a"]["encoding"] == "shuffle-delta-deflate"
+    return w.to_bytes()
+
+
+def test_d5_rejects_chunks_that_do_not_match_the_shape_or_run_past_the_end():
+    data = _encoded(64)
+    chunks = _header(data)["views"]["a"]["chunks"]
+    assert len(chunks) == 4
+    with pytest.raises(ContainerError, match="D5: view 'a' has chunk_rows 0"):
+        Container(_patched(data, "a", chunk_rows=0))
+    with pytest.raises(ContainerError, match="D5: view 'a' has 4 chunks, while 200 rows in chunks of 40 take 5"):
+        Container(_patched(data, "a", chunk_rows=40))
+    with pytest.raises(ContainerError, match="D5: view 'a' has 3 chunks"):
+        Container(_patched(data, "a", chunks=chunks[:3]))
+    with pytest.raises(ContainerError, match="D5: chunk 3 of view 'a' runs past the end of the file"):
+        Container(_patched(data, "a", chunks=[*chunks[:3], [chunks[3][0] + 4096, chunks[3][1]]]))
+    with pytest.raises(ContainerError, match="D5: chunk 1 of view 'a' is not an"):
+        Container(_patched(data, "a", chunks=[chunks[0], [0], *chunks[2:]]))
+
+
+def test_d5_rejects_the_wrong_decoded_size():
+    data = _encoded(64)
+    # under a shape with one column fewer, every chunk inflates to more bytes than its rows take
+    container = Container(_patched(data, "a", shape=[200, 2]))
+    with pytest.raises(ContainerError, match="D5: chunk 0 of view 'a' inflates to more than the 1024 bytes"):
+        container.view("a")
+    # under a shape with one column more, every chunk inflates to fewer bytes than its rows take
+    with pytest.raises(ContainerError, match="D5: chunk 0 of view 'a' inflates to 1536 bytes, not the 2048"):
+        Container(_patched(data, "a", shape=[200, 4])).view("a")
+
+
+def test_d5_rejects_corrupted_deflate_data_and_bytes_after_the_stream():
+    data = _encoded()
+    start = _payload_start(data)
+    offset, length = _header(data)["views"]["a"]["chunks"][0]
+    # flip a byte of the deflate data, and one of the Adler-32 checksum
+    for at, why in ((2, ""), (length - 1, "does not inflate: .*incorrect data check")):
+        bad = bytearray(data)
+        bad[start + offset + at] ^= 0x40
+        with pytest.raises(ContainerError, match=f"D5: chunk 0 of view 'a' {why}"):
+            Container(bytes(bad)).view("a")
+    with pytest.raises(ContainerError, match="D5: chunk 0 of view 'a' ends before its zlib stream does"):
+        Container(_patched(data, "a", chunks=[[offset, length - 3]])).view("a")
+    assert length % 8 != 0
+    padded = bytearray(data)
+    padded[start + offset + length] = 7
+    with pytest.raises(ContainerError, match="D5: chunk 0 of view 'a' has 1 bytes after its zlib stream"):
+        Container(_patched(bytes(padded), "a", chunks=[[offset, length + 1]])).view("a")

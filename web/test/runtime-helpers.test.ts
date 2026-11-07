@@ -39,3 +39,45 @@ describe('formatNumber', () => {
     expect(formatNumber(Infinity)).toBe('∞');
   });
 });
+
+describe('slider stops (section 2.9)', () => {
+  const scene = (): Scene => {
+    const s = baseScene({
+      variables: {
+        c: { kind: 'selector', parameter: 'C', default: 2.9 },
+        fam: { kind: 'choice', values: ['x', 'y', 'none'], default: 'x' },
+      },
+      controls: [{ kind: 'slider', variable: 'c', label: 'C', domain: { tags: { kind: 'orbit' } } }],
+    });
+    s.track_sets.s = { ...s.track_sets.s!, tracks: 2, tags: { kind: 'orbit', fam: 'x' }, parameters: { C: { view: 'c1' } } };
+    s.track_sets.u = { frame: 'a', tracks: 2, offsets: 'off', positions: 'pos', tags: { kind: 'orbit', fam: 'y' }, parameters: { C: { view: 'c2' } } };
+    return s;
+  };
+  const data = () =>
+    new MemoryStore()
+      .add('off', [0, 2, 4], 'uint32')
+      .add('pos', [
+        [0, 0],
+        [1, 0],
+        [2, 0],
+        [3, 0],
+      ])
+      .add('time', [0, 1, 0, 1])
+      .add('c1', [3, 1])
+      .add('c2', [2, 3]);
+  it('are the distinct parameter values of the matched track sets, in increasing order', () => {
+    const s = scene();
+    const scope = { scene: s, state: s.initial, panel: s.initial.panels.p1! };
+    const control = s.controls![0] as Extract<NonNullable<Scene['controls']>[number], { kind: 'slider' }>;
+    expect(sliderStops(scope, new SetCache(s, data()), control)).toEqual([1, 2, 3]);
+    control.domain = { tags: { fam: { var: 'fam' } } };
+    expect(sliderStops(scope, new SetCache(s, data()), control)).toEqual([1, 3]);
+    const none = { ...scope, state: withVariable(s, s.initial, 'fam', 'none') };
+    expect(sliderStops(none, new SetCache(s, data()), control)).toEqual([]);
+  });
+  it('nearestStop picks the nearest stop, the lowest index winning a tie', () => {
+    expect(nearestStop([1, 2, 3], 2.9)).toBe(2);
+    expect(nearestStop([1, 2, 3], 1.5)).toBe(0);
+    expect(nearestStop([], 1)).toBe(-1);
+  });
+});

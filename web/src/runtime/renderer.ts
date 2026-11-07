@@ -1635,7 +1635,8 @@ export class StageRenderer {
     this.gl.render(p.staticScene, p.camera);
     this.gl.setRenderTarget(null);
     this.region.min.set(0, 0);
-    this.region.max.set(r.z, r.w);
+    // at a fractional pixel ratio, the viewport is rounded up past the end of the drawing buffer
+    this.region.max.set(Math.min(r.z, target.width - r.x), Math.min(r.w, target.height - r.y));
     this.gl.copyTextureToTexture(s.texture, target.texture, this.region, this.corner.set(r.x, r.y));
   }
 

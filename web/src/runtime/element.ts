@@ -461,6 +461,10 @@ export function dropText(payload: { kind: string }, zone: DropZone): string {
   return `${panel ? 'move' : 'split'} ${side}`;
 }
 
+function reducedMotion(): boolean {
+  return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
 /** HTMLElement where there is one, so that importing this module under Node does not throw. */
 const Base = (typeof HTMLElement === 'undefined' ? class {} : HTMLElement) as typeof HTMLElement;
 
@@ -513,6 +517,12 @@ export class TychoViewerElement extends Base {
   private closeExport: (() => boolean) | null = null;
 
   private raf = 0;
+  /** Whether the element intersects the viewport. It stays true where IntersectionObserver does not exist. */
+  private intersecting = true;
+  /** Whether the animation loop may run, i.e. the element intersects the viewport and the page is visible. */
+  private shown = false;
+  private viewObserver: IntersectionObserver | null = null;
+  private readonly onVisibility = () => this.syncShown();
   private dirty = true;
   private anchor = { index: 0, time: 0 };
   /** The progress that playback last reached, between two frame indices, or null while paused. */
@@ -658,7 +668,7 @@ export class TychoViewerElement extends Base {
     this.buildTopBar();
     this.buildFooter();
     this.start();
-    if (this.kiosk) this.play();
+    if ((this.kiosk || this.hasAttribute('autoplay')) && !reducedMotion()) this.play();
   }
 
   // lifecycle
@@ -685,16 +695,33 @@ export class TychoViewerElement extends Base {
     this.resizeObserver.observe(this.stage);
     this.resizeObserver.observe(this.header);
     window.addEventListener('pagehide', this.onPageHide);
+    document.addEventListener('visibilitychange', this.onVisibility);
+    if (typeof IntersectionObserver !== 'undefined') {
+      this.intersecting = false;
+      this.viewObserver = new IntersectionObserver(
+        (entries) => {
+          this.intersecting = entries[entries.length - 1]!.isIntersecting;
+          this.syncShown();
+        },
+        { threshold: 0 },
+      );
+      this.viewObserver.observe(this);
+    }
     this.lastPanels = null;
     this.lastLayout = null;
     for (const pid of [...this.panelDom.keys()]) this.removePanelDom(pid);
     this.onChange('state');
     if (this.store.playing) this.onChange('playing');
+    this.syncShown();
   }
 
   private stop(): void {
     cancelAnimationFrame(this.raf);
     this.raf = 0;
+    this.shown = false;
+    document.removeEventListener('visibilitychange', this.onVisibility);
+    this.viewObserver?.disconnect();
+    this.viewObserver = null;
     this.flushSave();
     this.closeMenu(false);
     window.removeEventListener('pagehide', this.onPageHide);
@@ -793,7 +820,29 @@ export class TychoViewerElement extends Base {
   }
 
   private schedule(): void {
-    if (this.raf === 0 && this.renderer !== null) this.raf = requestAnimationFrame((t) => this.tick(t));
+    if (this.raf === 0 && this.renderer !== null && this.shown) this.raf = requestAnimationFrame((t) => this.tick(t));
+  }
+
+  /** Stops the animation loop when the element stops being shown, and restarts it when the element comes back, with the clock where it paused. */
+  private syncShown(): void {
+    const shown = this.intersecting && !document.hidden;
+    if (shown === this.shown) return;
+    this.shown = shown;
+    if (!shown) {
+      cancelAnimationFrame(this.raf);
+      this.raf = 0;
+      return;
+    }
+    if (this.store?.playing) {
+      this.meter.reset();
+      this.anchor = { index: this.playPosition(), time: performance.now() };
+    }
+    this.invalidate();
+  }
+
+  /** The loop position that playback last reached, between two frame indices, so that a new anchor does not move the picture back to a frame index. */
+  private playPosition(): number {
+    return this.playProgress === null ? this.store!.frame : this.playProgress * this.scene!.clock.steps;
   }
 
   /**
@@ -885,7 +934,12 @@ export class TychoViewerElement extends Base {
     return (this.scene?.controls ?? []).some((c) => c.kind === 'transport');
   }
 
-  /** Starts the clock. It does not do anything before a scene loads. */
+  /** Whether the clock is set to run. It stays true while the clock waits for the element to be shown. */
+  get playing(): boolean {
+    return this.store?.playing ?? false;
+  }
+
+  /** Starts the clock, at once or when the element is next shown. It does not do anything before a scene loads. */
   play(): void {
     this.store?.setPlaying(true);
   }
@@ -906,6 +960,7 @@ export class TychoViewerElement extends Base {
   private seek(frame: number): void {
     const store = this.store!;
     store.setFrame(frame);
+    this.playProgress = null;
     if (store.playing) this.anchor = { index: store.frame, time: performance.now() };
   }
 
@@ -998,11 +1053,8 @@ export class TychoViewerElement extends Base {
         speed.appendChild(o);
       }
       speed.addEventListener('change', () => {
-        const store = this.store!;
         this.speed = Number(speed.value);
-        // playback goes on from playProgress, between two frame indices, so that the picture does not jump back to the frame index
-        const at = this.playProgress === null ? store.frame : this.playProgress * scene.clock.steps;
-        this.anchor = { index: at, time: performance.now() };
+        this.anchor = { index: this.playPosition(), time: performance.now() };
         this.refreshExport?.();
       });
       cap.append(play, scrub, frame, speed);

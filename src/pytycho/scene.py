@@ -1257,3 +1257,118 @@ class Scene:
         if len(set(shown)) != len(shown):
             out.append("2.8: the layout shows a panel twice")
         return out
+
+    def _match(self, query: Mapping[str, Any], values: Mapping[str, str]) -> list[TrackSet]:
+        if "set" in query:
+            return [self._sets[query["set"]]] if query["set"] in self._sets else []
+        want = {k: values[v["var"]] if isinstance(v, Mapping) else v for k, v in query["tags"].items()}
+        return [ts for ts in self._sets.values() if ts.positions and all(ts.tags.get(k) == v for k, v in want.items())]
+
+    def _driver_of(self, view: Mapping[str, Any], values: Mapping[str, str], where: str) -> tuple[list[TrackSet], list[str]]:
+        drivers = self._match(view["driver"]["sets"], values)
+        if len(drivers) > 1:
+            return drivers, [f"V2: {where}: the driver's set query matches the track sets {[t.id for t in drivers]}, where one is needed"]
+        return drivers, []
+
+    def _check_view(
+        self, vid: str, view: Mapping[str, Any], values: Mapping[str, str], tree: FrameTree | None, clock: Mapping[str, Any]
+    ) -> list[str]:
+        """Checks rules F2, F5, V2, V3, C5, C6, and the drawing references for one view, at one combination of choice values."""
+        out = []
+        frame = values[view["frame"]["var"]] if isinstance(view["frame"], Mapping) else view["frame"]
+        where = f"view {vid!r} with {dict(values)}" if values else f"view {vid!r}"
+
+        def through(ts: TrackSet, src: str, what: str, body: str | None = None) -> None:
+            """Checks rules F5 and F2 for a track set evaluated from src, or from the position of body, to the display frame."""
+            if tree is None:
+                return
+            channels, attrs = tree.requirements(src, frame) if body is None else tree.body_requirements(body, frame)
+            missing = sorted(channels - set(ts.channels[0]) - {INDEX}) + sorted(attrs - set(ts.attrs))
+            if missing:
+                out.append(f"F5: {where}: track set {ts.id!r} lacks {missing} for {what} in frame {frame!r}")
+                return
+            for fid in _edges_used(tree, src, frame):
+                scale = self._frames[fid].get("scale")
+                if isinstance(scale, Mapping) and "attr" in scale:
+                    if scale.get("factor", 1.0) * ts.attrs[scale["attr"]] + scale.get("offset", 0.0) == 0.0:
+                        out.append(f"F2: {where}: the scale of frame {fid!r} is zero for track set {ts.id!r}")
+                elif isinstance(scale, Mapping) and "channel" in scale:
+                    # check every lap that a trail or a reveal can reach, from -n to n - 1 for a clock of n laps (rules L2 and C6)
+                    laps = range(-clock.get("laps", 1), clock.get("laps", 1)) if ts.periodic else range(1)
+                    for i, c in enumerate(ts._stored()[1]):
+                        stored = c[scale["channel"]].astype(ts.dtype).astype(np.float64)
+                        advance = stored[-1] - stored[0]
+                        if any(np.any((stored + j * advance if j else stored) == 0.0) for j in laps):
+                            out.append(f"F2: {where}: the scale of frame {fid!r} is zero on track {i} of track set {ts.id!r}")
+                            break
+
+        def clocked(ts: TrackSet, what: str) -> None:
+            missing = [c for c in clock["channels"] if c != INDEX and c not in ts.channels[0]]
+            if missing:
+                out.append(f"C5: {where}: track set {ts.id!r}, {what}, lacks clock channels {missing}")
+            if clock.get("laps", 1) > 1 and not ts.periodic:
+                out.append(f"C6: {where}: track set {ts.id!r}, {what}, is not periodic, and the clock has {clock['laps']} laps")
+
+        def member(ts: TrackSet, ref: Any, what: str) -> None:
+            if ref == "all" or "count" in ref:
+                return
+            if "index" in ref:
+                if ref["index"] >= len(ts.positions):
+                    out.append(
+                        f"V3: {where}: member index {ref['index']} of {what} is not below the track count {len(ts.positions)} "
+                        f"of track set {ts.id!r}"
+                    )
+                return
+            spec = self._variables[ref["var"]]
+            if spec.get("by", "nearest") == "nearest" and spec.get("parameter") not in ts.parameters[0]:
+                out.append(f"V3: {where}: track set {ts.id!r} lacks parameter {spec.get('parameter')!r} for selector {ref['var']!r}")
+
+        drivers, broken = self._driver_of(view, values, where)
+        out += broken
+        if len(drivers) == 1:
+            d = drivers[0]
+            through(d, d.frame, "the driver")
+            clocked(d, "the driver")
+            member(d, view["driver"]["member"], "the driver")
+        for layer in view["layers"]:
+            if layer["kind"] == "track":
+                matched = self._match(layer["sets"], values)
+                if len(matched) > 1:
+                    out.append(
+                        f"V2: {where}: a track layer's set query matches the track sets {[t.id for t in matched]}, where one is needed"
+                    )
+                elif matched:
+                    ts = matched[0]
+                    through(ts, ts.frame, "its tracks")
+                    member(ts, layer["members"], "a track layer")
+                    if "highlight" in layer:
+                        member(ts, layer["highlight"], "a highlight")
+                    hides = clock["mode"] == "value" and "hidden" in (layer.get("before"), layer.get("after"))
+                    if layer.get("reveal", "none") != "none" or _has_head(layer) or hides:
+                        clocked(ts, "on which a reading is taken")
+                    color = layer.get("color")
+                    if isinstance(color, Mapping):
+                        if "channel" in color and color["channel"] not in ts.channels[0]:
+                            out.append(f"2.7: {where}: track set {ts.id!r} lacks channel {color['channel']!r} for a layer's color")
+                        if "parameter" in color and color["parameter"] not in ts.parameters[0]:
+                            out.append(f"2.7: {where}: track set {ts.id!r} lacks parameter {color['parameter']!r} for a layer's color")
+            elif layer["kind"] == "body" and len(drivers) == 1:
+                d = drivers[0]
+                body = self._bodies[layer["body"]]
+                through(d, body["frame"], f"body {layer['body']!r}", layer["body"])
+        return out
+
+
+def _edges_used(tree: FrameTree, src: str, dst: str, _stack: tuple[str, ...] = ()) -> set[str]:
+    """The frames whose edge is evaluated to take a point from ``src`` to ``dst``, through body origins too."""
+    up, down = tree.path(src, dst)
+    used: set[str] = set()
+    for fid in up + down:
+        if fid in _stack:
+            continue
+        used.add(fid)
+        origin = tree.frames[fid].get("origin")
+        if isinstance(origin, Mapping):
+            body = tree.bodies[origin["body"]]
+            used |= _edges_used(tree, body["frame"], tree.frames[fid]["parent"], (*_stack, fid))
+    return used

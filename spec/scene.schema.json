@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://pytycho.readthedocs.io/en/stable/schema/0.2/scene.schema.json",
+  "$id": "https://pytycho.readthedocs.io/en/stable/schema/0.3/scene.schema.json",
   "title": "TyCHO scene",
-  "description": "Structure of scene.tys, version 0.2. The rules that this schema cannot express are in tycho-scene.md.",
+  "description": "Structure of scene.tys, version 0.3. The rules that this schema cannot express are in tycho-scene.md.",
   "type": "object",
   "additionalProperties": false,
   "required": [

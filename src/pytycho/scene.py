@@ -1105,7 +1105,7 @@ class Scene:
             raise SceneError("2.6: the scene does not have a clock")
         if not self._panels:
             raise SceneError("2.8: the scene does not have a panel")
-        doc: dict[str, Any] = {"format": "tycho-scene", "version": "0.2", "generator": f"pytycho {__version__}"}
+        doc: dict[str, Any] = {"format": "tycho-scene", "version": "0.3", "generator": f"pytycho {__version__}"}
         if self.title is not None:
             doc["title"] = self.title
         if self.theme is not None:

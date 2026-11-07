@@ -31,6 +31,7 @@ examples/**/*.png
 
 # local environment
 .venv/
+.DS_Store
 
 # editor-local language-server settings
 .zed/

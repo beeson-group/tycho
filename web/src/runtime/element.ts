@@ -686,6 +686,54 @@ export class TychoViewerElement extends Base {
   private applyTheme(): void {
     for (const [k, v] of Object.entries(chromeTokens(sceneTheme(this.scene!)))) this.style.setProperty(k, v);
   }
+
+  // state
+
+  private recall(): State {
+    const scene = this.scene!;
+    if (this.kiosk) return structuredClone(scene.initial);
+    try {
+      const text = localStorage.getItem(storageKey(this.sceneText));
+      return text === null ? structuredClone(scene.initial) : repair(scene, JSON.parse(text));
+    } catch {
+      return structuredClone(scene.initial);
+    }
+  }
+
+  private save(): void {
+    if (this.kiosk) return;
+    window.clearTimeout(this.saveTimer);
+    this.saveTimer = window.setTimeout(() => this.flushSave(), 300);
+  }
+
+  private flushSave(): void {
+    if (this.saveTimer === 0 || this.store === null) return;
+    window.clearTimeout(this.saveTimer);
+    this.saveTimer = 0;
+    try {
+      localStorage.setItem(storageKey(this.sceneText), JSON.stringify(this.store.state));
+    } catch {
+      // localStorage may be unavailable, and the state is then not saved
+    }
+  }
+
+  /** Returns to the scene's initial state and discards the stored state. */
+  reset(): void {
+    if (this.scene === null || this.store === null) return;
+    try {
+      localStorage.removeItem(storageKey(this.sceneText));
+    } catch {
+      // localStorage may be unavailable, and a state was then never stored
+    }
+    this.closeMenu(false);
+    this.store.set(structuredClone(this.scene.initial));
+    for (const pid of this.panelDom.keys()) this.renderer?.refit(pid);
+  }
+
+  /** The current state snapshot of section 2.8, or null before a scene loads. */
+  get state(): State | null {
+    return this.store?.state ?? null;
+  }
 }
 
 /**

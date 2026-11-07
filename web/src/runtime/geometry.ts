@@ -359,3 +359,111 @@ export function revealTrack(tc: TrackClock | null, clock: Clock, q: number, spec
   if (tail < 0 && !spec.periodic) tail = 0;
   return { hidden: false, reading: u, loop: U, head, ...loopSpan(tc, tail, U, n, round) };
 }
+
+// buffers in the layout the GPU draws, with two vertices per stored segment
+
+/** The number of stored segments of a set, i.e. its number of samples minus its number of tracks. */
+export function segmentCount(set: SetData): number {
+  return set.samples - set.tracks;
+}
+
+/** The index of the first segment of track `t`. */
+export function firstSegment(set: SetData, t: number): number {
+  return set.start(t) - t;
+}
+
+/** Calls `f(segment, sample)` for every stored segment, with the global index of its first sample. */
+function eachSegment(set: SetData, f: (j: number, s: number) => void): void {
+  let j = 0;
+  for (let t = 0; t < set.tracks; t++) {
+    const s = set.start(t);
+    const m = set.count(t);
+    for (let i = 0; i + 1 < m; i++) f(j++, s + i);
+  }
+}
+
+/** Per-sample values of width `k`, as two vertices per segment. */
+export function pairs(set: SetData, values: ArrayLike<number>, k: number): Float32Array {
+  const out = new Float32Array(2 * k * segmentCount(set));
+  eachSegment(set, (j, s) => {
+    for (let c = 0; c < k; c++) {
+      out[2 * k * j + c] = values[k * s + c]!;
+      out[2 * k * j + k + c] = values[k * (s + 1) + c]!;
+    }
+  });
+  return out;
+}
+
+/** Per-sample values of width `k` of the `m` samples from `s` on, as two vertices per segment. */
+export function slicePairs(values: ArrayLike<number>, k: number, s: number, m: number): Float32Array {
+  const out = new Float32Array(2 * k * (m - 1));
+  for (let i = 0; i + 1 < m; i++) {
+    for (let c = 0; c < k; c++) {
+      out[2 * k * i + c] = values[k * (s + i) + c]!;
+      out[2 * k * i + k + c] = values[k * (s + i + 1) + c]!;
+    }
+  }
+  return out;
+}
+
+/** Writes the segments of track `t` in lap `lap` as gpuSample gives them, from segment `j` on. */
+function writeTrackPairs(g: TrackGeometry, t: number, lap: number, out: Float32Array, j: number): void {
+  const m = g.set.count(t);
+  const own = g.track(t, lap);
+  const joint = [0, 0, 0];
+  if (lap < g.top) g.gpuSample(t, lap, m - 1, joint);
+  for (let i = 0; i + 1 < m; i++, j++) {
+    for (let c = 0; c < 3; c++) {
+      out[6 * j + c] = own[3 * i + c]!;
+      out[6 * j + 3 + c] = i + 2 === m && lap < g.top ? joint[c]! : own[3 * (i + 1) + c]!;
+    }
+  }
+}
+
+/** The positions of every segment of a set in lap `lap`, as two vertices per segment, joined to the next lap below the top. */
+export function lapPairs(g: TrackGeometry, lap: number): Float32Array {
+  const out = new Float32Array(6 * segmentCount(g.set));
+  for (let t = 0; t < g.set.tracks; t++) writeTrackPairs(g, t, lap, out, firstSegment(g.set, t));
+  return out;
+}
+
+/** The positions of the segments of track `t` in lap `lap`, as lapPairs lays them out. */
+export function trackLapPairs(g: TrackGeometry, t: number, lap: number): Float32Array {
+  const out = new Float32Array(6 * (g.set.count(t) - 1));
+  writeTrackPairs(g, t, lap, out, 0);
+  return out;
+}
+
+/** The loop reading of a vertex, which is the reading u_i at a sample or the blended reading at a point, plus its lap. */
+export function vertexReading(tc: TrackClock, v: Vertex): number {
+  const u = 'sample' in v ? tc.at(v.sample) : (1 - v.w) * tc.at(v.k) + v.w * tc.at(v.k + 1);
+  return u + vertexLap(v);
+}
+
+/** The readings of a segment's two samples, (u_i, u_(i+1)), on both its vertices. */
+export function pairReadings(set: SetData, u: Float64Array): Float32Array {
+  const out = new Float32Array(4 * segmentCount(set));
+  eachSegment(set, (j, s) => {
+    out[4 * j] = out[4 * j + 2] = u[s]!;
+    out[4 * j + 1] = out[4 * j + 3] = u[s + 1]!;
+  });
+  return out;
+}
+
+/** The readings of the `m` samples from `s` on, as pairReadings lays them out. */
+export function readingPairs(u: ArrayLike<number>, s: number, m: number): Float32Array {
+  const out = new Float32Array(4 * (m - 1));
+  for (let i = 0; i + 1 < m; i++) {
+    out[4 * i] = out[4 * i + 2] = u[s + i]!;
+    out[4 * i + 1] = out[4 * i + 3] = u[s + i + 1]!;
+  }
+  return out;
+}
+
+/** The track index of every vertex. */
+export function pairTracks(set: SetData): Float32Array {
+  const out = new Float32Array(2 * segmentCount(set));
+  let j = 0;
+  for (let t = 0; t < set.tracks; t++) for (let i = 0; i + 1 < set.count(t); i++, j++) out[2 * j] = out[2 * j + 1] = t;
+  return out;
+}

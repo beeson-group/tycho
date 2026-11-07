@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { Container, decodeEmbedded, type Dtype, type EncodedViewInfo, type TypedArray } from '../src/container';
+import { TychoError } from '../src/errors';
 import { encodeTyd, type TydArray } from './helpers';
+
+const rule = async (f: () => unknown): Promise<string> => {
+  try {
+    await f();
+  } catch (e) {
+    if (e instanceof TychoError) return e.rule;
+    throw e;
+  }
+  return 'no error';
+};
 
 const bits = (a: TypedArray): number[] => Array.from(new Uint8Array(a.buffer, a.byteOffset, a.byteLength));
 
@@ -92,5 +103,59 @@ describe('data.tyd version 1', () => {
     expect(Array.from(d.view('x').data)).toEqual([1, 2]);
     const e = await Container.parse(shifted.subarray(1).slice());
     expect(Array.from(e.view('x').data)).toEqual([1, 2]);
+  });
+
+  it('rejects versions 0, 2, and 3 (D3)', async () => {
+    for (const version of [0, 2, 3]) expect(await rule(() => Container.parse(encodeTyd([], { version })))).toBe('D3');
+    expect(await rule(() => Container.parse(encodeTyd([], { patch: (h) => (h.version = 2) })))).toBe('D3');
+  });
+
+  it('rejects a length that does not match the shape (D2)', async () => {
+    const bytes = encodeTyd([{ name: 'x', dtype: 'float64', shape: [2], values: [1, 2] }], {
+      patch: (h) => (h.views.x.shape = [3]),
+    });
+    expect(await rule(() => Container.parse(bytes))).toBe('D2');
+  });
+
+  it('rejects a view that runs past the end of the file (D2)', async () => {
+    const bytes = encodeTyd([{ name: 'x', dtype: 'float64', shape: [2], values: [1, 2] }], {
+      patch: (h) => (h.views.x.offset = 8),
+    });
+    expect(await rule(() => Container.parse(bytes))).toBe('D2');
+  });
+
+  it('rejects an unknown view key, an unknown encoding, and a missing key (D2)', async () => {
+    const x = (patch: (h: Record<string, any>) => void, chunkRows?: number) =>
+      Container.parse(encodeTyd([{ name: 'x', dtype: 'float64', shape: [2], values: [1, 2], chunkRows }], { patch }));
+    expect(await rule(() => x((h) => (h.views.x.filters = ['shuffle'])))).toBe('D2');
+    expect(await rule(() => x((h) => (h.views.x.chunk_rows = 2)))).toBe('D2');
+    expect(await rule(() => x((h) => (h.views.x.offset = 0), 2))).toBe('D2');
+    expect(await rule(() => x((h) => (h.views.x.encoding = 'zstd')))).toBe('D2');
+    expect(await rule(() => x((h) => delete h.views.x.encoding))).toBe('D2');
+    expect(await rule(() => x((h) => delete h.views.x.length))).toBe('D2');
+    expect(await rule(() => x((h) => delete h.views.x.chunks, 2))).toBe('D2');
+  });
+
+  it('rejects an unknown dtype (D1) and a shape without an axis (D2)', async () => {
+    const x = (patch: (h: Record<string, any>) => void) => Container.parse(encodeTyd([{ name: 'x', dtype: 'float64', shape: [1], values: [1] }], { patch }));
+    expect(await rule(() => x((h) => (h.views.x.dtype = 'float16')))).toBe('D1');
+    expect(await rule(() => x((h) => (h.views.x.shape = [])))).toBe('D2');
+  });
+
+  it('rejects an offset that is not a multiple of 8 and a shape too large to size (D2)', async () => {
+    expect(
+      await rule(() =>
+        Container.parse(
+          encodeTyd([{ name: 'x', dtype: 'float64', shape: [2], values: [1, 2] }], {
+            patch: (h) => ((h.views.x.offset = 4), (h.views.x.length = 8), (h.views.x.shape = [1])),
+          }),
+        ),
+      ),
+    ).toBe('D2');
+    expect(
+      await rule(() =>
+        Container.parse(encodeTyd([{ name: 'x', dtype: 'uint8', shape: [0], values: [] }], { patch: (h) => (h.views.x.shape = [4294967296, 4294967296]) })),
+      ),
+    ).toBe('D2');
   });
 });

@@ -305,3 +305,14 @@ def test_header_length_does_not_count_the_padding():
     struct.pack_into("<I", data, 8, hlen + (-(12 + hlen)) % 8)
     with pytest.raises(ContainerError, match="is not JSON"):
         Container(bytes(data))
+
+
+def test_the_container_fixtures_decode_to_the_same_bits_as_raw():
+    encoded, raw = Container.read(FIXTURES / "encoded.tyd"), Container.read(FIXTURES / "raw.tyd")
+    assert encoded.names == raw.names
+    for name in raw.names:
+        assert raw.header["views"][name]["encoding"] == "raw"
+        assert same_bits(encoded.view(name), raw.view(name)), name
+    infos = encoded.header["views"].values()
+    assert {v["encoding"] for v in infos} == {"raw", "shuffle-delta-deflate"}
+    assert max(len(v.get("chunks", [])) for v in infos) > 2

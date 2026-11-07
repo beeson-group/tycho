@@ -11,13 +11,45 @@ __version__ = "0.2.0"
 from ._evaluate import EvaluationError, evaluate
 from .container import Container, ContainerWriter
 from .html import build_html, write_html
+from .scene import (
+    Scene,
+    SceneError,
+    TrackSet,
+    attr,
+    axes,
+    body,
+    channel,
+    driver,
+    every,
+    grid,
+    rotation,
+    set_id,
+    sets,
+    split,
+    track,
+)
 
 __all__ = [
     "Container",
     "ContainerWriter",
     "EvaluationError",
+    "Scene",
+    "SceneError",
+    "TrackSet",
     "__version__",
+    "attr",
+    "axes",
+    "body",
     "build_html",
+    "channel",
+    "driver",
     "evaluate",
+    "every",
+    "grid",
+    "rotation",
+    "set_id",
+    "sets",
+    "split",
+    "track",
     "write_html",
 ]

@@ -1115,6 +1115,83 @@ def laps():
             ),
         },
     ]
+    # at frame 1, U = 0.125 and the trails reach below lap 0, into lap -1 and, for the longer one, into lap -2
+    head = mid(L(0, 0), L(0, 1))
+    body = mid(B(0, 0), B(0, 1))
+    cases.append(
+        {
+            "name": "C6 and L2: a trail continues below lap 0 into laps -1 and -2, each lowered by its number of advances",
+            "source": "analytic",
+            "state": state(),
+            "frame_index": 1,
+            "tolerance": TOL,
+            "expected": expected(
+                [
+                    None,
+                    # the tail reads 0.125 - 0.75 = -0.625, i.e. lap -1 at 0.375
+                    {
+                        "kind": "track",
+                        "set": "loop",
+                        "members": [
+                            {
+                                "index": 0,
+                                "line": pts_([mid(L(-1, 1), L(-1, 2)), L(-1, 2), L(-1, 3), L(0, 0), head]),
+                                "head": list(map(float, head)),
+                            }
+                        ],
+                    },
+                    {"kind": "track", "set": "loop", "members": [{"index": 0, "line": pts_([L(0, 0), head])}]},
+                    # the tail reads 0.125 - 1.5 = -1.375, i.e. lap -2 at 0.625
+                    {
+                        "kind": "track",
+                        "set": "loop",
+                        "members": [
+                            {"index": 0, "line": pts_([mid(L(-2, 2), L(-2, 3)), L(-2, 3)] + [L(-1, i) for i in range(4)] + [L(0, 0), head])}
+                        ],
+                    },
+                    {
+                        "kind": "body",
+                        "body": "b1",
+                        "position": list(map(float, body)),
+                        "trail": pts_([mid(B(-1, 1), B(-1, 2)), B(-1, 2), B(-1, 3), B(0, 0), body]),
+                    },
+                    None,
+                    None,
+                    *marks,
+                ]
+            ),
+        }
+    )
+    # frame 16 has U = 2, i.e. lap 2 at 0, which is the first sample of lap 2. the tail at 1.25 sits on sample 1 of lap 1
+    cases.append(
+        {
+            "name": "C6: a reading on a lap joint is the first sample of the higher lap",
+            "source": "analytic",
+            "state": state(),
+            "frame_index": 16,
+            "tolerance": TOL,
+            "expected": expected(
+                [
+                    None,
+                    {
+                        "kind": "track",
+                        "set": "loop",
+                        "members": [{"index": 0, "line": pts_([L(1, 1), L(1, 2), L(1, 3), L(2, 0)]), "head": list(map(float, L(2, 0)))}],
+                    },
+                    {
+                        "kind": "track",
+                        "set": "loop",
+                        "members": [{"index": 0, "line": pts_([L(0, i) for i in range(4)] + [L(1, i) for i in range(4)] + [L(2, 0)])}],
+                    },
+                    None,
+                    None,
+                    None,
+                    None,
+                    *marks,
+                ]
+            ),
+        }
+    )
     doc, data = _write_scene("laps", scene, cases)
     for fr in ("rot", "inertial"):
         for channel in ("@index", "a"):

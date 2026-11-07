@@ -1,0 +1,206 @@
+{
+ "format": "tycho-scene",
+ "version": "0.2",
+ "generator": "pytycho 0.2.0",
+ "title": "edge cases, fraction mode",
+ "frames": {
+  "p": {},
+  "c": {
+   "parent": "p",
+   "origin": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "rotation": {
+    "axis": "z",
+    "angle": 1.5707963267948966
+   }
+  },
+  "y": {
+   "parent": "p",
+   "rotation": {
+    "axis": "y",
+    "angle": 1.5707963267948966
+   }
+  }
+ },
+ "bodies": {
+  "b": {
+   "frame": "p",
+   "position": [
+    1.0,
+    0.0,
+    0.0
+   ]
+  }
+ },
+ "track_sets": {
+  "open": {
+   "frame": "p",
+   "tracks": 1,
+   "offsets": "open/offsets",
+   "positions": "open/positions",
+   "periodic": true
+  },
+  "nokey": {
+   "frame": "p",
+   "tracks": 1,
+   "offsets": "nokey/offsets",
+   "positions": "nokey/positions"
+  },
+  "off": {
+   "frame": "p",
+   "tracks": 1,
+   "offsets": "off/offsets",
+   "positions": "off/positions",
+   "periodic": false
+  },
+  "yrot": {
+   "frame": "p",
+   "tracks": 1,
+   "offsets": "yrot/offsets",
+   "positions": "yrot/positions",
+   "periodic": false
+  }
+ },
+ "clock": {
+  "mode": "fraction",
+  "channels": [
+   "@index"
+  ],
+  "steps": 4
+ },
+ "views": {
+  "open": {
+   "frame": "p",
+   "driver": {
+    "sets": {
+     "set": "open"
+    },
+    "member": {
+     "index": 0
+    }
+   },
+   "layers": [
+    {
+     "kind": "track",
+     "sets": {
+      "set": "open"
+     },
+     "members": "all",
+     "reveal": "trail",
+     "trail": {
+      "fraction": 0.75
+     },
+     "head": true
+    },
+    {
+     "kind": "track",
+     "sets": {
+      "set": "nokey"
+     },
+     "members": "all",
+     "reveal": "trail",
+     "trail": {
+      "fraction": 0.5
+     }
+    },
+    {
+     "kind": "track",
+     "sets": {
+      "set": "off"
+     },
+     "members": "all",
+     "reveal": "none",
+     "head": true
+    },
+    {
+     "kind": "body",
+     "body": "b"
+    }
+   ]
+  },
+  "c": {
+   "frame": "c",
+   "driver": {
+    "sets": {
+     "set": "off"
+    },
+    "member": {
+     "index": 0
+    }
+   },
+   "layers": [
+    {
+     "kind": "track",
+     "sets": {
+      "set": "off"
+     },
+     "members": "all",
+     "reveal": "none"
+    }
+   ]
+  },
+  "y": {
+   "frame": "y",
+   "driver": {
+    "sets": {
+     "set": "yrot"
+    },
+    "member": {
+     "index": 0
+    }
+   },
+   "layers": [
+    {
+     "kind": "track",
+     "sets": {
+      "set": "yrot"
+     },
+     "members": "all",
+     "reveal": "none"
+    }
+   ]
+  }
+ },
+ "initial": {
+  "variables": {},
+  "clock": {
+   "channel": "@index"
+  },
+  "panels": {
+   "open": {
+    "view": "open"
+   },
+   "c": {
+    "view": "c"
+   },
+   "y": {
+    "view": "y"
+   }
+  },
+  "layout": {
+   "kind": "split",
+   "dir": "row",
+   "ratio": 0.3333333333333333,
+   "a": {
+    "kind": "panel",
+    "id": "open"
+   },
+   "b": {
+    "kind": "split",
+    "dir": "row",
+    "ratio": 0.5,
+    "a": {
+     "kind": "panel",
+     "id": "c"
+    },
+    "b": {
+     "kind": "panel",
+     "id": "y"
+    }
+   }
+  }
+ }
+}

@@ -125,6 +125,17 @@ export class FrameTree {
   }
 }
 
+export interface Requirements {
+  channels: Set<string>;
+  attrs: Set<string>;
+}
+
+const scalarNeeds = (s: Scalar | ConstantScalar | undefined, req: Requirements): void => {
+  if (s === undefined || typeof s === 'number') return;
+  if ('attr' in s) req.attrs.add(s.attr);
+  else req.channels.add(s.channel);
+};
+
 /** Edge algebra over a scene's frames and bodies. */
 /** An edge as rule F1 applies it, with its origin checked once. */
 interface Edge {
@@ -144,6 +155,8 @@ export class Frames {
   constructor(scene: Scene) {
     this.scene = scene;
     this.tree = new FrameTree(scene.frames);
+    // at load, whatever is drawn, check rule F6 and that every body origin refers to a declared body
+    for (const id of Object.keys(scene.frames)) this.requirements(id, this.tree.root);
   }
 
   private body(bodyId: string): NonNullable<NonNullable<Scene['bodies']>[string]> {
@@ -216,5 +229,33 @@ export class Frames {
     let d: Vec3 = [p[0] / scale, p[1] / scale, p[2] / scale];
     if (rot !== undefined) d = rotate(d, rot.axis, angle, true);
     return [o[0] + d[0], o[1] + d[1], o[2] + d[2]];
+  }
+
+  /**
+   * The channels and attributes a context's track set must carry to take a position from `from`
+   * to `to` (rule F5), through body origins too. It fails with rule F6 on an origin that depends on itself.
+   */
+  requirements(from: string, to: string, req: Requirements = { channels: new Set(), attrs: new Set() }): Requirements {
+    const { up, down } = this.tree.path(from, to);
+    for (const child of [...up, ...down]) {
+      if (this.active.has(child)) fail('F6', `the origin of frame ${child} depends on itself`);
+      this.active.add(child);
+      try {
+        const f = this.tree.frame(child);
+        if (Array.isArray(f.origin)) point(f.origin, `the origin of frame ${child}`).forEach((s) => scalarNeeds(s, req));
+        else if (f.origin !== undefined) this.bodyRequirements(f.origin.body, f.parent!, req);
+        scalarNeeds(f.rotation?.angle, req);
+        scalarNeeds(f.scale, req);
+      } finally {
+        this.active.delete(child);
+      }
+    }
+    return req;
+  }
+
+  bodyRequirements(bodyId: string, frame: string, req: Requirements = { channels: new Set(), attrs: new Set() }): Requirements {
+    const body = this.body(bodyId);
+    body.position.forEach((s) => scalarNeeds(s, req));
+    return this.requirements(body.frame, frame, req);
   }
 }

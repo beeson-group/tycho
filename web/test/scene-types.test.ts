@@ -202,6 +202,20 @@ describe('validate', () => {
     expect(rule(() => validate(scene))).toBe('2.7');
     expect(rule(() => validate(baseScene({ version: '0.4' })))).toBe('S1');
   });
+  it('an orbit camera takes a stretch of three positive factors and a finite turn, in a scene of version 0.3 (2.7)', () => {
+    const scene = baseScene({ version: '0.3' });
+    scene.views.main!.camera = { kind: 'orbit', stretch: [1, 1, 5], turn: -90 };
+    expect(validate(scene, data(), state())).toEqual([]);
+    for (const stretch of [
+      [1, 1],
+      [1, 0, 1],
+      [1, 1, Infinity],
+      [1, 1, '5'],
+    ])
+      expect(rule(() => validate({ ...scene, views: { main: { ...scene.views.main!, camera: { kind: 'orbit', stretch: stretch as never } } } }))).toBe('2.7');
+    for (const turn of [NaN, Infinity, '90'])
+      expect(rule(() => validate({ ...scene, views: { main: { ...scene.views.main!, camera: { kind: 'orbit', turn: turn as never } } } }))).toBe('2.7');
+  });
   it('a clock takes the seconds of one loop, a positive finite number, in either mode (2.6)', () => {
     const scene = baseScene({ version: '0.3' });
     scene.clock = { ...scene.clock, seconds: 24 };

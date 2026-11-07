@@ -1036,6 +1036,28 @@ export class TrackDraw implements Draw {
 
   extend(): void {}
 
+  /** The colorbar of a colormapped layer, with the highlighted or single member marked on it, and the kernel's band. */
+  colorbar(): Colorbar | null {
+    const spec = this.color;
+    if (spec === undefined || typeof spec === 'string') return null;
+    const scale = colorScale(spec, this.set);
+    const params = this.set.def.parameters ?? {};
+    const def = scale.perTrack && Object.hasOwn(params, scale.name) ? params[scale.name] : undefined;
+    const label = def?.label ?? scale.name;
+    const [lo, hi] = scale.range;
+    const at = (v: number) => (hi === lo ? 0.5 : clamp01((v - lo) / (hi - lo)));
+    const member = this.highlight ?? (this.layer.members !== 'all' && this.members.length === 1 ? this.members[0]! : null);
+    const marker = scale.perTrack && member !== null ? at(scale.values[member]!) : null;
+    const k = this.kernel;
+    let band: [number, number] | null = null;
+    if (k !== null && scale.perTrack && scale.name === k.parameter && this.selected !== null) {
+      const v = scale.values[this.selected]!;
+      const half = 1.5 * k.width * k.extent;
+      band = [at(v - half), at(v + half)];
+    }
+    return { label: def?.unit ? `${label}, ${def.unit}` : label, gradient: gradientCss(scale), stops: gradientStops(scale), lo, hi, marker, band };
+  }
+
   dispose(): void {
     for (const p of this.passes.values()) p.dispose();
     this.ranges.texture.dispose();

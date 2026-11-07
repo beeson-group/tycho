@@ -1536,8 +1536,10 @@ class PanelRender {
   halfHeight = 1;
   /** The box the camera was last fitted to, before an orbit camera's stretch. */
   box: THREE.Box3 | null = null;
-  /** The point the fit aimed the camera at. */
+  /** The point the fit aimed the camera at, which an orbit camera turns about while it has no controls. */
   readonly target = new THREE.Vector3();
+  /** The angle in radians by which the clock has turned an orbit camera since the fit. */
+  turned = 0;
   /** What a plane camera showed at the last frame, or null under an orbit camera. */
   view: PlaneView | null = null;
 
@@ -1547,6 +1549,9 @@ class PanelRender {
 }
 
 const cameraKey = (c: Camera): string => JSON.stringify(c);
+
+/** An orbit camera turns with the clock when it has a nonzero turn. */
+const turns = (c: Camera): boolean => c.kind === 'orbit' && (c.turn ?? 0) !== 0;
 
 export class StageRenderer {
   readonly canvas: HTMLCanvasElement;
@@ -1700,7 +1705,8 @@ export class StageRenderer {
    */
   private drawStatic(p: PanelRender): void {
     if (p.staticScene.children.length === 0) return;
-    if (!this.cacheStatic) {
+    // a camera that the clock turns moves at every frame, which would draw the underlay coarse as during a drag
+    if (!this.cacheStatic || turns(p.cameraSpec)) {
       this.gl.render(p.staticScene, p.camera);
       return;
     }
@@ -1932,6 +1938,7 @@ export class StageRenderer {
     cam.up.copy(up);
     cam.lookAt(center);
     p.target.copy(center);
+    p.turned = 0;
     this.aspect(p);
     if (p.controls) {
       p.controls.target.copy(center);
@@ -1958,6 +1965,23 @@ export class StageRenderer {
       cam.right = p.halfWidth;
     } else cam.aspect = aspect;
     cam.updateProjectionMatrix();
+  }
+
+  /**
+   * Turns an orbit camera about its up axis through its target to its turn in degrees times the
+   * progress `q` of the loop. The turn adds to where the viewer moved the camera.
+   */
+  private turn(p: PanelRender, q: number): void {
+    const spec = p.cameraSpec;
+    if (spec.kind !== 'orbit' || spec.turn === undefined) return;
+    const angle = (spec.turn * q * Math.PI) / 180;
+    const target = p.controls?.target ?? p.target;
+    p.camera.position
+      .sub(target)
+      .applyAxisAngle(cameraBasis(spec).up, angle - p.turned)
+      .add(target);
+    p.camera.lookAt(target);
+    p.turned = angle;
   }
 
   /** What a plane camera shows now, and the marks that follow it laid out across it. */
@@ -2000,6 +2024,7 @@ export class StageRenderer {
       this.advance(p, state, q);
       if (p.needsFit || (resized && !p.userMoved)) this.fit(p);
       else if (resized) this.aspect(p);
+      this.turn(p, q);
       this.follow(p);
       if (p.error !== null) {
         errors.set(pid, p.error);

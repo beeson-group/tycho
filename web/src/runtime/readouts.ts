@@ -294,6 +294,15 @@ export function keyAction(key: string, shift: boolean, steps: number): KeyAction
   return /^[0-9]$/.test(key) ? { kind: 'seek', frame: Math.round((steps * Number(key)) / 10) % steps } : null;
 }
 
+/** Whether a focused form control takes `key` itself, given the tag name and the `type` of the control. */
+export function controlUsesKey(tag: string, type: string, key: string): boolean {
+  const moves = key.startsWith('Arrow') || key === 'Home' || key === 'End' || key === 'PageUp' || key === 'PageDown';
+  if (tag === 'BUTTON' || (tag === 'INPUT' && type === 'checkbox')) return key === ' ' || key === 'Enter';
+  if (tag === 'INPUT' && type === 'range') return moves;
+  if (tag === 'SELECT') return moves || key === 'Enter' || key.length === 1;
+  return tag === 'TEXTAREA' || tag === 'INPUT';
+}
+
 // a colorbar as a slider
 
 /** The scene-scoped selector that dragging a colorbar sets, with the label of its control and the track sets that its stops come from. */

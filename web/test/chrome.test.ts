@@ -452,7 +452,7 @@ describe('the chrome under a DOM stand-in', () => {
 
       // k plays, a digit seeks to as many tenths of the loop, and Shift with the right arrow steps ten frames and pauses
       const key = (k: string, shiftKey = false) =>
-        v.onKey({ key: k, shiftKey, metaKey: false, ctrlKey: false, altKey: false, preventDefault() {}, composedPath: () => [v] });
+        v.onKey({ key: k, shiftKey, metaKey: false, ctrlKey: false, altKey: false, preventDefault() {}, stopPropagation() {}, composedPath: () => [v] });
       key('k');
       expect(v.store.playing).toBe(true);
       expect([play.getAttribute('aria-label'), play.classList.contains('on'), byClass(play, 'i-pause').length]).toEqual(['Pause (k)', true, 1]);

@@ -42,6 +42,7 @@ import { icon, type IconName } from './icons.js';
 import { zoneFor, type DropZone } from './layout.js';
 import {
   colorbarLink,
+  controlUsesKey,
   formatNumber,
   FrameMeter,
   fpsText,
@@ -590,7 +591,7 @@ export class TychoViewerElement extends Base {
     this.footer = el('footer');
     this.root.append(this.header, this.stage, this.statsEl, this.footer);
     shadow.appendChild(this.root);
-    this.tabIndex = 0;
+    if (!this.hasAttribute('tabindex')) this.tabIndex = 0;
     this.addEventListener('keydown', (ev) => this.onKey(ev));
   }
 
@@ -984,32 +985,43 @@ export class TychoViewerElement extends Base {
   }
 
   private onKey(ev: KeyboardEvent): void {
-    if (this.store === null || ev.metaKey || ev.ctrlKey || ev.altKey) return;
+    if (this.useKey(ev)) ev.stopPropagation();
+  }
+
+  /**
+   * Acts on a key that reached the element, and returns whether the viewer used it. A key used by a focused control counts as
+   * used, since a listener on the document, such as reveal.js's, sees the event retargeted to the element and cannot tell.
+   */
+  private useKey(ev: KeyboardEvent): boolean {
+    if (this.store === null || ev.metaKey || ev.ctrlKey || ev.altKey) return false;
     if (ev.key === 'Escape') {
-      if (this.menu !== null) {
-        this.closeMenu(true);
-        ev.preventDefault();
-      } else if (this.closeExport?.()) ev.preventDefault();
-      return;
+      if (this.menu !== null) this.closeMenu(true);
+      else if (!this.closeExport?.()) return false;
+      ev.preventDefault();
+      return true;
     }
-    const target = ev.composedPath()[0] as Element | undefined;
-    if (target !== undefined && ['INPUT', 'SELECT', 'BUTTON', 'TEXTAREA'].includes(target.tagName)) return;
     const action = keyAction(ev.key, ev.shiftKey, this.scene!.clock.steps);
-    if (action === null) return;
+    const target = ev.composedPath()[0] as Element | undefined;
+    if (target !== undefined && ['INPUT', 'SELECT', 'BUTTON', 'TEXTAREA'].includes(target.tagName)) {
+      return action !== null || controlUsesKey(target.tagName, (target as HTMLInputElement).type, ev.key);
+    }
+    if (action === null) return false;
     if (action.kind === 'fit') {
       ev.preventDefault();
       this.fitAll();
-      return;
+      return true;
     }
     if (action.kind === 'slider') {
-      if (this.stepSlider(action.by)) ev.preventDefault();
-      return;
+      if (!this.stepSlider(action.by)) return false;
+      ev.preventDefault();
+      return true;
     }
-    if (!this.hasTransport() && !this.kiosk) return;
+    if (!this.hasTransport() && !this.kiosk) return false;
     ev.preventDefault();
     if (action.kind === 'toggle') this.store.setPlaying(!this.store.playing);
     else if (action.kind === 'step') this.step(action.by);
     else this.seek(action.frame);
+    return true;
   }
 
   /** Fits every panel's camera to what it draws. */

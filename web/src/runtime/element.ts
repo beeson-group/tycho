@@ -536,11 +536,11 @@ export class TychoViewerElement extends Base {
       this.start();
       return;
     }
-    if (this.loading || !(this.hasAttribute('scene') && this.hasAttribute('data'))) return;
+    if (this.loading) return;
     this.loading = true;
-    // the scripts that the attributes select may come after the element
-    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => void this.loadFromAttributes(), { once: true });
-    else void this.loadFromAttributes();
+    // the parser may not have reached the blocks yet, whether they are children of the element or come after it
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => void this.loadFromSources(), { once: true });
+    else void this.loadFromSources();
   }
 
   disconnectedCallback(): void {
@@ -581,19 +581,44 @@ export class TychoViewerElement extends Base {
     this.statusEl.textContent = message;
   }
 
-  private async loadFromAttributes(): Promise<void> {
+  /** The element that `selector` matches, or null when it does not match any or is not a valid selector, as most URLs are not. */
+  private select(selector: string): HTMLElement | null {
+    const root = this.getRootNode() as Document | ShadowRoot;
     try {
-      const find = (attr: string): HTMLElement => {
-        const sel = this.getAttribute(attr);
-        if (!sel) throw new Error(`the ${attr} attribute is missing`);
-        const root = this.getRootNode() as Document | ShadowRoot;
-        const found = (root.querySelector?.(sel) ?? document.querySelector(sel)) as HTMLElement | null;
-        if (found === null) throw new Error(`the ${attr} selector ${sel} does not match an element`);
-        return found;
-      };
-      const read = (e: HTMLElement) => decodeEmbedded(e.textContent ?? '', e.dataset.encoding ?? 'base64');
-      const sceneBytes = read(find('scene'));
-      const dataBytes = read(find('data'));
+      return (root.querySelector?.(selector) ?? document.querySelector(selector)) as HTMLElement | null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** The block or the URL of the scene or the data, by the order given at the top of this file, or null when the page gives neither. */
+  private source(kind: 'scene' | 'data'): HTMLElement | string | null {
+    for (const child of this.children) if (child.tagName === 'SCRIPT' && child.getAttribute('data-tycho') === kind) return child as HTMLElement;
+    const value = this.getAttribute(kind);
+    if (!value) return this.select(`#tycho-${kind}`);
+    const found = this.select(value);
+    if (found === null && value.startsWith('#')) throw new Error(`the ${kind} selector ${value} does not match an element`);
+    return found ?? value;
+  }
+
+  private async read(source: HTMLElement | string): Promise<Uint8Array> {
+    if (typeof source !== 'string') return decodeEmbedded(source.textContent ?? '', source.getAttribute('data-encoding') ?? 'base64');
+    const response = await fetch(source);
+    if (!response.ok) throw new Error(`${source} answered ${response.status}`);
+    return new Uint8Array(await response.arrayBuffer());
+  }
+
+  /** Loads the scene that the page gives this viewer. A viewer without any source stays empty until a caller invokes `load`. */
+  private async loadFromSources(): Promise<void> {
+    try {
+      const scene = this.source('scene');
+      const data = this.source('data');
+      if (scene === null && data === null) {
+        this.loading = false;
+        return;
+      }
+      if (scene === null || data === null) throw new Error(`the ${scene === null ? 'scene' : 'data'} is missing`);
+      const [sceneBytes, dataBytes] = await Promise.all([this.read(scene), this.read(data)]);
       if (this.loads > 0) return;
       await this.load(new TextDecoder('utf-8').decode(sceneBytes), dataBytes);
     } catch (e) {

@@ -1296,10 +1296,10 @@ class BodyDraw implements Draw {
 // axes and grid
 
 /**
- * Lines of an axes or a grid layer. Under a plane camera, axes spanning the view and a grid that
- * numbers its lines follow the visible rectangle and are laid out again whenever it moves. Every
- * other mark is laid out from the fitted box: the grid in the view plane, and the three axes from
- * the origin, both ways when they span the view.
+ * Lines of an axes or a grid layer. Under a plane camera, axes spanning the view, a grid that
+ * numbers its lines, and under a free aspect a grid without numbers follow the visible rectangle
+ * and are laid out again whenever it moves. Every other mark is laid out from the fitted box: the
+ * grid in the view plane, and the three axes from the origin, both ways when they span the view.
  */
 class MarkDraw implements Draw {
   readonly key: string;

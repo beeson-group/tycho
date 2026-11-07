@@ -71,3 +71,39 @@ function checkVersion(scene: Scene): void {
   if (missing.length > 0) problems.push(`the required features ${missing.join(', ')} are not implemented`);
   if (problems.length > 0) fail('S1', problems.join(', and '));
 }
+
+function checkVariableRef(scene: Scene, id: string, kind: string | null, rule: string): void {
+  const v = variableDef(scene, id);
+  if (v === undefined) fail(rule, `variable ${JSON.stringify(id)} is not declared`);
+  if (kind !== null && v.kind !== kind) fail(rule, `variable ${id} is a ${v.kind}, not a ${kind}`);
+}
+
+function checkScalar(s: Scalar | ConstantScalar | undefined, what: string, constant: boolean): void {
+  if (s === undefined) return;
+  if (typeof s === 'number') {
+    if (!Number.isFinite(s)) fail('S4', `${what} is ${String(s)}, not finite`);
+    return;
+  }
+  if ('attr' in s) {
+    if (!finite(s.factor ?? 1) || !finite(s.offset ?? 0)) fail('S4', `${what} has a factor or offset that is not finite`);
+    return;
+  }
+  if (constant) fail('F2', `${what} takes a number or an attribute, not a channel`);
+  if (s.channel === INDEX_CHANNEL) fail('2.2', `${what} reads channel ${INDEX_CHANNEL}, which is not allowed in a frame edge`);
+}
+
+function checkQuery(scene: Scene, q: SetQuery): void {
+  if ('set' in q) {
+    if (!Object.hasOwn(scene.track_sets, q.set)) fail('V2', `the set query names ${JSON.stringify(q.set)}, which is not a track set`);
+  } else {
+    for (const v of Object.values(q.tags)) if (typeof v === 'object' && v !== null) checkVariableRef(scene, v.var, 'choice', 'V2');
+  }
+}
+
+const unit = (x: unknown): boolean => typeof x === 'number' && x >= 0 && x <= 1;
+
+/** Checks a trail's fraction and taper (section 2.7). */
+function checkTrail(id: string, trail: Trail): void {
+  if (!(trail.fraction > 0 && trail.fraction <= 1)) fail('2.7', `view ${id}: a trail fraction is ${trail.fraction}, not in (0, 1]`);
+  if (trail.taper !== undefined && !(unit(trail.taper.width ?? 0) && unit(trail.taper.opacity ?? 0))) fail('2.7', `view ${id}: a trail taper is not in [0, 1]`);
+}

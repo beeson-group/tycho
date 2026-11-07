@@ -8,6 +8,7 @@ import { GeometryCache } from '../src/runtime/geometry';
 import { GLYPHS, icon } from '../src/runtime/icons';
 import {
   colorbarLink,
+  controlUsesKey,
   formatNumber,
   fpsText,
   fpsTitle,
@@ -823,6 +824,78 @@ describe('a viewer embedded on a page, under a DOM stand-in', () => {
     });
     it('reports false before a scene loads', () => {
       expect(viewer().v.playing).toBe(false);
+    });
+  });
+
+  describe('keys', () => {
+    const press = (host: FakeElement, key: string, target: unknown = host, more: object = {}) => {
+      const stopPropagation = vi.fn();
+      const preventDefault = vi.fn();
+      host.dispatchEvent({ type: 'keydown', key, stopPropagation, preventDefault, composedPath: () => [target], ...more });
+      return { stopped: stopPropagation.mock.calls.length > 0, prevented: preventDefault.mock.calls.length > 0 };
+    };
+
+    it('do nothing when they are typed elsewhere on the page, since the viewer does not listen there', async () => {
+      const onWindow = vi.spyOn(window, 'addEventListener');
+      const { v } = await live();
+      expect(doc.listening).not.toContain('keydown');
+      expect(onWindow.mock.calls.map((c) => c[0])).not.toContain('keydown');
+      const elsewhere = new FakeElement(doc as never, 'input');
+      doc.body.appendChild(elsewhere);
+      elsewhere.dispatchEvent({ type: 'keydown', key: 'k' });
+      expect(v.playing).toBe(false);
+    });
+    it('that the viewer uses do not reach the page, and the other keys do', async () => {
+      const { v, host } = await live();
+      expect(press(host, 'k')).toEqual({ stopped: true, prevented: true });
+      expect(v.playing).toBe(true);
+      expect(press(host, ' ').stopped).toBe(true);
+      expect(v.playing).toBe(false);
+      expect(press(host, 'ArrowRight').stopped).toBe(true);
+      expect(v.store.frame).toBe(1);
+      expect(press(host, 'f').stopped).toBe(true);
+      expect(press(host, 'ArrowUp').stopped).toBe(true);
+      for (const key of ['n', 'b', 'Escape', 'PageDown', 'Tab']) expect(press(host, key), key).toEqual({ stopped: false, prevented: false });
+      expect(press(host, 'k', host, { metaKey: true }).stopped).toBe(false);
+    });
+    it('reach the page when the scene gives the key nothing to do', async () => {
+      const { text, bytes } = dressedBroucke();
+      const scene = { ...JSON.parse(text), controls: [] };
+      const { v, host } = viewer();
+      await v.load(JSON.stringify(scene), bytes);
+      for (const key of ['ArrowUp', 'ArrowRight', ' ']) expect(press(host, key).stopped, key).toBe(false);
+      expect(press(host, 'f').stopped).toBe(true);
+    });
+    it('that a focused control takes do not reach the page, and the viewer does not act on them', async () => {
+      const { v, host } = await live();
+      const range = new FakeElement(doc as never, 'input');
+      range.type = 'range';
+      expect(press(host, 'ArrowRight', range)).toEqual({ stopped: true, prevented: false });
+      expect(v.store.frame).toBe(0);
+      const button = new FakeElement(doc as never, 'button');
+      expect(press(host, ' ', button)).toEqual({ stopped: true, prevented: false });
+      expect(press(host, 'Enter', button).stopped).toBe(true);
+      expect(press(host, 'k', button).stopped).toBe(true);
+      expect(v.playing).toBe(false);
+      expect(press(host, 'n', button).stopped).toBe(false);
+    });
+    it('know what each form control takes', () => {
+      expect(controlUsesKey('INPUT', 'range', 'PageUp')).toBe(true);
+      expect(controlUsesKey('INPUT', 'range', 'n')).toBe(false);
+      expect(controlUsesKey('INPUT', 'checkbox', ' ')).toBe(true);
+      expect(controlUsesKey('INPUT', 'checkbox', 'ArrowLeft')).toBe(false);
+      expect(controlUsesKey('INPUT', 'number', 'n')).toBe(true);
+      expect(controlUsesKey('SELECT', 'select-one', 'n')).toBe(true);
+      expect(controlUsesKey('SELECT', 'select-one', 'Tab')).toBe(false);
+      expect(controlUsesKey('TEXTAREA', 'textarea', 'n')).toBe(true);
+    });
+    it('reach a focusable element that does not take focus on load, and that keeps a tabindex of the page', async () => {
+      const { v } = await live();
+      expect(v.tabIndex).toBe(0);
+      expect(doc.activeElement).toBeNull();
+      const kept = viewer({ tabindex: '-1' }).v;
+      kept.connectedCallback();
+      expect(kept.tabIndex).toBeUndefined();
     });
   });
 

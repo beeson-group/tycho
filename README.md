@@ -72,7 +72,7 @@ To put a scene on a slide, paste the output of `ty.build_embed(scene.to_document
 
 | Extension | What |
 |---|---|
-| `.tys` | the scene document, a JSON file whose `format` is `tycho-scene`, at version 0.2. The format may still change incompatibly until version 1.0. |
+| `.tys` | the scene document, a JSON file whose `format` is `tycho-scene`, at version 0.3. The format may still change incompatibly until version 1.0. |
 | `.tyd` | the data container, a binary file. It starts with the `TYCD` magic number, i.e. four bytes that identify the file type, followed by a JSON header that describes each array, and then the little-endian typed arrays. Each array is stored raw, as its bytes lie in memory, or compressed in chunks of rows, which a reader can decode one at a time. |
 | `.html` | the deliverable, i.e. the page that you share. It embeds both files as base64 text and inlines the runtime. |
 

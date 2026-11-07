@@ -142,3 +142,65 @@ interface MenuEntry {
   /** Starts a new group, after a separator. */
   group?: boolean;
 }
+
+function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
+  const e = document.createElement(tag);
+  if (cls !== undefined) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+function setText(e: HTMLElement, text: string): void {
+  if (e.textContent !== text) e.textContent = text;
+}
+
+const stop = (ev: Event) => ev.stopPropagation();
+
+/** A button that shows only an icon, named for assistive technology and in a tooltip. */
+function iconButton(name: IconName, label: string, tip: string, cls = 'icon'): HTMLButtonElement {
+  const b = el('button', cls);
+  b.type = 'button';
+  b.setAttribute('aria-label', label);
+  b.title = tip;
+  b.appendChild(icon(name));
+  b.addEventListener('pointerdown', stop);
+  return b;
+}
+
+/** A group of controls on one surface, named for assistive technology. */
+function capsule(name: string, cls?: string): HTMLDivElement {
+  const c = el('div', cls === undefined ? 'cap' : `cap ${cls}`);
+  c.setAttribute('role', 'group');
+  c.setAttribute('aria-label', name);
+  return c;
+}
+
+/** A button group, one button per item, the current one pressed. */
+function seg(items: { id: string; label: string }[], onPick: (id: string) => void, name?: string): { el: HTMLDivElement; set(id: string): void } {
+  const root = el('div', 'seg');
+  root.setAttribute('role', 'group');
+  if (name !== undefined) root.setAttribute('aria-label', name);
+  const buttons = new Map<string, HTMLButtonElement>();
+  for (const it of items) {
+    const b = el('button', undefined, it.label);
+    b.type = 'button';
+    b.setAttribute('aria-pressed', 'false');
+    b.addEventListener('pointerdown', stop);
+    b.addEventListener('click', () => onPick(it.id));
+    buttons.set(it.id, b);
+    root.appendChild(b);
+  }
+  return {
+    el: root,
+    set(id: string) {
+      for (const [k, b] of buttons) b.setAttribute('aria-pressed', String(k === id));
+    },
+  };
+}
+
+/** Sets a range input's value and its filled part, which WebKit draws from `--p`. */
+function setRange(range: HTMLInputElement, value: number): void {
+  range.value = String(value);
+  const max = Number(range.max) - Number(range.min);
+  range.style.setProperty('--p', `${max > 0 ? (100 * (Number(range.value) - Number(range.min))) / max : 0}%`);
+}

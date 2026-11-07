@@ -49,7 +49,7 @@ export function evaluate(scene: Scene, data: DataStore, state: State, frameIndex
       if (!layerVisible(scope, layer)) continue;
       if (layer.kind === 'track') {
         const id = oneSet(scope, layer.sets);
-        layers.push(trackLayer(env, layer, id === null ? null : sets.get(id)));
+        layers.push(trackLayer(env, layer, id === null ? null : sets.get(id), driver));
       } else if (layer.kind === 'body') {
         layers.push(bodyLayer(env, layer, driver));
       } else {

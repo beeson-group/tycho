@@ -12,9 +12,10 @@ import type { BodyLayerResult, MemberResult, TrackLayerResult, Vec3 } from './ty
  * A vertex is a stored sample or a point blended between samples k and k + 1, in the context of
  * its lap of rule C6 (0 when absent). `shifted` puts it one lap lower (rule L2).
  */
-export type Vertex = { sample: number; shifted: boolean; lap?: number } | { k: number; w: number; shifted: boolean; lap?: number };
+export type Vertex = { sample: number; shifted: boolean; lap?: number } | BlendVertex;
+export type BlendVertex = { k: number; w: number; shifted: boolean; lap?: number };
 
-export function point(tc: TrackClock, u: number, shifted: boolean, lap = 0): Vertex {
+export function point(tc: TrackClock, u: number, shifted: boolean, lap = 0): BlendVertex {
   const { k, w } = tc.locate(u);
   return { k, w, shifted, lap };
 }
@@ -22,7 +23,7 @@ export function point(tc: TrackClock, u: number, shifted: boolean, lap = 0): Ver
 /** The polyline of a track between readings `ua` and `ub` within one lap (rule L1). */
 export function polyline(tc: TrackClock, ua: number, ub: number, lap = 0): Vertex[] {
   if (ua === ub) return [point(tc, ua, false, lap)];
-  const out = [point(tc, ua, false, lap)];
+  const out: Vertex[] = [point(tc, ua, false, lap)];
   for (let i = 0; i < tc.m; i++) {
     const ui = tc.at(i);
     if (ua < ui && ui < ub) out.push({ sample: i, shifted: false, lap });
@@ -81,8 +82,29 @@ export interface LayerEnv {
   display: string;
 }
 
-export function trackLayer(env: LayerEnv, layer: TrackLayer, set: SetData | null): TrackLayerResult {
+/** The driver's track, as a panel resolves it, or null when its set query does not match any set. */
+export type Driver = { set: SetData; track: number } | null;
+
+/** The driver's clock and loop reading, and the point at the reading in its lap. A body layer and a layer in the driver's context lack `before` and `after`, thus the reading is clamped (rules L4 and L6). */
+export function driverPoint(env: LayerEnv, driver: NonNullable<Driver>): { tc: TrackClock; loopReading: number; at: BlendVertex } {
+  const laps = clockLaps(env.clock);
+  const tc = new TrackClock(driver.set, driver.track, env.channel);
+  const loopReading = laps * bound(tc.reading(env.clock, env.q))!;
+  const lap = lapOf(loopReading, laps);
+  return { tc, loopReading, at: point(tc, lap.u, false, lap.lap) };
+}
+
+/** The contexts of the driver's samples k and k + 1 at its point `at`, and the weight that blends them (rules L4 and L6). */
+export function driverContexts(driver: NonNullable<Driver>, at: BlendVertex): { a: Context; b: Context; w: number } {
+  const lap = at.lap ?? 0;
+  const { set, track } = driver;
+  return { a: { set, track, sample: at.k, shifted: false, lap }, b: { set, track, sample: at.k + 1, shifted: false, lap }, w: at.w };
+}
+
+export function trackLayer(env: LayerEnv, layer: TrackLayer, set: SetData | null, driver: Driver = null): TrackLayerResult {
   if (set === null) return { kind: 'track', set: null, members: [] };
+  const context = layer.context ?? 'own';
+  if (context !== 'own' && context !== 'driver') fail('L6', `a track layer's context is ${JSON.stringify(context)}, not own or driver`);
   const reveal = layer.reveal ?? 'none';
   if (!['none', 'grow', 'trail'].includes(reveal)) fail('2.7', `a track layer's reveal is ${JSON.stringify(reveal)}, not none, grow, or trail`);
   for (const key of ['before', 'after'] as const) {
@@ -91,7 +113,19 @@ export function trackLayer(env: LayerEnv, layer: TrackLayer, set: SetData | null
   }
   if (reveal === 'trail') layerTrailFraction(layer);
   const laps = clockLaps(env.clock);
-  const f = (ctx: Context): Vec3 => env.frames.transform(set.position(ctx.track, ctx.sample), set.def.frame, env.display, ctx);
+  const from = set.def.frame;
+  let f = (ctx: Context): Vec3 => env.frames.transform(set.position(ctx.track, ctx.sample), from, env.display, ctx);
+  // in the driver's context every sample is transformed in the two contexts around the driver's reading, then blended (rule L6)
+  const blended = context === 'driver' && driver !== null ? driverContexts(driver, driverPoint(env, driver).at) : null;
+  if (blended !== null) {
+    const { a, b, w } = blended;
+    f = (ctx: Context): Vec3 => {
+      const p = set.position(ctx.track, ctx.sample);
+      const pa = env.frames.transform(p, from, env.display, a);
+      const pb = env.frames.transform(p, from, env.display, b);
+      return [(1 - w) * pa[0] + w * pb[0], (1 - w) * pa[1] + w * pb[1], (1 - w) * pa[2] + w * pb[2]];
+    };
+  }
   const head = hasHead(layer);
   const needsReading = reveal !== 'none' || head || (env.clock.mode === 'value' && (layer.before === 'hidden' || layer.after === 'hidden'));
   if (needsReading && laps > 1 && !set.periodic) fail('C6', `a reading is taken on track set ${set.id}, which is not periodic, and the clock has ${laps} laps`);
@@ -104,7 +138,7 @@ export function trackLayer(env: LayerEnv, layer: TrackLayer, set: SetData | null
       tc = new TrackClock(set, t, env.channel);
       u = bound(tc.reading(env.clock, env.q), layer.before, layer.after);
     }
-    const hidden = needsReading && u === null;
+    const hidden = (needsReading && u === null) || (context === 'driver' && blended === null);
     const loopReading = laps * (u ?? 0);
     if (!hidden) {
       if (reveal === 'none') vertices.push(...whole(set.count(t), laps, set.periodic));
@@ -129,7 +163,7 @@ function layerTrailFraction(layer: TrackLayer | BodyLayer): number {
 }
 
 /** The position and trail of a body layer (rule L4). The driver's reading is clamped to [0, 1], since a body layer does not have `before` or `after`. */
-export function bodyLayer(env: LayerEnv, layer: BodyLayer, driver: { set: SetData; track: number } | null): BodyLayerResult {
+export function bodyLayer(env: LayerEnv, layer: BodyLayer, driver: Driver): BodyLayerResult {
   const result: BodyLayerResult = { kind: 'body', body: layer.body, position: null };
   if (driver === null) {
     if (layer.trail !== undefined) result.trail = [];
@@ -137,11 +171,9 @@ export function bodyLayer(env: LayerEnv, layer: BodyLayer, driver: { set: SetDat
   }
   const { set, track } = driver;
   const laps = clockLaps(env.clock);
-  const tc = new TrackClock(set, track, env.channel);
-  const loopReading = laps * bound(tc.reading(env.clock, env.q))!;
-  const at = lapOf(loopReading, laps);
+  const { tc, loopReading, at } = driverPoint(env, driver);
   const f = (ctx: Context): Vec3 => env.frames.bodyPosition(layer.body, env.display, ctx);
-  result.position = vertexPosition(point(tc, at.u, false, at.lap), set, track, f);
+  result.position = vertexPosition(at, set, track, f);
   if (layer.trail !== undefined) {
     result.trail = trail(tc, loopReading, laps, layerTrailFraction(layer), set.periodic).map((v) => vertexPosition(v, set, track, f));
   }

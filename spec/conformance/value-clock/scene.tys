@@ -1,0 +1,161 @@
+{
+ "format": "tycho-scene",
+ "version": "0.2",
+ "generator": "pytycho 0.2.0, spec/conformance/generate.py",
+ "frames": {
+  "plane": {}
+ },
+ "track_sets": {
+  "a": {
+   "frame": "plane",
+   "tags": {
+    "family": "a"
+   },
+   "tracks": 2,
+   "offsets": "a/offsets",
+   "positions": "a/positions",
+   "channels": {
+    "t": {
+     "view": "a/t"
+    }
+   },
+   "parameters": {
+    "p": {
+     "view": "a/p"
+    }
+   }
+  },
+  "b": {
+   "frame": "plane",
+   "tags": {
+    "family": "b"
+   },
+   "tracks": 1,
+   "offsets": "b/offsets",
+   "positions": "b/positions",
+   "channels": {
+    "t": {
+     "view": "b/t"
+    }
+   },
+   "parameters": {
+    "p": {
+     "view": "b/p"
+    }
+   }
+  }
+ },
+ "variables": {
+  "fam": {
+   "kind": "choice",
+   "values": [
+    "a",
+    "b"
+   ],
+   "default": "a",
+   "scope": "scene"
+  },
+  "sel": {
+   "kind": "selector",
+   "by": "nearest",
+   "parameter": "p",
+   "default": 0.25,
+   "scope": "scene"
+  },
+  "show": {
+   "kind": "toggle",
+   "default": false,
+   "scope": "panel"
+  }
+ },
+ "clock": {
+  "mode": "value",
+  "channels": [
+   "t"
+  ],
+  "steps": 8,
+  "range": [
+   -1.0,
+   7.0
+  ]
+ },
+ "views": {
+  "v": {
+   "frame": "plane",
+   "driver": {
+    "sets": {
+     "tags": {
+      "family": {
+       "var": "fam"
+      }
+     }
+    },
+    "member": {
+     "var": "sel"
+    }
+   },
+   "layers": [
+    {
+     "kind": "track",
+     "sets": {
+      "tags": {
+       "family": {
+        "var": "fam"
+       }
+      }
+     },
+     "members": "all",
+     "reveal": "grow",
+     "head": true,
+     "before": "hidden",
+     "after": "hidden"
+    },
+    {
+     "kind": "track",
+     "sets": {
+      "tags": {
+       "family": {
+        "var": "fam"
+       }
+      }
+     },
+     "members": {
+      "var": "sel"
+     },
+     "reveal": "grow",
+     "head": true
+    },
+    {
+     "kind": "track",
+     "sets": {
+      "tags": {
+       "family": {
+        "var": "fam"
+       }
+      }
+     },
+     "members": "all",
+     "reveal": "none",
+     "visible": {
+      "var": "show"
+     }
+    }
+   ]
+  }
+ },
+ "initial": {
+  "variables": {},
+  "clock": {
+   "channel": "t"
+  },
+  "panels": {
+   "p1": {
+    "view": "v"
+   }
+  },
+  "layout": {
+   "kind": "panel",
+   "id": "p1"
+  }
+ }
+}

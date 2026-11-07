@@ -271,3 +271,26 @@ describe('the laps of a reveal-none layer (C6)', () => {
     }
   });
 });
+
+describe('the static-layer cache sees every camera change', () => {
+  it('reports a pan, a zoom, a change of aspect, and a refit, and does not report anything while the camera stays', () => {
+    const cam = new THREE.OrthographicCamera(-2, 2, 1, -1, -10, 10);
+    cam.position.set(0, 0, 5);
+    cam.updateProjectionMatrix();
+    const seen = new Float64Array(32);
+    expect(cameraMoved(cam, seen)).toBe(true);
+    expect(cameraMoved(cam, seen)).toBe(false);
+    cam.position.x += 0.25;
+    expect(cameraMoved(cam, seen)).toBe(true);
+    expect(cameraMoved(cam, seen)).toBe(false);
+    cam.zoom = 1.5;
+    cam.updateProjectionMatrix();
+    expect(cameraMoved(cam, seen)).toBe(true);
+    cam.left = -3;
+    cam.updateProjectionMatrix();
+    expect(cameraMoved(cam, seen)).toBe(true);
+    cam.lookAt(1, 0, 0);
+    expect(cameraMoved(cam, seen)).toBe(true);
+    expect(cameraMoved(cam, seen)).toBe(false);
+  });
+});

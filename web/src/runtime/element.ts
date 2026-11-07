@@ -1659,6 +1659,131 @@ export class TychoViewerElement extends Base {
     handle.addEventListener('pointerup', up);
     handle.addEventListener('pointercancel', up);
   }
+
+  // colorbars, one of which can set a selector
+
+  /** Writes a panel's colorbars from the renderer's data, in place, so that a drag on one survives the redraw it causes. */
+  private syncBars(pid: string, dom: PanelDom): void {
+    const scene = this.scene!;
+    const bars = this.renderer!.colorbars(pid);
+    if (dom.barDom.length !== bars.length) {
+      dom.barDom = bars.map(() => this.makeBar(pid));
+      dom.bars.replaceChildren(...dom.barDom.map((d) => d.root));
+    }
+    const panel = this.store!.state.panels[pid];
+    const view = panel === undefined ? undefined : scene.views[panel.view];
+    bars.forEach((b, i) => {
+      const d = dom.barDom[i]!;
+      setText(d.title, b.label);
+      if (d.gradient !== b.gradient) {
+        d.gradient = b.gradient;
+        d.grad.style.background = b.gradient;
+      }
+      setText(d.hi, formatNumber(b.hi, 3));
+      setText(d.lo, formatNumber(b.lo, 3));
+      d.range = [b.lo, b.hi];
+      d.mark.hidden = b.marker === null;
+      if (b.marker !== null) d.mark.style.bottom = `${(100 * b.marker).toFixed(2)}%`;
+      d.band.hidden = b.band === null;
+      if (b.band !== null) {
+        d.band.style.bottom = `${(100 * b.band[0]).toFixed(2)}%`;
+        d.band.style.height = `${(100 * (b.band[1] - b.band[0])).toFixed(2)}%`;
+      }
+      d.link = this.kiosk || view === undefined ? null : colorbarLink(scene, view, b.label);
+      const g = d.grad;
+      g.classList.toggle('live', d.link !== null);
+      if (d.link === null) {
+        for (const a of ['role', 'tabindex', 'aria-orientation', 'aria-label', 'aria-valuemin', 'aria-valuemax', 'aria-valuenow', 'aria-valuetext', 'title'])
+          g.removeAttribute(a);
+        return;
+      }
+      const value = this.panelValue({ scene, state: this.store!.state, panel: panel! }, d.link.variable) as number;
+      g.setAttribute('role', 'slider');
+      g.setAttribute('tabindex', '0');
+      g.setAttribute('aria-orientation', 'vertical');
+      g.setAttribute('aria-label', d.link.label);
+      g.setAttribute('aria-valuemin', String(b.lo));
+      g.setAttribute('aria-valuemax', String(b.hi));
+      g.setAttribute('aria-valuenow', String(value));
+      g.setAttribute('aria-valuetext', formatNumber(value));
+      g.title = `Drag or click to set ${d.link.label}`;
+    });
+  }
+
+  private makeBar(pid: string): BarDom {
+    const root = el('div', 'cbar');
+    const title = el('div', 'cbar-t');
+    const body = el('div', 'cbar-b');
+    const grad = el('div', 'cbar-g');
+    const band = el('span', 'cbar-k');
+    const mark = el('i');
+    grad.append(band, mark);
+    const ticks = el('div', 'cbar-n');
+    const hi = el('span');
+    const lo = el('span');
+    ticks.append(hi, lo);
+    body.append(grad, ticks);
+    root.append(title, body);
+    const d: BarDom = { root, title, grad, band, mark, hi, lo, gradient: '', range: [0, 1], link: null };
+    grad.addEventListener('pointerdown', (ev) => {
+      if (d.link === null || ev.button !== 0) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      grad.focus();
+      grad.setPointerCapture(ev.pointerId);
+      const at = (e: PointerEvent) => {
+        const r = grad.getBoundingClientRect();
+        this.setFromBar(pid, d, r.height > 0 ? (r.bottom - e.clientY) / r.height : 0);
+      };
+      const up = () => {
+        grad.removeEventListener('pointermove', at);
+        grad.removeEventListener('pointerup', up);
+        grad.removeEventListener('pointercancel', up);
+      };
+      at(ev);
+      grad.addEventListener('pointermove', at);
+      grad.addEventListener('pointerup', up);
+      grad.addEventListener('pointercancel', up);
+    });
+    grad.addEventListener('dblclick', stop);
+    grad.addEventListener('keydown', (ev) => {
+      if (d.link === null) return;
+      const by: Record<string, number> = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1, PageUp: 10, PageDown: -10, Home: -Infinity, End: Infinity };
+      if (!(ev.key in by)) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      this.stepBar(pid, d, by[ev.key]!);
+    });
+    return d;
+  }
+
+  private barStops(pid: string, link: ColorbarLink): number[] {
+    const st = this.store!.state;
+    const panel = st.panels[pid];
+    if (panel === undefined) return [];
+    const control = { kind: 'slider' as const, variable: link.variable, label: link.label, domain: link.domain };
+    return sliderStops({ scene: this.scene!, state: st, panel }, this.geometry!.sets, control);
+  }
+
+  /** Sets the bar's selector to the stop nearest the value at `t` along the bar, as the top bar's slider does. */
+  private setFromBar(pid: string, d: BarDom, t: number): void {
+    if (d.link === null) return;
+    const stops = this.barStops(pid, d.link);
+    const i = stopAt(stops, d.range[0], d.range[1], t);
+    const variable = d.link.variable;
+    if (i >= 0) this.store!.update((s) => withVariable(this.scene!, s, variable, stops[i]!));
+  }
+
+  private stepBar(pid: string, d: BarDom, by: number): void {
+    if (d.link === null) return;
+    const stops = this.barStops(pid, d.link);
+    const st = this.store!.state;
+    if (stops.length === 0 || st.panels[pid] === undefined) return;
+    const value = this.panelValue({ scene: this.scene!, state: st, panel: st.panels[pid]! }, d.link.variable) as number;
+    const i = Math.min(stops.length - 1, Math.max(0, nearestStop(stops, value) + by));
+    const variable = d.link.variable;
+    this.store!.update((s) => withVariable(this.scene!, s, variable, stops[i]!));
+  }
 }
 
 /**

@@ -169,6 +169,13 @@ def test_empty_encoded_views_are_read():
     assert c.view("thin").shape == (3, 0)
 
 
+def test_payload_starts_at_a_multiple_of_8():
+    data = ContainerWriter(generator="x" * 5).to_bytes()
+    (hlen,) = struct.unpack_from("<I", data, 8)
+    assert len(data) % 8 == 0
+    assert len(data) >= 12 + hlen
+
+
 def test_named_dtype_casts_and_own_dtype_is_kept():
     w = ContainerWriter()
     w.add_view("f", np.linspace(0, 1, 5), dtype="float32")
@@ -284,3 +291,17 @@ def test_d5_rejects_corrupted_deflate_data_and_bytes_after_the_stream():
     padded[start + offset + length] = 7
     with pytest.raises(ContainerError, match="D5: chunk 0 of view 'a' has 1 bytes after its zlib stream"):
         Container(_patched(bytes(padded), "a", chunks=[[offset, length + 1]])).view("a")
+
+
+def test_rejects_foreign_bytes():
+    with pytest.raises(ContainerError):
+        Container(b"ASTV" + bytes(16))
+
+
+def test_header_length_does_not_count_the_padding():
+    data = bytearray(ContainerWriter(generator="x" * 6).to_bytes())
+    (hlen,) = struct.unpack_from("<I", data, 8)
+    assert (12 + hlen) % 8 != 0
+    struct.pack_into("<I", data, 8, hlen + (-(12 + hlen)) % 8)
+    with pytest.raises(ContainerError, match="is not JSON"):
+        Container(bytes(data))

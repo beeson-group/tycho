@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 from pathlib import Path
 from typing import Any
@@ -391,3 +392,32 @@ def test_a_bad_channel_dtypes_mapping_is_refused():
     ts = scene.track_set("s", frame=root, channel_dtypes={"tim": "float64"})
     with pytest.raises(ty.SceneError, match=r"D1: channel_dtypes of track set 's' names channels \['tim'\]"):
         ts.add(np.zeros((2, 2)), channels={"time": [0.0, 1.0]})
+
+
+def test_write_html_embeds_both_files_and_reports_sizes(tmp_path):
+    scene = rotating_loop()
+    sizes = scene.write_html(tmp_path / "page.html", runtime="console.log('tycho')")
+    page = (tmp_path / "page.html").read_text(encoding="utf-8")
+    assert 'scene="#tycho-scene" data="#tycho-data"' in page
+    assert page.count('data-encoding="base64"') == 2
+    assert "console.log('tycho')" in page
+    # the stored size is below five rows of two float32 values, since the encoding makes it smaller
+    assert sizes["loop/positions"] == ty.Container(scene.to_container()).stored_size("loop/positions") < 5 * 2 * 4
+    assert sizes["page"] == len(page.encode("utf-8"))
+    with pytest.raises(ValueError, match="closing script tag"):
+        ty.build_html(scene.to_document(), scene.to_container(), runtime="</script>")
+
+
+def test_build_html_refuses_a_page_over_the_string_limit(monkeypatch):
+    import pytycho.html
+
+    scene = rotating_loop()
+    document, data = scene.to_document(), scene.to_container()
+    monkeypatch.setattr(pytycho.html, "MAX_STRING", 100)
+    with pytest.raises(ValueError, match=r"base64 of the scene is .* over the 100 that Chrome holds"):
+        ty.build_html(document, data, runtime="")
+    scene_chars = len(base64.b64encode(json.dumps(document, separators=(",", ":"), ensure_ascii=False).encode()))
+    monkeypatch.setattr(pytycho.html, "MAX_STRING", scene_chars)
+    ty.build_html(document, data, runtime="")
+    with pytest.raises(ValueError, match=r"base64 of the data .* Thin the scene"):
+        ty.build_html(document, data + bytes(scene_chars), runtime="")

@@ -964,3 +964,56 @@ class Scene:
             if len(out["labels"]) != len(names):
                 raise SceneError(f"2.6: the clock has {len(out['labels'])} labels for {len(names)} channels")
         self._clock = out
+
+    def view(
+        self,
+        id: str,
+        *,
+        frame: Any,
+        driver: Mapping[str, Any],
+        layers: Sequence[Mapping[str, Any]],
+        camera: Mapping[str, Any] | None = None,
+        label: str | None = None,
+    ) -> str:
+        """A view, given by a frame or a choice variable over frames, a driver, and layers."""
+        self._new(self._views, id, "view")
+        if not isinstance(driver, Mapping) or set(driver) != {"sets", "member"}:
+            raise SceneError(f"2.7: the driver of view {id!r} is {driver!r}, not driver(sets, member)")
+        out: dict[str, Any] = {
+            "frame": _var(frame, f"2.7: the frame of view {id!r}", "choice")
+            if isinstance(frame, Variable)
+            else _check_id(_id(frame), f"2.7: the frame of view {id!r}"),
+            "driver": {"sets": _query(driver["sets"]), "member": _member(driver["member"], "the driver's member", one=True)},
+            "layers": [_check_layer(x) for x in layers],
+        }
+        if camera is not None:
+            out["camera"] = _camera(camera)
+        if label is not None:
+            out["label"] = _text(label, "a view label")
+        self._views[id] = out
+        return id
+
+    def panel(self, id: str, view: str, variables: Mapping[str | Variable, Any] | None = None) -> str:
+        """A panel of the initial state that shows ``view``, with the values that it gives to panel-scoped variables."""
+        self._new(self._panels, id, "panel")
+        out: dict[str, Any] = {"view": _check_id(_id(view), f"2.8: the view of panel {id!r}")}
+        if variables:
+            out["variables"] = {
+                _check_id(_id(k), "a variable id"): self._value(v, f"2.5: the value of {_id(k)!r} in panel {id!r}")
+                for k, v in variables.items()
+            }
+        self._panels[id] = out
+        return id
+
+    def _value(self, value: Any, what: str) -> Any:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (Frame, Body, TrackSet, Variable)):
+            return value.id
+        if isinstance(value, str):
+            return value
+        return _finite(value, what)
+
+    def layout(self, node: Any) -> None:
+        """The initial layout, given as a panel id or a :func:`split`."""
+        self._layout = _node(node)

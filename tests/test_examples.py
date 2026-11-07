@@ -136,3 +136,23 @@ def test_manifolds_example_builds_a_valid_scene(tmp_path):
     inert = first["panels"]["inertial"]["layers"][4]["members"][0]["line"]
     assert len(rot) == len(inert) > 2
     assert rot[-1] != inert[-1]
+
+
+@pytest.mark.skipif(not MANIFOLDS_INPUT.is_file(), reason="needs examples/manifolds/manifolds-input.tyd, attached to each GitHub Release")
+def test_manifolds_slide_variant_holds_the_halo_alone_in_two_stacked_panels(tmp_path):
+    build = _example("manifolds")
+    build.build(MANIFOLDS_INPUT, tmp_path, 3, False, "light")
+    doc = json.loads((tmp_path / "manifolds-slide-light.tys").read_text())
+    assert sorted(doc["track_sets"]) == sorted(["halo-L1-orbit"] + [f"halo-L1-{a}-{b}" for a, b in build.LEGS])
+    assert doc["theme"] == build.SLIDE_THEMES["light"]
+    assert doc["initial"]["layout"] == {
+        "kind": "split",
+        "dir": "col",
+        "ratio": 0.5,
+        "a": {"kind": "panel", "id": "inertial"},
+        "b": {"kind": "panel", "id": "rotating"},
+    }
+    assert [r["place"] for r in doc["readouts"]] == ["panel"]
+    tracks = [layer for layer in doc["views"]["main"]["layers"] if layer["kind"] == "track"]
+    assert all("highlight" not in layer for layer in tracks)
+    assert {layer["color"] for layer in tracks} == set(build.SLIDE_COLORS["light"].values())

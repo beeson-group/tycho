@@ -66,3 +66,42 @@ def test_s3_and_t1_fail_at_the_call():
     ts = scene.track_set("s", frame=root)
     with pytest.raises(ty.SceneError, match="T1"):
         ts.add(np.zeros((1, 2)))
+
+
+def test_thin_selects_stored_samples_in_other_frames():
+    scene = ty.Scene()
+    rot = scene.frame("rot")
+    scene.frame("inertial", parent=rot, rotation=ty.rotation("z", ty.channel("f")))
+    ts = scene.track_set("s", frame=rot, dtype="float64")
+    f = np.linspace(0, 6, 300)
+    ts.add(np.column_stack([np.cos(3 * f), np.sin(f)]), channels={"f": f})
+    ts.add(np.column_stack([f, f]), channels={"f": f})
+    kept = ts.thin(20, frames=["rot", "inertial"], keep=[[7], []])
+    assert all(len(k) <= 20 and k[0] == 0 and k[-1] == 299 for k in kept)
+    assert 7 in kept[0]
+    # the returned list is a copy, thus editing it cannot break the stored selection
+    kept[0][1] = 0
+    assert ts.kept is not None
+    assert ts.kept[0][1] != 0
+    scene.clock(channels=["f"], steps=4)
+    scene.view("v", frame="rot", driver=ty.driver(ts, 0), layers=[])
+    scene.panel("p", "v")
+    stored = ty.Container(scene.to_container())
+    np.testing.assert_array_equal(stored.view("s/channels/f"), np.concatenate([f[k] for k in ts.kept]))
+
+
+def test_kept_must_count_the_tracks():
+    scene = ty.Scene()
+    rot = scene.frame("rot")
+    ts = scene.track_set("s", frame=rot)
+    f = np.linspace(0, 6, 50)
+    ts.add(np.column_stack([np.cos(f), np.sin(f)]), channels={"f": f})
+    ts.add(np.column_stack([f, f]), channels={"f": f})
+    ts.thin(10)
+    assert ts.kept is not None
+    ts.kept = ts.kept[:1]  # a selection that lost a track is a T1 failure, not a silently shorter container
+    scene.clock(channels=["f"], steps=4)
+    scene.view("v", frame="rot", driver=ty.driver(ts, 0), layers=[])
+    scene.panel("p", "v")
+    with pytest.raises(ty.SceneError, match="T1: track set 's' has kept indices for 1 tracks, not 2"):
+        scene.to_container()

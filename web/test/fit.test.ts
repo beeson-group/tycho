@@ -96,6 +96,11 @@ describe('orthoFit', () => {
     const flat = orthoFit(line, { kind: 'plane', plane: 'xy', aspect: 'free' }, 2);
     expect([flat.halfWidth, flat.halfHeight]).toEqual([expect.closeTo(5.5, 12), expect.closeTo(2.75, 12)]);
   });
+  it('under a free aspect keeps a tiny but real extent, e.g. a residual below 1e-12 against an iteration count', () => {
+    const residual = new THREE.Box3(new THREE.Vector3(0, 1e-15, 0), new THREE.Vector3(10, 5e-13, 0));
+    const fit = orthoFit(residual, { kind: 'plane', plane: 'xy', aspect: 'free' }, 1);
+    expect([fit.halfWidth, fit.halfHeight]).toEqual([expect.closeTo(5.5, 12), expect.closeTo(2.7445e-13, 16)]);
+  });
 });
 
 /** A panel of 400 by 400 CSS pixels that draws one track from (0, 0) to (10, 1) with `layers` after it, planned, fitted, and laid out without WebGL. */

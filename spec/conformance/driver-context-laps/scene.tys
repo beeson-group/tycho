@@ -1,0 +1,153 @@
+{
+ "format": "tycho-scene",
+ "version": "0.3",
+ "requires": [
+  "layers.driver_context"
+ ],
+ "generator": "pytycho 0.2.0",
+ "title": "a grid and a grown ring in the driver's context over two laps",
+ "frames": {
+  "rot": {
+   "label": "rotating",
+   "axes": [
+    "x",
+    "y",
+    "z"
+   ],
+   "unit": "DU"
+  },
+  "inertial": {
+   "label": "inertial",
+   "axes": [
+    "X",
+    "Y",
+    "Z"
+   ],
+   "unit": "DU",
+   "parent": "rot",
+   "rotation": {
+    "axis": "z",
+    "angle": {
+     "channel": "t"
+    }
+   }
+  }
+ },
+ "track_sets": {
+  "loop": {
+   "frame": "rot",
+   "tracks": 1,
+   "offsets": "loop/offsets",
+   "positions": "loop/positions",
+   "channels": {
+    "t": {
+     "view": "loop/channels/t"
+    }
+   },
+   "periodic": true
+  },
+  "grid": {
+   "frame": "rot",
+   "tracks": 2,
+   "offsets": "grid/offsets",
+   "positions": "grid/positions",
+   "periodic": false
+  },
+  "ring": {
+   "frame": "rot",
+   "tracks": 1,
+   "offsets": "ring/offsets",
+   "positions": "ring/positions",
+   "channels": {
+    "t": {
+     "view": "ring/channels/t"
+    }
+   },
+   "periodic": true
+  }
+ },
+ "variables": {
+  "frame": {
+   "kind": "choice",
+   "values": [
+    "rot",
+    "inertial"
+   ],
+   "default": "inertial",
+   "scope": "panel"
+  }
+ },
+ "clock": {
+  "mode": "fraction",
+  "channels": [
+   "t",
+   "@index"
+  ],
+  "steps": 8,
+  "laps": 2
+ },
+ "views": {
+  "v": {
+   "frame": {
+    "var": "frame"
+   },
+   "driver": {
+    "sets": {
+     "set": "loop"
+    },
+    "member": {
+     "index": 0
+    }
+   },
+   "layers": [
+    {
+     "kind": "track",
+     "sets": {
+      "set": "grid"
+     },
+     "members": "all",
+     "reveal": "none",
+     "context": "driver"
+    },
+    {
+     "kind": "track",
+     "sets": {
+      "set": "ring"
+     },
+     "members": "all",
+     "reveal": "grow",
+     "head": true,
+     "context": "driver"
+    },
+    {
+     "kind": "track",
+     "sets": {
+      "set": "loop"
+     },
+     "members": "all",
+     "reveal": "none",
+     "head": true
+    }
+   ],
+   "camera": {
+    "kind": "plane",
+    "plane": "xy"
+   }
+  }
+ },
+ "initial": {
+  "variables": {},
+  "clock": {
+   "channel": "t"
+  },
+  "panels": {
+   "p1": {
+    "view": "v"
+   }
+  },
+  "layout": {
+   "kind": "panel",
+   "id": "p1"
+  }
+ }
+}

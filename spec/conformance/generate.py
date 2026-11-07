@@ -1427,6 +1427,228 @@ def driver_context():
     print(f"driver-context: {len(cases)} cases with the reference ones, {len(rejections)} rejections")
 
 
+def _segment(ui, u):
+    """The segment k and the weight w of the reading u on the sample readings ui (rule C4)."""
+    k = min(int(np.searchsorted(ui, u, side="right")) - 1, len(ui) - 2)
+    return k, (u - ui[k]) / (ui[k + 1] - ui[k])
+
+
+def driver_context_laps():
+    """A grid and a grown ring in the driver's context over two laps (rules L6 and C6), driven by a time channel on a rotating edge."""
+    import pytycho as ty
+
+    loop_pts = np.array([[1.0, 0.0], [0.0, 1.0], [-1.0, 0.0], [0.0, -1.0], [1.0, 0.0]])
+    # the advance of the time channel t over one period is 2.5, hence lap 1 is turned by 2.5 rad more than lap 0
+    t, advance = np.array([0.0, 0.5, 1.0, 1.5, 2.5]), 2.5
+    grid_lines = [np.array([[-0.5, -1.0], [-0.5, 1.0]]), np.array([[-1.0, 0.5], [1.0, 0.5]])]
+    ring = np.array([[0.4, 0.0], [0.0, 0.4], [-0.4, 0.0], [0.0, -0.4], [0.4, 0.0]])
+    ring_t = np.array([0.0, 0.6, 1.0, 1.4, 2.0])
+
+    scene = ty.Scene(title="a grid and a grown ring in the driver's context over two laps")
+    rot = scene.frame("rot", label="rotating", axes=("x", "y", "z"), unit="DU")
+    scene.frame("inertial", parent=rot, rotation=ty.rotation("z", ty.channel("t")), label="inertial", axes=("X", "Y", "Z"), unit="DU")
+    loop = scene.track_set("loop", frame=rot, periodic=True, dtype="float64")
+    loop.add(loop_pts, channels={"t": t})
+    # the grid is drawn whole and never read, hence it is not periodic and does not store any channel
+    grid = scene.track_set("grid", frame=rot, dtype="float64")
+    for line in grid_lines:
+        grid.add(line)
+    ring_set = scene.track_set("ring", frame=rot, periodic=True, dtype="float64")
+    ring_set.add(ring, channels={"t": ring_t})
+    frame = scene.choice("frame", ["rot", "inertial"], default="inertial", scope="panel")
+    scene.clock("fraction", channels=["t", "@index"], steps=8, laps=2)
+    scene.view(
+        "v",
+        frame=frame,
+        driver=ty.driver(loop, 0),
+        camera={"kind": "plane", "plane": "xy"},
+        layers=[
+            ty.track(grid, context="driver"),
+            ty.track(ring_set, reveal="grow", head=True, context="driver"),
+            ty.track(loop, head=True),
+        ],
+    )
+    scene.panel("p1", "v")
+
+    ui, ring_ui = t / advance, (ring_t - ring_t[0]) / (ring_t[-1] - ring_t[0])
+
+    def driver_map(display, i):
+        """The map from the rotating frame into the display frame at frame i, blended at the driver's reading in its lap."""
+        if display == "rot":
+            return np.eye(3)
+        lap = min(int(2 * i / 8), 1)
+        k, w = _segment(ui, 2 * i / 8 - lap)
+        return (1.0 - w) * rz(t[k] + lap * advance) + w * rz(t[k + 1] + lap * advance)
+
+    def pts_(x):
+        return [list(map(float, x_ @ np.array([*p, 0.0]))) for x_, p in x]
+
+    def state(display="inertial", channel="t"):
+        return {
+            "variables": {},
+            "clock": {"channel": channel},
+            "panels": {"p1": {"view": "v", "variables": {"frame": display}}},
+            "layout": {"kind": "panel", "id": "p1"},
+        }
+
+    cases = []
+    for display, i in (("inertial", 3), ("inertial", 5), ("inertial", 7), ("rot", 5)):
+        m = driver_map(display, i)
+        lap = min(int(2 * i / 8), 1)
+        k, w = _segment(ring_ui, 2 * i / 8 - lap)
+        head = (1.0 - w) * ring[k] + w * ring[k + 1]
+        # with the reading in lap 1, lap 0 is grown whole, and its closing sample is kept once, as the first sample of lap 1
+        ring_line = [ring[s] for s in range(4)] * lap + [ring[s] for s in range(k + 1)] + [head]
+        cases.append(
+            {
+                "name": f"L6 and C6: in {display} at frame {i}, in lap {lap}, the grid and the ring are transformed in the blended "
+                "context of the driver's reading in its lap, raised by the advance of the time channel, and every lap of the ring "
+                "is drawn in this context",
+                "source": "analytic",
+                "state": state(display),
+                "frame_index": i,
+                "tolerance": TOL,
+                "expected": {
+                    "panels": {
+                        "p1": {
+                            "frame": display,
+                            "layers": [
+                                {
+                                    "kind": "track",
+                                    "set": "grid",
+                                    "members": [{"index": j, "line": pts_((m, p) for p in g)} for j, g in enumerate(grid_lines)],
+                                },
+                                {
+                                    "kind": "track",
+                                    "set": "ring",
+                                    "members": [{"index": 0, "line": pts_((m, p) for p in ring_line), "head": pts_([(m, head)])[0]}],
+                                },
+                                None,
+                            ],
+                        }
+                    }
+                },
+            }
+        )
+    doc, data = _write_scene("driver-context-laps", scene, cases)
+    for display in ("rot", "inertial"):
+        for channel in ("t", "@index"):
+            for i in range(-1, 9):
+                st = state(display, channel)
+                cases.append(
+                    {
+                        "name": f"{display}, {channel}, frame {i}",
+                        "source": "reference",
+                        "state": st,
+                        "frame_index": i,
+                        "tolerance": TOL,
+                        "expected": evaluate(doc, data, st, i),
+                    }
+                )
+    (HERE / "driver-context-laps" / "cases.json").write_text(json.dumps(cases, indent=1) + "\n")
+    print(f"driver-context-laps: {len(cases)} cases with the reference ones")
+
+
+def driver_context_value():
+    """A grid and a grown ring in the driver's context under a value clock that runs past both ends of the driver (rules L6 and C3)."""
+    import pytycho as ty
+
+    drv_pts = np.array([[1.0, 0.0], [0.8, 0.3], [0.6, 0.0]])
+    t, th = np.array([0.0, 1.0, 2.0]), np.array([0.0, 0.5, 1.5])
+    grid_lines = [np.array([[-0.5, -1.0], [-0.5, 1.0]]), np.array([[-1.0, 0.5], [1.0, 0.5]])]
+    ring = np.array([[0.4, 0.0], [0.0, 0.4], [-0.4, 0.0]])
+    ring_t = np.array([0.25, 1.0, 1.75])
+
+    scene = ty.Scene(title="a grid and a grown ring in the driver's context under a value clock")
+    rot = scene.frame("rot", label="rotating", axes=("x", "y", "z"), unit="DU")
+    inertial = scene.frame("inertial", parent=rot, rotation=ty.rotation("z", ty.channel("th")), label="inertial", axes=("X", "Y", "Z"))
+    drv = scene.track_set("drv", frame=rot, dtype="float64")
+    drv.add(drv_pts, channels={"t": t, "th": th})
+    grid = scene.track_set("grid", frame=rot, dtype="float64")
+    for line in grid_lines:
+        grid.add(line)
+    # the clock channel t is stored on the ring, and the angle th only on the driver
+    ring_set = scene.track_set("ring", frame=rot, dtype="float64")
+    ring_set.add(ring, channels={"t": ring_t})
+    scene.clock("value", channels=["t", "@index"], steps=8, range=[-1.0, 3.0])
+    scene.view(
+        "v",
+        frame=inertial,
+        driver=ty.driver(drv, 0),
+        camera={"kind": "plane", "plane": "xy"},
+        layers=[
+            ty.track(grid, context="driver"),
+            ty.track(ring_set, reveal="grow", head=True, before="hidden", context="driver"),
+            ty.track(drv, head=True),
+        ],
+    )
+    scene.panel("p1", "v")
+
+    def pts_(m, x):
+        return [list(map(float, m @ np.array([*p, 0.0]))) for p in x]
+
+    def state(channel="t"):
+        return {"variables": {}, "clock": {"channel": channel}, "panels": {"p1": {"view": "v"}}, "layout": {"kind": "panel", "id": "p1"}}
+
+    cases = []
+    # the value is v = -1 + 4 q, at which the driver's reading is v / 2, clamped to [0, 1], and the ring's reading is (v - 0.25) / 1.5,
+    # hidden below 0
+    for i, where in ((0, "below"), (3, "inside"), (7, "above")):
+        v = -1.0 + 4.0 * i / 8
+        k, w = _segment(t / 2.0, min(max(v / 2.0, 0.0), 1.0))
+        m = (1.0 - w) * rz(th[k]) + w * rz(th[k + 1])
+        u = (v - ring_t[0]) / (ring_t[-1] - ring_t[0])
+        if u < 0.0:
+            ring_member = {"index": 0, "line": [], "head": None}
+        else:
+            rk, rw = _segment((ring_t - ring_t[0]) / 1.5, min(u, 1.0))
+            head = (1.0 - rw) * ring[rk] + rw * ring[rk + 1]
+            line = [ring[s] for s in range(rk + 1)] + ([head] if rw > 0 else [])
+            ring_member = {"index": 0, "line": pts_(m, line), "head": pts_(m, [head])[0]}
+        cases.append(
+            {
+                "name": f"L6 and C3: at frame {i} the value is {where} the driver's span, the driver's reading is clamped to [0, 1], "
+                "and the ring is hidden or clamped by its own reading",
+                "source": "analytic",
+                "state": state(),
+                "frame_index": i,
+                "tolerance": TOL,
+                "expected": {
+                    "panels": {
+                        "p1": {
+                            "frame": "inertial",
+                            "layers": [
+                                {
+                                    "kind": "track",
+                                    "set": "grid",
+                                    "members": [{"index": j, "line": pts_(m, g)} for j, g in enumerate(grid_lines)],
+                                },
+                                {"kind": "track", "set": "ring", "members": [ring_member]},
+                                None,
+                            ],
+                        }
+                    }
+                },
+            }
+        )
+    doc, data = _write_scene("driver-context-value", scene, cases)
+    for channel in ("t", "@index"):
+        for i in range(-1, 9):
+            st = state(channel)
+            cases.append(
+                {
+                    "name": f"{channel}, frame {i}",
+                    "source": "reference",
+                    "state": st,
+                    "frame_index": i,
+                    "tolerance": TOL,
+                    "expected": evaluate(doc, data, st, i),
+                }
+            )
+    (HERE / "driver-context-value" / "cases.json").write_text(json.dumps(cases, indent=1) + "\n")
+    print(f"driver-context-value: {len(cases)} cases with the reference ones")
+
+
 def containers():
     """The same views written twice, with the encodings the writer picks and all raw, for a reader to decode bit for bit."""
     rng = np.random.default_rng(78)
@@ -1474,4 +1696,6 @@ if __name__ == "__main__":
     edge_value()
     laps()
     driver_context()
+    driver_context_laps()
+    driver_context_value()
     containers()

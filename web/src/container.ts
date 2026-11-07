@@ -6,6 +6,7 @@
  * buffer is aligned to the item size, and copied otherwise. Encoded views are decoded by
  * `Container.parse`, so that reading a view stays synchronous.
  */
+import { fail, TychoError } from './errors.js';
 
 export type Dtype = 'int8' | 'uint8' | 'int16' | 'uint16' | 'int32' | 'uint32' | 'float32' | 'float64';
 
@@ -96,4 +97,33 @@ function copyLittleEndian(bytes: DataView, byteOffset: number, count: number, dt
   }[dtype];
   for (let i = 0; i < count; i++) out[i] = read(byteOffset + i * size);
   return out;
+}
+
+/** Inflates one zlib stream into `out`, and throws a TychoError that gives `where` unless the stream inflates to as many bytes as `out` holds (rule D5). */
+async function inflate(src: Uint8Array, out: Uint8Array, where: string): Promise<void> {
+  const expected = out.length;
+  const stream = new DecompressionStream('deflate');
+  const writer = stream.writable.getWriter();
+  // errors surface on the readable side, where they are reported
+  writer.write(src as Uint8Array<ArrayBuffer>).catch(() => {});
+  writer.close().catch(() => {});
+  const reader = stream.readable.getReader();
+  let at = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (at + value.length > expected) {
+        reader.cancel().catch(() => {});
+        fail('D5', `${where} inflates to more than the ${expected} bytes of its rows`);
+      }
+      out.set(value, at);
+      at += value.length;
+    }
+  } catch (e) {
+    if (e instanceof TychoError) throw e;
+    const why = (e as Error).message;
+    fail('D5', `${where} does not inflate${why ? `: ${why}` : ''}`);
+  }
+  if (at !== expected) fail('D5', `${where} inflates to ${at} bytes, not the ${expected} of its rows`);
 }

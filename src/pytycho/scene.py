@@ -377,6 +377,87 @@ def _color_spec(value: Any, what: str) -> Any:
     return out
 
 
+def _check_layer(layer: Any) -> dict[str, Any]:
+    """A layer dict in the form that the schema and section 2.7 define, with every value checked."""
+    if not isinstance(layer, Mapping) or "kind" not in layer:
+        raise SceneError(f"2.7: a layer is a dict with a kind, not {layer!r}")
+    kind = _enum(layer["kind"], ("track", "body", "axes", "grid"), "2.7: a layer kind")
+    out: dict[str, Any] = {"kind": kind}
+    allowed = {"kind", "visible"}
+    if "visible" in layer:
+        v = layer["visible"]
+        out["visible"] = v if isinstance(v, Mapping) and set(v) == {"var"} else _var(v, "L5: a layer's visible", "toggle")
+    if kind == "track":
+        allowed |= {"sets", "members", "reveal", "trail", "head", "before", "after", "color", "opacity", "width", "highlight"}
+        out["sets"] = _query(layer.get("sets"))
+        out["members"] = _member(layer.get("members", "all"), "a track layer's members")
+        out["reveal"] = _enum(layer.get("reveal", "none"), ("none", "grow", "trail"), "2.7: a track layer's reveal")
+        if "trail" in layer:
+            out["trail"] = _trail(layer["trail"], "a trail")
+        if out["reveal"] == "trail" and "trail" not in out:
+            raise SceneError('2.7: a track layer has reveal "trail" but lacks a trail')
+        if "head" in layer:
+            out["head"] = _head(layer["head"])
+        for key in ("before", "after"):
+            if key in layer:
+                out[key] = _enum(layer[key], ("clamp", "hidden"), f"C3: a track layer's {key}")
+        if "color" in layer:
+            out["color"] = _color_spec(layer["color"], "a track layer's color")
+        if "opacity" in layer:
+            out["opacity"] = _finite(layer["opacity"], "a track layer's opacity")
+            if not 0.0 <= out["opacity"] <= 1.0:
+                raise SceneError(f"2.7: a track layer's opacity is {out['opacity']}, not in [0, 1]")
+        if "width" in layer:
+            out["width"] = _finite(layer["width"], "a track layer's width")
+            if out["width"] <= 0.0:
+                raise SceneError(f"2.7: a track layer's width is {out['width']}, not positive")
+        if "highlight" in layer:
+            h = layer["highlight"]
+            spec = dict(h) if isinstance(h, Mapping) else {"var": h}
+            if extra := set(spec) - {"var", "width", "opacity", "kernel"}:
+                raise SceneError(f"2.7: a highlight has unknown keys {sorted(extra)}")
+            hl: dict[str, Any] = _var(spec.get("var"), "2.7: a highlight", "selector")
+            if "width" in spec:
+                hl["width"] = _finite(spec["width"], "a highlight width")
+                if hl["width"] <= 0.0:
+                    raise SceneError(f"2.7: a highlight width is {hl['width']}, not positive")
+            if "opacity" in spec:
+                hl["opacity"] = _finite(spec["opacity"], "a highlight opacity")
+                if not 0.0 <= hl["opacity"] <= 1.0:
+                    raise SceneError(f"2.7: a highlight opacity is {hl['opacity']}, not in [0, 1]")
+            if "kernel" in spec:
+                k = spec["kernel"]
+                if not isinstance(k, Mapping) or set(k) != {"width", "opacity"}:
+                    raise SceneError(f"2.7: a highlight kernel is a dict of width and opacity, not {k!r}")
+                w = _finite(k["width"], "a highlight kernel's width")
+                if not 0.0 < w <= 1.0:
+                    raise SceneError(f"2.7: a highlight kernel's width is {w}, not in (0, 1]")
+                hl["kernel"] = {"width": w, "opacity": _unit_interval(k["opacity"], "a highlight kernel's opacity")}
+            out["highlight"] = hl
+    elif kind == "body":
+        allowed |= {"body", "trail", "size"}
+        out["body"] = _check_id(_id(layer.get("body")), "L4: a body layer's body")
+        if "trail" in layer:
+            out["trail"] = _trail(layer["trail"], "a body trail")
+        if "size" in layer:
+            out["size"] = _finite(layer["size"], "a body layer's size")
+            if out["size"] <= 0.0:
+                raise SceneError(f"2.7: a body layer's size is {out['size']}, not positive")
+    elif kind == "axes":
+        allowed |= {"span"}
+        if "span" in layer:
+            out["span"] = _enum(layer["span"], ("positive", "full"), "2.7: an axes layer's span")
+    else:
+        allowed |= {"labels"}
+        if "labels" in layer:
+            if not isinstance(layer["labels"], bool):
+                raise SceneError(f"2.7: a grid layer's labels is {layer['labels']!r}, not a boolean")
+            out["labels"] = layer["labels"]
+    if extra := set(layer) - allowed:
+        raise SceneError(f"2.7: a {kind} layer has unknown keys {sorted(extra)}")
+    return out
+
+
 # track sets
 
 

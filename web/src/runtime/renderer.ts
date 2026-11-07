@@ -1545,4 +1545,89 @@ export class StageRenderer {
     p.userMoved = false;
     this.makeControls(p);
   }
+
+  /**
+   * Draws a panel's static layers into the viewport just set, copied back from the underlay, which
+   * is drawn again first when anything they depend on changed.
+   */
+  private drawStatic(p: PanelRender): void {
+    if (p.staticScene.children.length === 0) return;
+    if (!this.cacheStatic) {
+      this.gl.render(p.staticScene, p.camera);
+      return;
+    }
+    const size = this.gl.getDrawingBufferSize(this.buffer);
+    if (this.underlay === null || this.underlay.width !== size.x || this.underlay.height !== size.y) {
+      this.underlay?.dispose();
+      this.underlay = pixelTarget(size.x, size.y, 0);
+      // the texture of the underlay must exist before a copy into it
+      this.gl.initRenderTarget(this.underlay);
+      for (const q of this.panels.values()) q.underlayDirty = true;
+    }
+    const vp = this.gl.getCurrentViewport(this.viewport);
+    if (!vp.equals(p.underlay)) {
+      p.underlay.copy(vp);
+      p.underlayDirty = true;
+    }
+    if (cameraMoved(p.camera, p.cameraSeen)) p.underlayDirty = true;
+    if (p.underlayDirty) {
+      p.underlayDirty = false;
+      const now = performance.now();
+      p.coarse = this.coarseDrags && now - p.rebuiltAt < DRAG_MS;
+      p.rebuiltAt = now;
+      if (p.coarse) {
+        this.drawCoarse(p, this.underlay, vp);
+        this.scheduleRefine();
+      } else this.drawFine(p, this.underlay, vp);
+    }
+    this.blit.material.uniforms.uUnderlay!.value = this.underlay.texture;
+    this.gl.render(this.blit.scene, this.blit.camera);
+  }
+
+  /** Draws a panel's static layers straight into its region of `target`, which is not multisampled. */
+  private drawCoarse(p: PanelRender, target: THREE.WebGLRenderTarget, r: THREE.Vector4): void {
+    target.viewport.copy(r);
+    target.scissor.copy(r);
+    target.scissorTest = true;
+    this.gl.setRenderTarget(target);
+    this.gl.clear(true, false, false);
+    this.gl.render(p.staticScene, p.camera);
+    this.gl.setRenderTarget(null);
+  }
+
+  /** Draws every coarse underlay again with antialiasing once REFINE_MS pass without a coarse one. */
+  private scheduleRefine(): void {
+    if (this.refineTimer !== null) clearTimeout(this.refineTimer);
+    this.refineTimer = setTimeout(() => {
+      this.refineTimer = null;
+      for (const q of this.panels.values()) {
+        if (!q.coarse) continue;
+        q.underlayDirty = true;
+        q.rebuiltAt = -Infinity;
+      }
+      this.onChange();
+    }, REFINE_MS);
+  }
+
+  /**
+   * Draws a panel's static layers with antialiasing into the scratch target, which three resolves
+   * after the draw, and copies them into the panel's region `r` of `target`.
+   */
+  private drawFine(p: PanelRender, target: THREE.WebGLRenderTarget, r: THREE.Vector4): void {
+    let s = this.scratch;
+    if (s === null || s.width < r.z || s.height < r.w) {
+      s?.dispose();
+      s = this.scratch = pixelTarget(Math.max(r.z, s?.width ?? 0), Math.max(r.w, s?.height ?? 0), 4);
+    }
+    s.viewport.set(0, 0, r.z, r.w);
+    s.scissor.set(0, 0, r.z, r.w);
+    s.scissorTest = true;
+    this.gl.setRenderTarget(s);
+    this.gl.clear(true, false, false);
+    this.gl.render(p.staticScene, p.camera);
+    this.gl.setRenderTarget(null);
+    this.region.min.set(0, 0);
+    this.region.max.set(r.z, r.w);
+    this.gl.copyTextureToTexture(s.texture, target.texture, this.region, this.corner.set(r.x, r.y));
+  }
 }

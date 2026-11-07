@@ -578,3 +578,10 @@ describe('the chrome under a DOM stand-in', () => {
     }
   });
 });
+
+// every node the shell builds is an element. scene strings thus reach the DOM as text and never as markup
+it('the runtime does not use innerHTML', () => {
+  for (const f of ['element.ts', 'icons.ts', 'readouts.ts', 'state.ts', 'colors.ts']) {
+    expect(readFileSync(new URL(`../src/runtime/${f}`, import.meta.url), 'utf8')).not.toMatch(/innerHTML|outerHTML|insertAdjacentHTML/);
+  }
+});

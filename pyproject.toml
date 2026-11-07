@@ -7,6 +7,8 @@ name = "pytycho"
 dynamic = ["version"]
 description = "Animated, interactive astrodynamics visualizations in a single HTML file"
 readme = "README.md"
+# the wheel carries the runtime bundle, which contains three.js and mp4-muxer (both MIT)
+license = "Apache-2.0 AND MIT"
 license-files = ["LICENSE", "NOTICE", "AUTHORS", "THIRD_PARTY_NOTICES.md"]
 requires-python = ">=3.10"
 authors = [{ name = "Claudio Vestini" }, { name = "Nina Karampela" }, { name = "Jack Sydney Schwartz" }]
@@ -40,3 +42,13 @@ Changelog = "https://github.com/beeson-group/tycho/blob/main/CHANGELOG.md"
 
 [tool.hatch]
 version.path = "src/pytycho/__init__.py"
+
+[tool.hatch.build]
+# the gitignored runtime bundle, built by `npm --prefix web run build`, is listed here for the sdist and the wheel to carry it
+artifacts = ["src/pytycho/_static/tycho.js"]
+
+[tool.hatch.build.targets.sdist]
+exclude = ["examples/**/*.csv", "examples/**/*.tys", "examples/**/*.tyd", "examples/**/*.html", "examples/**/*.png"]
+
+[tool.hatch.build.targets.wheel.hooks.custom]
+path = "hatch_build.py"

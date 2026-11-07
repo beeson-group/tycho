@@ -57,9 +57,9 @@ export function nearestStop(stops: readonly number[], value: number): number {
 /** Seconds one lap of the clock lasts at speed 1, whatever its steps. */
 export const LAP_SECONDS = 8;
 
-/** The seconds that one loop of the clock lasts at speed 1, which are LAP_SECONDS for each of its laps (rule C6). */
+/** The seconds that one loop of the clock lasts at speed 1: its `seconds` when given, else LAP_SECONDS for each of its laps (rule C6). */
 export function loopSeconds(clock: Clock): number {
-  return LAP_SECONDS * (clock.laps ?? 1);
+  return clock.seconds ?? LAP_SECONDS * (clock.laps ?? 1);
 }
 
 /**

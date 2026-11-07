@@ -57,7 +57,7 @@ const LAYER_KEYS: Record<string, readonly string[]> = {
   axes: ['kind', 'span', 'visible'],
   grid: ['kind', 'labels', 'visible'],
 };
-const CLOCK_KEYS = ['mode', 'channels', 'labels', 'steps', 'range', 'laps'];
+const CLOCK_KEYS = ['mode', 'channels', 'labels', 'steps', 'range', 'laps', 'seconds'];
 const THEME_KEYS = ['background', 'foreground', 'grid'];
 
 /** Checks the format, the version, and `requires` (rule S1 and section 2). */
@@ -241,6 +241,8 @@ export function validate(scene: Scene, data?: DataStore, state?: State): string[
   }
   if (clock.labels !== undefined && clock.labels.length !== clock.channels.length)
     fail('2.6', `the clock has ${clock.labels.length} labels for ${clock.channels.length} channels`);
+  if (clock.seconds !== undefined && !(finite(clock.seconds) && clock.seconds > 0))
+    fail('2.6', `the clock seconds are ${JSON.stringify(clock.seconds)}, not a positive finite number`);
   clockLaps(clock);
   for (const [id, view] of Object.entries(scene.views)) {
     if (typeof view!.frame === 'string') {

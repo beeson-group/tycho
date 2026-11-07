@@ -36,7 +36,7 @@ export interface Schedule {
 
 /**
  * Every output frame, as live playback would draw it at the time of the frame. A loop of `steps` lasts
- * `seconds / speed`, where `seconds` is LAP_SECONDS for each lap. Output frame `k` is drawn at time
+ * `seconds / speed`, where `seconds` is the clock's loopSeconds. Output frame `k` is drawn at time
  * `k / fps`, at the progress reached then, with the integer part of the loop position as its index.
  */
 export function frameSchedule(steps: number, fps: number, loops: number, speed = 1, start = 0, seconds = LAP_SECONDS): Schedule {

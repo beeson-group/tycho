@@ -64,3 +64,40 @@ def test_edge_with_origin_rotation_and_scale():
     out = evaluate(doc, data, state(), 0)["panels"]["p"]
     expected = [2.0 * rz(a) @ (p - np.array([1.0, -2.0, 0.5])) for p, a in zip(pts, angle, strict=True)]
     np.testing.assert_allclose(out["layers"][0]["members"][0]["line"], expected, atol=1e-13)
+
+
+def test_c4_at_an_exact_sample_and_grow():
+    pts = np.array([[0.0, 0, 0], [1.0, 0, 0], [3.0, 0, 0], [6.0, 0, 0], [10.0, 0, 0]])
+    layers = [{"kind": "track", "sets": {"set": "s"}, "members": "all", "reveal": "grow", "head": True}]
+    doc, data = scene(pts, {}, frames={"root": {}}, layers=layers)
+    member = evaluate(doc, data, state(), 4)["panels"]["p"]["layers"][0]["members"][0]
+    # the clock reading is q = 4/8 and the sample readings are u_i = i/4, thus the reading falls on sample 2
+    assert member["line"] == [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [3.0, 0.0, 0.0]]
+    assert member["head"] == [3.0, 0.0, 0.0]
+
+
+def test_periodic_trail_wraps_in_the_shifted_context():
+    frames = {"root": {}, "inertial": {"parent": "root", "rotation": {"axis": "z", "angle": {"channel": "a"}}}}
+    pts = np.array([[1.0, 0, 0], [0.0, 1, 0], [-1.0, 0, 0], [0.0, -1, 0], [1.0, 0, 0]])
+    angle = np.array([0.0, 0.5, 1.0, 1.5, 2.5])
+    layers = [{"kind": "track", "sets": {"set": "s"}, "members": "all", "reveal": "trail", "trail": {"fraction": 0.5}}]
+    doc, data = scene(pts, {"a": angle}, frames=frames, periodic=True, layers=layers, frame="inertial")
+    line = evaluate(doc, data, state(), 1)["panels"]["p"]["layers"][0]["members"][0]["line"]
+    # the reading is u = 1/8, and the tail wraps to 1/8 - 1/2 + 1 = 5/8. the line runs from the point at 5/8,
+    # between samples 2 and 3, through samples 3 and 0 to the head
+    shift = angle[-1] - angle[0]
+    p_tail = 0.5 * rz(angle[2] - shift) @ pts[2] + 0.5 * rz(angle[3] - shift) @ pts[3]
+    expected = [p_tail, rz(angle[3] - shift) @ pts[3], rz(angle[0]) @ pts[0], 0.5 * rz(angle[0]) @ pts[0] + 0.5 * rz(angle[1]) @ pts[1]]
+    np.testing.assert_allclose(line, expected, atol=1e-13)
+
+
+def test_value_mode_hidden_and_clamp():
+    pts = np.array([[0.0, 0, 0], [1.0, 0, 0], [2.0, 0, 0]])
+    layers = [
+        {"kind": "track", "sets": {"set": "s"}, "members": "all", "reveal": "grow", "head": True, "after": "hidden"},
+        {"kind": "track", "sets": {"set": "s"}, "members": "all", "reveal": "grow", "head": True},
+    ]
+    doc, data = scene(pts, {"t": [0.0, 1.0, 2.0]}, frames={"root": {}}, layers=layers, mode="value", steps=4, rng=[0.0, 4.0])
+    out = evaluate(doc, data, state("t"), 3)["panels"]["p"]["layers"]
+    assert out[0]["members"][0] == {"index": 0, "line": [], "head": None}
+    assert out[1]["members"][0]["head"] == [2.0, 0.0, 0.0]

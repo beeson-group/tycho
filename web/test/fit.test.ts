@@ -154,6 +154,7 @@ function boxPanel(camera: Camera) {
 }
 
 describe("an orbit camera's stretch and turn (2.7)", () => {
+  const near = (v: THREE.Vector3) => v.toArray().map((x) => expect.closeTo(x, 9));
   it('stretches what the panel draws, fits the stretched box, and draws every axis at one length after the stretch', () => {
     const { p } = boxPanel({ kind: 'orbit', stretch: [1, 1, 5] });
     expect(p.scene.scale.toArray()).toEqual([1, 1, 5]);
@@ -185,6 +186,31 @@ describe("an orbit camera's stretch and turn (2.7)", () => {
     expect(items[2].y).toBeCloseTo(((1 - tip.y) / 2) * 400, 9);
     const plain = boxPanel({ kind: 'orbit' });
     expect(plain.stage.labelItems(plain.p).map((l: { text: string }) => l.text)).toEqual(['x', 'y', 'z']);
+  });
+  it('turns the camera about the up axis through its target by turn degrees times the progress, and back at the start of a loop', () => {
+    const { stage, p } = boxPanel({ kind: 'orbit', turn: 90 });
+    const offset = () => p.camera.position.clone().sub(p.target);
+    const start = offset();
+    stage.turn(p, 0.5);
+    expect(offset().toArray()).toEqual(near(start.clone().applyAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 4)));
+    stage.turn(p, 0);
+    expect(offset().toArray()).toEqual(near(start));
+    const y = boxPanel({ kind: 'orbit', up: 'y', turn: -180 });
+    const from = y.p.camera.position.clone().sub(y.p.target);
+    y.stage.turn(y.p, 0.25);
+    expect(y.p.camera.position.clone().sub(y.p.target).toArray()).toEqual(near(from.applyAxisAngle(new THREE.Vector3(0, 1, 0), -Math.PI / 4)));
+  });
+  it('adds the turn to where the viewer moved the camera, and does not turn a camera without a turn', () => {
+    const { stage, p } = boxPanel({ kind: 'orbit', turn: 90 });
+    const z = new THREE.Vector3(0, 0, 1);
+    const start = p.camera.position.clone().sub(p.target);
+    p.camera.position.copy(p.target).add(start.clone().applyAxisAngle(z, 0.1));
+    stage.turn(p, 0.5);
+    expect(p.camera.position.clone().sub(p.target).toArray()).toEqual(near(start.clone().applyAxisAngle(z, 0.1 + Math.PI / 4)));
+    const still = boxPanel({ kind: 'orbit' });
+    const before = still.p.camera.position.clone();
+    still.stage.turn(still.p, 0.5);
+    expect(still.p.camera.position.toArray()).toEqual(before.toArray());
   });
 });
 

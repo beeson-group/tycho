@@ -151,3 +151,41 @@ describe('store and updates', () => {
     expect(newPanelId(one)).toBe('p3');
   });
 });
+
+describe('drops on a panel', () => {
+  // the initial state splits a row at 0.5 into p1 (frame shift, k 0.5) and p2 (frame tilt, k 2.5)
+  it("a value on an edge makes a panel with the target's view and values, then sets the value", () => {
+    const s = scene();
+    const st = withDrop(s, s.initial, 'p2', 'bottom', { kind: 'value', variable: 'frame', value: 'rot' });
+    expect(st.panels.p3).toEqual({ view: 'v', variables: { frame: 'rot', k: 2.5 } });
+    expect(st.layout).toEqual({
+      kind: 'split',
+      dir: 'row',
+      ratio: 0.5,
+      a: { kind: 'panel', id: 'p1' },
+      b: { kind: 'split', dir: 'col', ratio: 0.5, a: { kind: 'panel', id: 'p2' }, b: { kind: 'panel', id: 'p3' } },
+    });
+    expect(st.panels.p2).toBe(s.initial.panels.p2);
+  });
+  it('a value or a view on the center changes the target only', () => {
+    const s = scene();
+    const st = withDrop(s, s.initial, 'p1', 'centre', { kind: 'value', variable: 'frame', value: 'root' });
+    expect(st.panels.p1!.variables).toEqual({ frame: 'root', k: 0.5 });
+    expect(st.layout).toBe(s.initial.layout);
+    expect(withDrop(s, s.initial, 'p1', 'centre', { kind: 'view', view: 'nowhere' })).toBe(s.initial);
+    expect(withDrop(s, s.initial, 'p1', 'centre', { kind: 'view', view: 'v' }).panels.p1).toEqual(s.initial.panels.p1);
+  });
+  it('a panel dropped on an edge moves there, and one dropped on the center swaps places', () => {
+    const s = scene();
+    const moved = withDrop(s, s.initial, 'p2', 'top', { kind: 'panel', id: 'p1' });
+    expect(moved.layout).toEqual({ kind: 'split', dir: 'col', ratio: 0.5, a: { kind: 'panel', id: 'p1' }, b: { kind: 'panel', id: 'p2' } });
+    const swapped = withDrop(s, s.initial, 'p2', 'centre', { kind: 'panel', id: 'p1' });
+    expect(swapped.layout).toEqual(swapLeaves(s.initial.layout, 'p1', 'p2'));
+    expect(swapped.layout).toEqual({ ...s.initial.layout, a: { kind: 'panel', id: 'p2' }, b: { kind: 'panel', id: 'p1' } });
+    expect(withDrop(s, s.initial, 'p1', 'left', { kind: 'panel', id: 'p1' })).toBe(s.initial);
+  });
+  it('does not make a panel past the limit', () => {
+    const s = scene();
+    expect(withDrop(s, s.initial, 'p1', 'right', { kind: 'view', view: 'v' }, 2)).toBe(s.initial);
+  });
+});

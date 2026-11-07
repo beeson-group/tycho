@@ -8,10 +8,18 @@ set. A build without the pages still succeeds, and docs/gallery.md then shows wh
 
 from __future__ import annotations
 
+import gzip
 import os
 import shutil
 import sys
+import urllib.request
 from pathlib import Path
+
+from sphinx.util import logging
+from sphinx.util.tags import Tags
+
+tags: Tags = globals()["tags"]  # Sphinx puts it in this namespace before executing the file
+logger = logging.getLogger("conf")
 
 DOCS = Path(__file__).resolve().parent
 ROOT = DOCS.parent
@@ -74,12 +82,45 @@ STAGED.mkdir(parents=True, exist_ok=True)
 for _name in ("scene.schema.json", "tycho-scene.md"):
     shutil.copyfile(ROOT / "spec" / _name, STAGED / _name)
 
+EXAMPLES = EXTRA / "examples"
+EXAMPLE_PAGES = ("broucke",)
+# The example pages are attached to each GitHub Release and are not tracked in git. When Read the Docs sets the READTHEDOCS
+# environment variable, fetch_example_pages() downloads the pages and posters of the latest release from the release download
+# URLs, which work without a token or an API call. A local build stays offline unless TYCHO_DOCS_EXAMPLES=1 is set.
+RELEASE_ASSETS = "https://github.com/beeson-group/tycho/releases/latest/download/"
+
+
+def fetch_example_pages(dest: Path) -> None:
+    """Downloads the page and the poster of each example from the latest GitHub Release into dest, skipping any that is missing."""
+    dest.mkdir(parents=True, exist_ok=True)
+    for name in [f"{page}.{ext}" for page in EXAMPLE_PAGES for ext in ("html", "png")]:
+        try:
+            with urllib.request.urlopen(RELEASE_ASSETS + name, timeout=300) as response:
+                (dest / name).write_bytes(response.read())
+        except OSError as error:  # a release does not exist yet, the asset is missing, or the network is down
+            logger.info("%s not fetched: %s", name, error)
+
+
+if os.environ.get("READTHEDOCS") == "True" or os.environ.get("TYCHO_DOCS_EXAMPLES") == "1":
+    fetch_example_pages(EXAMPLES)
+
 myst_substitutions = {
     "version": release,
     "scene_format": SCENE_FORMAT,
     "schema_link": f"[`schema/{SCENE_FORMAT}/scene.schema.json`](site:schema/{SCENE_FORMAT}/scene.schema.json)",
     "spec_link": f"[`schema/{SCENE_FORMAT}/tycho-scene.md`](site:schema/{SCENE_FORMAT}/tycho-scene.md)",
 }
+for _page in EXAMPLE_PAGES:
+    _path = EXAMPLES / f"{_page}.html"
+    if _path.is_file():
+        _bytes = _path.read_bytes()
+        tags.add(f"{_page}_page")
+        myst_substitutions[f"{_page}_size"] = f"{len(_bytes) / 1e6:.1f} MB"
+        myst_substitutions[f"{_page}_transfer"] = f"{len(gzip.compress(_bytes, 6)) / 1e6:.1f} MB"
+    else:
+        myst_substitutions[f"{_page}_size"] = myst_substitutions[f"{_page}_transfer"] = "unknown"
+    if (EXAMPLES / f"{_page}.png").is_file():
+        tags.add(f"{_page}_poster")
 
 # autodoc
 

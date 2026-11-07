@@ -277,13 +277,19 @@ class Track:
     def context(self, lap: int = 0) -> Context:
         """The context of every sample in lap ``lap`` of rule C6. Lap -1 is the shifted context of rule L2."""
 
-        def channel(name: str) -> np.ndarray | None:
-            values = self.channel(name)
-            if values is None or lap == 0:
-                return values
-            return values + lap * (values[-1] - values[0])
+        return Context(self.attrs, lambda name: _raised(self.channel(name), lap), self.m)
 
-        return Context(self.attrs, channel, self.m)
+    def sample_context(self, lap: int, sample: int, n: int) -> Context:
+        """The context of sample ``sample`` in lap ``lap``, repeated for ``n`` points.
+
+        A layer in the driver's context reads its points in this context (rule L6).
+        """
+
+        def channel(name: str) -> np.ndarray | None:
+            values = _raised(self.channel(name), lap)
+            return None if values is None else np.full(n, values[sample])
+
+        return Context(self.attrs, channel, n)
 
     def clock_values(self, name: str) -> np.ndarray:
         """The clock channel's values along the track, checked against rule T3."""
@@ -301,6 +307,13 @@ class Track:
         """The sample readings ``u_i`` of rule C1 for clock channel ``name``."""
         c = self.clock_values(name)
         return (c - c[0]) / (c[-1] - c[0])
+
+
+def _raised(values: np.ndarray | None, lap: int) -> np.ndarray | None:
+    """A channel's values raised by ``lap`` times its advance over one period (rule C6)."""
+    if values is None or lap == 0:
+        return values
+    return values + lap * (values[-1] - values[0])
 
 
 class SetData:
@@ -737,18 +750,22 @@ class _Panel:
             if layer.get(key, "clamp") not in ("clamp", "hidden"):
                 raise EvaluationError(f"C3: a track layer's {key} is {layer[key]!r}, not clamp or hidden")
         fraction = _fraction(layer) if reveal == "trail" else 0.0
+        context = layer.get("context", "own")
+        if context not in ("own", "driver"):
+            raise EvaluationError(f"L6: a track layer's context is {context!r}, not own or driver")
         # under rule C5, a reading is not taken on a track drawn whole and never hidden, whose track set need not carry the clock channels
         hides = self.reading.mode == "value" and "hidden" in (layer.get("before"), layer.get("after"))
         reads = reveal != "none" or head or hides
         laps = self.reading.laps
         if reads and laps > 1 and not data.periodic:
             raise EvaluationError(f"C6: a reading is taken on track set {data.id!r}, which is not periodic, and the clock has {laps} laps")
+        at = self.driver_point() if context == "driver" and self.driver is not None else None
         members = []
         for i in self.members(layer["members"], data):
             track = data.track(i)
             entry: dict[str, Any] = {"index": i}
             u = self.clamped(track, layer) if reads else 0.0
-            if u is None:
+            if u is None or (context == "driver" and at is None):
                 entry["line"] = []
                 if head:
                     entry["head"] = None
@@ -763,16 +780,42 @@ class _Panel:
             else:
                 vertices = trail(u_samples, loop_reading, laps, fraction, track.periodic)
 
-            def positions(lap: int, t: Track = track) -> np.ndarray:
-                return self.ev.tree.transform(t.positions, data.frame, self.frame, t.context(lap))
+            if at is not None:
+                table = _every_lap(self.in_driver_context(track.positions, data.frame, at))
+            else:
 
-            table = _by_lap(positions)
+                def positions(lap: int, t: Track = track) -> np.ndarray:
+                    return self.ev.tree.transform(t.positions, data.frame, self.frame, t.context(lap))
+
+                table = _by_lap(positions)
             entry["line"] = resolve_vertices(vertices, table)
             if head:
                 j, within = lap_of(loop_reading, laps)
                 entry["head"] = resolve_vertices([("blend", *segment(u_samples, within), j)], table)[0]
             members.append(entry)
         return {"kind": "track", "set": data.id, "members": members}
+
+    def driver_point(self) -> tuple[Track, np.ndarray, float, int, int, float]:
+        """The driver's track, its sample readings, its loop reading, and the lap, segment, and weight of the point at the reading.
+
+        A body layer and a layer in the driver's context lack before and after, thus the reading is clamped (rules L4 and L6).
+        """
+        assert self.driver is not None
+        data, k_member = self.driver
+        track = data.track(k_member)
+        loop_reading = self.reading.laps * min(max(self.reading.of(track), 0.0), 1.0)
+        u_samples = track.sample_readings(self.reading.channel)
+        j, within = lap_of(loop_reading, self.reading.laps)
+        k, w = segment(u_samples, within)
+        return track, u_samples, loop_reading, j, k, w
+
+    def in_driver_context(self, points: np.ndarray, src: str, at: tuple[Track, np.ndarray, float, int, int, float]) -> np.ndarray:
+        """Points of frame ``src`` in the display frame, in the blended context of the driver's point ``at`` (rules L4 and L6)."""
+        track, _, _, j, k, w = at
+        n = len(points)
+        a = self.ev.tree.transform(points, src, self.frame, track.sample_context(j, k, n))
+        b = self.ev.tree.transform(points, src, self.frame, track.sample_context(j, k + 1, n))
+        return (1.0 - w) * a + w * b
 
     def body_layer(self, layer: Mapping[str, Any]) -> dict[str, Any]:
         body = layer.get("body")
@@ -785,17 +828,11 @@ class _Panel:
             if fraction is not None:
                 out["trail"] = []
             return out
-        data, k_member = self.driver
-        track = data.track(k_member)
-        # a body layer lacks before and after, thus the reading of the driver is clamped
-        u = min(max(self.reading.of(track), 0.0), 1.0)
+        track, u_samples, loop_reading, j, k, w = self.driver_point()
         laps = self.reading.laps
-        loop_reading = laps * u
-        u_samples = track.sample_readings(self.reading.channel)
         tree = self.ev.tree
         table = _by_lap(lambda lap: tree.body_position(body, self.frame, track.context(lap)))
-        j, within = lap_of(loop_reading, laps)
-        out["position"] = resolve_vertices([("blend", *segment(u_samples, within), j)], table)[0]
+        out["position"] = resolve_vertices([("blend", k, w, j)], table)[0]
         if fraction is not None:
             out["trail"] = resolve_vertices(trail(u_samples, loop_reading, laps, fraction, track.periodic), table)
         return out
@@ -822,6 +859,11 @@ def sparse(tracks: int, n: int) -> list[int]:
     if out[-1] != tracks - 1:
         out.append(tracks - 1)
     return out
+
+
+def _every_lap(positions: np.ndarray) -> Callable[[int], np.ndarray]:
+    """A table of positions that is the same in every lap, as for a layer in the driver's context (rule L6)."""
+    return lambda _lap: positions
 
 
 def _by_lap(compute: Callable[[int], np.ndarray]) -> Callable[[int], np.ndarray]:

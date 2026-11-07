@@ -18,7 +18,9 @@ import {
   type Reveal,
   type TrackGeometry,
 } from '../src/runtime/geometry';
+import { driverMatrix, planPanel } from '../src/runtime/renderer';
 import type { Layer, Scene, State, TrackLayer } from '../src/scene';
+import type * as THREE from 'three';
 import { corpusNames, loadCorpus } from './corpus';
 
 const names = corpusNames();
@@ -111,6 +113,24 @@ function drawn(g: TrackGeometry, t: number, rev: Reveal, u: ArrayLike<number>): 
 
 const key = (segments: Vec3[][]): string[] => segments.map((s) => JSON.stringify(s)).sort();
 
+/** A point of a layer's own frame in the display frame, by the model matrix of a layer in the driver's context (rule L6). */
+const apply = (m: THREE.Matrix4, p: Vec3): Vec3 => {
+  const e = m.elements;
+  return [0, 1, 2].map((r) => e[r]! * p[0] + e[4 + r]! * p[1] + e[8 + r]! * p[2] + e[12 + r]!) as Vec3;
+};
+
+/** Whether the segments match the wanted ones one to one, each point within the tolerance, in any order. */
+function sameSegments(segments: Vec3[][], want: Vec3[][], tol = 1e-12): boolean {
+  if (segments.length !== want.length) return false;
+  const free = want.map(() => true);
+  const near = (a: Vec3[], b: Vec3[]) => a.every((p, i) => p.every((x, c) => Math.abs(x - b[i]![c]!) <= tol));
+  return segments.every((s) => {
+    const j = want.findIndex((w, i) => free[i] && near(s, w));
+    if (j >= 0) free[j] = false;
+    return j >= 0;
+  });
+}
+
 /** Readings as the GPU stores them, one per sample, read back from the pair layout. */
 function float32Readings(g: TrackGeometry, u: Float64Array): Float32Array {
   const pairs = pairReadings(g.set, u);
@@ -166,10 +186,19 @@ describe('reveal, pieces, and the GPU comparison give the evaluator line (C3, L1
                 const scope: PanelScope = { scene, state, panel: panel! };
                 const defs = scene.views[panel!.view]!.layers.filter((l) => layerVisible(scope, l));
                 const res = result.panels[pid]!;
+                const plan = planPanel(scene, geo, state, pid);
+                const env: LayerEnv = { scope, frames: geo.frames, clock: scene.clock, channel: state.clock.channel, q, display: res.frame };
                 defs.forEach((def, li) => {
                   const r = res.layers[li] as TrackLayerResult;
                   if (def.kind !== 'track' || r.set === null) return;
-                  const g = geo.geometry(r.set, res.frame);
+                  // a layer in the driver's context is drawn from its own frame by a model matrix, and is hidden without a driver (rule L6)
+                  const own = def.context === 'driver' ? scene.track_sets[r.set]!.frame : null;
+                  if (own !== null && plan.driver === null) {
+                    for (const m of r.members) expect([m.line, m.head ?? null]).toEqual([[], null]);
+                    return;
+                  }
+                  const model = own === null ? null : driverMatrix(env, own, plan.driver!);
+                  const g = geo.geometry(r.set, own ?? res.frame);
                   const reads = needsReading(def, scene.clock) ? geo.readings(r.set, state.clock.channel) : null;
                   const u = reads ?? geo.readings(r.set, '@index');
                   const gpuU = rounding === 'float32' ? float32Readings(g, u.u) : u.u;
@@ -181,11 +210,19 @@ describe('reveal, pieces, and the GPU comparison give the evaluator line (C3, L1
                     if (rev.hidden) seen.hidden++;
                     seen.pieces += rev.pieces.length;
                     const want = m.line.slice(1).map((p, j) => [m.line[j]!, p]);
-                    expect(key(drawn(g, m.index, rev, gpuU)), `${pid} layer ${li} member ${m.index} frame ${i}`).toEqual(key(want));
+                    const where = `${pid} layer ${li} member ${m.index} frame ${i}`;
+                    if (model === null) expect(key(drawn(g, m.index, rev, gpuU)), where).toEqual(key(want));
+                    else {
+                      const segments = drawn(g, m.index, rev, gpuU).map((s) => s.map((p) => apply(model, p)));
+                      expect(sameSegments(segments, want), where).toBe(true);
+                    }
                     if (hasHead(def)) {
-                      const head = rev.head === null ? null : ([0, 0, 0] as Vec3);
+                      let head = rev.head === null ? null : ([0, 0, 0] as Vec3);
                       if (head !== null) g.vertex(m.index, rev.head!, head);
-                      expect(head).toEqual(m.head);
+                      if (head !== null && model !== null) {
+                        head = apply(model, head);
+                        expect(sameSegments([[head]], [[m.head!]]), where).toBe(true);
+                      } else expect(head).toEqual(m.head);
                     }
                     compared++;
                   }

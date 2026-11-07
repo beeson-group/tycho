@@ -1809,6 +1809,56 @@ export class StageRenderer {
   }
 
   /**
+   * Draws every panel of `state` at progress `q` in [0, 1) on a stage of `width` by `height` CSS
+   * pixels. A frame index i sits at q = i / steps, and playback draws between two of them. Returns the
+   * message of every panel that could not be drawn.
+   */
+  renderAt(state: State, q: number, width: number, height: number, pixelRatio: number): Map<string, string> {
+    const w = Math.max(1, Math.floor(width));
+    const h = Math.max(1, Math.floor(height));
+    if (w !== this.size.w || h !== this.size.h || pixelRatio !== this.size.ratio) {
+      this.gl.setPixelRatio(pixelRatio);
+      this.gl.setSize(w, h, false);
+      this.size = { w, h, ratio: pixelRatio };
+    }
+    const tiles = tile(state.layout, { x: 0, y: 0, w, h }, GUTTER);
+    for (const p of [...this.panels.values()]) if (!Object.hasOwn(state.panels, p.id)) this.disposePanel(p);
+    const replan = state !== this.lastState;
+    this.lastState = state;
+    const errors = new Map<string, string>();
+
+    this.gl.setScissorTest(false);
+    this.gl.setClearColor(this.background, 1);
+    this.gl.clear();
+    this.gl.setScissorTest(true);
+    for (const [pid, rect] of tiles.panels) {
+      const p = this.panel(pid);
+      const replanned = replan || p.plan === null;
+      if (replanned) this.replan(p, state);
+      const resized = rect.w !== p.rect.w || rect.h !== p.rect.h;
+      p.rect = rect;
+      this.advance(p, state, q);
+      if (p.needsFit || (resized && !p.userMoved)) this.fit(p);
+      else if (resized) this.aspect(p);
+      this.follow(p);
+      if (p.error !== null) {
+        errors.set(pid, p.error);
+        continue;
+      }
+      if (rect.w < 1 || rect.h < 1) continue;
+      for (const d of p.draws.values()) d.resize?.(rect.w, rect.h);
+      const y = h - rect.y - rect.h;
+      this.gl.setViewport(rect.x, y, rect.w, rect.h);
+      this.gl.setScissor(rect.x, y, rect.w, rect.h);
+      this.drawStatic(p);
+      this.gl.render(p.scene, p.camera);
+      this.placeLabels(p);
+    }
+    this.gl.setScissorTest(false);
+    return errors;
+  }
+
+  /**
    * The labels of a panel at the last frame, in CSS pixels from the panel's corner. They are the tick
    * numbers and axis titles of a plane camera, the axis titles at the tips of axes laid out from the
    * box, and the body labels beside their discs.
@@ -1882,5 +1932,17 @@ export class StageRenderer {
       span.style.fontSize = it.kind === 'title' ? '13px' : '';
       span.style.transform = `translate(${it.x.toFixed(1)}px, ${it.y.toFixed(1)}px)${it.rotate ? ' rotate(-90deg)' : ''} translate(${shift}, -50%)`;
     });
+  }
+
+  dispose(): void {
+    for (const p of [...this.panels.values()]) this.disposePanel(p);
+    if (this.refineTimer !== null) clearTimeout(this.refineTimer);
+    this.blit.material.dispose();
+    this.underlay?.dispose();
+    this.scratch?.dispose();
+    this.ctx.disc.dispose();
+    this.gl.dispose();
+    // free the context now rather than at collection, since a page may hold only a few
+    this.gl.forceContextLoss();
   }
 }

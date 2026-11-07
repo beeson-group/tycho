@@ -200,6 +200,153 @@ def rotating_loop():
     write("rotating-loop", doc, w, cases)
 
 
+def value_clock():
+    """A value clock over ragged tracks, a decreasing channel, hidden and clamp, a nearest tie, tags, and a toggle."""
+    w = ContainerWriter(generator=f"pytycho {pytycho.__version__}, spec/conformance/generate.py")
+    w.add_view("a/offsets", np.array([0, 5, 8]), dtype="uint32")
+    w.add_view("a/positions", np.array([[0, 0], [1, 0], [2, 0], [3, 0], [4, 0], [0, 1], [1, 1], [2, 1]], dtype=np.float64))
+    w.add_view("a/t", np.array([4.0, 3, 2, 1, 0, 2, 3, 4]))
+    w.add_view("a/p", np.array([0.0, 0.5]))
+    w.add_view("b/offsets", np.array([0, 2]), dtype="uint32")
+    w.add_view("b/positions", np.array([[0.0, 2.0, 1.0], [1.0, 2.0, 1.0]]))
+    w.add_view("b/t", np.array([0.0, 1.0]))
+    w.add_view("b/p", np.array([1.0]))
+
+    def tset(sid, tracks):
+        return {
+            "frame": "plane",
+            "tags": {"family": sid},
+            "tracks": tracks,
+            "offsets": f"{sid}/offsets",
+            "positions": f"{sid}/positions",
+            "channels": {"t": {"view": f"{sid}/t"}},
+            "parameters": {"p": {"view": f"{sid}/p"}},
+        }
+
+    doc = {
+        "format": "tycho-scene",
+        "version": "0.2",
+        "generator": w.generator,
+        "frames": {"plane": {}},
+        "track_sets": {"a": tset("a", 2), "b": tset("b", 1)},
+        "variables": {
+            "fam": {"kind": "choice", "values": ["a", "b"], "default": "a", "scope": "scene"},
+            "sel": {"kind": "selector", "by": "nearest", "parameter": "p", "default": 0.25, "scope": "scene"},
+            "show": {"kind": "toggle", "default": False, "scope": "panel"},
+        },
+        "clock": {"mode": "value", "channels": ["t"], "steps": 8, "range": [-1.0, 7.0]},
+        "views": {
+            "v": {
+                "frame": "plane",
+                "driver": {"sets": {"tags": {"family": {"var": "fam"}}}, "member": {"var": "sel"}},
+                "layers": [
+                    {
+                        "kind": "track",
+                        "sets": {"tags": {"family": {"var": "fam"}}},
+                        "members": "all",
+                        "reveal": "grow",
+                        "head": True,
+                        "before": "hidden",
+                        "after": "hidden",
+                    },
+                    {
+                        "kind": "track",
+                        "sets": {"tags": {"family": {"var": "fam"}}},
+                        "members": {"var": "sel"},
+                        "reveal": "grow",
+                        "head": True,
+                    },
+                    {
+                        "kind": "track",
+                        "sets": {"tags": {"family": {"var": "fam"}}},
+                        "members": "all",
+                        "reveal": "none",
+                        "visible": {"var": "show"},
+                    },
+                ],
+            }
+        },
+        "initial": {"variables": {}, "clock": {"channel": "t"}, "panels": {"p1": {"view": "v"}}, "layout": {"kind": "panel", "id": "p1"}},
+    }
+
+    def state(fam="a", show=False):
+        return {
+            "variables": {"fam": fam},
+            "clock": {"channel": "t"},
+            "panels": {"p1": {"view": "v", "variables": {"show": show}}},
+            "layout": {"kind": "panel", "id": "p1"},
+        }
+
+    cases = []
+    # frame 2 has v = 1. track 0 runs t from 4 down to 0, thus u = 0.75 falls on sample 3. track 1 starts at t = 2, hence u = -0.5
+    grow = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0], [3.0, 0.0, 0.0]]
+    cases.append(
+        {
+            "name": "value mode, decreasing channel at an exact sample, hidden before, nearest tie to index 0",
+            "source": "analytic",
+            "state": state(),
+            "frame_index": 2,
+            "tolerance": TOL,
+            "expected": {
+                "panels": {
+                    "p1": {
+                        "frame": "plane",
+                        "layers": [
+                            {
+                                "kind": "track",
+                                "set": "a",
+                                "members": [{"index": 0, "line": grow, "head": grow[-1]}, {"index": 1, "line": [], "head": None}],
+                            },
+                            {"kind": "track", "set": "a", "members": [{"index": 0, "line": grow, "head": grow[-1]}]},
+                        ],
+                    }
+                }
+            },
+        }
+    )
+    # frame 6 has v = 5, at which track 0 reads u = -0.25. it is hidden in the first layer and clamped to its first sample in the second
+    cases.append(
+        {
+            "name": "value mode, before the track, hidden and clamp",
+            "source": "analytic",
+            "state": state(),
+            "frame_index": 6,
+            "tolerance": TOL,
+            "expected": {
+                "panels": {
+                    "p1": {
+                        "frame": "plane",
+                        "layers": [
+                            {
+                                "kind": "track",
+                                "set": "a",
+                                "members": [{"index": 0, "line": [], "head": None}, {"index": 1, "line": [], "head": None}],
+                            },
+                            {"kind": "track", "set": "a", "members": [{"index": 0, "line": [[0.0, 0.0, 0.0]], "head": [0.0, 0.0, 0.0]}]},
+                        ],
+                    }
+                }
+            },
+        }
+    )
+    data = w.to_bytes()
+    for fam in ("a", "b"):
+        for show in (False, True):
+            for i in range(8):
+                s = state(fam, show)
+                cases.append(
+                    {
+                        "name": f"family {fam}, show {show}, frame {i}",
+                        "source": "reference",
+                        "state": s,
+                        "frame_index": i,
+                        "tolerance": TOL,
+                        "expected": evaluate(doc, data, s, i),
+                    }
+                )
+    write("value-clock", doc, w, cases)
+
+
 def containers():
     """The same views written twice, with the encodings the writer picks and all raw, for a reader to decode bit for bit."""
     rng = np.random.default_rng(78)
@@ -241,4 +388,5 @@ def containers():
 
 if __name__ == "__main__":
     rotating_loop()
+    value_clock()
     containers()

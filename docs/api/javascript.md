@@ -41,22 +41,29 @@ The page can also load the runtime as a classic script, which is a `<script>` el
 ## The element
 
 ```html
-<tycho-viewer scene="#tycho-scene" data="#tycho-data"></tycho-viewer>
-<script type="application/octet-stream" id="tycho-scene" data-encoding="base64">eyJmb3JtYXQiOi...</script>
-<script type="application/octet-stream" id="tycho-data" data-encoding="base64">VFlDRAMAAAA...</script>
+<tycho-viewer>
+<script type="application/octet-stream" data-tycho="scene" data-encoding="base64">eyJmb3JtYXQiOi...</script>
+<script type="application/octet-stream" data-tycho="data" data-encoding="base64">VFlDRAEAAAA...</script>
+</tycho-viewer>
 ```
 
 | Attribute | Value |
 |---|---|
-| `scene` | a CSS selector, e.g. `#tycho-scene`, of a `<script type="application/octet-stream">` element holding `scene.tys` as base64 text. The browser treats a script of this type as data and does not run it |
-| `data` | a CSS selector of such an element holding `data.tyd` |
-| `kiosk` | present or absent, whatever its value. When present, the viewer hides every control and plays at once, which suits a slide, and it neither restores nor stores the state |
+| `scene` | a URL of `scene.tys`, or a CSS selector of a block, i.e. of a `<script type="application/octet-stream">` element holding `scene.tys` as base64 text. The browser treats a script of this type as data and does not run it |
+| `data` | a URL of `data.tyd`, or a CSS selector of such a block |
+| `theme` | `dark` or `light`, a built-in palette that replaces the theme of the scene. The viewer follows a later change of this attribute |
+| `autoplay` | present or absent, whatever its value. When present, the viewer plays once the scene is loaded and the element is visible |
+| `kiosk` | present or absent, whatever its value. When present, the viewer hides every control and plays as with `autoplay`, which suits a slide, and it neither restores nor stores the state |
+
+The viewer takes each file from its child block marked `data-tycho="scene"` or `data-tycho="data"`, else from the attribute, else from the block with the id `tycho-scene` or `tycho-data`. A page can thus hold several viewers, each with its child blocks. Under `prefers-reduced-motion: reduce`, neither `autoplay` nor `kiosk` starts the clock, and the controls still work.
 
 The `data-encoding` of each script is `base64`, which is the default and the only encoding, since the views of the container are already compressed. The viewer inflates (decompresses) these views with the browser's `DecompressionStream`.
 
 The viewer looks up the selectors first in its root node, which is the document or the shadow root that contains it, and then in the document. A shadow root is the hidden subtree of another custom element, in which the viewer may be placed. The scripts may come after the element, since a viewer that connects while the document is still loading waits until the whole document has been parsed.
 
-The attributes are read once, when the element connects, which happens when it is inserted into the document. A later change of an attribute does not load another scene, and the method `load` below serves for this instead. Since the viewer fills its CSS box (the rectangle that the layout of the page gives it), it must be given a size. The pages written by pytycho give it one with `tycho-viewer { display: block; width: 100%; height: 100%; }`.
+Apart from `theme`, the attributes are read once, when the element connects, which happens when it is inserted into the document. A later change of an attribute does not load another scene, and the method `load` below serves for this instead. Since the viewer fills its CSS box (the rectangle that the layout of the page gives it), it must be given a size. The pages written by pytycho give it one with `tycho-viewer { display: block; width: 100%; height: 100%; }`.
+
+The custom properties `--tycho-background`, `--tycho-foreground`, and `--tycho-grid` of the host take precedence over the theme. Text in HTML inherits the font of the host, and text on a canvas, i.e. in a video export, is set in `--tycho-font` when this property is set. The clock runs only while the element intersects the viewport and the page is visible, and it resumes from where it paused. A key that the viewer uses does not reach the page, so that a deck does not also navigate.
 
 The element is a `TychoViewerElement`, with the methods and properties below.
 
@@ -65,6 +72,7 @@ The element is a `TychoViewerElement`, with the methods and properties below.
 | `load(sceneText, dataBytes)` | loads a scene from the text of `scene.tys` and the bytes of `data.tyd`, in place of the attributes, and returns a promise that resolves once the scene or its error shows. A load begun later takes precedence over one still decoding, whose result is then dropped |
 | `state` | the current state snapshot of section 2.8 of the spec, which holds the panels and their layout, the values of the variables, and the clock channel. It is `null` before a scene loads |
 | `play()`, `pause()` | starts and stops the clock, and does not do anything before a scene loads |
+| `playing` | whether the clock is set to run, which stays true while the clock waits for the element to be shown |
 | `reset()` | returns to the initial state of the scene and discards the stored state |
 | `fitAll()` | fits the camera of every panel to what the panel draws, panning and zooming each panel until its content fills it |
 | `exportVideo(options)` | records a video of the current state, as described below |

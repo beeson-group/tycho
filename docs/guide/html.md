@@ -32,7 +32,9 @@ A page embeds in another page, on a website or on a reveal.js slide, through an 
 <iframe src="loop.html" style="width: 100%; height: 600px; border: 0"></iframe>
 ```
 
-The call `write_html(path, kiosk=True)` writes a kiosk page, i.e. a page meant for a slide. A kiosk page hides the top bar, the panel headers, the caption's tiles, and the footer, and it plays at once. The keys still play, step, and reset the views ([keys](panels.md#keys)). A kiosk page starts from the scene's initial state every time and does not store anything. To put the viewer element in a page you write yourself, instead of an iframe, use the npm package ([JavaScript API](../api/javascript.md)).
+The call `write_html(path, kiosk=True)` writes a kiosk page, i.e. a page meant for a slide. A kiosk page hides the top bar, the panel headers, the caption's tiles, and the footer, and it plays at once. The keys still play, step, and reset the views ([keys](panels.md#keys)). A kiosk page starts from the scene's initial state every time and does not store anything.
+
+To put a scene on a slide without an iframe, paste the output of {func}`pytycho.build_embed` into the deck, and load the runtime from {func}`pytycho.html.runtime_js` once per deck. Each keyword of the call is an attribute of the viewer element, e.g. `theme="dark"` or `autoplay=True`, and a deck can hold several viewers. To put the viewer element in a page you write yourself, use the npm package ([JavaScript API](../api/javascript.md)).
 
 ## The video export
 

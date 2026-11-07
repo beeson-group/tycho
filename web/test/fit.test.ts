@@ -2,6 +2,10 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { TychoError } from '../src/errors';
+import { progress } from '../src/evaluate/clock';
+import { evaluate } from '../src/evaluate/index';
+import type { LayerEnv } from '../src/evaluate/layers';
+import type { TrackLayerResult } from '../src/evaluate/types';
 import { members, sparse } from '../src/evaluate/resolve';
 import type { SetData } from '../src/evaluate/sets';
 import { sceneTheme } from '../src/runtime/colors';
@@ -21,7 +25,7 @@ import {
   type TrackPlan,
 } from '../src/runtime/renderer';
 import { withVariable } from '../src/runtime/state';
-import type { State, TrackLayer } from '../src/scene';
+import type { Camera, State, TrackLayer } from '../src/scene';
 import { loadCorpus } from './corpus';
 
 const broucke = () => {
@@ -292,5 +296,68 @@ describe('the static-layer cache sees every camera change', () => {
     cam.lookAt(1, 0, 0);
     expect(cameraMoved(cam, seen)).toBe(true);
     expect(cameraMoved(cam, seen)).toBe(false);
+  });
+});
+
+describe('a track layer in the driver context (L6)', () => {
+  const c = loadCorpus('driver-context');
+  const geometry = new GeometryCache(c.scene, c.data);
+  const ctx = { scene: c.scene, geometry, shared: new Shared(), theme: sceneTheme(c.scene), disc: new THREE.Texture() };
+  const grid = (scene: typeof c.scene, st: State) => {
+    const plan = planPanel(scene, geometry, st, 'p1');
+    const layer = plan.layers.find((l) => l.kind === 'track' && l.index === 0) as TrackPlan & { set: SetData };
+    const env = (q: number): LayerEnv => ({
+      scope: plan.scope,
+      frames: geometry.frames,
+      clock: scene.clock,
+      channel: st.clock.channel,
+      q,
+      display: plan.display,
+    });
+    return { plan, layer, env };
+  };
+  for (const camera of [{ kind: 'plane', plane: 'xy' }, { kind: 'orbit' }] as Camera[]) {
+    it(`is drawn from its own frame by a model matrix where the evaluator draws it, inside the fit, under a ${camera.kind} camera`, () => {
+      const scene = structuredClone(c.scene);
+      scene.views.v!.camera = camera;
+      const own = geometry.geometry('grid', 'pulsating').positions;
+      for (const frame of ['pulsating', 'rotating', 'inertial', 'inertial-m1']) {
+        const st = withVariable(scene, scene.initial, 'frame', frame, 'p1');
+        const { plan, layer, env } = grid(scene, st);
+        expect(layer.context).toBe('driver');
+        const draw = new TrackDraw(ctx, layer, plan.display, 'k');
+        expect(draw.isStatic).toBe(false);
+        const box = fitBox(plan, geometry)!;
+        for (let i = 0; i <= scene.clock.steps; i++) {
+          const q = progress(scene.clock.steps, i);
+          draw.update(layer, scene, q);
+          draw.place(env(q), plan.driver);
+          expect(draw.group.visible).toBe(true);
+          const want = (evaluate(scene, c.data, st, i).panels.p1!.layers[0] as TrackLayerResult).members.flatMap((m) => m.line);
+          expect(want.length).toBe(own.length / 3);
+          want.forEach((w, j) => {
+            const p = new THREE.Vector3(own[3 * j]!, own[3 * j + 1]!, own[3 * j + 2]!).applyMatrix4(draw.group.matrix);
+            [p.x, p.y, p.z].forEach((x, k) => {
+              expect(x).toBeCloseTo(w[k]!, 12);
+              expect(box[k]! - 1e-12 <= x && x <= box[k + 3]! + 1e-12, `${frame} frame ${i} vertex ${j}`).toBe(true);
+            });
+          });
+        }
+        draw.dispose();
+      }
+    });
+  }
+  it('is hidden, and is left out of the fit, when the driver does not match a set', () => {
+    const st = withVariable(c.scene, c.scene.initial, 'family', 'b');
+    const { plan, layer, env } = grid(c.scene, st);
+    expect(plan.driver).toBeNull();
+    const draw = new TrackDraw(ctx, layer, plan.display, 'k');
+    draw.update(layer, c.scene, 0.5);
+    draw.place(env(0.5), plan.driver);
+    expect(draw.group.visible).toBe(false);
+    const box = fitBox(plan, geometry)!;
+    const orbit = geometry.geometry('orbit', plan.display);
+    expect(box).toEqual(orbit.bounds());
+    draw.dispose();
   });
 });

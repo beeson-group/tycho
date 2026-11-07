@@ -1,0 +1,17 @@
+# Read the Docs serves the site at https://pytycho.readthedocs.io/. It builds the latest version on each push to
+# main, the stable version from the highest release tag, and a preview for each pull request, linked from its checks.
+# docs/conf.py puts src/ on the path, hence the build installs only the docs toolchain and NumPy, not the package.
+version: 2
+
+build:
+  os: ubuntu-24.04
+  tools:
+    python: "3.14"
+
+sphinx:
+  configuration: docs/conf.py
+  fail_on_warning: true
+
+python:
+  install:
+    - requirements: docs/requirements.txt

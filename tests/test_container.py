@@ -189,3 +189,33 @@ def test_d1_rejects_a_lossy_integer_cast():
         ContainerWriter().add_view("a", np.array([1.5, 2.0]), dtype="int32")
     with pytest.raises(ContainerError, match="D1"):
         ContainerWriter().add_view("a", np.array([-1]), dtype="uint32")
+
+
+def _one(array=None, **kwargs) -> bytes:
+    w = ContainerWriter(**kwargs)
+    w.add_view("a", np.zeros(4) if array is None else array)
+    return w.to_bytes()
+
+
+def test_d2_rejects_a_wrong_length_and_a_view_past_the_end():
+    data = _one(raw=True)
+    with pytest.raises(ContainerError, match="D2"):
+        Container(_patched(data, "a", length=24))
+    with pytest.raises(ContainerError, match="D2"):
+        Container(_patched(data, "a", offset=8))
+    with pytest.raises(ContainerError, match="D2"):
+        Container(_patched(data, "a", shape=[]))
+
+
+def test_d2_rejects_a_view_key_an_encoding_and_a_missing_key():
+    data = _one(raw=True)
+    with pytest.raises(ContainerError, match=r"D2: view 'a' has keys \['filters'\]"):
+        Container(_patched(data, "a", filters=["shuffle"]))
+    with pytest.raises(ContainerError, match=r"D2: view 'a' has keys \['chunk_rows'\]"):
+        Container(_patched(data, "a", chunk_rows=4))
+    with pytest.raises(ContainerError, match="D2: view 'a' has encoding 'zstd'"):
+        Container(_patched(data, "a", encoding="zstd"))
+    header = _header(data)
+    del header["views"]["a"]["length"]
+    with pytest.raises(ContainerError, match=r"D2: view 'a' lacks the keys \['length'\]"):
+        Container(_rebuilt(header, data[_payload_start(data) :]))

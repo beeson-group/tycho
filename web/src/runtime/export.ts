@@ -142,3 +142,32 @@ export function avcCodec(width: number, height: number, fps: number, profile: 'h
 export function exportBitrate(width: number, height: number, fps: number): number {
   return Math.round(Math.min(40e6, Math.max(1e6, 0.08 * width * height * fps)));
 }
+
+/**
+ * MP4 muxing of encoded H.264 chunks, through mp4-muxer's raw path, so that it runs without
+ * WebCodecs. The moov box goes before the media data.
+ */
+export class Mp4Writer {
+  private readonly muxer: Muxer<ArrayBufferTarget>;
+
+  constructor(width: number, height: number, fps: number) {
+    if (width % 2 !== 0 || height % 2 !== 0) throw new Error(`an MP4 export needs even sides, not ${width} by ${height}`);
+    this.muxer = new Muxer({ target: new ArrayBufferTarget(), video: { codec: 'avc', width, height, frameRate: fps }, fastStart: 'in-memory' });
+  }
+
+  /** Adds one encoded frame. Times are in microseconds. */
+  add(data: Uint8Array, key: boolean, timestamp: number, duration: number, meta?: EncodedVideoChunkMetadata): void {
+    const config = meta?.decoderConfig;
+    if (config !== undefined) {
+      if (!config.codec.startsWith('avc1.')) throw new Error(`an MP4 export holds H.264 only, not ${config.codec}`);
+      // an Annex B stream comes without the avcC record, and mp4-muxer would write it empty
+      if (config.description === undefined) throw new Error('the H.264 encoder did not give an avcC record. Configure it with avc: { format: "avc" }');
+    }
+    this.muxer.addVideoChunkRaw(data, key ? 'key' : 'delta', timestamp, duration, meta);
+  }
+
+  finish(): Uint8Array {
+    this.muxer.finalize();
+    return new Uint8Array(this.muxer.target.buffer);
+  }
+}

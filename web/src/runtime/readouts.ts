@@ -255,3 +255,41 @@ export function fpsTitle(report: FrameReport | null): string {
   const hz = Math.round(1000 / report.refresh);
   return `${report.drawn} frames drawn in the last second, ${report.late} late, on a display refreshing about ${hz} times a second`;
 }
+
+export type KeyAction = { kind: 'toggle' } | { kind: 'step'; by: number } | { kind: 'seek'; frame: number } | { kind: 'fit' } | { kind: 'slider'; by: number };
+
+/**
+ * The action of a key, following common video players. Space or k plays and pauses. The left and right
+ * arrows, or "," and ".", step one frame and pause, and ten with Shift. Home or 0 goes to frame 0, and a
+ * digit from 1 to 9 goes to as many tenths of the loop. The key f fits every panel. The up and down arrows
+ * step the first scene-scoped slider by one stop, or by ten with Shift.
+ */
+export function keyAction(key: string, shift: boolean, steps: number): KeyAction | null {
+  const n = shift ? 10 : 1;
+  switch (key) {
+    case ' ':
+    case 'k':
+    case 'K':
+      return { kind: 'toggle' };
+    case 'ArrowRight':
+    case '.':
+      return { kind: 'step', by: n };
+    case 'ArrowLeft':
+    case ',':
+      return { kind: 'step', by: -n };
+    case '>':
+      return { kind: 'step', by: 10 };
+    case '<':
+      return { kind: 'step', by: -10 };
+    case 'Home':
+      return { kind: 'seek', frame: 0 };
+    case 'f':
+    case 'F':
+      return { kind: 'fit' };
+    case 'ArrowUp':
+      return { kind: 'slider', by: n };
+    case 'ArrowDown':
+      return { kind: 'slider', by: -n };
+  }
+  return /^[0-9]$/.test(key) ? { kind: 'seek', frame: Math.round((steps * Number(key)) / 10) % steps } : null;
+}

@@ -111,3 +111,43 @@ describe('storage key', () => {
     expect(storageKey(text)).not.toBe(storageKey(`${text} `));
   });
 });
+
+describe('store and updates', () => {
+  it('notifies on a new snapshot, frame, or playing flag, and not on a no-op', () => {
+    const s = scene();
+    const store = new Store(s.initial, s.clock.steps);
+    const seen: string[] = [];
+    store.subscribe((c) => seen.push(c));
+    store.set(store.state);
+    store.setFrame(-1);
+    expect(store.frame).toBe(s.clock.steps - 1);
+    store.setFrame(s.clock.steps - 1);
+    store.setFrame(0.5);
+    store.setPlaying(true);
+    store.update((st) => withChannel(st, '@index'));
+    store.update((st) => withChannel(st, '@index'));
+    expect(seen).toEqual(['frame', 'playing', 'state']);
+  });
+
+  it('writes a panel-scoped value in the panel and a scene-scoped one in the scene, refusing what does not fit', () => {
+    const s = scene();
+    let st = withVariable(s, s.initial, 'frame', 'rot', 'p2');
+    expect(st.panels.p2!.variables).toEqual({ frame: 'rot', k: 2.5 });
+    expect(st.panels.p1).toBe(s.initial.panels.p1);
+    st = withVariable(s, st, 'e', 0.4, 'p1');
+    expect(st.variables).toEqual({ e: 0.4 });
+    expect(withVariable(s, st, 'frame', 'nowhere', 'p1')).toBe(st);
+    expect(withVariable(s, st, 'e', 'x')).toBe(st);
+    expect(withVariable(s, st, 'e', 0.4)).toBe(st);
+  });
+
+  it('closes a panel by collapsing its split, keeps the last one, and finds a free id', () => {
+    const s = scene();
+    const one = withoutPanel(s.initial, 'p1');
+    expect(Object.keys(one.panels)).toEqual(['p2']);
+    expect(one.layout).toEqual({ kind: 'panel', id: 'p2' });
+    expect(withoutPanel(one, 'p2')).toBe(one);
+    expect(newPanelId(s.initial)).toBe('p3');
+    expect(newPanelId(one)).toBe('p3');
+  });
+});

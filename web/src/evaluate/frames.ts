@@ -29,6 +29,23 @@ export function scalarValue(s: Scalar | ConstantScalar, ctx: Context): number {
   return ctx.set.channelAt(s.channel, ctx.track, ctx.sample, ctx.shifted, ctx.lap ?? 0);
 }
 
+/** Checks that `p` is a list of three constant scalars, and returns it (rules F2 and 2.4). */
+function point(p: unknown, what: string): ConstantScalar[] {
+  if (!Array.isArray(p) || p.length !== 3) fail('F2', `${what} is three scalars, not ${JSON.stringify(p)}`);
+  for (const s of p) if (s !== null && typeof s === 'object' && 'channel' in s) fail('F2', `${what} takes a number or an attribute, not a channel`);
+  return p as ConstantScalar[];
+}
+
+/** Right-handed rotation by `angle` about `axis` (rule F1), or its transpose. */
+function rotate(p: Vec3, axis: 'x' | 'y' | 'z', angle: number, transpose: boolean): Vec3 {
+  const c = Math.cos(angle);
+  const s = transpose ? -Math.sin(angle) : Math.sin(angle);
+  const [x, y, z] = p;
+  if (axis === 'z') return [c * x - s * y, s * x + c * y, z];
+  if (axis === 'x') return [x, c * y - s * z, s * y + c * z];
+  return [c * x + s * z, y, -s * x + c * z];
+}
+
 export class FrameTree {
   private readonly frames: Record<string, Frame | undefined>;
   private readonly depth = new Map<string, number>();
@@ -105,5 +122,99 @@ export class FrameTree {
     if (from === undefined) this.paths.set(a, (from = new Map()));
     from.set(b, found);
     return found;
+  }
+}
+
+/** Edge algebra over a scene's frames and bodies. */
+/** An edge as rule F1 applies it, with its origin checked once. */
+interface Edge {
+  parent: string;
+  origin: ConstantScalar[] | { body: string } | undefined;
+  rotation: Frame['rotation'];
+  scale: Scalar | undefined;
+}
+
+export class Frames {
+  readonly tree: FrameTree;
+  private readonly scene: Scene;
+  private readonly active = new Set<string>();
+  private readonly edges = new Map<string, Edge>();
+  private readonly bodies = new Map<string, NonNullable<NonNullable<Scene['bodies']>[string]>>();
+
+  constructor(scene: Scene) {
+    this.scene = scene;
+    this.tree = new FrameTree(scene.frames);
+  }
+
+  private body(bodyId: string): NonNullable<NonNullable<Scene['bodies']>[string]> {
+    const known = this.bodies.get(bodyId);
+    if (known !== undefined) return known;
+    const bodies = this.scene.bodies ?? {};
+    if (!Object.hasOwn(bodies, bodyId)) fail('2.4', `body ${JSON.stringify(bodyId)} is not declared`);
+    const body = bodies[bodyId]!;
+    if (!Object.hasOwn(this.scene.frames, body.frame)) fail('2.4', `body ${bodyId} is in frame ${JSON.stringify(body.frame)}, which is not declared`);
+    point(body.position, `the position of body ${bodyId}`);
+    this.bodies.set(bodyId, body);
+    return body;
+  }
+
+  private edgeOf(child: string): Edge {
+    let e = this.edges.get(child);
+    if (e === undefined) {
+      const f = this.tree.frame(child);
+      const origin = Array.isArray(f.origin) ? point(f.origin, `the origin of frame ${child}`) : f.origin;
+      e = { parent: f.parent!, origin, rotation: f.rotation, scale: f.scale };
+      this.edges.set(child, e);
+    }
+    return e;
+  }
+
+  /** Takes `p` from frame `from` to frame `to` in one context (rule F3). */
+  transform(p: Vec3, from: string, to: string, ctx: Context): Vec3 {
+    const { up, down } = this.tree.path(from, to);
+    let q = p;
+    for (const child of up) q = this.edge(child, q, ctx, true);
+    for (const child of down) q = this.edge(child, q, ctx, false);
+    return q;
+  }
+
+  /** A body's position in `frame` (section 2.4), with its attributes read from the context's track set. */
+  bodyPosition(bodyId: string, frame: string, ctx: Context): Vec3 {
+    const body = this.body(bodyId);
+    const p = body.position.map((s) => scalarValue(s, ctx)) as Vec3;
+    return this.transform(p, body.frame, frame, ctx);
+  }
+
+  /**
+   * Applies the edge from `child`'s parent to `child` (rule F1), or its inverse. Only an origin at
+   * a body evaluates further edges, hence only there can an edge meet itself (rule F6).
+   */
+  private edge(child: string, p: Vec3, ctx: Context, inverse: boolean): Vec3 {
+    const f = this.edgeOf(child);
+    let o: Vec3 = [0, 0, 0];
+    if (Array.isArray(f.origin)) o = [scalarValue(f.origin[0]!, ctx), scalarValue(f.origin[1]!, ctx), scalarValue(f.origin[2]!, ctx)];
+    else if (f.origin !== undefined) {
+      if (this.active.has(child)) fail('F6', `the origin of frame ${child} depends on itself`);
+      this.active.add(child);
+      try {
+        o = this.bodyPosition(f.origin.body, f.parent, ctx);
+      } finally {
+        this.active.delete(child);
+      }
+    }
+    const scale = f.scale === undefined ? 1 : scalarValue(f.scale, ctx);
+    if (scale === 0) fail('F2', `the scale of frame ${child} is zero`);
+    const rot = f.rotation;
+    const angle = rot === undefined ? 0 : scalarValue(rot.angle, ctx);
+    if (!inverse) {
+      // the forward edge gives p_child = s * R * (p_parent - o), with scale s, rotation R, and origin o
+      let d: Vec3 = [p[0] - o[0], p[1] - o[1], p[2] - o[2]];
+      if (rot !== undefined) d = rotate(d, rot.axis, angle, false);
+      return [scale * d[0], scale * d[1], scale * d[2]];
+    }
+    // the inverse edge gives p_parent = o + R^T * (p_child / s)
+    let d: Vec3 = [p[0] / scale, p[1] / scale, p[2] / scale];
+    if (rot !== undefined) d = rotate(d, rot.axis, angle, true);
+    return [o[0] + d[0], o[1] + d[1], o[2] + d[2]];
   }
 }

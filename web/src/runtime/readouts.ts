@@ -83,3 +83,70 @@ export function positionProgress(x: number, steps: number): number {
   const q = (((x % steps) + steps) % steps) / steps;
   return q < 1 ? q : 0;
 }
+
+/** The panel, the state, and the frame index through which a readout reads. A caption without a panel does not read anything. */
+export interface ReadoutContext {
+  scene: Scene;
+  geometry: GeometryCache;
+  state: State;
+  /** The panel whose driver and values the readout reads. */
+  panel: string;
+  frameIndex: number;
+  /** The progress at which the channel parts read, between two frame indices while playing. It defaults to frameIndex / steps. */
+  progress?: number;
+}
+
+type Part = Readout['parts'][number];
+
+/** The text of a readout. A part that the driver cannot give, because its query does not match any set, reads as a dash. */
+export function readoutText(ctx: ReadoutContext, parts: readonly Part[]): string {
+  return readoutPieces(ctx, parts).join('');
+}
+
+/** The text of each part of a readout, one per part, or an empty list when the panel is missing. */
+export function readoutPieces(ctx: ReadoutContext, parts: readonly Part[]): string[] {
+  const { scene, geometry, state } = ctx;
+  const panel = state.panels[ctx.panel];
+  if (panel === undefined || !Object.hasOwn(state.panels, ctx.panel)) return [];
+  const scope: PanelScope = { scene, state, panel };
+  const view = scene.views[panel.view]!;
+  const steps = scene.clock.steps;
+  const i = ((ctx.frameIndex % steps) + steps) % steps;
+  const q = ctx.progress ?? i / steps;
+  let driver: { setId: string; track: number } | null | undefined;
+  const getDriver = () => {
+    if (driver === undefined) {
+      const id = oneSet(scope, view.driver.sets);
+      driver = id === null ? null : { setId: id, track: driverMember(scope, view.driver.member, geometry.sets.get(id)) };
+    }
+    return driver;
+  };
+  const out: string[] = [];
+  for (const p of parts) {
+    if (typeof p === 'string') out.push(p);
+    else if ('clock' in p) out.push(String(p.clock === 'index' ? i : steps));
+    else if ('var' in p) {
+      const v = variableValue(scope, p.var);
+      const def = variableDef(scene, p.var);
+      if (typeof v === 'number') out.push(formatNumber(v, p.digits));
+      else if (typeof v === 'boolean') out.push(v ? 'on' : 'off');
+      else if (def?.kind === 'choice' && def.labels !== undefined) out.push(def.labels[def.values.indexOf(v)] ?? v);
+      else out.push(v);
+    } else {
+      const d = getDriver();
+      if (d === null) {
+        out.push('—');
+        continue;
+      }
+      const set = geometry.sets.get(d.setId);
+      if ('member' in p) out.push(formatNumber(set.parameter(p.member, '2.9')[d.track]!, p.digits));
+      else if ('attr' in p) out.push(formatNumber((p.factor ?? 1) * set.attr(p.attr) + (p.offset ?? 0), p.digits));
+      else {
+        const tc = geometry.readings(d.setId, state.clock.channel).clocks[d.track]!;
+        if (!set.hasChannel(p.channel)) fail('2.9', `track set ${d.setId} lacks channel ${JSON.stringify(p.channel)}`);
+        out.push(formatNumber(channelAtReading(set, tc, d.track, p.channel, scene.clock, q), p.digits));
+      }
+    }
+  }
+  return out;
+}

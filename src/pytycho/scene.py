@@ -1358,6 +1358,69 @@ class Scene:
                 through(d, body["frame"], f"body {layer['body']!r}", layer["body"])
         return out
 
+    def _check_control(self, control: Mapping[str, Any], combos: Callable[[set[str]], list[dict[str, str]]]) -> list[str]:
+        kind = {"slider": "selector", "tabs": "choice", "toggle": "toggle"}.get(control["kind"])
+        if kind is None:
+            return []
+        out = self._check_var(control["variable"], kind, f"2.9: a {control['kind']} control")
+        if out or control["kind"] != "slider":
+            return out
+        spec = self._variables[control["variable"]]
+        if spec.get("by", "nearest") != "nearest":
+            return [f"2.9: the slider over {control['variable']!r} needs a selector by nearest, and the selector is by index"]
+        out += self._check_query(control["domain"], "2.9: a slider's domain")
+        if out:
+            return out
+        for values in combos(self._choices_in(control["domain"])):
+            for ts in self._match(control["domain"], values):
+                if spec["parameter"] not in ts.parameters[0]:
+                    out.append(
+                        f"2.9: the slider over {control['variable']!r} has track set {ts.id!r} in its domain, "
+                        f"which lacks parameter {spec['parameter']!r}"
+                    )
+        return out
+
+    def _check_readout(
+        self,
+        readout: Mapping[str, Any],
+        state: Mapping[str, Any],
+        view_ok: Mapping[str, bool],
+        combos: Callable[[set[str]], list[dict[str, str]]],
+    ) -> list[str]:
+        """Checks section 2.9: a var part refers to a variable, and every possible driver's track set carries each driver-relative part."""
+        out = []
+        parts = [p for p in readout["parts"] if isinstance(p, Mapping)]
+        for part in parts:
+            if "var" in part:
+                out += self._check_var(part["var"], None, "2.9: a readout")
+        relative = [p for p in parts if any(k in p for k in ("member", "attr", "channel"))]
+        if not relative:
+            return out
+
+        def leaves(node: Mapping[str, Any]) -> list[str]:
+            return [node["id"]] if node["kind"] == "panel" else leaves(node["a"]) + leaves(node["b"])
+
+        panel_ids = list(state["panels"]) if readout["place"] == "panel" else leaves(state["layout"])[:1]
+        for pid in panel_ids:
+            panel = state["panels"].get(pid)
+            if panel is None or not view_ok.get(panel["view"], False):
+                continue
+            view = self._views[panel["view"]]
+            for values in combos(self._choices_in(view["driver"]["sets"])):
+                drivers, _ = self._driver_of(view, values, "")
+                if len(drivers) != 1:
+                    continue
+                ts = drivers[0]
+                where = f"the {readout['place']} readout through panel {pid!r}" + (f" with {values}" if values else "")
+                for part in relative:
+                    if "member" in part and part["member"] not in ts.parameters[0]:
+                        out.append(f"2.9: {where} names parameter {part['member']!r}, which track set {ts.id!r} lacks")
+                    if "attr" in part and part["attr"] not in ts.attrs:
+                        out.append(f"2.9: {where} names attribute {part['attr']!r}, which track set {ts.id!r} lacks")
+                    if "channel" in part and part["channel"] not in ts.channels[0]:
+                        out.append(f"2.9: {where} names channel {part['channel']!r}, which track set {ts.id!r} lacks")
+        return out
+
 
 def _edges_used(tree: FrameTree, src: str, dst: str, _stack: tuple[str, ...] = ()) -> set[str]:
     """The frames whose edge is evaluated to take a point from ``src`` to ``dst``, through body origins too."""

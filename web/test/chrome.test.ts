@@ -625,6 +625,18 @@ describe('a viewer embedded on a page, under a DOM stand-in', () => {
     return { v, host };
   }
 
+  /** A loaded viewer with a stand-in for its renderer and the subscription that start() makes. */
+  async function live(attributes: Record<string, string> = {}) {
+    const { text, bytes } = dressedBroucke();
+    const { v, host } = viewer(attributes);
+    await v.load(text, bytes);
+    v.unsubscribe = v.store.subscribe((c: string) => v.onChange(c));
+    v.onChange('state');
+    v.renderer = { setTheme: vi.fn(), renderAt: () => new Map(), refitAll: () => undefined };
+    v.syncShown();
+    return { v, host };
+  }
+
   const titled = (title: string) => JSON.stringify({ ...dressedBroucke().scene, title });
   const titleOf = (v: { titleEl: { textContent: string } }) => v.titleEl.textContent;
   const loaded = (v: { scene: unknown }) => vi.waitFor(() => expect(v.scene).not.toBeNull());
@@ -689,6 +701,75 @@ describe('a viewer embedded on a page, under a DOM stand-in', () => {
       await Promise.resolve();
       expect(shown(empty)).toBe('loading…');
       expect(empty.loading).toBe(false);
+    });
+  });
+
+  describe('the clock', () => {
+    const steps = (v: { scene: Scene }) => v.scene.clock.steps;
+
+    it('does not draw while the element is out of the viewport or the page is hidden', async () => {
+      const raf = vi.fn(() => 7);
+      g.requestAnimationFrame = raf;
+      const { v } = await live();
+      v.play();
+      expect(v.raf).toBe(7);
+      v.intersecting = false;
+      v.syncShown();
+      expect(v.raf).toBe(0);
+      raf.mockClear();
+      v.invalidate();
+      expect(raf).not.toHaveBeenCalled();
+      v.intersecting = true;
+      doc.hidden = true;
+      v.syncShown();
+      v.invalidate();
+      expect(raf).not.toHaveBeenCalled();
+      doc.hidden = false;
+      v.syncShown();
+      expect(raf).toHaveBeenCalledTimes(1);
+    });
+    it('resumes from where it paused, however long the element was away', async () => {
+      const { v } = await live();
+      v.play();
+      v.playProgress = 0.25;
+      v.intersecting = false;
+      v.syncShown();
+      expect(v.playing).toBe(true);
+      const before = performance.now();
+      v.intersecting = true;
+      v.syncShown();
+      expect(v.anchor.index).toBeCloseTo(0.25 * steps(v));
+      expect(v.anchor.time).toBeGreaterThanOrEqual(before);
+    });
+    it('resumes from a frame sought while away, rather than from the progress before it', async () => {
+      const { v } = await live();
+      v.play();
+      v.playProgress = 0.25;
+      v.intersecting = false;
+      v.syncShown();
+      v.seek(5);
+      v.intersecting = true;
+      v.syncShown();
+      expect(v.anchor.index).toBe(5);
+    });
+    it('plays on load with autoplay, and not without it', async () => {
+      expect((await live({ autoplay: '' })).v.playing).toBe(true);
+      expect((await live()).v.playing).toBe(false);
+    });
+    it('does not autoplay under reduced motion, keeps the first frame, and still plays on request', async () => {
+      (window as unknown as Record<string, unknown>).matchMedia = (q: string) => ({ matches: q === '(prefers-reduced-motion: reduce)' });
+      for (const attributes of [{ autoplay: '' }, { kiosk: '' }] as Record<string, string>[]) {
+        const { v } = await live(attributes);
+        expect(v.playing).toBe(false);
+        expect(v.store.frame).toBe(0);
+        v.play();
+        expect(v.playing).toBe(true);
+        v.pause();
+        expect(v.playing).toBe(false);
+      }
+    });
+    it('reports false before a scene loads', () => {
+      expect(viewer().v.playing).toBe(false);
     });
   });
 

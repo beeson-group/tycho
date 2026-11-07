@@ -13,7 +13,9 @@ which reports every failure at once.
 from __future__ import annotations
 
 import copy
+import json
 import math
+import os
 import re
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
@@ -23,6 +25,7 @@ import numpy as np
 from . import __version__
 from ._evaluate import Context, FrameTree
 from ._thin import select
+from .container import ContainerWriter
 
 ID = re.compile(r"[A-Za-z0-9_.-]+")
 HEX = re.compile(r"#[0-9a-fA-F]{6}")
@@ -1525,6 +1528,42 @@ class Scene:
                     if "channel" in part and part["channel"] not in ts.channels[0]:
                         out.append(f"2.9: {where} names channel {part['channel']!r}, which track set {ts.id!r} lacks")
         return out
+
+    def to_container(self) -> bytes:
+        """The data container, ``data.tyd``, as bytes."""
+        w = ContainerWriter(generator=f"pytycho {__version__}")
+        for ts in self._sets.values():
+            if not ts.positions:
+                raise SceneError(f"T1: track set {ts.id!r} does not have a track")
+            if ts.kept is not None and (bad := self._check_kept(ts)):
+                raise SceneError(bad[0])
+            positions, channels = ts._stored()
+            offsets = np.concatenate([[0], np.cumsum([len(p) for p in positions])])
+            w.add_view(f"{ts.id}/offsets", offsets, dtype="uint32")
+            w.add_view(f"{ts.id}/positions", np.vstack(positions), dtype=ts.dtype)
+            for n in channels[0]:
+                w.add_view(f"{ts.id}/channels/{n}", np.concatenate([c[n] for c in channels]), dtype=self._channel_dtype(ts, n))
+            for n in ts.parameters[0]:
+                w.add_view(f"{ts.id}/parameters/{n}", np.array([p[n] for p in ts.parameters]), dtype="float64")
+        return w.to_bytes()
+
+    def write(self, tys_path: str | os.PathLike[str], tyd_path: str | os.PathLike[str]) -> None:
+        """Writes ``scene.tys`` and ``data.tyd``, serializing both before opening either file."""
+        try:
+            text = json.dumps(self.to_document(), indent=1, ensure_ascii=False, allow_nan=False) + "\n"
+        except ValueError as exc:
+            raise SceneError(f"S4: {exc}") from None
+        data = self.to_container()
+        with open(tys_path, "w", encoding="utf-8") as fh:
+            fh.write(text)
+        with open(tyd_path, "wb") as fh:
+            fh.write(data)
+
+    def write_html(self, path: str | os.PathLike[str], *, kiosk: bool = False, runtime: str | None = None) -> dict[str, int]:
+        """Writes the scene as one self-contained page, and returns the stored size in bytes of every view and of the page."""
+        from .html import write_html
+
+        return write_html(path, self.to_document(), self.to_container(), kiosk=kiosk, runtime=runtime)
 
 
 def _edges_used(tree: FrameTree, src: str, dst: str, _stack: tuple[str, ...] = ()) -> set[str]:

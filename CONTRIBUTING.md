@@ -38,6 +38,13 @@ The GitHub Actions workflow `ci.yml` runs the same checks on every pull request 
 
 The script `web/scripts/frame-profile.mjs` measures what a frame of playback costs. The command `node web/scripts/frame-profile.mjs examples/broucke/broucke.html --set family=11 --set branch=apoapsis` times the frames that the page draws, in headless Chrome (Chrome without a window) on the GPU of the machine it runs on. Each `--set` fixes a scene-scoped variable of the page, here the family and the branch of the Broucke example. The option `--compare-cache` checks the static-layer cache against drawing every layer, by comparing the two sets of frames pixel by pixel. This cache holds the layers that do not move during playback, which are drawn once and copied back every frame. The option `--drag e:0:0.45` times a slider drag, i.e. 240 paused frames that move the selector `e`, the eccentricity, from 0 to 0.45. The timings rank costs and show regressions, rather than predict the frame rate of a display. The script requires Google Chrome and a built example page.
 
+The script `web/scripts/video.mjs` exports the video of a page with the viewer's `exportVideo`, in headless Chrome, and writes the MP4 and a poster, which is the last frame by default. The video of the manifolds example for a portrait zone of the talk template is exported from the slide variant of each mode, e.g. for the dark mode with the commands below. The font file is the Latin Modern Roman of the template, and for the light mode `light` is written in place of `dark`.
+
+```sh
+python examples/manifolds/build.py --slide dark
+node web/scripts/video.mjs examples/manifolds/manifolds-slide-dark.html manifolds-dark.mp4 --size 1200x1600 --dpr 2 --fps 60 --theme dark --font latin-modern-roman-400-normal.woff2
+```
+
 ## Changes
 
 Add a line for every user-visible change under `## [Unreleased]` in `CHANGELOG.md`, in the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) sections (Added, Changed, Deprecated, Removed, Fixed, and Security). This section becomes the notes of the next GitHub Release. A change to the scene format starts in `spec/`, with a conformance case that both evaluators pass, since the spec is the contract between pytycho and the runtime.

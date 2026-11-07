@@ -448,7 +448,8 @@ const DRIVER_FIT_BUDGET = 4_000_000;
 /**
  * The box of a layer in the driver's context, which holds its members as they are drawn at every sample of the
  * driver's track in every lap (rule L6). A point between two driver samples is a blend of the two images, and
- * the box holds it too. A large layer maps the corners of its box in its own frame instead, which bounds it.
+ * the box holds it too. For a layer of more than 8 points over the budget, the 8 corners of its box in its own frame are mapped instead,
+ * and their images bound it.
  */
 function driverFitBox(l: TrackPlan & { set: SetData }, driver: NonNullable<Driver>, display: string, geometry: GeometryCache, budget: number): Box6 {
   const frames = geometry.frames;
@@ -459,7 +460,8 @@ function driverFitBox(l: TrackPlan & { set: SetData }, driver: NonNullable<Drive
   const varies = frames.requirements(from, display).channels.size > 0;
   const m = varies ? driver.set.count(driver.track) : 1;
   let points = l.members.length === l.set.tracks ? own.positions : Float64Array.from(l.members.flatMap((t) => [...own.track(t, 0)]));
-  if ((points.length / 3) * m * (varies ? laps : 1) > budget) {
+  // points holds 3 numbers per point, and the 8 corners save work only on a layer of more than 8 points
+  if (points.length > 24 && (points.length / 3) * m * (varies ? laps : 1) > budget) {
     const [x0, y0, z0, x1, y1, z1] = own.bounds();
     points = Float64Array.from([x0, y0, z0, x1, y0, z0, x0, y1, z0, x1, y1, z0, x0, y0, z1, x1, y0, z1, x0, y1, z1, x1, y1, z1]);
   }

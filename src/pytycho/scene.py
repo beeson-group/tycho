@@ -536,6 +536,50 @@ def grid(labels: bool | None = None, visible: Any = None) -> dict[str, Any]:
     return _check_layer(layer)
 
 
+def split(dir: str, ratio: float, a: Any, b: Any) -> dict[str, Any]:
+    """A layout split. A leaf is a panel id."""
+    return _node({"kind": "split", "dir": dir, "ratio": ratio, "a": a, "b": b})
+
+
+def _node(value: Any) -> dict[str, Any]:
+    if isinstance(value, str):
+        return {"kind": "panel", "id": _check_id(value, "2.8: a panel id")}
+    if isinstance(value, Mapping) and value.get("kind") == "panel" and set(value) == {"kind", "id"}:
+        return _node(value["id"])
+    if isinstance(value, Mapping) and value.get("kind") == "split" and set(value) == {"kind", "dir", "ratio", "a", "b"}:
+        ratio = _finite(value["ratio"], "2.8: a split ratio")
+        if not 0.0 < ratio < 1.0:
+            raise SceneError(f"2.8: a split ratio is {ratio}, not in (0, 1)")
+        return {
+            "kind": "split",
+            "dir": _enum(value["dir"], ("row", "col"), "2.8: a split direction"),
+            "ratio": ratio,
+            "a": _node(value["a"]),
+            "b": _node(value["b"]),
+        }
+    raise SceneError(f"2.8: a layout node is a panel id or a split, not {value!r}")
+
+
+def _camera(value: Mapping[str, Any]) -> dict[str, Any]:
+    if not isinstance(value, Mapping):
+        raise SceneError(f"2.7: a camera is a dict, not {value!r}")
+    kind = _enum(value.get("kind"), ("plane", "orbit"), "2.7: a camera kind")
+    out: dict[str, Any] = {"kind": kind}
+    if kind == "plane":
+        allowed = {"kind", "plane"}
+        if "plane" in value:
+            out["plane"] = _enum(value["plane"], ("xy", "xz", "yz"), "2.7: a camera plane")
+    else:
+        allowed = {"kind", "projection", "up"}
+        if "projection" in value:
+            out["projection"] = _enum(value["projection"], ("orthographic", "perspective"), "2.7: a camera projection")
+        if "up" in value:
+            out["up"] = _enum(value["up"], ("x", "y", "z"), "2.7: a camera up axis")
+    if extra := set(value) - allowed:
+        raise SceneError(f"2.7: a {kind} camera has unknown keys {sorted(extra)}")
+    return out
+
+
 # track sets
 
 

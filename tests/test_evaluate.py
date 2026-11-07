@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from pytycho._evaluate import evaluate
 from pytycho.container import ContainerWriter
@@ -101,3 +102,32 @@ def test_value_mode_hidden_and_clamp():
     out = evaluate(doc, data, state("t"), 3)["panels"]["p"]["layers"]
     assert out[0]["members"][0] == {"index": 0, "line": [], "head": None}
     assert out[1]["members"][0]["head"] == [2.0, 0.0, 0.0]
+
+
+def test_v2_more_than_one_match_is_an_error():
+    pts = np.array([[0.0, 0, 0], [1.0, 0, 0]])
+    doc, data = scene(pts, {}, frames={"root": {}}, layers=[])
+    doc["track_sets"]["s"]["tags"] = {"a": "x"}
+    doc["track_sets"]["t"] = dict(doc["track_sets"]["s"])
+    doc["views"]["v"]["layers"] = [{"kind": "track", "sets": {"tags": {"a": "x"}}, "members": "all"}]
+    with pytest.raises(ValueError, match="V2"):
+        evaluate(doc, data, state(), 0)
+
+
+def test_c5_a_track_drawn_whole_needs_no_clock_channel():
+    pts = np.array([[0.0, 0, 0], [1.0, 0, 0], [2.0, 0, 0]])
+    layers = [{"kind": "track", "sets": {"set": "u"}, "members": "all"}]
+    doc, data = scene(pts, {"t": [0.0, 1.0, 2.0]}, frames={"root": {}}, layers=layers, mode="value", steps=4, rng=[0.0, 4.0])
+    doc["clock"]["channels"] = ["t"]
+    # the driver's track set s carries t. the drawn track set u does not, and is drawn whole
+    doc["track_sets"]["u"] = {k: v for k, v in doc["track_sets"]["s"].items() if k != "channels"}
+    assert len(evaluate(doc, data, state("t"), 1)["panels"]["p"]["layers"][0]["members"][0]["line"]) == 3
+    for reads in ({"head": True}, {"reveal": "grow"}, {"before": "hidden"}):
+        doc["views"]["v"]["layers"] = [{**layers[0], **reads}]
+        with pytest.raises(ValueError, match="C5"):
+            evaluate(doc, data, state("t"), 1)
+    # the driver is resolved for every panel, hence its track set must carry the clock channels too
+    doc["views"]["v"]["layers"] = []
+    doc["views"]["v"]["driver"] = {"sets": {"set": "u"}, "member": {"index": 0}}
+    with pytest.raises(ValueError, match="C5"):
+        evaluate(doc, data, state("t"), 1)

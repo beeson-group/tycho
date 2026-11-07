@@ -102,3 +102,120 @@ float alphaOf(float tr) {
   return uKernel == 1 ? texelFetch(uAlphas, texelOf(tr), 0).x : uOpacity;
 }
 `;
+
+/**
+ * A corner of a segment's quad, where position.x is the side, -1 or 1, and position.y the end, 0 or 1.
+ * In a perspective view, a segment reaching behind the camera is first trimmed to end between the
+ * camera plane and the near plane, as LineMaterial in three.js does, so that its screen direction stays
+ * meaningful. A segment wholly behind the camera is not drawn.
+ */
+const QUAD_GLSL = /* glsl */ `
+uniform vec2 uResolution;
+void trimSegment(const in vec4 start, inout vec4 end) {
+  float nearEstimate = -0.5 * projectionMatrix[3][2] / projectionMatrix[2][2];
+  float alpha = (nearEstimate - start.z) / (end.z - start.z);
+  end.xyz = mix(start.xyz, end.xyz, alpha);
+}
+vec4 corner(vec3 a, vec3 b, float w) {
+  vec4 va = modelViewMatrix * vec4(a, 1.0);
+  vec4 vb = modelViewMatrix * vec4(b, 1.0);
+  if (projectionMatrix[2][3] == -1.0) {
+    if (va.z >= 0.0 && vb.z >= 0.0) return ${HIDDEN};
+    if (va.z < 0.0 && vb.z >= 0.0) trimSegment(va, vb);
+    else if (vb.z < 0.0 && va.z >= 0.0) trimSegment(vb, va);
+  }
+  vec4 ca = projectionMatrix * va;
+  vec4 cb = projectionMatrix * vb;
+  vec2 d = (cb.xy / cb.w - ca.xy / ca.w) * uResolution;
+  float len = length(d);
+  vec2 dir = len > 1e-9 ? d / len : vec2(1.0, 0.0);
+  vec2 nrm = vec2(-dir.y, dir.x);
+  vec4 c = position.y > 0.5 ? cb : ca;
+  c.xy += nrm * position.x * w / uResolution * c.w;
+  return c;
+}
+`;
+
+/** A GL line per segment. Its two vertices are 2j and 2j + 1, hence the parity of a vertex gives its end. */
+const NARROW_VERTEX =
+  REVEAL_GLSL +
+  /* glsl */ `
+#ifdef USE_TRACK_COLOR
+attribute vec3 tcolor;
+#endif
+uniform vec3 uColor;
+varying vec4 vColor;
+void main() {
+  vec4 r = texelFetch(uRanges, texelOf(track), 0);
+  if (!revealed(r)) {
+    vColor = vec4(0.0);
+    gl_Position = ${HIDDEN};
+    return;
+  }
+  float s = along(r, gl_VertexID % 2 == 1 ? useg.y : useg.x);
+#ifdef USE_TRACK_COLOR
+  vec3 rgb = tcolor;
+#else
+  vec3 rgb = uColor;
+#endif
+  vColor = vec4(rgb, alphaOf(track) * mix(uTaperOpacity, 1.0, s));
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+const WIDE_VERTEX =
+  REVEAL_GLSL +
+  QUAD_GLSL +
+  /* glsl */ `
+attribute vec3 instanceStart;
+attribute vec3 instanceEnd;
+#ifdef USE_TRACK_COLOR
+attribute vec3 colorStart;
+attribute vec3 colorEnd;
+#endif
+uniform vec3 uColor;
+uniform float uWidth;
+uniform float uTaperWidth;
+varying vec4 vColor;
+void main() {
+  vec4 r = texelFetch(uRanges, texelOf(track), 0);
+  if (!revealed(r)) {
+    vColor = vec4(0.0);
+    gl_Position = ${HIDDEN};
+    return;
+  }
+  bool atEnd = position.y > 0.5;
+  float s = along(r, atEnd ? useg.y : useg.x);
+#ifdef USE_TRACK_COLOR
+  vec3 rgb = atEnd ? colorEnd : colorStart;
+#else
+  vec3 rgb = uColor;
+#endif
+  vColor = vec4(rgb, alphaOf(track) * mix(uTaperOpacity, 1.0, s));
+  gl_Position = corner(instanceStart, instanceEnd, uWidth * mix(uTaperWidth, 1.0, s));
+}
+`;
+
+const PIECE_VERTEX =
+  QUAD_GLSL +
+  /* glsl */ `
+attribute vec3 instanceStart;
+attribute vec3 instanceEnd;
+attribute vec4 colorStart;
+attribute vec4 colorEnd;
+attribute float widthStart;
+attribute float widthEnd;
+varying vec4 vColor;
+void main() {
+  bool atEnd = position.y > 0.5;
+  vColor = atEnd ? colorEnd : colorStart;
+  gl_Position = corner(instanceStart, instanceEnd, atEnd ? widthEnd : widthStart);
+}
+`;
+
+const FRAGMENT = /* glsl */ `
+varying vec4 vColor;
+void main() {
+  gl_FragColor = vColor;
+}
+`;

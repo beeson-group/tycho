@@ -172,3 +172,33 @@ def test_v3_a_count_steps_by_the_rounded_ratio_and_keeps_the_last_track():
     assert sparse(7, 3) == [0, 2, 4, 6]
     assert sparse(1, 1) == [0]
     assert len(sparse(915, 40)) == 41
+
+
+def test_l3_a_head_object_gives_the_same_point_as_true():
+    pts = np.array([[0.0, 0, 0], [1.0, 0, 0], [3.0, 0, 0]])
+    layers = [
+        {"kind": "track", "sets": {"set": "s"}, "members": "all", "reveal": "grow", "head": True},
+        {"kind": "track", "sets": {"set": "s"}, "members": "all", "head": {"color": "#f0e442", "size": 9}},
+    ]
+    doc, data = scene(pts, {}, frames={"root": {}}, layers=layers)
+    # with the clock reading q = 3/8 and the sample readings u_i = i/2, the reading lies at weight 0.75 between samples 0 and 1
+    out = evaluate(doc, data, state(), 3)["panels"]["p"]["layers"]
+    assert out[1]["members"][0]["head"] == out[0]["members"][0]["head"] == [0.75, 0.0, 0.0]
+
+
+def test_c6_one_lap_is_the_trail_of_rule_l2_and_n_laps_raise_the_channels():
+    frames = {"root": {}, "inertial": {"parent": "root", "rotation": {"axis": "z", "angle": {"channel": "a"}}}}
+    pts = np.array([[1.0, 0, 0], [0.0, 1, 0], [-1.0, 0, 0], [0.0, -1, 0], [1.0, 0, 0]])
+    angle = np.array([0.0, 0.5, 1.0, 1.5, 2.5])
+    layers = [{"kind": "track", "sets": {"set": "s"}, "members": "all"}]
+    doc, data = scene(pts, {"a": angle}, frames=frames, periodic=True, layers=layers, frame="inertial")
+    one = evaluate(doc, data, state(), 1)["panels"]["p"]["layers"][0]["members"][0]["line"]
+    doc["clock"]["laps"] = 4
+    four = evaluate(doc, data, state(), 1)["panels"]["p"]["layers"][0]["members"][0]["line"]
+    assert len(one) == 5
+    assert len(four) == 4 * 4 + 1
+    np.testing.assert_allclose(four[:4], one[:4], atol=1e-15)
+    np.testing.assert_allclose(four[-1], rz(angle[-1] + 3 * 2.5) @ pts[-1], atol=1e-13)
+    doc["clock"]["laps"] = 2.0
+    with pytest.raises(ValueError, match="C6"):
+        evaluate(doc, data, state(), 1)

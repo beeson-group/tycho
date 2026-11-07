@@ -160,3 +160,46 @@ def _point(values: Any, what: str) -> list[Any]:
     if isinstance(values, (str, bytes, Mapping)) or not isinstance(values, (Sequence, np.ndarray)) or len(values) != 3:
         raise SceneError(f"F2: {what} is {values!r}, not three scalars")
     return [_scalar(v, what, constant=True) for v in values]
+
+
+# handles
+
+
+class Frame:
+    """A declared frame."""
+
+    def __init__(self, fid: str) -> None:
+        self.id = fid
+
+
+class Body:
+    """A declared body."""
+
+    def __init__(self, bid: str) -> None:
+        self.id = bid
+
+
+class Variable:
+    """A declared variable."""
+
+    def __init__(self, vid: str, kind: str) -> None:
+        self.id, self.kind = vid, kind
+
+    def to_json(self) -> dict[str, Any]:
+        return {"var": self.id}
+
+
+def _id(value: Any) -> str:
+    return value.id if isinstance(value, (Frame, Body, Variable, TrackSet)) else value
+
+
+def _var(value: Any, what: str, kind: str | None = None) -> dict[str, Any]:
+    """The reference ``{"var": id}`` to a variable given as a handle or an id.
+
+    A handle of the wrong kind fails here, and an id of the wrong kind fails at the write.
+    """
+    if isinstance(value, Variable):
+        if kind is not None and value.kind != kind:
+            raise SceneError(f"{what} names {value.id!r}, which is a {value.kind}, not a {kind}")
+        return value.to_json()
+    return {"var": _check_id(value, what)}

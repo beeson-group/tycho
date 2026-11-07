@@ -81,3 +81,45 @@ describe('orthoFit', () => {
     }
   });
 });
+
+describe('lazy geometry and per-track buffers', () => {
+  it('one track transformed alone equals its slice of the whole track set, shifted too', () => {
+    const c = broucke();
+    const fresh = new GeometryCache(c.scene, c.data).geometry('family-7-apoapsis', 'inertial-m1');
+    const whole = c.geometry.geometry('family-7-apoapsis', 'inertial-m1');
+    const set = whole.set;
+    for (let t = 0; t < set.tracks; t++) {
+      const s = set.start(t);
+      const m = set.count(t);
+      expect(Array.from(fresh.track(t, true))).toEqual(Array.from(whole.shifted!.subarray(3 * s, 3 * (s + m))));
+      expect(Array.from(fresh.track(t, false))).toEqual(Array.from(whole.positions.subarray(3 * s, 3 * (s + m))));
+    }
+  });
+  it('a track pass draws the same pairs as its part of the whole-set pass', () => {
+    const c = broucke();
+    const g = c.geometry.geometry('family-8-apoapsis', 'rotating');
+    const set = g.set;
+    const all = pairs(set, g.positions, 3);
+    const u = c.geometry.readings(set.id, 'time').u;
+    const allU = pairReadings(set, u);
+    for (let t = 0; t < set.tracks; t++) {
+      const j = set.start(t) - t;
+      const m = set.count(t);
+      expect(Array.from(slicePairs(g.track(t, false), 3, 0, m))).toEqual(Array.from(all.subarray(6 * j, 6 * (j + m - 1))));
+      expect(Array.from(readingPairs(u, set.start(t), m))).toEqual(Array.from(allU.subarray(4 * j, 4 * (j + m - 1))));
+    }
+  });
+  it('a taper reads the head at the reading and a wrapped tail one fraction behind', () => {
+    const c = broucke();
+    const set = c.geometry.sets.get('family-7-periapsis');
+    const layer: TrackLayer = { kind: 'track', sets: { set: set.id }, members: 'all', reveal: 'trail', trail: { fraction: 0.4 }, head: true };
+    const tc = c.geometry.readings(set.id, 'true_anomaly').clocks[1]!;
+    for (const q of [0.1, 0.25, 0.7]) {
+      const rev = revealTrack(tc, c.scene.clock, q, revealSpec(layer, true));
+      expect(rev.reading).toBe(q);
+      expect(vertexReading(tc, rev.head!)).toBeCloseTo(q, 12);
+      expect(vertexReading(tc, rev.pieces[0]![0])).toBeCloseTo(q - 0.4, 12);
+      expect(vertexReading(tc, rev.pieces[rev.pieces.length - 1]![1])).toBeCloseTo(q, 12);
+    }
+  });
+});

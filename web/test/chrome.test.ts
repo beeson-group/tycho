@@ -350,4 +350,231 @@ describe('the chrome under a DOM stand-in', () => {
       dropText({ kind: 'panel' }, 'bottom'),
     ]).toEqual(['split right', 'replace', 'swap', 'move below']);
   });
+
+  it('builds the shell of a scene: top bar, Add panel group, panel headers, stat tiles, capsules, and the export disclosure', async () => {
+    const g = globalThis as Record<string, unknown>;
+    g.VideoEncoder = class {};
+    g.VideoFrame = class {};
+    try {
+      const { scene, text, bytes } = dressedBroucke();
+      const doc = g.document as { activeElement: unknown };
+      const hostEvents = new FakeElement(g.document as never, 'tycho-viewer');
+      const v = new TychoViewerElement() as any;
+      Object.assign(v, {
+        shadowRoot: null,
+        isConnected: false,
+        style: hostEvents.style,
+        hasAttribute: () => false,
+        getAttribute: () => null,
+        addEventListener: hostEvents.addEventListener.bind(hostEvents),
+        attachShadow: () => {
+          const r = new FakeElement(g.document as never, '#shadow-root');
+          Object.defineProperty(r, 'activeElement', { get: () => doc.activeElement });
+          v.shadowRoot = r;
+          return r;
+        },
+      });
+      await v.load(text, bytes);
+      // the next two lines do what start() does once a renderer exists
+      v.unsubscribe = v.store.subscribe((c: string) => v.onChange(c));
+      v.onChange('state');
+      const shadow = v.shadowRoot as FakeElement;
+      const root = byClass(shadow, 'root')[0]!;
+      const one = (cls: string, under: FakeElement = root) => {
+        const found = byClass(under, cls);
+        expect(found, cls).toHaveLength(1);
+        return found[0]!;
+      };
+      expect(hostEvents.style['--accent']).toBe('#f0a050');
+
+      // the top bar holds the title, the scene variables as label and control, then Add panel
+      const header = byTag(root, 'header')[0]!;
+      expect(header.childNodes.map((c) => (c.tagName === 'H1' ? 'h1' : c.className))).toEqual(['h1', 'vars', 'add']);
+      expect(byTag(header, 'h1')[0]!.textContent).toBe('Broucke families, mini');
+      const vars = one('vars');
+      expect(vars.getAttribute('aria-label')).toBe('Scene');
+      expect(byClass(vars, 'field').map((f) => byClass(f, 'k')[0]!.textContent)).toEqual(['family', 'branch', 'eccentricity']);
+      const add = one('add');
+      expect(add.getAttribute('aria-label')).toBe('Add panel');
+      expect(byClass(add, 'k')[0]!.textContent).toBe('Add panel');
+      const chips = byClass(add, 'chip');
+      expect(chips.map((c) => byClass(c, 'lbl')[0]!.textContent)).toEqual([
+        'rotating-pulsating',
+        'rotating',
+        'barycentric-inertial',
+        'inertial-m1',
+        'inertial-m2',
+      ]);
+      expect(
+        chips.every((c) => byClass(c, 'body')[0]!.getAttribute('role') === 'button' && byClass(c, 'caret')[0]!.getAttribute('aria-haspopup') === 'menu'),
+      ).toBe(true);
+
+      // a panel header holds the frame chip with its value list over the caret, reset view, and close, and it does not show a title when the scene has one view
+      const panels = byClass(root, 'panel');
+      expect(panels.map((p) => p.dataset.id)).toEqual(['pulsating', 'inertial']);
+      const head = one('phead', panels[0]);
+      expect(one('t', head).hidden).toBe(true);
+      const hchip = one('chip', head);
+      expect(one('lbl', hchip).textContent).toBe('rotating-pulsating');
+      const select = byTag(hchip, 'select')[0]!;
+      expect([select.getAttribute('aria-label'), select.value, select.options.length]).toEqual(['frame', 'rotating-pulsating', 5]);
+      expect(byClass(head, 'icon').map((b) => b.getAttribute('aria-label'))).toEqual(['Reset view', 'Close panel']);
+      expect(byClass(head, 'seg')).toHaveLength(0);
+      select.value = 'inertial-m1';
+      select.dispatchEvent({ type: 'change' });
+      expect(v.state.panels.pulsating.variables.frame).toBe('inertial-m1');
+      expect(one('lbl', hchip).textContent).toBe('inertial-m1');
+      const preadout = one('stack', panels[0]);
+      expect(byTag(preadout, 'dt').map((d) => d.textContent)).toEqual(['true anomaly']);
+      expect(one('u', preadout).textContent).toBe('rad');
+
+      // the caption shows as stat tiles, with the constant last
+      const stats = one('stats');
+      expect(byTag(stats, 'dt').map((d) => d.textContent)).toEqual(['e', 'mu']);
+      fillReadout(v.captions[0], v.pieces('pulsating', v.captions[0].parts));
+      expect(byTag(stats, 'b').map((b) => b.textContent)).toEqual([
+        formatNumber(Number(byTag(stats, 'b')[0]!.textContent.replace('−', '-')), 4),
+        formatNumber(0.012155, 6),
+      ]);
+
+      // the footer holds the Playback, View, and Export capsules and does not have step buttons. the frame-rate counter shows dashes while paused
+      const caps = byClass(root, 'cap');
+      expect(caps.map((c) => c.getAttribute('aria-label'))).toEqual(['Playback', 'View', 'Export']);
+      const play = one('play', caps[0]);
+      expect(play.getAttribute('aria-label')).toBe('Play (k)');
+      expect(byTag(caps[0]!, 'input').map((i) => i.type)).toEqual(['range']);
+      expect(one('fps', caps[0]).textContent).toBe('–– fps');
+      // the frame counter reserves "dd / dd" for 64 steps, so that its width stays the same once the index reaches two digits
+      expect([scene.clock.steps, one('frame', caps[0]).style.minWidth]).toEqual([64, '7ch']);
+      expect(byTag(caps[0]!, 'button').map((b) => b.getAttribute('aria-label') ?? b.textContent)).toEqual(['Play (k)', 'true_anomaly', 'time', '@index']);
+      expect(byTag(caps[1]!, 'button').map((b) => b.getAttribute('aria-label'))).toEqual(['Reset every view', 'Reset scene']);
+      expect(byClass(caps[1]!, 'i-house')).toHaveLength(1);
+
+      // k plays, a digit seeks to as many tenths of the loop, and Shift with the right arrow steps ten frames and pauses
+      const key = (k: string, shiftKey = false) =>
+        v.onKey({ key: k, shiftKey, metaKey: false, ctrlKey: false, altKey: false, preventDefault() {}, composedPath: () => [v] });
+      key('k');
+      expect(v.store.playing).toBe(true);
+      expect([play.getAttribute('aria-label'), play.classList.contains('on'), byClass(play, 'i-pause').length]).toEqual(['Pause (k)', true, 1]);
+      key('5');
+      expect(v.store.frame).toBe(32);
+      key('ArrowRight', true);
+      expect([v.store.frame, v.store.playing]).toEqual([42, false]);
+      expect(one('fps', caps[0]).textContent).toBe('–– fps');
+
+      // the export controls sit behind a disclosure that keeps its label and closes by its x button or by Esc
+      const disclose = one('disclose', caps[2]);
+      const bar = one('exportbar');
+      expect([disclose.textContent, disclose.getAttribute('aria-expanded'), disclose.getAttribute('aria-controls'), bar.id, bar.hidden]).toEqual([
+        'Export video',
+        'false',
+        'xbar',
+        'xbar',
+        true,
+      ]);
+      disclose.click();
+      expect([disclose.textContent, disclose.getAttribute('aria-expanded'), bar.hidden]).toEqual(['Export video', 'true', false]);
+      // the export opens at one loop and the highest rate that fits, and both are chosen again after a change of speed
+      const [fpsSelect, loopsSelect] = byTag(bar, 'select').filter((s) => ['Frame rate', 'Loops'].includes(s.getAttribute('aria-label')!));
+      expect([fpsSelect!.value, loopsSelect!.value]).toEqual(['60', '1']);
+      expect(one('info', bar).textContent).toMatch(/^480 frames, 8\.0 s at 1× speed$/);
+      fpsSelect!.value = '24';
+      loopsSelect!.value = '3';
+      const speedSelect = byTag(caps[0]!, 'select').find((s) => s.getAttribute('aria-label') === 'Playback speed')!;
+      speedSelect.value = '4';
+      speedSelect.dispatchEvent({ type: 'change' });
+      expect([fpsSelect!.value, loopsSelect!.value, one('info', bar).textContent]).toEqual(['60', '1', '120 frames, 2.0 s at 4× speed']);
+      speedSelect.value = '1';
+      speedSelect.dispatchEvent({ type: 'change' });
+      byClass(bar, 'icon')
+        .find((b) => b.getAttribute('aria-label') === 'Close export options')!
+        .click();
+      expect([disclose.getAttribute('aria-expanded'), bar.hidden]).toEqual(['false', true]);
+      disclose.click();
+      key('Escape');
+      expect([disclose.getAttribute('aria-expanded'), bar.hidden]).toEqual(['false', true]);
+
+      // a bar chip's caret opens the placement menu, whose items are the keyboard route to a drop
+      const caret = one('caret', chips[1]);
+      caret.click();
+      const menu = one('menu');
+      expect(caret.getAttribute('aria-expanded')).toBe('true');
+      const items = byTag(menu, 'button');
+      expect(items.map((b) => b.textContent)).toEqual([
+        'Add panel',
+        'Split inertial-m1 right',
+        'Split inertial-m1 below',
+        'Replace inertial-m1',
+        'Split barycentric-inertial right',
+        'Split barycentric-inertial below',
+        'Replace barycentric-inertial',
+      ]);
+      expect(items.every((b) => b.getAttribute('role') === 'menuitem')).toBe(true);
+      items[5]!.click();
+      expect(byClass(root, 'menu')).toHaveLength(0);
+      expect(caret.getAttribute('aria-expanded')).toBe('false');
+      const st = v.state as State;
+      expect(Object.keys(st.panels).sort()).toEqual(['inertial', 'p3', 'pulsating']);
+      expect(st.panels.p3!.variables!.frame).toBe('rotating');
+      caret.click();
+      key('Escape');
+      expect(byClass(root, 'menu')).toHaveLength(0);
+
+      // on a narrow bar the chips would wrap, hence one Add panel menu button stands in for them
+      const addChips = byClass(add, 'chip');
+      addChips[addChips.length - 1]!.offsetTop = 30;
+      addChips[0]!.offsetHeight = 24;
+      v.fitAddGroup();
+      const fallback = byTag(add, 'button').find((b) => b.className === 'btn')!;
+      expect([one('chips', add).hidden, fallback.hidden, fallback.textContent]).toEqual([true, false, 'Add panel']);
+      fallback.click();
+      expect(byTag(one('menu'), 'button').map((b) => b.textContent)).toEqual([
+        'rotating-pulsating',
+        'rotating',
+        'barycentric-inertial',
+        'inertial-m1',
+        'inertial-m2',
+      ]);
+      byTag(one('menu'), 'button')[4]!.click();
+      expect(Object.keys((v.state as State).panels)).toHaveLength(4);
+
+      // dragging a colorbar keyed on eccentricity, or using the keyboard on it, sets the scene-scoped eccentricity selector `e`
+      const bars: Colorbar[] = [{ label: 'eccentricity', gradient: 'linear-gradient(red, blue)', stops: [], lo: 0, hi: 1, marker: 0.5, band: [0.4, 0.65] }];
+      v.renderer = { colorbars: () => bars, refit() {}, refitAll() {}, bind() {}, dispose() {} };
+      const dom = v.panelDom.get('pulsating');
+      v.syncBars('pulsating', dom);
+      const grad = one('cbar-g', panels[0]);
+      expect([grad.classList.contains('live'), grad.getAttribute('role'), grad.getAttribute('aria-label')]).toEqual([true, 'slider', 'eccentricity']);
+      // the kernel's band is shaded over the bar, and the marker sits above it
+      const band = one('cbar-k', grad);
+      expect(grad.children.map((c: FakeElement) => c.tagName.toLowerCase())).toEqual(['span', 'i']);
+      expect([band.hidden, band.style.bottom, band.style.height]).toEqual([false, '40.00%', '25.00%']);
+      bars[0]!.band = null;
+      v.syncBars('pulsating', dom);
+      expect(band.hidden).toBe(true);
+      bars[0]!.band = [0, 0.1];
+      v.syncBars('pulsating', dom);
+      expect([band.hidden, band.style.bottom, band.style.height]).toEqual([false, '0.00%', '10.00%']);
+      const pstate = v.state as State;
+      const stops = sliderStops(
+        { scene, state: pstate, panel: pstate.panels.pulsating! },
+        v.geometry.sets,
+        scene.controls![2] as Extract<Control, { kind: 'slider' }>,
+      );
+      expect(stops.length).toBeGreaterThan(1);
+      v.setFromBar('pulsating', dom.barDom[0], 1);
+      expect((v.state as State).variables!.e).toBe(stops[stops.length - 1]);
+      grad.dispatchEvent({ type: 'keydown', key: 'ArrowDown' });
+      expect((v.state as State).variables!.e).toBe(stops[stops.length - 2]);
+      grad.dispatchEvent({ type: 'keydown', key: 'Home' });
+      expect((v.state as State).variables!.e).toBe(stops[0]);
+      bars[0]!.label = 'something else';
+      v.syncBars('pulsating', dom);
+      expect([grad.classList.contains('live'), grad.getAttribute('role')]).toEqual([false, null]);
+      v.stop();
+    } finally {
+      delete g.VideoEncoder;
+      delete g.VideoFrame;
+    }
+  });
 });

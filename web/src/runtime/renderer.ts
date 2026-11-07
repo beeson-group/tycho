@@ -1177,3 +1177,130 @@ class BodyDraw implements Draw {
     }
   }
 }
+
+// axes and grid
+
+/**
+ * Lines of an axes or a grid layer. Under a plane camera, axes spanning the view and a grid that
+ * numbers its lines follow the visible rectangle and are laid out again whenever it moves. Every
+ * other mark is laid out from the fitted box: the grid in the view plane, and the three axes from
+ * the origin, both ways when they span the view.
+ */
+class MarkDraw implements Draw {
+  readonly key: string;
+  readonly group = new THREE.Group();
+  readonly kind: 'axes' | 'grid';
+  /** Laid out from the visible rectangle of a plane camera, on every camera change. */
+  readonly follows: boolean;
+  /** Axes drawn both ways through the origin. */
+  readonly full: boolean;
+  /** True when the mark gives tick numbers under a plane camera, i.e. for axes spanning the view or a grid with labels. */
+  readonly ticks: boolean;
+  private readonly theme: Theme;
+  private readonly lines: THREE.LineSegments;
+  private shown = '';
+  /** Axis tips, for the labels of axes laid out from the box. */
+  tips: THREE.Vector3[] = [];
+
+  constructor(ctx: DrawContext, layer: MarkLayer, cam: Camera, key: string) {
+    this.key = key;
+    this.kind = layer.kind;
+    this.theme = ctx.theme;
+    const plane = cam.kind === 'plane';
+    if (layer.kind === 'axes') {
+      this.full = (layer.span ?? (plane ? 'full' : 'positive')) === 'full';
+      this.ticks = plane && this.full;
+    } else {
+      this.full = false;
+      this.ticks = plane && (layer.labels ?? plane);
+    }
+    this.follows = this.ticks;
+    const mat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, depthTest: false, depthWrite: false });
+    this.lines = new THREE.LineSegments(new THREE.BufferGeometry(), mat);
+    this.lines.frustumCulled = false;
+    this.group.add(this.lines);
+  }
+
+  private set(pos: number[], col: number[]): void {
+    this.lines.geometry.dispose();
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 4));
+    this.lines.geometry = g;
+  }
+
+  layout(box: THREE.Box3, cam: Camera): void {
+    if (this.follows) return;
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    const ext = Math.max(size.x, size.y, size.z, 1e-9);
+    const pos: number[] = [];
+    const col: number[] = [];
+    const add = (a: THREE.Vector3, b: THREE.Vector3, rgb: Rgb, alpha: number) => {
+      pos.push(a.x, a.y, a.z, b.x, b.y, b.z);
+      col.push(...rgb, alpha, ...rgb, alpha);
+    };
+    if (this.kind === 'axes') {
+      const len = niceStep(ext, 2);
+      const fg = hexRgb(this.theme.foreground);
+      this.tips = [new THREE.Vector3(len, 0, 0), new THREE.Vector3(0, len, 0), new THREE.Vector3(0, 0, len)];
+      for (const tip of this.tips) add(this.full ? tip.clone().negate() : new THREE.Vector3(), tip, fg, 0.8);
+    } else {
+      const { right, up, normal } = cameraBasis(cam.kind === 'plane' ? cam : { kind: 'plane', plane: cam.up === 'x' ? 'yz' : cam.up === 'y' ? 'xz' : 'xy' });
+      const step = niceStep(ext, 8);
+      const grid = hexRgb(this.theme.grid);
+      const zero = hexRgb(mixHex(this.theme.grid, this.theme.foreground, 0.3));
+      const c0 = center.dot(right);
+      const c1 = center.dot(up);
+      // the grid lies at 0 along the normal axis when the data spans 0 there, else through the center of the data
+      const k = Math.abs(normal.x) > 0.5 ? 'x' : Math.abs(normal.y) > 0.5 ? 'y' : 'z';
+      const axis = new THREE.Vector3();
+      axis[k] = 1;
+      const depth = box.min[k] <= 0 && box.max[k] >= 0 ? 0 : center[k];
+      const reach = 2.5 * ext;
+      const i0 = Math.floor((c0 - reach) / step);
+      const i1 = Math.ceil((c0 + reach) / step);
+      const j0 = Math.floor((c1 - reach) / step);
+      const j1 = Math.ceil((c1 + reach) / step);
+      const at = (a: number, b: number) => right.clone().multiplyScalar(a).addScaledVector(up, b).addScaledVector(axis, depth);
+      for (let i = i0; i <= i1; i++) add(at(i * step, j0 * step), at(i * step, j1 * step), i === 0 ? zero : grid, 1);
+      for (let j = j0; j <= j1; j++) add(at(i0 * step, j * step), at(i1 * step, j * step), j === 0 ? zero : grid, 1);
+    }
+    this.set(pos, col);
+  }
+
+  /** Lays the lines out across a plane camera's visible rectangle, unless they are already laid out for it. */
+  follow(v: PlaneView, cam: Camera & { kind: 'plane' }): void {
+    if (!this.follows) return;
+    const key = [v.x0, v.x1, v.y0, v.y1, v.stepX, v.stepY].join(',');
+    if (key === this.shown) return;
+    this.shown = key;
+    const { right, up } = cameraBasis(cam);
+    const pos: number[] = [];
+    const col: number[] = [];
+    const add = (a0: number, b0: number, a1: number, b1: number, rgb: Rgb, alpha: number) => {
+      const p = right.clone().multiplyScalar(a0).addScaledVector(up, b0);
+      const q = right.clone().multiplyScalar(a1).addScaledVector(up, b1);
+      pos.push(p.x, p.y, p.z, q.x, q.y, q.z);
+      col.push(...rgb, alpha, ...rgb, alpha);
+    };
+    if (this.kind === 'axes') {
+      const fg = hexRgb(this.theme.foreground);
+      if (v.y0 <= 0 && v.y1 >= 0) add(v.x0, 0, v.x1, 0, fg, 0.5);
+      if (v.x0 <= 0 && v.x1 >= 0) add(0, v.y0, 0, v.y1, fg, 0.5);
+    } else {
+      const grid = hexRgb(this.theme.grid);
+      const zero = hexRgb(mixHex(this.theme.grid, this.theme.foreground, 0.3));
+      for (const x of multiples(v.x0, v.x1, v.stepX)) add(x, v.y0, x, v.y1, x === 0 ? zero : grid, 1);
+      for (const y of multiples(v.y0, v.y1, v.stepY)) add(v.x0, y, v.x1, y, y === 0 ? zero : grid, 1);
+    }
+    this.set(pos, col);
+  }
+
+  extend(): void {}
+
+  dispose(): void {
+    this.lines.geometry.dispose();
+    (this.lines.material as THREE.Material).dispose();
+  }
+}

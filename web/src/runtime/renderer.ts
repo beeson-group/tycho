@@ -448,3 +448,88 @@ export function kernelOpacity(floor: number, kernel: { width: number; opacity: n
   const ratio = extent > 0 ? d / (kernel.width * extent) : 0;
   return Math.max(floor, kernel.opacity * Math.exp(-ratio * ratio));
 }
+
+/** The part of the display plane a plane camera shows, and the steps of its ticks. */
+export interface PlaneView {
+  /** The visible rectangle along the camera's right and up axes, in display-frame units. */
+  x0: number;
+  x1: number;
+  y0: number;
+  y1: number;
+  /** The panel's size in CSS pixels. */
+  w: number;
+  h: number;
+  stepX: number;
+  stepY: number;
+}
+
+/** What an orthographic camera under a plane camera shows, with a tick about every 110 pixels across and 70 up. */
+export function planeView(camera: THREE.OrthographicCamera, cam: Camera & { kind: 'plane' }, w: number, h: number): PlaneView {
+  const { right, up } = cameraBasis(cam);
+  const cx = camera.position.dot(right);
+  const cy = camera.position.dot(up);
+  const hw = (camera.right - camera.left) / (2 * camera.zoom);
+  const hh = (camera.top - camera.bottom) / (2 * camera.zoom);
+  return {
+    x0: cx - hw,
+    x1: cx + hw,
+    y0: cy - hh,
+    y1: cy + hh,
+    w,
+    h,
+    stepX: niceStep(2 * hw, Math.max(3, w / 110)),
+    stepY: niceStep(2 * hh, Math.max(3, h / 70)),
+  };
+}
+
+/** The multiples of `step` in [a, b]. */
+function multiples(a: number, b: number, step: number): number[] {
+  const out: number[] = [];
+  const k1 = Math.floor(b / step);
+  for (let k = Math.ceil(a / step); k <= k1 && out.length < 1000; k++) out.push(k * step);
+  return out;
+}
+
+/** A tick number with as many decimals as its step, and a true minus. */
+function tickText(v: number, step: number): string {
+  const decimals = Math.max(0, -Math.floor(Math.log10(step)));
+  return (Math.abs(v) < step * 1e-9 ? 0 : v).toFixed(decimals).replace('-', '−');
+}
+
+/** A label's width in CSS pixels at the 12 px of a tick number, a little over the widest digit and the minus. */
+const tickWidth = (s: string): number => 7 * s.length - 3.5 * (s.split('.').length - 1);
+
+/** The height below which a panel does not have room for the x title under its tick row, and the width below which it does not have room for the y title. */
+const TITLE_ROOM = 160;
+
+/**
+ * The labels of a plane view. Tick numbers run along the bottom and the left edges, clear of the corners.
+ * The two axis titles sit at the bottom center and the left center, the second reading upward, each in a
+ * separate row outside the tick numbers. The tick row is centered 28 px above the bottom edge and the x
+ * title 10 px above it. The y title sits 10 px from the left edge, and the y tick column is right-aligned
+ * clear of it at its widest number. A panel too short or too narrow for a title keeps its ticks.
+ */
+export function planeLabels(v: PlaneView, ticks: boolean, titles: [string, string] | null): PanelLabel[] {
+  const out: PanelLabel[] = [];
+  const sx = (x: number) => ((x - v.x0) / (v.x1 - v.x0)) * v.w;
+  const sy = (y: number) => v.h - ((y - v.y0) / (v.y1 - v.y0)) * v.h;
+  if (ticks) {
+    const left: PanelLabel[] = [];
+    for (const y of multiples(v.y0, v.y1, v.stepY)) {
+      const py = sy(y);
+      if (py > 22 && py < v.h - 44) left.push({ text: tickText(y, v.stepY), x: 0, y: py, align: 'end', kind: 'tick' });
+    }
+    // the column ends where its widest number starts 22 px from the edge, clear of the y title
+    const column = Math.max(44, 22 + Math.max(0, ...left.map((l) => tickWidth(l.text))));
+    for (const x of multiples(v.x0, v.x1, v.stepX)) {
+      const px = sx(x);
+      if (px > column + 12 && px < v.w - 16) out.push({ text: tickText(x, v.stepX), x: px, y: v.h - 28, align: 'center', kind: 'tick' });
+    }
+    for (const l of left) out.push({ ...l, x: column });
+  }
+  if (titles !== null) {
+    if (titles[0] !== '' && v.h >= TITLE_ROOM) out.push({ text: titles[0], x: v.w / 2, y: v.h - 10, align: 'center', kind: 'title' });
+    if (titles[1] !== '' && v.w >= TITLE_ROOM) out.push({ text: titles[1], x: 10, y: v.h / 2, align: 'center', rotate: true, kind: 'title' });
+  }
+  return out;
+}

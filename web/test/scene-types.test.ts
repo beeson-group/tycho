@@ -67,4 +67,41 @@ describe('validate', () => {
     ).toBe('T1');
     expect(rule(() => validate(baseScene(), data().add('time', [1, 1])))).toBe('T3');
   });
+  const second = () => {
+    const scene = baseScene();
+    scene.track_sets.u = { frame: 'a', tracks: 1, offsets: 'off', positions: 'pos' };
+    scene.views.main!.layers = [{ kind: 'track', sets: { set: 'u' }, members: 'all' }];
+    return scene;
+  };
+  it('only a track set on which a reading is taken must carry the clock channels (C5)', () => {
+    const scene = second();
+    validate(scene, data(), state());
+    expect((evaluate(scene, data(), state(), 1).panels.p1!.layers[0] as TrackLayerResult).members[0]!.line.length).toBe(2);
+    scene.views.main!.layers = [{ kind: 'track', sets: { set: 'u' }, members: 'all', head: true }];
+    expect(rule(() => validate(scene, data(), state()))).toBe('C5');
+    scene.views.main!.layers = [];
+    scene.views.main!.driver.sets = { set: 'u' };
+    expect(rule(() => validate(scene, data(), state()))).toBe('C5');
+  });
+  it('a literal index past the last track and a selector whose parameter the track set lacks are rejected (V3)', () => {
+    const scene = second();
+    scene.views.main!.layers = [{ kind: 'track', sets: { set: 'u' }, members: { index: 1 } }];
+    expect(rule(() => validate(scene, data(), state()))).toBe('V3');
+    expect(rule(() => evaluate(scene, data(), state(), 0))).toBe('V3');
+    scene.variables = { e: { kind: 'selector', parameter: 'e', default: 0 } };
+    scene.views.main!.layers = [{ kind: 'track', sets: { set: 'u' }, members: { var: 'e' } }];
+    expect(rule(() => validate(scene, data(), state()))).toBe('V3');
+    expect(rule(() => evaluate(scene, data(), state(), 0))).toBe('V3');
+  });
+  it('a selector without `by: index` is by nearest and needs a parameter (section 2.5)', () => {
+    const scene = baseScene({ variables: { e: { kind: 'selector', default: 0 } } });
+    expect(rule(() => validate(scene))).toBe('2.5');
+  });
+  it('a query that needs one track set and matches two is rejected (V2)', () => {
+    const scene = second();
+    scene.track_sets.s!.tags = { kind: 'x' };
+    scene.track_sets.u!.tags = { kind: 'x' };
+    scene.views.main!.layers = [{ kind: 'track', sets: { tags: { kind: 'x' } }, members: 'all' }];
+    expect(rule(() => evaluate(scene, data(), state(), 0))).toBe('V2');
+  });
 });

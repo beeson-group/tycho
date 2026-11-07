@@ -55,4 +55,42 @@ describe('data.tyd version 1', () => {
     expect(c.header.views['float64/three']!.encoding).toBe('shuffle-delta-deflate');
     expect((c.header.views['float64/three'] as EncodedViewInfo).chunks).toHaveLength(3);
   });
+
+  it('wraps the delta of integer bit patterns at every width', async () => {
+    const arrays: TydArray[] = [
+      { name: 'u8', dtype: 'uint8', shape: [4], values: [255, 0, 255, 1], chunkRows: 4 },
+      { name: 'u16', dtype: 'uint16', shape: [3], values: [65535, 0, 65535], chunkRows: 4 },
+      { name: 'u32', dtype: 'uint32', shape: [3], values: [4294967295, 0, 4294967295], chunkRows: 4 },
+      // the low half of each float64 overflows, and the high half thus takes a carry
+      { name: 'f64', dtype: 'float64', shape: [4, 2], values: [1, -1, 1 + 2 ** -52, -2, 2 ** -1074, 3, -0, Number.MAX_VALUE], chunkRows: 4 },
+    ];
+    const c = await Container.parse(encodeTyd(arrays));
+    for (const a of arrays) expect(bits(c.view(a.name).data), a.name).toEqual(bits(CTORS[a.dtype].from(a.values)));
+  });
+
+  it('reads empty views raw and encoded (D2)', async () => {
+    const c = await Container.parse(
+      encodeTyd([
+        { name: 'none', dtype: 'float64', shape: [0, 3], values: [], chunkRows: 4 },
+        { name: 'thin', dtype: 'float32', shape: [3, 0], values: [], chunkRows: 2 },
+        { name: 'raw', dtype: 'uint32', shape: [0], values: [] },
+      ]),
+    );
+    expect((c.header.views.none as EncodedViewInfo).chunks).toEqual([]);
+    expect((c.header.views.thin as EncodedViewInfo).chunks).toHaveLength(2);
+    for (const n of ['none', 'thin', 'raw']) expect(c.view(n).data.length).toBe(0);
+    expect(c.view('thin').shape).toEqual([3, 0]);
+  });
+
+  it('views are zero-copy when raw and aligned, and copied otherwise', async () => {
+    const bytes = encodeTyd([{ name: 'x', dtype: 'float64', shape: [2], values: [1, 2] }]);
+    const c = await Container.parse(bytes);
+    expect(c.view('x').data.buffer).toBe(bytes.buffer);
+    const shifted = new Uint8Array(bytes.length + 1);
+    shifted.set(bytes, 1);
+    const d = await Container.parse(shifted.subarray(1));
+    expect(Array.from(d.view('x').data)).toEqual([1, 2]);
+    const e = await Container.parse(shifted.subarray(1).slice());
+    expect(Array.from(e.view('x').data)).toEqual([1, 2]);
+  });
 });

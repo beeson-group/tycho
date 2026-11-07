@@ -1261,6 +1261,132 @@ export class TychoViewerElement extends Base {
     }
     return null;
   }
+
+  /** The panel-scoped choice that a header chip shows and, with one view, the Add panel group offers, i.e. the one a view's frame reads, or else the first. */
+  private templateChoice(): { id: string; def: Choice; label: string } | null {
+    const scene = this.scene!;
+    const choices = Object.entries(scene.variables ?? {}).filter(([, v]) => v?.kind === 'choice' && v.scope === 'panel') as [string, Choice][];
+    if (choices.length === 0) return null;
+    const framed = new Set(Object.values(scene.views).map((v) => (typeof v!.frame === 'string' ? '' : v!.frame.var)));
+    const [id, def] = choices.find(([c]) => framed.has(c)) ?? choices[0]!;
+    const tabs = (scene.controls ?? []).find((c) => c.kind === 'tabs' && c.variable === id) as Extract<Control, { kind: 'tabs' | 'toggle' }> | undefined;
+    return { id, def, label: tabs?.label ?? id };
+  }
+
+  /** What the Add panel group offers. It offers the views when there are several, and the values of the panel-scoped choice otherwise. */
+  private templates(): Template[] {
+    const scene = this.scene!;
+    const views = Object.entries(scene.views).map(([id, v]) => ({ kind: 'view' as const, view: id, label: v!.label ?? id }));
+    const c = this.choice;
+    if (views.length > 1 || c === null) return views;
+    return c.def.values.map((value, i) => ({ kind: 'value' as const, variable: c.id, value, label: c.def.labels?.[i] ?? value }));
+  }
+
+  private buildTopBar(): void {
+    const scene = this.scene!;
+    this.varsEl.replaceChildren();
+    this.sceneWidgets = [];
+    for (const c of scene.controls ?? []) {
+      if (c.kind === 'transport') continue;
+      if (variableDef(scene, c.variable)?.scope === 'panel') continue;
+      const w = this.makeWidget(c, undefined);
+      if (w) {
+        this.sceneWidgets.push(w);
+        this.varsEl.appendChild(w.el);
+      }
+    }
+    this.buildAddGroup();
+    this.statsEl.replaceChildren();
+    this.captions = (scene.readouts ?? []).filter((r) => r.place === 'caption').map((r) => buildReadout(r.parts, 'wide'));
+    this.statsEl.append(...this.captions.map((r) => r.root));
+  }
+
+  private buildAddGroup(): void {
+    this.addEl.replaceChildren();
+    const items = this.templates();
+    const group = el('div', 'chips');
+    group.appendChild(el('span', 'k', 'Add panel'));
+    this.addChips = [];
+    for (const t of items) {
+      const c = buildChip(t.label, 'menu');
+      c.body.setAttribute('role', 'button');
+      c.body.tabIndex = 0;
+      c.body.setAttribute('aria-roledescription', 'draggable');
+      c.body.title = 'Drag onto a panel: an edge splits it, the center replaces it. Click to add a panel.';
+      c.body.addEventListener('pointerdown', (ev) => this.startDrag(ev, t, c.body, c.root));
+      c.body.addEventListener('keydown', (ev) => {
+        if (ev.key !== 'Enter' && ev.key !== ' ') return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        this.addPanel(t);
+      });
+      const caret = c.button!;
+      caret.addEventListener('click', () => this.openMenu(caret, this.chipEntries(t)));
+      group.appendChild(c.root);
+      this.addChips.push(c.root);
+    }
+    const fallback = el('button', 'btn');
+    fallback.type = 'button';
+    fallback.setAttribute('aria-haspopup', 'menu');
+    fallback.setAttribute('aria-expanded', 'false');
+    fallback.append(icon('plus'), el('span', undefined, 'Add panel'), icon('chevronDown', 'chev'));
+    fallback.hidden = true;
+    fallback.addEventListener('pointerdown', stop);
+    fallback.addEventListener('click', () =>
+      this.openMenu(
+        fallback,
+        items.map((t) => ({ label: t.label, run: () => this.addPanel(t) })),
+      ),
+    );
+    this.addEl.append(group, fallback);
+    this.addGroup = group;
+    this.addButton = fallback;
+    this.fitAddGroup();
+  }
+
+  /** Shows the Add panel chips on one line, or the single Add panel menu button when they would wrap. */
+  private fitAddGroup(): void {
+    const group = this.addGroup;
+    const button = this.addButton;
+    if (group === null || button === null || this.addChips.length < 2) return;
+    const focused = this.shadowRoot?.activeElement ?? null;
+    group.hidden = false;
+    button.hidden = true;
+    const first = this.addChips[0]!;
+    const last = this.addChips[this.addChips.length - 1]!;
+    const wraps = last.offsetTop > first.offsetTop + first.offsetHeight / 2;
+    group.hidden = wraps;
+    button.hidden = !wraps;
+    if (wraps && focused !== null && group.contains(focused)) button.focus();
+  }
+
+  /** The menu of a chip in the top bar, with Add panel, then Split right, Split below, and Replace for every panel. */
+  private chipEntries(t: Template): MenuEntry[] {
+    const scene = this.scene!;
+    return chipMenu(this.store!.state, (id) => this.panelName(id), MAX_PANELS).map((m) => ({
+      label: m.label,
+      disabled: m.disabled,
+      group: m.group,
+      run: () => this.store!.update((s) => withPlacement(scene, s, m.placement, t, MAX_PANELS, (id) => this.isTall(id))),
+    }));
+  }
+
+  private addPanel(t: Template): void {
+    this.store!.update((s) => withAdd(this.scene!, s, t, MAX_PANELS, (id) => this.isTall(id)));
+  }
+
+  private isTall(pid: string): boolean {
+    const r = this.panelDom.get(pid)?.host.getBoundingClientRect();
+    return r !== undefined && r.width < r.height;
+  }
+
+  /** A panel's name in the menus, which is its view when the scene has several, then what its header chip shows. */
+  private panelName(pid: string): string {
+    const dom = this.panelDom.get(pid);
+    if (dom === undefined) return pid;
+    const chip = dom.chipLabel.textContent ?? '';
+    return dom.title.hidden ? chip || pid : `${dom.title.textContent ?? pid}, ${chip}`;
+  }
 }
 
 /**

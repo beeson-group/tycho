@@ -1,0 +1,87 @@
+name: CD
+
+# On a published release, this workflow uploads pytycho to PyPI and @beeson-group/tycho to npm, both through
+# trusted publishing with OpenID Connect, hence it does not store any token. The runtime is built once, thus
+# both packages carry the same bundle, and neither is published unless both build and pass their tests. A
+# manual run uploads pytycho to TestPyPI as a release candidate and does not publish to npm, which lacks a
+# test registry. Trusted publishing to npm needs an existing package, and @beeson-group/tycho exists there.
+
+on:
+  workflow_dispatch:
+  release:
+    types:
+      - published
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false  # never cancel a publish halfway
+
+env:
+  FORCE_COLOR: 3
+
+jobs:
+  runtime:
+    name: Build, test, and pack the runtime
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: The versions agree and match the tag on a release
+        env:
+          TAG: ${{ github.event_name == 'release' && github.ref_name || '' }}
+        run: python3 .github/check_versions.py ${TAG:+"$TAG"}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false  # a release workflow does not use a cache
+      - name: Test, then pack, which checks the notices and builds the bundles and the types
+        working-directory: web
+        run: npm ci && npm run typecheck && npm test && npm pack
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: npm-package
+          path: web/beeson-group-tycho-*.tgz
+          if-no-files-found: error
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: runtime
+          path: src/pytycho/_static/tycho.js
+          if-no-files-found: error
+
+  dist:
+    name: Build and check the distributions
+    needs: [runtime]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: runtime
+          path: src/pytycho/_static
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          python-version: "3.14"
+          enable-cache: false  # a release workflow does not use a cache
+      - run: uv run pytest
+      - run: uv build
+      - run: uvx twine check --strict dist/*
+      - name: The wheel carries the runtime and the notices
+        run: |
+          unzip -l dist/*.whl | tee wheel.txt
+          for f in pytycho/_static/tycho.js licenses/LICENSE licenses/NOTICE licenses/THIRD_PARTY_NOTICES.md; do
+            grep -q "$f" wheel.txt || { echo "::error::the wheel has no $f"; exit 1; }
+          done
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Packages
+          path: dist/*
+          if-no-files-found: error

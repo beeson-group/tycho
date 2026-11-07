@@ -25,6 +25,14 @@ await viewer.load(scene, new Uint8Array(data));
 
 The method `load` takes the text of the scene document and the bytes of the data container. It returns a promise, since it inflates, i.e. decompresses, the compressed arrays of the container.
 
+The element also reads a scene without any script, from the attributes below or from its child blocks, and a page can hold several viewers.
+
+| Attribute | Meaning |
+|---|---|
+| `theme` | `dark` or `light`, a built-in palette that replaces the theme of the scene and can change at any time |
+| `autoplay` | plays once the scene is loaded and the element is visible, unless the user asked for reduced motion |
+| `scene`, `data` | URLs of the two files, used when the element does not have child blocks |
+
 The package ships an ECMAScript module at the default export path, and an immediately invoked function expression (IIFE) at `@beeson-group/tycho/iife`, which exposes a global `tycho`. The IIFE is a plain script, and it is the bundle that pytycho inlines into its pages. Both bundle three.js, which draws the panels with WebGL, and mp4-muxer, which writes the MP4 file of a video export, hence the package does not have any runtime dependency. The scene format is specified in [spec/tycho-scene.md](https://github.com/beeson-group/tycho/blob/main/spec/tycho-scene.md), and the changes per release are in [CHANGELOG.md](https://github.com/beeson-group/tycho/blob/main/CHANGELOG.md).
 
 The package is licensed under Apache-2.0. The bundled third-party code is MIT-licensed, and `NOTICE` and `THIRD_PARTY_NOTICES.md` in this package list this code with its license texts.

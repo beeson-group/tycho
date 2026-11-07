@@ -58,6 +58,16 @@ The script declares two frames, `rotating` and its child `inertial`, and a track
 
 The full example, [`examples/broucke/build.py`](https://github.com/beeson-group/tycho/blob/main/examples/broucke/build.py), draws the planar Broucke families of the elliptic restricted three-body problem in five frames. These are families of periodic orbits that Broucke published in 1969. The example reads trajectories computed with the PyDyLAN library from `broucke-input.tyd`, a file attached to each GitHub Release rather than kept in the repository.
 
+## On a slide
+
+To put a scene on a slide, paste the output of `ty.build_embed(scene.to_document(), scene.to_container(), theme="dark", autoplay=True)` into the deck, and load the runtime from `pytycho.html.runtime_js()` once per deck. A deck can hold several viewers. The keywords of the call are attributes of the viewer element.
+
+| Attribute | Meaning |
+|---|---|
+| `theme` | `dark` or `light`, a built-in palette that replaces the theme of the scene and can change at any time |
+| `autoplay` | plays once the scene is loaded and the element is visible, unless the user asked for reduced motion |
+| `scene`, `data` | URLs of the two files, used when the element does not have child blocks |
+
 ## Files
 
 | Extension | What |

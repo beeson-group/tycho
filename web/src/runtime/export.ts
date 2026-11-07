@@ -72,3 +72,73 @@ export function defaultExportFps(steps: number, speed: number, seconds = LAP_SEC
   for (const fps of [...EXPORT_FPS].reverse()) if (checkExport(frameSchedule(steps, fps, 1, speed, 0, seconds).count, fps) === null) return fps;
   return null;
 }
+
+export type SizePreset = '720p' | '1080p' | 'stage';
+
+export interface ExportSize {
+  /** The size of the video in pixels, as `width` and `height`. */
+  width: number;
+  height: number;
+  /** Video pixels per CSS pixel. The layout, the fit, the line widths, and the text are laid out at a width of width / pixelRatio CSS pixels. */
+  pixelRatio: number;
+}
+
+/**
+ * A preset's size at `fps`. The presets 720p and 1080p share one layout of 1280 by 720 CSS pixels,
+ * at pixel ratios of 1 and 1.5. The preset `stage` is the stage's size rounded down to even pixels,
+ * at the whole pixel ratio nearest the screen's, at most 2. Where H.264 cannot hold the size and the
+ * rate there, the ratio is lowered in eighths to the largest at which it can. Both sides are kept even, as required by H.264.
+ */
+export function sizePreset(preset: SizePreset, stage = { w: 1280, h: 720 }, devicePixelRatio = 1, fps = 30): ExportSize {
+  if (preset === '720p') return { width: 1280, height: 720, pixelRatio: 1 };
+  if (preset === '1080p') return { width: 1920, height: 1080, pixelRatio: 1.5 };
+  const even = (x: number) => Math.max(2, 2 * Math.floor(x / 2));
+  const w = even(stage.w);
+  const h = even(stage.h);
+  let size: ExportSize = { width: w, height: h, pixelRatio: 1 };
+  for (let eighths = 8 * Math.min(2, Math.max(1, Math.round(devicePixelRatio))); eighths >= 1; eighths--) {
+    const ratio = eighths / 8;
+    size = { width: even(w * ratio), height: even(h * ratio), pixelRatio: ratio };
+    if (avcFits(size.width, size.height, fps)) break;
+  }
+  return size;
+}
+
+/** The H.264 levels, each as its number, maximum frame size, and maximum rate, in 16 by 16 macroblocks. */
+const AVC_LEVELS: [number, number, number][] = [
+  [30, 1620, 40500],
+  [31, 3600, 108000],
+  [32, 5120, 216000],
+  [40, 8192, 245760],
+  [42, 8704, 522240],
+  [50, 22080, 589824],
+  [51, 36864, 983040],
+  [52, 36864, 2073600],
+];
+
+/**
+ * The widest side an export takes. The H.264 hardware encoder of macOS does not accept a wider side (VideoToolbox
+ * does not open a session at 4352 by 2160), and Chrome there falls back to software beyond it.
+ */
+export const AVC_MAX_SIDE = 4096;
+
+/** Whether H.264 holds a size and rate, i.e. whether both sides are even, a level up to 5.2 holds them, and neither side exceeds AVC_MAX_SIDE. */
+export function avcFits(width: number, height: number, fps: number): boolean {
+  return width % 2 === 0 && height % 2 === 0 && Math.max(width, height) <= AVC_MAX_SIDE && avcCodec(width, height, fps) !== null;
+}
+
+/** The H.264 codec string for a size and rate, at the lowest level that holds them, or null past level 5.2. */
+export function avcCodec(width: number, height: number, fps: number, profile: 'high' | 'main' | 'baseline' = 'high'): string | null {
+  const wm = Math.ceil(width / 16);
+  const hm = Math.ceil(height / 16);
+  const fs = wm * hm;
+  const level = AVC_LEVELS.find(([, maxFs, maxRate]) => fs <= maxFs && fs * fps <= maxRate && Math.max(wm, hm) <= Math.sqrt(8 * maxFs));
+  if (level === undefined) return null;
+  const p = { high: '6400', main: '4d40', baseline: '42e0' }[profile];
+  return `avc1.${p}${level[0].toString(16).padStart(2, '0')}`;
+}
+
+/** A target bitrate of 0.08 bits per pixel per frame, ample for lines on a plain background, within 1 to 40 Mbit/s. */
+export function exportBitrate(width: number, height: number, fps: number): number {
+  return Math.round(Math.min(40e6, Math.max(1e6, 0.08 * width * height * fps)));
+}

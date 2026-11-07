@@ -1092,6 +1092,56 @@ class Scene:
                 raise SceneError(f"2.9: readout digits is {out['digits']}, not in 1 to 17")
         return out
 
+    # the write-time check
+
+    def _check(self, doc: dict[str, Any]) -> list[str]:
+        """Every failure of the cross-references and of the rules that hold for the whole scene.
+
+        The rules that depend on a variable are checked for every combination of choice values.
+        """
+        failures: list[str] = []
+        if not self._sets:
+            failures.append("2.1: the scene does not have a track set")
+        for ts in self._sets.values():
+            if not ts.positions:
+                failures.append(f"T1: track set {ts.id!r} does not have a track")
+            elif ts.kept is not None:
+                failures += self._check_kept(ts)
+        failures += self._check_clock_channels(doc["clock"])
+        tree: FrameTree | None
+        try:
+            tree = FrameTree(self._frames, self._bodies)
+            for fid in self._frames:
+                tree.requirements(fid, tree.root)
+        except ValueError as exc:
+            failures.append(str(exc))
+            tree = None
+        choices = {k: v["values"] for k, v in self._variables.items() if v["kind"] == "choice"}
+
+        def combos(used: set[str]) -> list[dict[str, str]]:
+            keys = sorted(used)
+            return (
+                [{k: choices[k][j] for k, j in zip(keys, combo, strict=True)} for combo in np.ndindex(*[len(choices[k]) for k in keys])]
+                if keys
+                else [{}]
+            )
+
+        view_ok: dict[str, bool] = {}
+        for vid, view in self._views.items():
+            broken = self._check_references(vid, view)
+            failures += broken
+            view_ok[vid] = not broken
+            if broken:
+                continue
+            for values in combos(self._choices_of(view)):
+                failures += self._check_view(vid, view, values, tree, doc["clock"])
+        failures += self._check_state(doc["initial"])
+        for control in self._controls:
+            failures += self._check_control(control, combos)
+        for readout in self._readouts:
+            failures += self._check_readout(readout, doc["initial"], view_ok, combos)
+        return sorted(set(failures))
+
     def _check_kept(self, ts: TrackSet) -> list[str]:
         kept = ts.kept or []
         if len(kept) != len(ts.positions):

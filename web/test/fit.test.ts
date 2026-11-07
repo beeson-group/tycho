@@ -1,6 +1,6 @@
 // Tests the camera fit, the lazy per-track geometry, and the per-track buffers under Node, which do not need WebGL.
 import * as THREE from 'three';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { TychoError } from '../src/errors';
 import { progress } from '../src/evaluate/clock';
 import { evaluate } from '../src/evaluate/index';
@@ -455,6 +455,17 @@ describe('a track layer in the driver context (L6)', () => {
       }
     });
   }
+  it("is placed by the driver's clock of the geometry cache, not by a clock built on every frame", () => {
+    const st = c.scene.initial;
+    const { plan, layer, env } = grid(c.scene, st);
+    const cached = geometry.readings(plan.driver!.set.id, st.clock.channel).clocks[plan.driver!.track]!;
+    const reading = vi.spyOn(cached, 'reading');
+    const draw = new TrackDraw(ctx, layer, plan.display, 'k');
+    for (let i = 0; i <= c.scene.clock.steps; i++) draw.place(env(progress(c.scene.clock.steps, i)), plan.driver);
+    expect(reading).toHaveBeenCalledTimes(c.scene.clock.steps + 1);
+    reading.mockRestore();
+    draw.dispose();
+  });
   it('is hidden, and is left out of the fit, when the driver does not match a set', () => {
     const st = withVariable(c.scene, c.scene.initial, 'family', 'b');
     const { plan, layer, env } = grid(c.scene, st);

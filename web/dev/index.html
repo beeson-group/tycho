@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TyCHO runtime, dev page</title>
+<!--
+  A page for checking the browser runtime by hand against a conformance scene. Build the dev
+  bundle and serve the checkout root, then open /web/dev/index.html:
+
+    npm --prefix web run build:dev
+    python3 -m http.server 8000        (from the checkout root)
+
+  Query parameters:
+    scene=<name>   a directory of spec/conformance, two-panels by default
+    src=<path>     <path>.tys and <path>.tyd from the checkout root instead, for example
+                   src=examples/broucke/broucke
+    plain          the scene as it is. A corpus scene does not have controls or readouts, and
+                   one without controls gets dev controls unless this parameter is given. Dev
+                   controls also color every track layer of all members by the parameter of the
+                   first selector and highlight the selected member, so that the colorbar of the
+                   layer can be dragged to set the selector.
+    kiosk          the kiosk attribute, which hides the controls and plays automatically
+-->
+<style>
+  html, body { margin: 0; height: 100%; background: #000; color: #d8d8d8; font: 13px/1.4 "Helvetica Neue", Arial, sans-serif; }
+  body { display: grid; grid-template-rows: auto 1fr auto; }
+  nav { padding: 6px 12px; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+  nav a { color: #f0a050; }
+  nav .k { color: #9a9a9a; }
+  tycho-viewer { display: block; min-height: 0; }
+  details { padding: 4px 12px 8px; max-height: 30vh; overflow: auto; }
+  pre { margin: 4px 0; white-space: pre-wrap; color: #9a9a9a; }
+  .error { color: #ff7a7a; padding: 12px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<nav id="nav"><span class="k">scene</span></nav>
+<main id="main" style="display: contents"></main>
+<details><summary>state snapshot</summary><pre id="state"></pre></details>
+<script src="../dist/tycho.dev.js"></script>
+<script>
+(async () => {
+  const CORPUS = ['two-panels', 'rotating-loop', 'broucke-mini', 'edge-fraction', 'edge-value', 'value-clock'];
+  const params = new URLSearchParams(location.search);
+  const name = params.get('scene') || 'two-panels';
+  const nav = document.getElementById('nav');
+  for (const n of CORPUS) {
+    const a = document.createElement('a');
+    const p = new URLSearchParams(params);
+    p.set('scene', n);
+    p.delete('src');
+    a.href = `?${p}`;
+    a.textContent = n;
+    if (n === name && !params.has('src')) a.style.fontWeight = '700';
+    nav.appendChild(a);
+  }
+  const example = document.createElement('a');
+  example.href = '?src=examples/broucke/broucke';
+  example.textContent = 'examples/broucke';
+  if (params.get('src') === 'examples/broucke/broucke') example.style.fontWeight = '700';
+  nav.appendChild(example);
+  const fail = (text) => {
+    const div = document.createElement('div');
+    div.className = 'error';
+    div.textContent = text;
+    document.getElementById('main').appendChild(div);
+  };
+  if (typeof tycho === 'undefined') return fail('dist/tycho.dev.js did not load: run `npm --prefix web run build:dev`.');
+
+  const src = params.get('src');
+  const [sceneUrl, dataUrl] = src
+    ? [`../../${src}.tys`, `../../${src}.tyd`]
+    : [`../../spec/conformance/${encodeURIComponent(name)}/scene.tys`, `../../spec/conformance/${encodeURIComponent(name)}/data.tyd`];
+  let sceneText, dataBytes;
+  try {
+    const [s, d] = await Promise.all([fetch(sceneUrl), fetch(dataUrl)]);
+    if (!s.ok || !d.ok) throw new Error(`HTTP ${s.status} and ${d.status} for ${sceneUrl} and ${dataUrl}`);
+    sceneText = await s.text();
+    dataBytes = new Uint8Array(await d.arrayBuffer());
+  } catch (e) {
+    return fail(`cannot fetch the corpus scene: ${e.message}\nServe the checkout root, not web/.`);
+  }
+
+  // withControls adds controls and readouts to a corpus scene, which does not have any. It adds a transport,
+  // tabs for every choice, a toggle for every toggle, a slider for every selector by nearest, and readouts of
+  // the driver, each kept only while the scene still validates.
+  let data;
+  try {
+    data = await tycho.Container.parse(dataBytes);
+  } catch (e) {
+    return fail(`cannot read ${dataUrl}: ${e.message}`);
+  }
+  const valid = (scene) => {
+    try {
+      tycho.validate(scene, data);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  };
+  const withControls = (original) => {
+    const scene = structuredClone(original);
+    const controls = [{ kind: 'transport' }];
+    const params = [];
+    for (const [id, v] of Object.entries(scene.variables || {})) {
+      if (v.kind === 'choice') controls.push({ kind: 'tabs', variable: id, label: id });
+      else if (v.kind === 'toggle') controls.push({ kind: 'toggle', variable: id, label: id });
+      else if (v.kind === 'selector' && v.by !== 'index') {
+        const set = Object.keys(scene.track_sets).find((k) => Object.hasOwn(scene.track_sets[k].parameters || {}, v.parameter));
+        if (set !== undefined) controls.push({ kind: 'slider', variable: id, label: id, domain: { set } });
+        params.push(v.parameter);
+      }
+    }
+    for (const c of controls) {
+      const trial = { ...scene, controls: [...(scene.controls || []), c] };
+      if (valid(trial)) scene.controls = trial.controls;
+    }
+    // for a colorbar to drag, the tracks of all members are colored by the parameter of the first selector
+    const selector = Object.entries(scene.variables || {}).find(([, v]) => v.kind === 'selector' && v.by !== 'index' && v.scope !== 'panel' && v.parameter);
+    if (selector !== undefined) {
+      for (const view of Object.values(scene.views)) {
+        view.layers.forEach((layer, i) => {
+          if (layer.kind !== 'track' || layer.members !== 'all' || layer.color !== undefined) return;
+          const before = view.layers[i];
+          view.layers[i] = { ...layer, color: { colormap: 'viridis', parameter: selector[1].parameter }, highlight: { var: selector[0] } };
+          if (!valid(scene)) view.layers[i] = before;
+        });
+      }
+    }
+    const tryReadout = (r) => {
+      const trial = { ...scene, readouts: [...(scene.readouts || []), r] };
+      if (valid(trial)) scene.readouts = trial.readouts;
+    };
+    tryReadout({ place: 'caption', parts: ['frame ', { clock: 'index' }, ' of ', { clock: 'steps' }] });
+    for (const p of params) tryReadout({ place: 'caption', parts: [`${p} = `, { member: p, digits: 4 }] });
+    for (const c of scene.clock.channels) if (c !== '@index') tryReadout({ place: 'panel', parts: [`${c} = `, { channel: c, digits: 4 }] });
+    return scene;
+  };
+  if (!params.has('plain') && !(JSON.parse(sceneText).controls || []).length) {
+    const scene = withControls(JSON.parse(sceneText));
+    scene.title = `${scene.title || name}, with dev controls`;
+    sceneText = JSON.stringify(scene, null, 1);
+  }
+
+  const toBase64 = (bytes) => {
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    return btoa(bin);
+  };
+  const embed = (id, bytes) => {
+    const s = document.createElement('script');
+    s.type = 'application/octet-stream';
+    s.id = id;
+    s.dataset.encoding = 'base64';
+    s.textContent = toBase64(bytes);
+    document.body.appendChild(s);
+  };
+  embed('tycho-scene', new TextEncoder().encode(sceneText));
+  embed('tycho-data', dataBytes);
+
+  const viewer = document.createElement('tycho-viewer');
+  viewer.setAttribute('scene', '#tycho-scene');
+  viewer.setAttribute('data', '#tycho-data');
+  if (params.has('kiosk')) viewer.setAttribute('kiosk', '');
+  document.getElementById('main').appendChild(viewer);
+  window.viewer = viewer;
+  const out = document.getElementById('state');
+  setInterval(() => {
+    if (viewer.state) out.textContent = JSON.stringify(viewer.state, null, 1);
+  }, 1000);
+})();
+</script>
+</body>
+</html>

@@ -131,3 +131,44 @@ def test_c5_a_track_drawn_whole_needs_no_clock_channel():
     doc["views"]["v"]["driver"] = {"sets": {"set": "u"}, "member": {"index": 0}}
     with pytest.raises(ValueError, match="C5"):
         evaluate(doc, data, state("t"), 1)
+
+
+def test_v3_a_literal_index_past_the_last_track_is_an_error():
+    pts = np.array([[0.0, 0, 0], [1.0, 0, 0]])
+    doc, data = scene(pts, {}, frames={"root": {}}, layers=[{"kind": "track", "sets": {"set": "s"}, "members": {"index": 1}}])
+    with pytest.raises(ValueError, match="V3"):
+        evaluate(doc, data, state(), 0)
+
+
+def test_selector_by_index_rounds_a_half_up_and_clamps():
+    w = ContainerWriter()
+    w.add_view("s/offsets", np.array([0, 2, 4, 6]), dtype="uint32")
+    w.add_view("s/positions", np.zeros((6, 3)))
+    doc = {
+        "frames": {"root": {}},
+        "track_sets": {"s": {"frame": "root", "tracks": 3, "offsets": "s/offsets", "positions": "s/positions"}},
+        "variables": {"k": {"kind": "selector", "by": "index", "default": 0}},
+        "clock": {"mode": "fraction", "channels": ["@index"], "steps": 2},
+        "views": {
+            "v": {
+                "frame": "root",
+                "driver": {"sets": {"set": "s"}, "member": {"index": 0}},
+                "layers": [{"kind": "track", "sets": {"set": "s"}, "members": {"var": "k"}}],
+            }
+        },
+    }
+    for value, index in ((-0.6, 0), (-0.5, 0), (0.49, 0), (0.5, 1), (1.5, 2), (2.5, 2)):
+        out = evaluate(doc, w.to_bytes(), {**state(), "variables": {"k": value}}, 0)
+        assert out["panels"]["p"]["layers"][0]["members"][0]["index"] == index
+
+
+def test_v3_a_count_steps_by_the_rounded_ratio_and_keeps_the_last_track():
+    from pytycho._evaluate import sparse
+
+    # 5 / 2 = 2.5 rounds half up to 3, where a round half to even would give 2
+    assert sparse(5, 2) == [0, 3, 4]
+    assert sparse(5, 1) == [0, 4]
+    assert sparse(5, 5) == sparse(5, 9) == [0, 1, 2, 3, 4]
+    assert sparse(7, 3) == [0, 2, 4, 6]
+    assert sparse(1, 1) == [0]
+    assert len(sparse(915, 40)) == 41

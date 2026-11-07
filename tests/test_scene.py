@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -105,3 +106,63 @@ def test_kept_must_count_the_tracks():
     scene.panel("p", "v")
     with pytest.raises(ty.SceneError, match="T1: track set 's' has kept indices for 1 tracks, not 2"):
         scene.to_container()
+
+
+def test_writer_lists_every_failure_with_its_rule():
+    scene = ty.Scene()
+    rot = scene.frame("rot")
+    scene.frame("inertial", parent=rot, rotation=ty.rotation("z", ty.channel("f")))
+    for sid in ("a", "b"):
+        ts = scene.track_set(sid, frame=rot, tags={"kind": "x"})
+        ts.add(np.zeros((3, 2)), channels={"t": [0.0, 1.0, 1.0]})
+    frame = scene.choice("frame", ["rot", "inertial"], scope="panel")
+    scene.clock(channels=["t"], steps=4)
+    scene.view("v", frame=frame, driver=ty.driver(ty.set_id("a"), 0), layers=[ty.track(ty.sets(kind="x"))])
+    scene.panel("p", "v")
+    with pytest.raises(ty.SceneError) as info:
+        scene.to_document()
+    message = str(info.value)
+    for expected in ("T3:", "V2:", "F5:", "'inertial'"):
+        assert expected in message
+
+
+def small():
+    scene = ty.Scene()
+    root = scene.frame("root")
+    moving = scene.track_set("moving", frame=root, dtype="float64")
+    moving.add(np.zeros((3, 2)), channels={"t": [0.0, 1.0, 2.0]}, parameters={"e": 0.1})
+    still = scene.track_set("still", frame=root)
+    still.add(np.ones((2, 2)))
+    scene.clock(channels=["t"], steps=4)
+    return scene, moving, still
+
+
+def test_c5_only_a_set_that_is_read_needs_the_clock_channels():
+    scene, moving, still = small()
+    scene.view("v", frame="root", driver=ty.driver(moving, 0), layers=[ty.track(still)])
+    scene.panel("p", "v")
+    scene.to_document()
+    reads: dict[str, Any]
+    for reads in ({"head": True}, {"reveal": "grow"}, {"trail": 0.5}):
+        scene, moving, still = small()
+        scene.view("v", frame="root", driver=ty.driver(moving, 0), layers=[ty.track(still, **reads)])
+        scene.panel("p", "v")
+        with pytest.raises(ty.SceneError, match="C5: view 'v': track set 'still'"):
+            scene.to_document()
+    scene, moving, still = small()
+    scene.view("v", frame="root", driver=ty.driver(still, 0), layers=[])
+    scene.panel("p", "v")
+    with pytest.raises(ty.SceneError, match="C5: view 'v': track set 'still', the driver"):
+        scene.to_document()
+
+
+def test_v3_fails_at_the_write():
+    scene, moving, still = small()
+    e = scene.selector("e", parameter="e")
+    scene.view("v", frame="root", driver=ty.driver(moving, 1), layers=[ty.track(still, e), ty.track(moving, 0)])
+    scene.panel("p", "v")
+    with pytest.raises(ty.SceneError) as info:
+        scene.to_document()
+    message = str(info.value)
+    assert "V3: view 'v': member index 1 of the driver is not below the track count 1 of track set 'moving'" in message
+    assert "V3: view 'v': track set 'still' lacks parameter 'e' for selector 'e'" in message

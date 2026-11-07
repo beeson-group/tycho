@@ -580,3 +580,43 @@ def test_a_colormap_keyed_on_a_choice_names_every_value_and_nothing_else():
     e = scene.selector("e", parameter="e")
     with pytest.raises(ty.SceneError, match="selector, not a choice"):
         ty.track("closed", color={"parameter": "e", "colormap": {"var": e, "map": {"x": "viridis"}}})
+
+
+def test_drawing_options_kernel_taper_head_axes_and_grid():
+    scene, _ = periodic_pair()
+    e = scene.selector("e", parameter="e")
+    k = scene.selector("k", by="index")
+    layer = ty.track("closed", e, trail=0.3, taper=(0, 0), head={"color": "#f0e442", "size": 9})
+    assert layer["trail"] == {"fraction": 0.3, "taper": {"width": 0.0, "opacity": 0.0}}
+    assert layer["head"] == {"color": "#f0e442", "size": 9.0}
+    assert ty.track("closed", trail={"fraction": 0.3, "taper": {"opacity": 0.5}})["trail"] == {"fraction": 0.3, "taper": {"opacity": 0.5}}
+    assert ty.track("closed", head={})["head"] == {}
+    assert ty.axes(span="full") == {"kind": "axes", "span": "full"}
+    assert ty.grid(labels=True) == {"kind": "grid", "labels": True}
+    for call, match in (
+        (lambda: ty.track("closed", taper=(0, 0)), "2.7: a taper is given without a trail"),
+        (lambda: ty.track("closed", trail=0.3, taper=(0, 1.5)), r"2.7: the taper opacity of a trail is 1.5, not in \[0, 1\]"),
+        (lambda: ty.track("closed", trail={"fraction": 0.3, "taper": (0, 0)}, taper=(0, 0)), "given twice"),
+        (lambda: ty.track("closed", head={"size": 0}), "L3: a head size is 0.0, not positive"),
+        (lambda: ty.track("closed", head={"colour": "#ffffff"}), "L3: a head has unknown keys"),
+        (lambda: ty.track("closed", head="yes"), "L3"),  # pyright: ignore[reportArgumentType]
+        (
+            lambda: ty.track("closed", highlight={"var": e, "kernel": {"width": 0.0, "opacity": 0.5}}),
+            r"kernel's width is 0.0, not in \(0, 1\]",
+        ),
+        (lambda: ty.track("closed", highlight={"var": e, "kernel": {"width": 0.1, "opacity": 1.5}}), "kernel's opacity"),
+        (lambda: ty.track("closed", highlight={"var": e, "kernel": {"width": 0.1}}), "a dict of width and opacity"),
+        (lambda: ty.axes(span="half"), "an axes layer's span"),
+        (lambda: ty.grid(labels="yes"), "labels is 'yes', not a boolean"),  # pyright: ignore[reportArgumentType]
+    ):
+        with pytest.raises(ty.SceneError, match=match):
+            call()
+    scene.view(
+        "v",
+        frame="root",
+        driver=ty.driver("closed", 0),
+        layers=[ty.track("closed", highlight={"var": k, "kernel": {"width": 0.1, "opacity": 0.5}})],
+    )
+    scene.panel("p", "v")
+    with pytest.raises(ty.SceneError, match=r"2\.7: a highlight kernel of view 'v' needs a selector by nearest, and 'k' is by index"):
+        scene.to_document()

@@ -167,3 +167,25 @@ def test_empty_encoded_views_are_read():
     c = Container(_rebuilt(header, zlib.compress(b"") * 2))
     assert c.view("none").shape == (0, 3)
     assert c.view("thin").shape == (3, 0)
+
+
+def test_named_dtype_casts_and_own_dtype_is_kept():
+    w = ContainerWriter()
+    w.add_view("f", np.linspace(0, 1, 5), dtype="float32")
+    w.add_view("g", np.linspace(0, 1, 5))
+    c = Container(w.to_bytes())
+    assert c.view("f").dtype == np.float32
+    assert c.view("g").dtype == np.float64
+
+
+@pytest.mark.parametrize("array", [np.arange(3, dtype=np.int64), np.ones(3, dtype=np.float16), np.ones(3, dtype=bool)])
+def test_d1_rejects_an_unnamed_foreign_dtype(array):
+    with pytest.raises(ContainerError, match="D1"):
+        ContainerWriter().add_view("a", array)
+
+
+def test_d1_rejects_a_lossy_integer_cast():
+    with pytest.raises(ContainerError, match="D1"):
+        ContainerWriter().add_view("a", np.array([1.5, 2.0]), dtype="int32")
+    with pytest.raises(ContainerError, match="D1"):
+        ContainerWriter().add_view("a", np.array([-1]), dtype="uint32")

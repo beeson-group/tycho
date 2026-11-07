@@ -421,3 +421,77 @@ def test_build_html_refuses_a_page_over_the_string_limit(monkeypatch):
     ty.build_html(document, data, runtime="")
     with pytest.raises(ValueError, match=r"base64 of the data .* Thin the scene"):
         ty.build_html(document, data + bytes(scene_chars), runtime="")
+
+
+def test_a_full_document_with_controls_readouts_theme_and_camera_validates_against_the_schema():
+    jsonschema = pytest.importorskip("jsonschema")
+    scene = ty.Scene(title="full", theme={"background": "#000000", "foreground": "#dddddd", "grid": "#333333"})
+    root = scene.frame("root", label="root", axes=("x", "y", "z"), unit="DU")
+    scene.frame("inertial", parent=root, rotation=ty.rotation("z", ty.channel("f")), label="inertial")
+    b = scene.body("b", frame=root, position=[1.0, 0.0, 0.0], label="b", color="#e69f00")
+    ts = scene.track_set("s", frame=root, tags={"kind": "x"}, attrs={"mu": 0.1}, periodic=True, dtype="float64", label="s")
+    f = np.linspace(0, 2 * np.pi, 10)
+    for e in (0.1, 0.2):
+        ts.add(np.column_stack([np.cos(f), np.sin(f)]), channels={"f": f, "t": f * 2}, parameters={"e": e})
+    ts.describe("f", interp="linear", unit="rad")
+    ts.describe("e", label="eccentricity")
+    kind = scene.choice("kind", ["x", "y"], labels=["ex", "why"])
+    frame = scene.choice("frame", ["root", "inertial"], scope="panel")
+    e = scene.selector("e", parameter="e", default=0.1)
+    show = scene.toggle("show", default=True)
+    scene.clock("fraction", channels=["f", "t", "@index"], labels=["anomaly", "time", "sample"], steps=16)
+    scene.view(
+        "v",
+        frame=frame,
+        driver=ty.driver(ty.sets(kind=kind), e),
+        camera={"kind": "plane", "plane": "xy"},
+        layers=[
+            ty.track(
+                ty.sets(kind=kind),
+                color={"parameter": "e", "colormap": "viridis", "range": [0, 1]},
+                opacity=0.4,
+                highlight={"var": e, "width": 2.0, "opacity": 1.0},
+            ),
+            ty.track(ty.sets(kind=kind), e, trail=0.3, head=True, color="#ffffff", width=2.0, visible=show),
+            ty.body(b, trail=0.3, size=5.0),
+            ty.axes(),
+            ty.grid(visible=show),
+        ],
+    )
+    scene.view(
+        "orbit",
+        frame=root,
+        driver=ty.driver(ts, 0),
+        camera={"kind": "orbit", "projection": "perspective", "up": "z"},
+        layers=[ty.track(ts)],
+    )
+    scene.panel("p1", "v", {frame: "root"})
+    scene.panel("p2", "orbit")
+    scene.layout(ty.split("row", 0.5, "p1", "p2"))
+    scene.tabs(kind, label="kind")
+    scene.tabs(frame, label="frame")
+    scene.slider(e, label="e", domain=ty.sets(kind=kind))
+    scene.toggle_control(show, label="show")
+    scene.transport()
+    scene.readout(
+        "caption",
+        "e = ",
+        {"member": "e", "digits": 3},
+        " at ",
+        ty.channel("f"),
+        " mu ",
+        1 - ty.attr("mu"),
+        " ",
+        kind,
+        " frame ",
+        {"clock": "index"},
+        " of ",
+        {"clock": "steps"},
+    )
+    scene.readout("panel", {"channel": "t", "digits": 2})
+    doc = scene.to_document()
+    schema = json.loads((CORPUS.parent / "scene.schema.json").read_text())
+    jsonschema.Draft202012Validator(schema).validate(doc)
+    assert doc["controls"][0] == {"kind": "tabs", "variable": "kind", "label": "kind"}
+    assert doc["readouts"][0]["parts"][5] == {"attr": "mu", "factor": -1.0, "offset": 1.0}
+    evaluate(doc, scene.to_container(), doc["initial"], 3)

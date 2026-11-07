@@ -333,3 +333,61 @@ def test_declarations_fail_at_the_call():
         scene.choice("c", ["a", "b"], default="z")
     with pytest.raises(ty.SceneError, match="D1"):
         scene.track_set("s", frame=scene.frame("root"), dtype="int32")
+
+
+def test_parameters_are_stored_as_float64():
+    scene, _, _ = small()
+    assert ty.Container(scene.to_container()).view("moving/parameters/e").dtype == np.float64
+
+
+def clocked(time, **kwargs):
+    scene = ty.Scene()
+    root = scene.frame("root")
+    ts = scene.track_set("s", frame=root, **kwargs)
+    ts.add(np.column_stack([np.linspace(0.0, 1.0, len(time)), np.zeros(len(time))]), channels={"time": time, "rho": np.ones(len(time))})
+    scene.clock(channels=["time"], steps=10)
+    scene.view("v", frame="root", driver=ty.driver(ts, 0), layers=[ty.track(ts)])
+    scene.panel("p", "v")
+    return scene
+
+
+def test_a_clock_in_seconds_past_j2000_is_stored_as_float64():
+    # 1e6 samples from 2026 to 2028 in seconds past J2000. float32 steps of 64 s at this magnitude would make the clock nonmonotone (T3)
+    time = 8.2e8 + np.linspace(0.0, 2 * 365.25 * 86400.0, 1_000_000)
+    scene = clocked(time)
+    scene.to_document()
+    data = ty.Container(scene.to_container())
+    stored = data.view("s/channels/time")
+    assert stored.dtype == np.float64
+    assert np.array_equal(stored, time)
+    assert data.view("s/positions").dtype == np.float32
+    assert data.view("s/channels/rho").dtype == np.float32
+
+
+def test_a_nondimensional_clock_stays_float32():
+    scene = clocked(np.linspace(0.0, 2 * np.pi, 1000))
+    scene.to_document()
+    assert ty.Container(scene.to_container()).view("s/channels/time").dtype == np.float32
+
+
+def test_channel_dtypes_win():
+    scene = clocked(np.linspace(0.0, 2 * np.pi, 1000), channel_dtypes={"time": "float64", "rho": "float64"})
+    data = ty.Container(scene.to_container())
+    assert data.view("s/channels/time").dtype == np.float64
+    assert data.view("s/channels/rho").dtype == np.float64
+    assert data.view("s/positions").dtype == np.float32
+    # rule T3 holds on the stored values, thus a forced float32 clock that rounds to repeated values is refused
+    scene = clocked(8.2e8 + np.linspace(0.0, 1000.0, 1000), channel_dtypes={"time": "float32"})
+    with pytest.raises(ty.SceneError, match="T3: clock channel 'time' of track set 's' is not strictly monotone"):
+        scene.to_document()
+
+
+def test_a_bad_channel_dtypes_mapping_is_refused():
+    scene = ty.Scene()
+    root = scene.frame("root")
+    for bad in ({"time": "int32"}, {"time": np.float64}, ["time"], {"@index": "float64"}):
+        with pytest.raises(ty.SceneError, match="D1: channel"):
+            scene.track_set("s", frame=root, channel_dtypes=bad)  # pyright: ignore[reportArgumentType]
+    ts = scene.track_set("s", frame=root, channel_dtypes={"tim": "float64"})
+    with pytest.raises(ty.SceneError, match=r"D1: channel_dtypes of track set 's' names channels \['tim'\]"):
+        ts.add(np.zeros((2, 2)), channels={"time": [0.0, 1.0]})

@@ -10,11 +10,14 @@ __version__ = "0.2.0"
 
 from ._evaluate import EvaluationError, evaluate
 from .container import Container, ContainerWriter
+from .html import build_html, write_html
 
 __all__ = [
     "Container",
     "ContainerWriter",
     "EvaluationError",
     "__version__",
+    "build_html",
     "evaluate",
+    "write_html",
 ]

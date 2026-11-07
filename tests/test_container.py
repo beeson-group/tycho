@@ -110,3 +110,32 @@ def test_the_delta_wraps_and_the_shuffle_groups_bytes():
     delta = np.array([[1, 0xFFFFFFFF], [0xFFFFFFFF, 1], [0xFFFFFFFF, 1]], dtype="<u4")
     assert raw == delta.reshape(-1).view(np.uint8).reshape(-1, 4).T.tobytes()
     assert raw[:6] == bytes([1, 0xFF, 0xFF, 1, 0xFF, 1])  # the first byte of each of the six values
+
+
+def test_the_writer_picks_the_smaller_encoding_and_raw_on_request():
+    rng = np.random.default_rng(0)
+    w = ContainerWriter()
+    w.add_view("smooth", np.linspace(0.0, 1.0, 3000).reshape(1000, 3))
+    w.add_view("noise", rng.integers(0, 256, 4000), dtype="uint8")
+    w.add_view("empty", np.zeros((0, 3)))
+    w.add_view("thin", np.zeros((4, 0), np.float32))
+    kinds = {name: v["encoding"] for name, v in w.views.items()}
+    assert kinds == {"smooth": "shuffle-delta-deflate", "noise": "raw", "empty": "raw", "thin": "raw"}
+    forced = ContainerWriter(raw=True)
+    forced.add_view("smooth", np.linspace(0.0, 1.0, 3000).reshape(1000, 3))
+    assert forced.views["smooth"]["encoding"] == "raw"
+    assert len(forced.to_bytes()) > len(w.to_bytes())
+
+
+def test_the_default_chunk_holds_about_one_mebibyte():
+    a = np.cumsum(np.ones((100_000, 3)), axis=0)
+    w = ContainerWriter()
+    w.add_view("a", a)
+    info = w.views["a"]
+    assert info["chunk_rows"] == (1 << 20) // 24
+    assert len(info["chunks"]) == 3
+    spans = info["chunks"]
+    assert all(spans[k][0] + spans[k][1] == spans[k + 1][0] for k in range(len(spans) - 1))
+    np.testing.assert_array_equal(Container(w.to_bytes()).view("a"), a)
+    with pytest.raises(ContainerError, match="D5: chunk_rows"):
+        w.add_view("b", a, chunk_rows=0)

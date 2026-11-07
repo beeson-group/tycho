@@ -94,6 +94,10 @@ describe('wall time to loop position', () => {
     expect(at(0, 1000, 1, 72)).toBeCloseTo(64 / 72, 15);
     expect(at(3, -50)).toBe(3);
   });
+  it('runs a loop in the seconds of the clock when it gives them, whatever its laps', () => {
+    expect(loopSeconds({ mode: 'value', channels: ['time'], steps: 960, range: [-8, 11], seconds: 24 })).toBe(24);
+    expect(loopSeconds({ mode: 'fraction', channels: ['@index'], steps: 4320, laps: 9, seconds: 30 })).toBe(30);
+  });
   it('lies between two frame indices, the index its integer part and the progress its exact place', () => {
     const x = at(0, 1062.5, 0.25);
     expect(x).toBe(2.125);

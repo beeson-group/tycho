@@ -202,6 +202,12 @@ describe('validate', () => {
     expect(rule(() => validate(scene))).toBe('2.7');
     expect(rule(() => validate(baseScene({ version: '0.4' })))).toBe('S1');
   });
+  it('a clock takes the seconds of one loop, a positive finite number, in either mode (2.6)', () => {
+    const scene = baseScene({ version: '0.3' });
+    scene.clock = { ...scene.clock, seconds: 24 };
+    expect(validate(scene, data(), state())).toEqual([]);
+    for (const seconds of [0, -1, Infinity, '24']) expect(rule(() => validate({ ...scene, clock: { ...scene.clock, seconds: seconds as never } }))).toBe('2.6');
+  });
   it('warns on a camera key this reader does not know, e.g. aspect on an orbit camera (section 2)', () => {
     const scene = baseScene();
     scene.views.main!.camera = { kind: 'orbit', aspect: 'free' } as never;

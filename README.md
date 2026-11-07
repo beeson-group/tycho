@@ -56,7 +56,7 @@ scene.write_html("loop.html")
 
 The script declares two frames, `rotating` and its child `inertial`, and a track set `loop` that holds one ellipse of 400 samples in the rotating frame. Each sample also stores its angle, as the channel `angle`. The call `ty.channel("angle")` makes the inertial frame turn by the stored angle of each sample. The runtime thus never integrates or interpolates a channel. It draws the samples it was given, in the frames that the scene declares. The choice variable `frame` is scoped to the panel, hence the panels `p1` and `p2` each hold a separate value of it and show the view `main` in different frames. The tabs switch the frame of a panel, and the transport plays the clock, which runs 200 animation frames per loop.
 
-The full example, [`examples/broucke/build.py`](https://github.com/beeson-group/tycho/blob/main/examples/broucke/build.py), draws the planar Broucke families of the elliptic restricted three-body problem in five frames. These are families of periodic orbits that Broucke published in 1969. The example reads trajectories computed with the PyDyLAN library from `broucke-input.tyd`, a file attached to each GitHub Release rather than kept in the repository.
+The full example, [`examples/broucke/build.py`](https://github.com/beeson-group/tycho/blob/main/examples/broucke/build.py), draws the planar Broucke families of the elliptic restricted three-body problem in five frames. These are families of periodic orbits that Broucke published in 1969. The example reads trajectories computed with the PyDyLAN library from `broucke-input.tyd`, a file attached to each GitHub Release rather than kept in the repository. In a second example, [`examples/manifolds/build.py`](https://github.com/beeson-group/tycho/blob/main/examples/manifolds/build.py), the invariant manifolds of Earth–Moon periodic orbits are drawn in 3D from `manifolds-input.tyd`, which is attached to the Release in the same way.
 
 ## On a slide
 
@@ -118,7 +118,7 @@ Style and static checks run through [pre-commit](https://pre-commit.com), a tool
 
 [nox](https://nox.thea.codes) wraps the rest, as the sessions of `noxfile.py`. A bare `uvx nox` runs the lint and the tests, `uvx nox -s docs` builds the documentation, and `uvx nox -s build` builds the sdist and the wheel. [CONTRIBUTING.md](https://github.com/beeson-group/tycho/blob/main/CONTRIBUTING.md) has the details and the release steps.
 
-The example reads `examples/broucke/broucke-input.tyd`, which is attached to each GitHub Release rather than kept in git, and its test is therefore skipped when this file is missing. The page `web/dev/index.html` loads any conformance scene into the runtime, so that a change can be checked by eye. It runs the development bundle that `npm --prefix web run build:dev` builds, and it is served from the checkout root, e.g. by `python3 -m http.server 8000`.
+The examples read `examples/broucke/broucke-input.tyd` and `examples/manifolds/manifolds-input.tyd`, which are attached to each GitHub Release rather than kept in git, and the test of each example is therefore skipped when its file is missing. The page `web/dev/index.html` loads any conformance scene into the runtime, so that a change can be checked by eye. It runs the development bundle that `npm --prefix web run build:dev` builds, and it is served from the checkout root, e.g. by `python3 -m http.server 8000`.
 
 ## License
 

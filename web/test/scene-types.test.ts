@@ -199,6 +199,11 @@ describe('validate', () => {
     expect(rule(() => validate(scene))).toBe('2.7');
     expect(rule(() => validate(baseScene({ version: '0.4' })))).toBe('S1');
   });
+  it('warns on a camera key this reader does not know, e.g. aspect on an orbit camera (section 2)', () => {
+    const scene = baseScene();
+    scene.views.main!.camera = { kind: 'orbit', aspect: 'free' } as never;
+    expect(validate(scene)).toContain('the camera of view main has a key "aspect" that this reader does not know');
+  });
   it('a newer minor version and an unknown layer kind break S1, and wrong kinds and ranges break L5 and 2.7', () => {
     expect(rule(() => validate(baseScene({ version: '0.9' })))).toBe('S1');
     const scene = baseScene();

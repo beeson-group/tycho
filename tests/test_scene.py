@@ -293,3 +293,31 @@ def test_describe_keeps_channels_and_parameters_apart():
     doc = scene.to_document()
     assert doc["track_sets"]["moving"]["channels"]["t"] == {"view": "moving/channels/t", "interp": "hold", "unit": "TU"}
     assert doc["track_sets"]["moving"]["parameters"]["e"] == {"view": "moving/parameters/e", "label": "eccentricity"}
+
+
+def test_readouts_and_sliders_are_checked_against_the_driver():
+    scene, moving, still = small()
+    e = scene.selector("e", parameter="e")
+    k = scene.selector("k", by="index")
+    scene.view("v", frame="root", driver=ty.driver(moving, e), layers=[])
+    scene.panel("p", "v")
+    scene.readout("panel", "e = ", {"member": "e", "digits": 3}, " at ", ty.channel("t"), " of ", 2 * ty.attr("mu") + 1)
+    scene.readout("caption", {"member": "nope"}, {"channel": "nope"}, {"attr": "nope"})
+    scene.slider(e, label="e", domain=still)
+    scene.slider(k, label="k", domain=moving)
+    with pytest.raises(ty.SceneError) as info:
+        scene.to_document()
+    message = str(info.value)
+    for expected in (
+        "names parameter 'nope', which track set 'moving' lacks",
+        "names channel 'nope', which track set 'moving' lacks",
+        "names attribute 'nope', which track set 'moving' lacks",
+        "names attribute 'mu', which track set 'moving' lacks",
+        "2.9: the slider over 'e' has track set 'still' in its domain, which lacks parameter 'e'",
+        "2.9: the slider over 'k' needs a selector by nearest",
+    ):
+        assert expected in message
+    with pytest.raises(ty.SceneError, match="of var, member, attr, channel, and clock, not one"):
+        scene.readout("panel", {"member": "e", "attr": "mu"})
+    with pytest.raises(ty.SceneError, match="digits"):
+        scene.readout("panel", {"member": "e", "digits": 0})

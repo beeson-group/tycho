@@ -1091,3 +1091,51 @@ class Scene:
             if not 1 <= out["digits"] <= 17:
                 raise SceneError(f"2.9: readout digits is {out['digits']}, not in 1 to 17")
         return out
+
+    def _check_kept(self, ts: TrackSet) -> list[str]:
+        kept = ts.kept or []
+        if len(kept) != len(ts.positions):
+            return [f"T1: track set {ts.id!r} has kept indices for {len(kept)} tracks, not {len(ts.positions)}"]
+        out = []
+        for i, (k, p) in enumerate(zip(kept, ts.positions, strict=True)):
+            if len(k) < 2 or k[0] != 0 or k[-1] != len(p) - 1 or np.any(np.diff(k) <= 0) or np.any(k < 0):
+                out.append(f"T1: track set {ts.id!r}: the kept indices of track {i} are not strictly increasing from 0 to {len(p) - 1}")
+        return out
+
+    def _check_clock_channels(self, clock: Mapping[str, Any]) -> list[str]:
+        """Checks that each clock channel, as stored, is strictly monotone and finite along every track, with a finite span (rule T3)."""
+        out = []
+        for name in clock["channels"]:
+            if name == INDEX:
+                continue
+            for ts in self._sets.values():
+                if not ts.positions or name not in ts.channels[0]:
+                    continue
+                dtype = self._channel_dtype(ts, name)
+                for i, c in enumerate(ts._stored()[1]):
+                    stored = c[name].astype(dtype).astype(np.float64)
+                    d = np.diff(stored)
+                    if not (np.all(d > 0) or np.all(d < 0)):
+                        out.append(f"T3: clock channel {name!r} of track set {ts.id!r} is not strictly monotone along track {i}")
+                    elif not np.isfinite(stored[-1] - stored[0]):
+                        out.append(f"T3: clock channel {name!r} of track set {ts.id!r} has an infinite span along track {i}")
+        return out
+
+    def _channel_dtype(self, ts: TrackSet, name: str) -> str:
+        """The stored dtype of a channel. It is the dtype given in ``channel_dtypes``, else float64 for a clock
+        channel that float32 would spoil (see :meth:`track_set`), else the track set's dtype."""
+        if name in ts.channel_dtypes:
+            return ts.channel_dtypes[name]
+        if ts.dtype == "float64" or self._clock is None or name not in self._clock["channels"]:
+            return ts.dtype
+        for c in ts._stored()[1]:
+            exact = c[name]
+            rounded = exact.astype(np.float32).astype(np.float64)
+            d = np.diff(rounded)
+            if not (np.all(d > 0) or np.all(d < 0)):
+                return "float64"
+            # compare each step with the larger rounding error of its two ends
+            error = np.abs(rounded - exact)
+            if np.any(np.maximum(error[:-1], error[1:]) > 0.01 * np.abs(np.diff(exact))):
+                return "float64"
+        return ts.dtype

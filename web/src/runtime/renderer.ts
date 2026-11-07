@@ -1304,3 +1304,110 @@ class MarkDraw implements Draw {
     (this.lines.material as THREE.Material).dispose();
   }
 }
+
+// panels
+
+/**
+ * A quad over the viewport that copies a panel's region of the underlay back pixel for pixel. The
+ * fragment at window position (x, y) takes the texel at (x, y), hence sampling and filtering cannot
+ * shift or blur it.
+ */
+/** Two underlay rebuilds closer than this, in milliseconds, are a drag. */
+const DRAG_MS = 100;
+/** How long after the last coarse rebuild the underlays are drawn again with antialiasing, in milliseconds. */
+const REFINE_MS = 150;
+
+/** A render target of `width` by `height` device pixels for copies pixel for pixel, multisampled when `samples` is above 0. */
+function pixelTarget(width: number, height: number, samples: number): THREE.WebGLRenderTarget {
+  return new THREE.WebGLRenderTarget(width, height, {
+    samples,
+    depthBuffer: false,
+    minFilter: THREE.NearestFilter,
+    magFilter: THREE.NearestFilter,
+    generateMipmaps: false,
+  });
+}
+
+function blitPass(): { scene: THREE.Scene; camera: THREE.Camera; material: THREE.ShaderMaterial } {
+  const material = new THREE.ShaderMaterial({
+    glslVersion: THREE.GLSL3,
+    uniforms: { uUnderlay: { value: null } },
+    vertexShader: 'void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }',
+    fragmentShader: 'uniform sampler2D uUnderlay; out vec4 color; void main() { color = texelFetch(uUnderlay, ivec2(gl_FragCoord.xy), 0); }',
+    depthTest: false,
+    depthWrite: false,
+    blending: THREE.NoBlending,
+  });
+  const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
+  quad.frustumCulled = false;
+  const scene = new THREE.Scene();
+  scene.add(quad);
+  return { scene, camera: new THREE.OrthographicCamera(), material };
+}
+
+/**
+ * Whether a camera's world or projection matrix differs from `seen`, which then holds both. The test
+ * covers any pan, zoom, rotation, fit, or change of aspect, however the camera was moved.
+ */
+export function cameraMoved(camera: THREE.Camera, seen: Float64Array): boolean {
+  camera.updateMatrixWorld();
+  const a = camera.matrixWorld.elements;
+  const b = camera.projectionMatrix.elements;
+  let moved = false;
+  for (let i = 0; i < 16; i++) {
+    if (seen[i] !== a[i]) ((moved = true), (seen[i] = a[i]!));
+    if (seen[16 + i] !== b[i]) ((moved = true), (seen[16 + i] = b[i]!));
+  }
+  return moved;
+}
+
+type AnyCamera = THREE.OrthographicCamera | THREE.PerspectiveCamera;
+
+class PanelRender {
+  readonly id: string;
+  /** The layers that move with the clock, drawn every frame. */
+  readonly scene = new THREE.Scene();
+  /**
+   * The bottom run of layers that do not take a reading, drawn once into `underlay` and copied back
+   * every frame until the camera, the panel's size, or the layers' members, highlight, or selection change.
+   */
+  readonly staticScene = new THREE.Scene();
+  /** The panel's region of the stage's underlay, in device pixels, when its static layers were last copied there. */
+  readonly underlay = new THREE.Vector4(-1, -1, -1, -1);
+  underlayDirty = true;
+  /** The keys of the draws in `staticScene`, to detect a change of the run when the panel is planned again. */
+  staticKey = '';
+  /** When the underlay was last drawn again, in milliseconds. */
+  rebuiltAt = -Infinity;
+  /** The underlay was drawn without antialiasing, during a drag, and is drawn again with it once the drag stops. */
+  coarse = false;
+  /** The camera's world and projection matrices when the underlay was drawn. */
+  readonly cameraSeen = new Float64Array(32);
+  camera: AnyCamera = new THREE.OrthographicCamera();
+  cameraSpec: Camera = { kind: 'plane', plane: 'xy' };
+  controls: OrbitControls | null = null;
+  element: HTMLElement | null = null;
+  /** Text over the panel: tick numbers, axis titles, and body labels. */
+  labels: HTMLElement | null = null;
+  plan: PanelPlan | null = null;
+  error: string | null = null;
+  readonly draws = new Map<number, Draw>();
+  rect: Rect = { x: 0, y: 0, w: 1, h: 1 };
+  /** What the panel draws, as far as the fit depends on it. A change refits the camera. */
+  content = '';
+  needsFit = true;
+  userMoved = false;
+  fitting = false;
+  /** Half the height of the orthographic view, at zoom 1. */
+  halfHeight = 1;
+  /** The box the camera was last fitted to. */
+  box: THREE.Box3 | null = null;
+  /** What a plane camera showed at the last frame, or null under an orbit camera. */
+  view: PlaneView | null = null;
+
+  constructor(id: string) {
+    this.id = id;
+  }
+}
+
+const cameraKey = (c: Camera): string => JSON.stringify(c);

@@ -150,3 +150,50 @@ export function readoutPieces(ctx: ReadoutContext, parts: readonly Part[]): stri
   }
   return out;
 }
+
+// stat tiles
+
+/** One stat tile of a readout: its label, the index of its value part, and its unit. */
+export interface ReadoutTile {
+  label: string;
+  part: number;
+  unit: string;
+  /** The least width of the value in ch, for a value that changes during playback (a channel or the clock), so that it does not move its neighbors. */
+  width: number | null;
+}
+
+/**
+ * A readout as stat tiles, or null when its text does not split. Parts are flat text, hence the
+ * split is a heuristic. A value's label is the text after the last comma before it, less a
+ * trailing "=" or ":", and its unit is the text after it up to the next comma. It fails when a
+ * label is empty, when the text between two values does not have a comma to split at, or when any
+ * text would be left over. Attribute parts, which are scene constants, go last.
+ */
+export function readoutTiles(parts: readonly Part[]): ReadoutTile[] | null {
+  const texts: string[] = [''];
+  const values: number[] = [];
+  parts.forEach((p, i) => {
+    if (typeof p === 'string') texts[texts.length - 1] += p;
+    else {
+      values.push(i);
+      texts.push('');
+    }
+  });
+  if (values.length === 0) return null;
+  const blank = (xs: string[]) => xs.every((x) => x.trim() === '');
+  const tiles: ReadoutTile[] = [];
+  for (let k = 0; k < values.length; k++) {
+    const before = texts[k]!.split(',');
+    const after = texts[k + 1]!.split(',');
+    // the text between two values holds the first one's unit and the second one's label
+    if (k > 0 ? before.length < 2 || !blank(before.slice(1, -1)) : !blank(before.slice(0, -1))) return null;
+    if (k === values.length - 1 && !blank(after.slice(1))) return null;
+    const label = before[before.length - 1]!.replace(/\s*[=:]\s*$/, '').trim();
+    if (label === '') return null;
+    const p = parts[values[k]!] as Exclude<Part, string>;
+    const width = 'clock' in p ? 5 : 'channel' in p ? (p.digits ?? 6) + 5 : null;
+    tiles.push({ label, part: values[k]!, unit: after[0]!.trim(), width });
+  }
+  const constant = (t: ReadoutTile) => 'attr' in (parts[t.part] as object);
+  return [...tiles.filter((t) => !constant(t)), ...tiles.filter(constant)];
+}

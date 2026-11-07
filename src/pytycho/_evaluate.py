@@ -582,3 +582,113 @@ class _Reading:
             return self.q
         c = track.clock_values(self.channel)
         return float((self.v - c[0]) / (c[-1] - c[0]))
+
+
+class _Panel:
+    def __init__(self, ev: _Evaluator, state: Mapping[str, Any], panel: Mapping[str, Any], reading: _Reading) -> None:
+        self.ev = ev
+        self.state = state
+        self.panel = panel
+        self.reading = reading
+        try:
+            self.view = ev.doc["views"][panel["view"]]
+        except (KeyError, TypeError):
+            raise EvaluationError(f"2.8: a panel shows {panel.get('view')!r}, which is not a view") from None
+        if not isinstance(self.view, Mapping) or not all(k in self.view for k in ("frame", "driver", "layers")):
+            raise EvaluationError(f"2.7: view {panel['view']!r} lacks frame, driver, or layers")
+        # the driver is resolved for every panel, whether or not a layer uses it (section 2.7)
+        driver = self.view["driver"]
+        if not isinstance(driver, Mapping) or "sets" not in driver or "member" not in driver:
+            raise EvaluationError(f"2.7: the driver of view {panel['view']!r} lacks sets or member")
+        data = self.one(driver["sets"])
+        self.driver: tuple[SetData, int] | None = None
+        if data is not None:
+            if driver["member"] == "all" or (isinstance(driver["member"], Mapping) and "count" in driver["member"]):
+                raise EvaluationError(f"V3: the driver's member is {driver['member']!r}, but a driver resolves to one track")
+            missing = [c for c in ev.doc["clock"]["channels"] if c != INDEX and c not in data.channels]
+            if missing:
+                raise EvaluationError(f"C5: the driver's track set {data.id!r} lacks clock channels {missing}")
+            if reading.laps > 1 and not data.periodic:
+                raise EvaluationError(f"C6: the driver's track set {data.id!r} is not periodic, and the clock has {reading.laps} laps")
+            self.driver = (data, self.members(driver["member"], data)[0])
+
+    # variables (rule V1)
+
+    def var(self, vid: str) -> Any:
+        try:
+            spec = self.ev.variables[vid]
+        except KeyError:
+            raise EvaluationError(f"2.5: variable {vid!r} is not declared") from None
+        values = self.panel.get("variables", {}) if spec.get("scope", "scene") == "panel" else self.state.get("variables", {})
+        return values.get(vid, spec["default"])
+
+    def value(self, spec: Any) -> Any:
+        if isinstance(spec, Mapping) and "var" in spec:
+            return self.var(spec["var"])
+        return spec
+
+    # set queries and members (rules V2 and V3)
+
+    def match(self, query: Any) -> list[str]:
+        sets = self.ev.doc["track_sets"]
+        if isinstance(query, Mapping) and "set" in query:
+            if query["set"] not in sets:
+                raise EvaluationError(f"V2: the set query names {query['set']!r}, which is not a track set")
+            return [query["set"]]
+        if not isinstance(query, Mapping) or not isinstance(query.get("tags"), Mapping):
+            raise EvaluationError(f'V2: a set query is {{"set": id}} or {{"tags": {{...}}}}, not {query!r}')
+        wanted = {name: self.value(v) for name, v in query["tags"].items()}
+        return [sid for sid, s in sets.items() if all((s.get("tags") or {}).get(k) == v for k, v in wanted.items())]
+
+    def one(self, query: Mapping[str, Any]) -> SetData | None:
+        matches = self.match(query)
+        if len(matches) > 1:
+            raise EvaluationError(f"V2: the set query {dict(query)} matches the {len(matches)} track sets {matches}, where one is needed")
+        return self.ev.set_data(matches[0]) if matches else None
+
+    def members(self, ref: Any, data: SetData) -> list[int]:
+        if ref == "all":
+            return list(range(data.tracks))
+        if isinstance(ref, Mapping) and "index" in ref:
+            k = ref["index"]
+            if isinstance(k, bool) or not isinstance(k, int):
+                raise EvaluationError(f"V3: member index {k!r} is not an integer")
+            if not 0 <= k < data.tracks:
+                raise EvaluationError(f"V3: member index {k} is not below the track count {data.tracks} of track set {data.id!r}")
+            return [k]
+        if isinstance(ref, Mapping) and "count" in ref:
+            n = ref["count"]
+            if isinstance(n, bool) or not isinstance(n, int) or n < 1:
+                raise EvaluationError(f"V3: member count {n!r} is not an integer of at least one")
+            return sparse(data.tracks, n)
+        if isinstance(ref, Mapping) and "var" in ref:
+            return [self.selected(ref["var"], data)]
+        raise EvaluationError(f'V3: a member reference is \'all\', {{"index": k}}, {{"count": n}}, or {{"var": id}}, not {ref!r}')
+
+    def selected(self, vid: str, data: SetData) -> int:
+        spec = self.ev.variables.get(vid)
+        if spec is None or spec.get("kind") != "selector":
+            raise EvaluationError(f"V3: variable {vid!r} is not a selector")
+        value = self.var(vid)
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+            raise EvaluationError(f"2.5: selector {vid!r} holds {value!r}, not a finite number")
+        value = float(value)
+        if spec.get("by", "nearest") == "index":
+            return min(max(math.floor(value + 0.5), 0), data.tracks - 1)
+        parameter = spec["parameter"]
+        if parameter not in data.parameters:
+            raise EvaluationError(f"V3: track set {data.id!r} lacks parameter {parameter!r} for selector {vid!r}")
+        # argmin takes the first of equal distances, i.e. the lowest index
+        return int(np.argmin(np.abs(data.parameters[parameter] - value)))
+
+
+def sparse(tracks: int, n: int) -> list[int]:
+    """The tracks of ``{"count": n}`` (rule V3), which are every ``step``-th track from the first, and the last.
+
+    The step is ``floor(tracks / n + 0.5)``, or 1 when ``n`` is at least ``tracks``.
+    """
+    step = 1 if n >= tracks else math.floor(tracks / n + 0.5)
+    out = list(range(0, tracks, step))
+    if out[-1] != tracks - 1:
+        out.append(tracks - 1)
+    return out

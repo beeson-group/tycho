@@ -123,3 +123,51 @@ describe('lazy geometry and per-track buffers', () => {
     }
   });
 });
+
+describe('a panel plan of the grammar of 0.2', () => {
+  const laps = () => {
+    const c = loadCorpus('laps');
+    return { ...c, geometry: new GeometryCache(c.scene, c.data) };
+  };
+  const tracks = (c: ReturnType<typeof laps>, st: State) => planPanel(c.scene, c.geometry, st, 'p1').layers.filter((l): l is TrackPlan => l.kind === 'track');
+
+  it("resolves a colormap keyed on a choice by the panel's value, and leaves the rest alone", () => {
+    const c = laps();
+    const inertial = tracks(c, c.scene.initial);
+    const rot = tracks(c, withVariable(c.scene, c.scene.initial, 'frame', 'rot', 'p1'));
+    expect(inertial.map((l) => (typeof l.color === 'object' ? l.color.colormap : (l.color ?? null)))).toEqual([null, null, null, null, 'plasma', 'plasma']);
+    expect(rot.map((l) => (typeof l.color === 'object' ? l.color.colormap : (l.color ?? null)))).toEqual([null, null, null, null, 'viridis', 'viridis']);
+    expect(inertial[4]!.color).toEqual({ parameter: 'e', colormap: 'plasma' });
+  });
+
+  it('takes its members from the evaluator for every reference, a count included', () => {
+    const c = laps();
+    const plan = planPanel(c.scene, c.geometry, c.scene.initial, 'p1');
+    const fan = c.geometry.sets.get('fan');
+    const ts = plan.layers.filter((l): l is TrackPlan => l.kind === 'track');
+    expect(ts[4]!.members).toEqual(sparse(5, 2));
+    expect(ts[4]!.members).toEqual([0, 3, 4]);
+    for (const l of ts) expect(l.members).toEqual(members(plan.scope, l.layer.members, l.set!));
+    // the selector `e` of the highlight, by nearest at 0.2, picks a member of the all-members layer
+    expect(ts[5]!.selected).toBe(ts[5]!.highlight);
+    expect(fan.parameter('e')[ts[5]!.selected!]).toBeCloseTo(0.2, 12);
+  });
+
+  it('refuses a reading on a track set that is not periodic when the clock has laps (C6)', () => {
+    const c = laps();
+    c.scene.views.v!.layers[5] = { ...(c.scene.views.v!.layers[5] as TrackLayer), reveal: 'grow' };
+    expect(() => planPanel(c.scene, c.geometry, c.scene.initial, 'p1')).toThrow(TychoError);
+    expect(() => planPanel(c.scene, c.geometry, c.scene.initial, 'p1')).toThrow(/\[C6\]/);
+  });
+
+  it('fits every lap the loop draws', () => {
+    const c = laps();
+    const box = fitBox(planPanel(c.scene, c.geometry, c.scene.initial, 'p1'), c.geometry)!;
+    const g = c.geometry.geometry('loop', 'inertial');
+    for (let j = 0; j < 3; j++) {
+      const p = g.lapPositions(j);
+      for (let i = 0; i < p.length; i += 3)
+        for (let k = 0; k < 3; k++) (expect(p[i + k]!).toBeGreaterThanOrEqual(box[k]! - 1e-15), expect(p[i + k]!).toBeLessThanOrEqual(box[k + 3]! + 1e-15));
+    }
+  });
+});

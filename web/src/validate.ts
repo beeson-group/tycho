@@ -49,6 +49,8 @@ const FRAME_KEYS = ['label', 'axes', 'unit', 'parent', 'origin', 'rotation', 'sc
 const BODY_KEYS = ['label', 'frame', 'position', 'color'];
 const SET_KEYS = ['label', 'frame', 'tags', 'attrs', 'tracks', 'offsets', 'positions', 'channels', 'parameters', 'periodic'];
 const VIEW_KEYS = ['label', 'frame', 'camera', 'driver', 'layers'];
+const PLANE_CAMERA_KEYS = ['kind', 'plane', 'aspect'];
+const ORBIT_CAMERA_KEYS = ['kind', 'projection', 'up'];
 const LAYER_KEYS: Record<string, readonly string[]> = {
   track: ['kind', 'sets', 'members', 'reveal', 'trail', 'head', 'before', 'after', 'context', 'color', 'opacity', 'width', 'highlight', 'visible'],
   body: ['kind', 'body', 'trail', 'size', 'visible'],
@@ -181,6 +183,7 @@ export function validate(scene: Scene, data?: DataStore, state?: State): string[
   for (const [id, s] of Object.entries(scene.track_sets)) unknownKeys(s, SET_KEYS, `track set ${id}`, warnings);
   for (const [id, v] of Object.entries(scene.views)) {
     unknownKeys(v, VIEW_KEYS, `view ${id}`, warnings);
+    if (v.camera !== undefined) unknownKeys(v.camera, v.camera.kind === 'orbit' ? ORBIT_CAMERA_KEYS : PLANE_CAMERA_KEYS, `the camera of view ${id}`, warnings);
     for (const layer of v!.layers)
       if (Object.hasOwn(LAYER_KEYS, layer.kind)) unknownKeys(layer, LAYER_KEYS[layer.kind]!, `a ${layer.kind} layer of view ${id}`, warnings);
   }

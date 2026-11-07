@@ -107,3 +107,56 @@ function checkTrail(id: string, trail: Trail): void {
   if (!(trail.fraction > 0 && trail.fraction <= 1)) fail('2.7', `view ${id}: a trail fraction is ${trail.fraction}, not in (0, 1]`);
   if (trail.taper !== undefined && !(unit(trail.taper.width ?? 0) && unit(trail.taper.opacity ?? 0))) fail('2.7', `view ${id}: a trail taper is not in [0, 1]`);
 }
+
+function checkTrackLayer(scene: Scene, id: string, layer: TrackLayer): void {
+  checkQuery(scene, layer.sets);
+  if (typeof layer.members === 'object' && 'var' in layer.members) checkVariableRef(scene, layer.members.var, 'selector', 'V3');
+  if (typeof layer.members === 'object' && 'count' in layer.members && !(Number.isInteger(layer.members.count) && layer.members.count >= 1)) {
+    fail('V3', `view ${id}: member count ${JSON.stringify(layer.members.count)} is not an integer of at least one`);
+  }
+  const hl = layer.highlight;
+  if (hl !== undefined) {
+    checkVariableRef(scene, hl.var, 'selector', '2.7');
+    if (hl.width !== undefined && !(hl.width > 0)) fail('2.7', `view ${id}: a highlight width is ${hl.width}, not positive`);
+    if (hl.opacity !== undefined && !unit(hl.opacity)) fail('2.7', `view ${id}: a highlight opacity is ${hl.opacity}, not in [0, 1]`);
+    if (hl.kernel !== undefined) {
+      if (!(hl.kernel.width > 0 && hl.kernel.width <= 1)) fail('2.7', `view ${id}: a highlight kernel's width is ${hl.kernel.width}, not in (0, 1]`);
+      if (!unit(hl.kernel.opacity)) fail('2.7', `view ${id}: a highlight kernel's opacity is ${hl.kernel.opacity}, not in [0, 1]`);
+      const sel = variableDef(scene, hl.var);
+      if (sel?.kind === 'selector' && sel.by === 'index') fail('2.7', `view ${id}: a highlight kernel needs a selector by nearest, and ${hl.var} is by index`);
+    }
+  }
+  const reveal = layer.reveal ?? 'none';
+  if (!['none', 'grow', 'trail'].includes(reveal)) fail('2.7', `view ${id}: a track layer's reveal is ${JSON.stringify(reveal)}, not none, grow, or trail`);
+  if (reveal === 'trail' && layer.trail === undefined) fail('2.7', `view ${id}: a track layer has reveal "trail" but lacks a trail`);
+  if (layer.trail !== undefined) checkTrail(id, layer.trail);
+  if (layer.head !== undefined && typeof layer.head !== 'boolean') {
+    if (typeof layer.head !== 'object' || layer.head === null)
+      fail('L3', `view ${id}: a track layer's head is ${JSON.stringify(layer.head)}, not a boolean or an object`);
+    if (layer.head.color !== undefined && !COLOR.test(layer.head.color))
+      fail('L3', `view ${id}: a head color is ${JSON.stringify(layer.head.color)}, not a #rrggbb color`);
+    if (layer.head.size !== undefined && !(layer.head.size > 0)) fail('L3', `view ${id}: a head size is ${layer.head.size}, not positive`);
+  }
+  for (const key of ['before', 'after'] as const) {
+    if (layer[key] !== undefined && layer[key] !== 'clamp' && layer[key] !== 'hidden')
+      fail('C3', `view ${id}: a track layer's ${key} is ${JSON.stringify(layer[key])}, not clamp or hidden`);
+  }
+  if (layer.opacity !== undefined && !unit(layer.opacity)) fail('2.7', `view ${id}: a track layer's opacity is ${layer.opacity}, not in [0, 1]`);
+  if (layer.width !== undefined && !(layer.width > 0)) fail('2.7', `view ${id}: a track layer's width is ${layer.width}, not positive`);
+  if (layer.color !== undefined && typeof layer.color === 'object') {
+    const cmap = layer.color.colormap;
+    if (typeof cmap === 'object' && cmap !== null) {
+      // a colormap keyed on a choice gives a colormap for every value of the choice, and only for these values
+      checkVariableRef(scene, cmap.var, 'choice', '2.7');
+      const values = (variableDef(scene, cmap.var) as { values: string[] }).values;
+      const keys = Object.keys(cmap.map ?? {});
+      const missing = values.filter((v) => !Object.hasOwn(cmap.map, v));
+      const extra = keys.filter((k) => !values.includes(k));
+      if (missing.length > 0) fail('2.7', `view ${id}: a colormap keyed on ${cmap.var} does not name a colormap for ${JSON.stringify(missing)}`);
+      if (extra.length > 0) fail('2.7', `view ${id}: a colormap keyed on ${cmap.var} maps ${JSON.stringify(extra)}, which are not its values`);
+      for (const k of keys)
+        if (!COLORMAPS.includes(cmap.map[k]!)) fail('2.7', `view ${id}: the colormap ${JSON.stringify(cmap.map[k])} is not one of ${COLORMAPS.join(', ')}`);
+    } else if (!COLORMAPS.includes(cmap)) fail('2.7', `view ${id}: the colormap ${JSON.stringify(cmap)} is not one of ${COLORMAPS.join(', ')}`);
+    if ('parameter' in layer.color === 'channel' in layer.color) fail('2.7', `view ${id}: a colormap color names both or neither of parameter and channel`);
+  }
+}

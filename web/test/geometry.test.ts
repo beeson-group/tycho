@@ -199,3 +199,80 @@ describe('reveal, pieces, and the GPU comparison give the evaluator line (C3, L1
     }
   }
 });
+
+describe('body trails from the per-lap table are the evaluator trail (L4, C6)', () => {
+  const FRACTIONS = [undefined, 1, 0.3, 0.07];
+  for (const name of names) {
+    it(`${name}: every body layer, at integer frames and between them`, () => {
+      const c = loadCorpus(name);
+      const geo = new GeometryCache(c.scene, c.data);
+      const states = [...new Map(c.cases.map((k) => [JSON.stringify(k.state), k.state])).values()];
+      if (states.length === 0) states.push(c.scene.initial);
+      let compared = 0;
+      let laps = 0;
+      for (const state of states) {
+        for (const fraction of FRACTIONS) {
+          const scene = structuredClone(c.scene);
+          for (const view of Object.values(scene.views)) {
+            view!.layers = view!.layers.map((l) => (l.kind === 'body' && fraction !== undefined ? ({ ...l, trail: { fraction } } as Layer) : l));
+          }
+          const n = clockLaps(scene.clock);
+          for (let i = 0; i < Math.min(scene.clock.steps, 50); i++) {
+            const result = evaluateOrSkip(scene, c, state, i, ['C5', 'C6']);
+            if (result === null) break;
+            for (const half of [0, 0.5]) {
+              const q = progress(scene.clock.steps, i) + half / scene.clock.steps;
+              for (const [pid, panel] of Object.entries(state.panels)) {
+                const scope: PanelScope = { scene, state, panel: panel! };
+                const view = scene.views[panel!.view]!;
+                const defs = view.layers.filter((l) => layerVisible(scope, l));
+                const res = result.panels[pid]!;
+                const driverId = oneSet(scope, view.driver.sets);
+                const driver = driverId === null ? null : { set: geo.sets.get(driverId), track: 0 };
+                if (driver) driver.track = driverMember(scope, view.driver.member, driver.set);
+                const env: LayerEnv = { scope, frames: geo.frames, clock: scene.clock, channel: state.clock.channel, q, display: res.frame };
+                defs.forEach((def, li) => {
+                  if (def.kind !== 'body' || driver === null) return;
+                  const want = half === 0 ? (res.layers[li] as BodyLayerResult) : bodyLayer(env, def, driver);
+                  const table = geo.bodyTrail(def.body, res.frame, driver.set.id, driver.track);
+                  const tc = geo.readings(driver.set.id, state.clock.channel).clocks[driver.track]!;
+                  const loopReading = n * bound(tc.reading(scene.clock, q))!;
+                  const at = lapOf(loopReading, n);
+                  const got: Vec3 = [0, 0, 0];
+                  table.vertex(point(tc, at.u, false, at.lap), got);
+                  expect(got, `${pid} layer ${li} frame ${i}+${half}`).toEqual(want.position);
+                  if (def.trail !== undefined) {
+                    let tail = loopReading - n * def.trail.fraction;
+                    if (tail < 0 && !driver.set.periodic) tail = 0;
+                    const out = new Float32Array(3 * trailCapacity(table.m, n, def.trail.fraction));
+                    const count = table.polyline(tc, tail, loopReading, n, out);
+                    const trail = want.trail!;
+                    expect(count, `${pid} layer ${li} frame ${i}+${half}`).toBe(trail.length);
+                    const expected = Float32Array.from(trail.flat());
+                    expect(Array.from(out.subarray(0, 3 * count))).toEqual(Array.from(expected));
+                    if (lapOf(tail, n).lap < at.lap) laps++;
+                  }
+                  compared++;
+                });
+              }
+            }
+          }
+        }
+      }
+      // a trail crosses a lap joint only on a periodic track set under a clock in fraction mode with laps
+      if (compared > 0 && clockLaps(c.scene.clock) > 1) expect(laps).toBeGreaterThan(0);
+    });
+  }
+  it('shares one lap when neither the body nor the frame reads a channel, and stores each lap otherwise', () => {
+    const c = loadCorpus('laps');
+    const geo = new GeometryCache(c.scene, c.data);
+    const body = Object.keys(c.scene.bodies ?? {})[0];
+    if (body === undefined) return;
+    for (const frame of Object.keys(c.scene.frames)) {
+      const table = geo.bodyTrail(body, frame, Object.keys(c.scene.track_sets)[0]!, 0);
+      const shared = table.lap(0) === table.lap(2);
+      expect(shared).toBe(table.invariant);
+      expect(table.invariant).toBe(geo.frames.bodyRequirements(body, frame).channels.size === 0);
+    }
+  });
+});

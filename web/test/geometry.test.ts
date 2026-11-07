@@ -157,7 +157,7 @@ const VARIANTS: Partial<TrackLayer>[] = [
   { reveal: 'trail', trail: { fraction: 0.5 }, before: 'clamp', after: 'hidden' },
 ];
 
-const seen = { wraps: 0, hidden: 0, pieces: 0, laps: 0, deep: 0 };
+const seen = { wraps: 0, hidden: 0, pieces: 0, laps: 0, deep: 0, driver: 0 };
 
 /** With several laps, a reading is taken only on a periodic track set (rule C6), hence the variants go only to the layers of periodic track sets. */
 const takesVariant = (scene: Scene, l: Layer): boolean =>
@@ -215,6 +215,7 @@ describe('reveal, pieces, and the GPU comparison give the evaluator line (C3, L1
                     else {
                       const segments = drawn(g, m.index, rev, gpuU).map((s) => s.map((p) => apply(model, p)));
                       expect(sameSegments(segments, want), where).toBe(true);
+                      seen.driver++;
                     }
                     if (hasHead(def)) {
                       let head = rev.head === null ? null : ([0, 0, 0] as Vec3);
@@ -316,7 +317,8 @@ describe('body trails from the per-lap table are the evaluator trail (L4, C6)', 
 });
 
 describe('the corpus sweep above', () => {
-  it('met periodic wraps, trails across lap joints and below lap -1, hidden tracks, and end pieces', () => {
+  it('met periodic wraps, trails across lap joints and below lap -1, hidden tracks, end pieces, and layers in the driver context', () => {
+    expect(seen.driver).toBeGreaterThan(0);
     expect(seen.wraps).toBeGreaterThan(0);
     expect(seen.laps).toBeGreaterThan(0);
     expect(seen.deep).toBeGreaterThan(0);

@@ -467,3 +467,108 @@ export function pairTracks(set: SetData): Float32Array {
   for (let t = 0; t < set.tracks; t++) for (let i = 0; i + 1 < set.count(t); i++, j++) out[2 * j] = out[2 * j + 1] = t;
   return out;
 }
+
+// body trails
+
+/**
+ * A body's position in one display frame in the context of each sample of one driver track,
+ * per lap of rule C6, as x, y, z per sample. A lap is filled the first time it is drawn and kept,
+ * so that a frame copies a trail instead of evaluating it. When neither the body's position nor an
+ * edge into the display frame reads a channel, every lap has the positions of lap 0.
+ */
+export class BodyTrailTable {
+  readonly m: number;
+  readonly invariant: boolean;
+  private readonly laps = new Map<number, Float64Array>();
+
+  constructor(
+    private readonly frames: Frames,
+    private readonly body: string,
+    private readonly display: string,
+    private readonly set: SetData,
+    private readonly track: number,
+  ) {
+    this.m = set.count(track);
+    this.invariant = frames.bodyRequirements(body, display).channels.size === 0;
+  }
+
+  /** The body's positions at every sample of lap `j`, each in the context of its sample. */
+  lap(j: number): Float64Array {
+    const k = this.invariant ? 0 : j;
+    let buf = this.laps.get(k);
+    if (buf === undefined) {
+      buf = new Float64Array(3 * this.m);
+      const { set, track } = this;
+      for (let i = 0; i < this.m; i++) buf.set(this.frames.bodyPosition(this.body, this.display, { set, track, sample: i, shifted: false, lap: k }), 3 * i);
+      this.laps.set(k, buf);
+    }
+    return buf;
+  }
+
+  /** The position of a vertex (rule C4) in its lap, written at `out[o..o+2]`. */
+  vertex(v: Vertex, out: { [i: number]: number }, o = 0): void {
+    const buf = this.lap(vertexLap(v));
+    if ('sample' in v) {
+      const a = 3 * v.sample;
+      out[o] = buf[a]!;
+      out[o + 1] = buf[a + 1]!;
+      out[o + 2] = buf[a + 2]!;
+      return;
+    }
+    const a = 3 * v.k;
+    const w = v.w;
+    for (let c = 0; c < 3; c++) out[o + c] = (1 - w) * buf[a + c]! + w * buf[a + 3 + c]!;
+  }
+
+  /**
+   * The polyline of rules L1 and C6 between loop readings `ua <= ub`, with the same vertices as the
+   * evaluator's `loopPolyline`, written as x, y, z per vertex from `out[0]`. Returns the vertex
+   * count. The samples of a lap are copied as runs, and only the two ends are blended.
+   */
+  polyline(tc: TrackClock, ua: number, ub: number, laps: number, out: Float32Array): number {
+    let n = 0;
+    const put = (v: Vertex) => {
+      this.vertex(v, out, 3 * n);
+      n++;
+    };
+    const a = lapOf(ua, laps);
+    if (ua === ub) {
+      put(point(tc, a.u, false, a.lap));
+      return n;
+    }
+    const b = lapOf(ub, laps);
+    // the samples of lap j strictly inside (lo, hi), as a run of the lap's buffer
+    const run = (j: number, lo: number, hi: number) => {
+      const i0 = search(tc, lo, false, identity);
+      const i1 = search(tc, hi, true, identity);
+      if (i1 > i0) {
+        out.set(this.lap(j).subarray(3 * i0, 3 * i1), 3 * n);
+        n += i1 - i0;
+      }
+    };
+    if (a.lap === b.lap) {
+      put(point(tc, a.u, false, a.lap));
+      run(a.lap, a.u, b.u);
+      put(point(tc, b.u, false, b.lap));
+      return n;
+    }
+    // each joint keeps the first sample of the higher lap (rule C6), hence the end point of a lap is dropped
+    put(point(tc, a.u, false, a.lap));
+    run(a.lap, a.u, 1);
+    for (let j = a.lap + 1; j < b.lap; j++) {
+      put(point(tc, 0, false, j));
+      run(j, 0, 1);
+    }
+    put(point(tc, 0, false, b.lap));
+    // an end at the first sample of its lap is the point put above (rule L1)
+    if (b.u === 0) return n;
+    run(b.lap, 0, b.u);
+    put(point(tc, b.u, false, b.lap));
+    return n;
+  }
+}
+
+/** The most vertices a trail of `fraction` of a loop of `laps` laps over `m` samples can have. */
+export function trailCapacity(m: number, laps: number, fraction: number): number {
+  return (Math.ceil(laps * fraction) + 2) * (m + 1) + 2;
+}

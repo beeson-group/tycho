@@ -136,3 +136,39 @@ describe('export size and codec', () => {
     expect(exportBitrate(7680, 4320, 30)).toBe(40e6);
   });
 });
+
+describe('encoder choice', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  // the answers of Chrome 154 on macOS: H.264 up to 4096 pixels a side, and VP9 at any size
+  const chrome = (asked: string[]) => ({
+    isConfigSupported: async (config: VideoEncoderConfig) => {
+      asked.push(config.codec);
+      const avc = config.codec.startsWith('avc1.') && Math.max(config.width, config.height) <= 4096 && config.width * config.height <= 4096 * 2304;
+      return { supported: avc || config.codec.startsWith('vp09.'), config };
+    },
+  });
+
+  it('never puts VP9 in an MP4, and refuses the size of the export that QuickTime refused', async () => {
+    const asked: string[] = [];
+    vi.stubGlobal('VideoEncoder', chrome(asked));
+    await expect(chooseConfig(5904, 2924, 60, 40e6)).rejects.toThrow(/H\.264/);
+    expect(asked.some((c) => c.startsWith('vp09'))).toBe(false);
+  });
+
+  it('takes H.264 high at the lowest level, in the avc format, at the size that the stage preset gives', async () => {
+    const asked: string[] = [];
+    vi.stubGlobal('VideoEncoder', chrome(asked));
+    const config = await chooseConfig(4058, 2010, 60, 40e6);
+    expect(config).toMatchObject({ codec: 'avc1.640034', width: 4058, height: 2010, framerate: 60, avc: { format: 'avc' } });
+    expect(asked).toEqual(['avc1.640034']);
+  });
+
+  it('refuses with a reason when the browser does not have an H.264 encoder', async () => {
+    const asked: string[] = [];
+    vi.stubGlobal('VideoEncoder', {
+      isConfigSupported: async (config: VideoEncoderConfig) => (asked.push(config.codec), { supported: config.codec.startsWith('vp09.'), config }),
+    });
+    await expect(chooseConfig(1280, 720, 30, 2e6)).rejects.toThrow(/does not have an H\.264 encoder for 1280 by 720 at 30 fps/);
+    expect(asked).toEqual(['avc1.64001f', 'avc1.4d401f', 'avc1.42e01f']);
+  });
+});

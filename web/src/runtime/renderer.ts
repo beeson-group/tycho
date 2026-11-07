@@ -786,3 +786,134 @@ function trackTexture(tracks: number): { data: Float32Array; texture: THREE.Data
   texture.needsUpdate = true;
   return { data, texture, width };
 }
+
+export class TrackDraw implements Draw {
+  readonly key: string;
+  readonly group = new THREE.Group();
+  private readonly src: TrackSource;
+  private readonly layer: TrackLayer;
+  private readonly set: SetData;
+  private readonly geo: TrackGeometry;
+  private readonly clocks: TrackReadings | null;
+  private readonly spec: RevealSpec;
+  private readonly color: ColorSpec | undefined;
+  private readonly width: number;
+  private readonly hiWidth: number;
+  private readonly opacity: number;
+  private readonly hiOpacity: number;
+  /** Along a trail, the loop readings over which the taper falls, else 0, and the width and opacity it falls to. */
+  private readonly fraction: number;
+  private readonly taperWidth: number;
+  private readonly taperOpacity: number;
+  private readonly kernel: Kernel | null;
+  private readonly ranges: ReturnType<typeof trackTexture>;
+  private readonly alphas: ReturnType<typeof trackTexture> | null;
+  private readonly resolution: THREE.IUniform<THREE.Vector2> = { value: new THREE.Vector2(1, 1) };
+  private readonly uniforms: Record<string, THREE.IUniform>;
+  private readonly baseHolder = new THREE.Object3D();
+  private readonly hiHolder = new THREE.Object3D();
+  /** The passes built so far, by lap and kind, each built the first time its lap shows anything. */
+  private readonly passes = new Map<string, Pass>();
+  private readonly pieces: Pieces;
+  private heads: THREE.Points | null = null;
+  private readonly headSize: number;
+  private readonly headColor: Rgb | null;
+  private members: number[] = [];
+  private highlight: number | null = null;
+  private selected: number | null = null;
+  private baseWhat: 'set' | number | null = null;
+  private skip = -1;
+  private filled = false;
+
+  constructor(ctx: DrawContext, plan: TrackPlan & { set: SetData }, display: string, key: string) {
+    this.key = key;
+    const set = plan.set;
+    const layer = plan.layer;
+    this.set = set;
+    this.layer = layer;
+    this.geo = ctx.geometry.geometry(set.id, display);
+    this.clocks = plan.channel === null ? null : ctx.geometry.readings(set.id, plan.channel);
+    const readings = this.clocks ?? ctx.geometry.readings(set.id, INDEX_CHANNEL);
+    this.spec = revealSpec(layer, set.periodic, clockLaps(ctx.scene.clock));
+    this.color = plan.color;
+    const color = coloring(plan.color, set, hexRgb(ctx.theme.foreground));
+    this.kernel = kernelOf(ctx, layer, set);
+    this.src = { ctx, set, geo: this.geo, display, readings, colorKey: JSON.stringify(plan.color ?? null), coloring: color, kernel: this.kernel !== null };
+    this.width = layer.width ?? 1;
+    this.hiWidth = layer.highlight?.width ?? this.width;
+    this.opacity = layer.opacity ?? 1;
+    this.hiOpacity = layer.highlight?.opacity ?? 1;
+    this.fraction = this.spec.reveal === 'trail' ? this.spec.laps * this.spec.fraction : 0;
+    this.taperWidth = layer.trail?.taper?.width ?? TAPER_WIDTH;
+    this.taperOpacity = layer.trail?.taper?.opacity ?? TAPER_OPACITY;
+
+    this.ranges = trackTexture(set.tracks);
+    for (let t = 0; t < set.tracks; t++) this.ranges.data.set(EMPTY_RANGE, 4 * t);
+    this.alphas = this.kernel === null ? null : trackTexture(set.tracks);
+    this.uniforms = {
+      uRanges: { value: this.ranges.texture },
+      uAlphas: { value: (this.alphas ?? this.ranges).texture },
+      uRangesWidth: { value: this.ranges.width },
+      uColor: { value: new THREE.Vector3(...(color.kind === 'constant' ? color.rgb : [1, 1, 1])) },
+      uResolution: this.resolution,
+      uFraction: { value: this.fraction },
+      uTaperWidth: { value: this.taperWidth },
+      uTaperOpacity: { value: this.fraction > 0 ? this.taperOpacity : 1 },
+    };
+    this.group.add(this.baseHolder, this.hiHolder);
+
+    // the end pieces computed on the CPU, at most two per track
+    this.pieces = new Pieces(2 * Math.min(set.tracks, 64), this.resolution);
+    this.group.add(this.pieces.mesh);
+
+    const head = layer.head;
+    this.headSize = typeof head === 'object' && head !== null ? (head.size ?? HEAD_SIZE) : HEAD_SIZE;
+    this.headColor = typeof head === 'object' && head !== null && head.color !== undefined ? hexRgb(head.color) : null;
+    if (hasHead(layer)) {
+      const hm = new THREE.PointsMaterial({
+        size: this.headSize,
+        sizeAttenuation: false,
+        map: ctx.disc,
+        alphaTest: 0.5,
+        vertexColors: true,
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+      });
+      this.heads = new THREE.Points(new THREE.BufferGeometry(), hm);
+      this.heads.frustumCulled = false;
+      this.growHeads(1);
+      this.group.add(this.heads);
+    }
+  }
+
+  /** Room for `n` heads in the heads' buffers. */
+  private growHeads(n: number): void {
+    const heads = this.heads;
+    if (heads === null) return;
+    const have = heads.geometry.getAttribute('position') as THREE.BufferAttribute | undefined;
+    if (have !== undefined && have.count >= n) return;
+    heads.geometry.dispose();
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3 * n), 3).setUsage(THREE.DynamicDrawUsage));
+    g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(3 * n), 3).setUsage(THREE.DynamicDrawUsage));
+    heads.geometry = g;
+  }
+
+  resize(w: number, h: number): void {
+    this.resolution.value.set(Math.max(1, w), Math.max(1, h));
+  }
+
+  extend(): void {}
+
+  dispose(): void {
+    for (const p of this.passes.values()) p.dispose();
+    this.ranges.texture.dispose();
+    this.alphas?.texture.dispose();
+    this.pieces.dispose();
+    if (this.heads) {
+      this.heads.geometry.dispose();
+      (this.heads.material as THREE.Material).dispose();
+    }
+  }
+}

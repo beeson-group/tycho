@@ -286,3 +286,35 @@ describe('the corpus sweep above', () => {
     expect(seen.pieces).toBeGreaterThan(0);
   });
 });
+
+describe('laps on demand (C6)', () => {
+  it('shares one lap of positions across every lap when the edges do not read a channel, and keeps each lap apart otherwise', () => {
+    const c = loadCorpus('laps');
+    const geo = new GeometryCache(c.scene, c.data);
+    const rot = geo.geometry('loop', 'rot');
+    const inertial = geo.geometry('loop', 'inertial');
+    expect([rot.laps, rot.top, rot.invariant, inertial.invariant]).toEqual([3, 2, true, false]);
+    expect([-1, 0, 1, 2].map((j) => rot.lapKey(j))).toEqual(['joined', 'joined', 'joined', 'top']);
+    expect([-1, 0, 1, 2].map((j) => inertial.lapKey(j))).toEqual(['-1', '0', '1', '2']);
+    // a track set that is not periodic has one lap, whatever the laps of the clock
+    expect(geo.geometry('fan', 'inertial').laps).toBe(1);
+    expect(rot.lapPositions(2)).toBe(rot.lapPositions(0));
+    expect(inertial.lapPositions(2)).not.toEqual(inertial.lapPositions(0));
+  });
+  it("a readout reads the driver's channel in the driver's lap", () => {
+    const c = loadCorpus('laps');
+    const geo = new GeometryCache(c.scene, c.data);
+    const set = geo.sets.get('loop');
+    const tc = geo.readings('loop', '@index').clocks[0]!;
+    const a = set.channel('a');
+    const m = set.count(0);
+    for (const index of [0, 5, 8, 13, 19, 23]) {
+      const q = index / c.scene.clock.steps;
+      const U = 3 * q;
+      const lap = Math.min(Math.floor(U), 2);
+      const { k, w } = tc.locate(U - lap);
+      const raise = lap * (a[m - 1]! - a[0]!);
+      expect(channelAtReading(set, tc, 0, 'a', c.scene.clock, q)).toBeCloseTo((1 - w) * (a[k]! + raise) + w * (a[k + 1]! + raise), 12);
+    }
+  });
+});

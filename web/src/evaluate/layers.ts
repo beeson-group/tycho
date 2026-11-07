@@ -85,10 +85,16 @@ export interface LayerEnv {
 /** The driver's track, as a panel resolves it, or null when its set query does not match any set. */
 export type Driver = { set: SetData; track: number } | null;
 
-/** The driver's clock and loop reading, and the point at the reading in its lap. A body layer and a layer in the driver's context lack `before` and `after`, thus the reading is clamped (rules L4 and L6). */
-export function driverPoint(env: LayerEnv, driver: NonNullable<Driver>): { tc: TrackClock; loopReading: number; at: BlendVertex } {
+/**
+ * The driver's clock and loop reading, and the point at the reading in its lap. A body layer and a layer in the driver's context lack `before` and `after`,
+ * thus the reading is clamped (rules L4 and L6). A caller that keeps the driver's clock on `env.channel` passes it as `tc`, which is otherwise built here.
+ */
+export function driverPoint(
+  env: LayerEnv,
+  driver: NonNullable<Driver>,
+  tc = new TrackClock(driver.set, driver.track, env.channel),
+): { tc: TrackClock; loopReading: number; at: BlendVertex } {
   const laps = clockLaps(env.clock);
-  const tc = new TrackClock(driver.set, driver.track, env.channel);
   const loopReading = laps * bound(tc.reading(env.clock, env.q))!;
   const lap = lapOf(loopReading, laps);
   return { tc, loopReading, at: point(tc, lap.u, false, lap.lap) };

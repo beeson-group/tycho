@@ -22,7 +22,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { fail, TychoError } from '../errors.js';
-import { bound, clockLaps, lapOf } from '../evaluate/clock.js';
+import { bound, clockLaps, lapOf, type TrackClock } from '../evaluate/clock.js';
 import { driverContexts, driverPoint, hasHead, point, type Driver, type LayerEnv, type Vertex } from '../evaluate/layers.js';
 import type { Context, Frames } from '../evaluate/frames.js';
 import {
@@ -434,8 +434,8 @@ export function affineAt(frames: Frames, from: string, to: string, ctx: Context)
  * The affine map from frame `from` into the display frame at the driver's reading (rule L6), i.e. the maps in the
  * contexts of the driver's samples k and k + 1 blended by the weight w, as a matrix of three.js.
  */
-export function driverMatrix(env: LayerEnv, from: string, driver: NonNullable<Driver>, out = new THREE.Matrix4()): THREE.Matrix4 {
-  const { a, b, w } = driverContexts(driver, driverPoint(env, driver).at);
+export function driverMatrix(env: LayerEnv, from: string, driver: NonNullable<Driver>, out = new THREE.Matrix4(), clock?: TrackClock): THREE.Matrix4 {
+  const { a, b, w } = driverContexts(driver, driverPoint(env, driver, clock).at);
   const ma = affineAt(env.frames, from, env.display, a);
   const mb = affineAt(env.frames, from, env.display, b);
   const m = ma.map((x, i) => (1 - w) * x + w * mb[i]!);
@@ -917,9 +917,11 @@ export class TrackDraw implements Draw {
   private filled = false;
   /** True for a layer in the driver's context (rule L6), whose buffers are in the frame of its set and whose group's matrix moves them. */
   readonly driverContext: boolean;
+  private readonly geometry: GeometryCache;
 
   constructor(ctx: DrawContext, plan: TrackPlan & { set: SetData }, display: string, key: string) {
     this.key = key;
+    this.geometry = ctx.geometry;
     const set = plan.set;
     const layer = plan.layer;
     this.set = set;
@@ -1074,7 +1076,7 @@ export class TrackDraw implements Draw {
   place(env: LayerEnv, driver: Driver): void {
     this.group.visible = driver !== null;
     if (driver === null) return;
-    driverMatrix(env, this.set.def.frame, driver, this.group.matrix);
+    driverMatrix(env, this.set.def.frame, driver, this.group.matrix, this.geometry.readings(driver.set.id, env.channel).clocks[driver.track]);
     this.group.matrixWorldNeedsUpdate = true;
   }
 

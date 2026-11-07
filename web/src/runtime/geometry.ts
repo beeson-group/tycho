@@ -179,3 +179,34 @@ export class TrackGeometry {
 }
 
 const lapNumber = (lap: number | boolean): number => (lap === true ? -1 : lap === false ? 0 : lap);
+
+/** The clock along every track of a set for one channel, with the reading u_i of every sample and one TrackClock per track. */
+export class TrackReadings {
+  readonly channel: string;
+  readonly clocks: TrackClock[];
+  readonly u: Float64Array;
+
+  constructor(set: SetData, channel: string) {
+    this.channel = channel;
+    this.clocks = [];
+    this.u = new Float64Array(set.samples);
+    for (let t = 0; t < set.tracks; t++) {
+      const tc = new TrackClock(set, t, channel);
+      const s = set.start(t);
+      for (let i = 0; i < tc.m; i++) this.u[s + i] = tc.at(i);
+      this.clocks.push(tc);
+    }
+  }
+}
+
+/**
+ * A channel of the driver's track at progress `q`, as a readout shows it (section 2.9). The
+ * reading is clamped to [0, 1], and the channel is blended between the samples of rule C4 in the
+ * context of the driver's lap of rule C6.
+ */
+export function channelAtReading(set: SetData, tc: TrackClock, track: number, channel: string, clock: Clock, q: number): number {
+  const laps = clockLaps(clock);
+  const at = lapOf(laps * bound(tc.reading(clock, q))!, laps);
+  const { k, w } = tc.locate(at.u);
+  return (1 - w) * set.channelAt(channel, track, k, false, at.lap) + w * set.channelAt(channel, track, k + 1, false, at.lap);
+}

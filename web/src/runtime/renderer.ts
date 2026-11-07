@@ -1745,4 +1745,66 @@ export class StageRenderer {
       p.error = e.message;
     }
   }
+
+  /** Fits the camera to every track layer's members (fitBox), or to the bodies when the track layers do not draw anything. */
+  private fit(p: PanelRender): void {
+    const box = new THREE.Box3();
+    const b = p.plan === null ? null : fitBox(p.plan, this.ctx.geometry);
+    if (b !== null) box.set(new THREE.Vector3(b[0], b[1], b[2]), new THREE.Vector3(b[3], b[4], b[5]));
+    else for (const d of p.draws.values()) if (d instanceof BodyDraw && d.group.visible) d.extend(box);
+    if (box.isEmpty()) box.set(new THREE.Vector3(-1, -1, -1), new THREE.Vector3(1, 1, 1));
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    const radius = Math.max(size.length() / 2, 1e-9);
+    const spec = p.cameraSpec;
+    const { up, normal } = cameraBasis(spec);
+    const cam = p.camera;
+    p.fitting = true;
+    if (cam instanceof THREE.OrthographicCamera) {
+      p.halfHeight = orthoFit(box, spec, p.rect.w / Math.max(1, p.rect.h)).halfHeight;
+      const dist = 4 * radius + 1;
+      const reach = 10 * (center.length() + dist + radius);
+      cam.near = -reach;
+      cam.far = reach;
+      cam.zoom = 1;
+      cam.position.copy(center).addScaledVector(normal, dist);
+    } else {
+      const dist = (radius / Math.sin((cam.fov * Math.PI) / 360)) * 1.08;
+      cam.near = dist / 1000;
+      cam.far = dist * 1000 + center.length();
+      cam.position.copy(center).addScaledVector(normal, dist);
+    }
+    cam.up.copy(up);
+    cam.lookAt(center);
+    this.aspect(p);
+    if (p.controls) {
+      p.controls.target.copy(center);
+      p.controls.update();
+    }
+    for (const d of p.draws.values()) if (d instanceof MarkDraw) d.layout(box, spec);
+    p.box = box;
+    p.fitting = false;
+    p.needsFit = false;
+  }
+
+  /** Keeps one world unit the same length across and up the screen in an orthographic view. */
+  private aspect(p: PanelRender): void {
+    const aspect = p.rect.w / Math.max(1, p.rect.h);
+    const cam = p.camera;
+    if (cam instanceof THREE.OrthographicCamera) {
+      cam.top = p.halfHeight;
+      cam.bottom = -p.halfHeight;
+      cam.left = -p.halfHeight * aspect;
+      cam.right = p.halfHeight * aspect;
+    } else cam.aspect = aspect;
+    cam.updateProjectionMatrix();
+  }
+
+  /** What a plane camera shows now, and the marks that follow it laid out across it. */
+  private follow(p: PanelRender): void {
+    const spec = p.cameraSpec;
+    p.view = spec.kind === 'plane' && p.camera instanceof THREE.OrthographicCamera ? planeView(p.camera, spec, p.rect.w, p.rect.h) : null;
+    if (p.view === null || spec.kind !== 'plane') return;
+    for (const d of p.draws.values()) if (d instanceof MarkDraw) d.follow(p.view, spec);
+  }
 }

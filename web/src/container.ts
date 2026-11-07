@@ -54,6 +54,11 @@ export interface DataHeader {
   views: Record<string, ViewInfo>;
 }
 
+const VIEW_KEYS: Record<string, Set<string>> = {
+  raw: new Set(['dtype', 'shape', 'encoding', 'offset', 'length']),
+  'shuffle-delta-deflate': new Set(['dtype', 'shape', 'encoding', 'chunk_rows', 'chunks']),
+};
+
 type TypedArrayConstructor = {
   new (buffer: ArrayBufferLike, byteOffset: number, length: number): TypedArray;
   new (length: number): TypedArray;
@@ -80,6 +85,9 @@ export function isDtype(s: unknown): s is Dtype {
 export function itemSize(dtype: Dtype): number {
   return CONSTRUCTORS[dtype].BYTES_PER_ELEMENT;
 }
+
+const isCount = (x: unknown): x is number => Number.isSafeInteger(x) && (x as number) >= 0;
+const isObject = (x: unknown): x is Record<string, unknown> => x !== null && typeof x === 'object' && !Array.isArray(x);
 
 /** Reads `count` little-endian items starting at `byteOffset`, copying through a DataView. */
 function copyLittleEndian(bytes: DataView, byteOffset: number, count: number, dtype: Dtype): TypedArray {
@@ -196,4 +204,44 @@ async function decodeView(name: string, info: EncodedViewInfo, payload: Uint8Arr
     restore(t, m, width, size, out, first * width * size);
   }
   return new CONSTRUCTORS[info.dtype](out, 0, rows * width);
+}
+
+/** Checks one view's record against rules D1, D2 and D5, given the payload's size. */
+function checkView(name: string, v: unknown, payloadSize: number): asserts v is ViewInfo {
+  if (!isObject(v)) fail('1', `view ${name} is not an object`);
+  const keys = typeof v.encoding === 'string' && Object.hasOwn(VIEW_KEYS, v.encoding) ? VIEW_KEYS[v.encoding]! : null;
+  if (keys === null) fail('D2', `view ${name} has encoding ${JSON.stringify(v.encoding)}, which this reader does not know`);
+  const extra = Object.keys(v).filter((k) => !keys.has(k));
+  if (extra.length > 0) fail('D2', `view ${name} has keys ${extra.sort().join(', ')} that this reader does not know`);
+  const missing = [...keys].filter((k) => !Object.hasOwn(v, k));
+  if (missing.length > 0) fail('D2', `view ${name} lacks the keys ${missing.join(', ')}`);
+  if (!isDtype(v.dtype)) fail('D1', `view ${name} has dtype ${JSON.stringify(v.dtype)}, not one of ${Object.keys(CONSTRUCTORS).join(', ')}`);
+  const shape = v.shape;
+  if (!Array.isArray(shape) || shape.length === 0 || !shape.every(isCount)) {
+    fail('D2', `view ${name} has shape ${JSON.stringify(shape)}, not a nonempty list of counts`);
+  }
+  const expected = shape.reduce((a: number, b: number) => a * b, 1) * itemSize(v.dtype);
+  if (!Number.isSafeInteger(expected)) fail('D2', `view ${name} has shape [${shape.join(', ')}], which is too large`);
+  if (v.encoding === 'raw') {
+    if (!isCount(v.offset) || !isCount(v.length)) fail('D2', `view ${name} has an offset or a length that is not a count`);
+    if (v.offset % 8 !== 0) fail('D2', `view ${name} starts at byte ${v.offset}, which is not a multiple of 8`);
+    if (v.length !== expected) {
+      fail('D2', `view ${name} has length ${v.length}, while shape [${shape.join(', ')}] of ${v.dtype} takes ${expected} bytes`);
+    }
+    if (v.offset + v.length > payloadSize) {
+      fail('D2', `view ${name} runs past the end of the file, at bytes ${v.offset} to ${v.offset + v.length} of the payload`);
+    }
+    return;
+  }
+  const rows = v.chunk_rows;
+  if (!isCount(rows) || rows < 1) fail('D5', `view ${name} has chunk_rows ${JSON.stringify(rows)}, not a positive integer`);
+  if (!Array.isArray(v.chunks)) fail('D5', `the chunks of view ${name} are not a list`);
+  const count = Math.ceil(shape[0] / rows);
+  if (v.chunks.length !== count) {
+    fail('D5', `view ${name} has ${v.chunks.length} chunks, while ${shape[0]} rows in chunks of ${rows} take ${count}`);
+  }
+  v.chunks.forEach((span: unknown, k: number) => {
+    if (!Array.isArray(span) || span.length !== 2 || !span.every(isCount)) fail('D5', `chunk ${k} of view ${name} is not an [offset, length] pair of counts`);
+    if (span[0] + span[1] > payloadSize) fail('D5', `chunk ${k} of view ${name} runs past the end of the file`);
+  });
 }

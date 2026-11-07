@@ -1,0 +1,257 @@
+{
+ "format": "tycho-scene",
+ "version": "0.2",
+ "generator": "pytycho 0.2.0",
+ "title": "two panels",
+ "frames": {
+  "root": {},
+  "rot": {
+   "parent": "root",
+   "rotation": {
+    "axis": "z",
+    "angle": {
+     "channel": "th"
+    }
+   }
+  },
+  "tilt": {
+   "parent": "rot",
+   "origin": [
+    {
+     "attr": "d"
+    },
+    0.0,
+    0.0
+   ],
+   "rotation": {
+    "axis": "x",
+    "angle": 0.3
+   }
+  },
+  "shift": {
+   "parent": "root",
+   "origin": {
+    "body": "anchor"
+   },
+   "scale": {
+    "attr": "k"
+   }
+  }
+ },
+ "bodies": {
+  "anchor": {
+   "frame": "rot",
+   "position": [
+    {
+     "attr": "d"
+    },
+    {
+     "attr": "d",
+     "factor": 2.0
+    },
+    0.0
+   ]
+  }
+ },
+ "track_sets": {
+  "orbits": {
+   "frame": "tilt",
+   "tags": {
+    "group": "moving"
+   },
+   "attrs": {
+    "d": 0.5,
+    "k": 2.0
+   },
+   "tracks": 3,
+   "offsets": "orbits/offsets",
+   "positions": "orbits/positions",
+   "channels": {
+    "th": {
+     "view": "orbits/channels/th"
+    },
+    "t": {
+     "view": "orbits/channels/t"
+    }
+   },
+   "parameters": {
+    "e": {
+     "view": "orbits/parameters/e"
+    }
+   },
+   "periodic": false
+  },
+  "fixed": {
+   "frame": "root",
+   "tags": {
+    "group": "fixed"
+   },
+   "attrs": {
+    "d": 0.5,
+    "k": 2.0
+   },
+   "tracks": 1,
+   "offsets": "fixed/offsets",
+   "positions": "fixed/positions",
+   "channels": {
+    "th": {
+     "view": "fixed/channels/th"
+    }
+   },
+   "periodic": false
+  }
+ },
+ "variables": {
+  "frame": {
+   "kind": "choice",
+   "values": [
+    "root",
+    "rot",
+    "tilt",
+    "shift"
+   ],
+   "default": "root",
+   "scope": "panel"
+  },
+  "k": {
+   "kind": "selector",
+   "by": "index",
+   "default": 0.0,
+   "scope": "panel"
+  },
+  "e": {
+   "kind": "selector",
+   "by": "nearest",
+   "default": 0.2,
+   "scope": "scene",
+   "parameter": "e"
+  },
+  "group": {
+   "kind": "choice",
+   "values": [
+    "moving",
+    "absent"
+   ],
+   "default": "moving",
+   "scope": "scene"
+  }
+ },
+ "clock": {
+  "mode": "fraction",
+  "channels": [
+   "t",
+   "@index"
+  ],
+  "steps": 6
+ },
+ "views": {
+  "v": {
+   "frame": {
+    "var": "frame"
+   },
+   "driver": {
+    "sets": {
+     "tags": {
+      "group": {
+       "var": "group"
+      }
+     }
+    },
+    "member": {
+     "var": "k"
+    }
+   },
+   "layers": [
+    {
+     "kind": "track",
+     "sets": {
+      "set": "fixed"
+     },
+     "members": "all",
+     "reveal": "none"
+    },
+    {
+     "kind": "track",
+     "sets": {
+      "set": "orbits"
+     },
+     "members": "all",
+     "reveal": "none"
+    },
+    {
+     "kind": "track",
+     "sets": {
+      "tags": {
+       "group": {
+        "var": "group"
+       }
+      }
+     },
+     "members": {
+      "var": "k"
+     },
+     "reveal": "trail",
+     "trail": {
+      "fraction": 0.4
+     },
+     "head": true
+    },
+    {
+     "kind": "track",
+     "sets": {
+      "set": "orbits"
+     },
+     "members": {
+      "var": "e"
+     },
+     "reveal": "grow"
+    },
+    {
+     "kind": "body",
+     "body": "anchor",
+     "trail": {
+      "fraction": 0.4
+     }
+    },
+    {
+     "kind": "grid"
+    }
+   ]
+  }
+ },
+ "initial": {
+  "variables": {},
+  "clock": {
+   "channel": "t"
+  },
+  "panels": {
+   "p1": {
+    "view": "v",
+    "variables": {
+     "frame": "shift",
+     "k": 0.5
+    }
+   },
+   "p2": {
+    "view": "v",
+    "variables": {
+     "frame": "tilt",
+     "k": 2.5
+    }
+   }
+  },
+  "layout": {
+   "kind": "split",
+   "dir": "row",
+   "ratio": 0.5,
+   "a": {
+    "kind": "panel",
+    "id": "p1"
+   },
+   "b": {
+    "kind": "panel",
+    "id": "p2"
+   }
+  }
+ }
+}

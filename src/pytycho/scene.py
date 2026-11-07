@@ -458,6 +458,84 @@ def _check_layer(layer: Any) -> dict[str, Any]:
     return out
 
 
+def track(
+    sets: Any,
+    members: Any = "all",
+    *,
+    reveal: str | None = None,
+    trail: Any = None,
+    taper: Any = None,
+    head: bool | Mapping[str, Any] = False,
+    before: str | None = None,
+    after: str | None = None,
+    color: Any = None,
+    opacity: float | None = None,
+    width: float | None = None,
+    highlight: Any = None,
+    visible: Any = None,
+) -> dict[str, Any]:
+    """A track layer. A ``trail`` fraction implies ``reveal="trail"``.
+
+    ``taper`` gives the fractions of the layer's width and opacity left at the tail of the trail, as
+    ``(width, opacity)`` or as a dict. ``head`` is True or a dict of ``color`` and ``size``.
+    """
+    if taper is not None:
+        if trail is None:
+            raise SceneError("2.7: a taper is given without a trail")
+        spec = dict(trail) if isinstance(trail, Mapping) else {"fraction": trail}
+        if "taper" in spec:
+            raise SceneError("2.7: the taper is given twice, in the trail and as taper")
+        trail = {**spec, "taper": taper}
+    layer: dict[str, Any] = {
+        "kind": "track",
+        "sets": sets,
+        "members": members,
+        "reveal": reveal or ("trail" if trail is not None else "none"),
+    }
+    if head is not False:
+        layer["head"] = head
+    for key, value in (
+        ("trail", trail),
+        ("before", before),
+        ("after", after),
+        ("color", color),
+        ("opacity", opacity),
+        ("width", width),
+        ("highlight", highlight),
+        ("visible", visible),
+    ):
+        if value is not None:
+            layer[key] = value
+    return _check_layer(layer)
+
+
+def body(body: Any, *, trail: float | None = None, size: float | None = None, visible: Any = None) -> dict[str, Any]:
+    """A body layer, with an optional trail fraction."""
+    layer: dict[str, Any] = {"kind": "body", "body": body}
+    for key, value in (("trail", trail), ("size", size), ("visible", visible)):
+        if value is not None:
+            layer[key] = value
+    return _check_layer(layer)
+
+
+def axes(span: str | None = None, visible: Any = None) -> dict[str, Any]:
+    """An axes layer. ``span`` is ``"full"`` or ``"positive"``, by default full under a plane camera."""
+    layer: dict[str, Any] = {"kind": "axes"}
+    for key, value in (("span", span), ("visible", visible)):
+        if value is not None:
+            layer[key] = value
+    return _check_layer(layer)
+
+
+def grid(labels: bool | None = None, visible: Any = None) -> dict[str, Any]:
+    """A grid layer. ``labels`` numbers its lines, by default under a plane camera."""
+    layer: dict[str, Any] = {"kind": "grid"}
+    for key, value in (("labels", labels), ("visible", visible)):
+        if value is not None:
+            layer[key] = value
+    return _check_layer(layer)
+
+
 # track sets
 
 

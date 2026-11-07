@@ -109,3 +109,32 @@ describe('wall time to loop position', () => {
     expect(positionProgress(-1e-17, 64)).toBe(0);
   });
 });
+
+describe('tiles', () => {
+  const layout: Layout = {
+    kind: 'split',
+    dir: 'row',
+    ratio: 0.25,
+    a: { kind: 'panel', id: 'p1' },
+    b: { kind: 'split', dir: 'col', ratio: 0.5, a: { kind: 'panel', id: 'p2' }, b: { kind: 'panel', id: 'p3' } },
+  };
+  it('splits the stage by the ratios, less the gutters, in whole pixels', () => {
+    const t = tile(layout, { x: 0, y: 0, w: 406, h: 206 }, 6);
+    expect(t.panels.get('p1')).toEqual({ x: 0, y: 0, w: 100, h: 206 });
+    expect(t.panels.get('p2')).toEqual({ x: 106, y: 0, w: 300, h: 100 });
+    expect(t.panels.get('p3')).toEqual({ x: 106, y: 106, w: 300, h: 100 });
+    expect(t.gutters.map((g) => [g.path, g.rect])).toEqual([
+      ['', { x: 100, y: 0, w: 6, h: 206 }],
+      ['b', { x: 106, y: 100, w: 300, h: 6 }],
+    ]);
+  });
+  it('sets a ratio by path, and reads one from a pointer, kept in [0.1, 0.9]', () => {
+    const next = withRatio(layout, 'b', 0.8);
+    expect(next.kind === 'split' && next.b.kind === 'split' && next.b.ratio).toBe(0.8);
+    expect(next.kind === 'split' && next.a).toBe((layout as Extract<Layout, { kind: 'split' }>).a);
+    const g = tile(layout, { x: 0, y: 0, w: 406, h: 206 }, 6).gutters[0]!;
+    expect(ratioAt(g, 203, 50, 6)).toBe(0.5);
+    expect(ratioAt(g, 0, 50, 6)).toBe(0.1);
+    expect(ratioAt(g, 999, 50, 6)).toBe(0.9);
+  });
+});

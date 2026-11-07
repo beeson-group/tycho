@@ -758,6 +758,100 @@ def edge_fraction():
             },
             "state": {**one, "clock": {"channel": "t"}},
         },
+        {"name": "F2: a constant zero scale", "rule": "F2", "scene": {"frames": {"c": {"scale": 0}}}},
+        {"name": "F2: an origin of two scalars", "rule": "F2", "scene": {"frames": {"c": {"origin": [1.0, 0.0]}}}},
+        {"name": "2.3: an edge field on the root", "rule": "2.3", "scene": {"frames": {"p": {"scale": 2}}}},
+        {
+            "name": "2.2: @index in a frame edge",
+            "rule": "2.2",
+            "scene": {"frames": {"c": {"rotation": {"axis": "z", "angle": {"channel": "@index"}}}}},
+        },
+        {
+            "name": "F6: an origin at a body in the frame it defines",
+            "rule": "F6",
+            "scene": {"bodies": {"loop": {"frame": "c", "position": [0, 0, 0]}}, "frames": {"c": {"origin": {"body": "loop"}}}},
+        },
+        {
+            "name": "V2: a {set} query naming no set",
+            "rule": "V2",
+            "scene": {"views": {"open": {"layers": [{"kind": "track", "sets": {"set": "nope"}, "members": "all"}]}}},
+        },
+        {
+            "name": "V2: a driver query matching two sets",
+            "rule": "V2",
+            "scene": {
+                "track_sets": {"open": {"tags": {"g": "x"}}, "nokey": {"tags": {"g": "x"}}},
+                "views": {"open": {"driver": {"sets": {"set": None, "tags": {"g": "x"}}}}},
+            },
+        },
+        {
+            "name": "V3: a literal index past the last track",
+            "rule": "V3",
+            "scene": {"views": {"open": {"driver": {"sets": {"set": "open"}, "member": {"index": 1}}}}},
+        },
+        {
+            "name": "V3: a driver member of all",
+            "rule": "V3",
+            "scene": {"views": {"open": {"driver": {"sets": {"set": "open"}, "member": "all"}}}},
+        },
+        {
+            "name": "C5: a driver set without the clock channel",
+            "rule": "C5",
+            "scene": {
+                "track_sets": {"nokey": {"channels": {"t": {"view": "bad/time"}}}},
+                "clock": {"channels": ["t"]},
+                "initial": {"clock": {"channel": "t"}},
+            },
+            "state": {**one, "clock": {"channel": "t"}},
+        },
+        {"name": "C2: value mode without a range", "rule": "C2", "scene": {"clock": {"mode": "value"}}},
+        {"name": "2.6: a frame index that is not an integer", "rule": "2.6", "frame_index": 0.5},
+        {"name": "2.8: a panel showing an unknown view", "rule": "2.8", "state": {**one, "panels": {"open": {"view": "nope"}}}},
+        {
+            "name": "2.8: a layout showing a panel twice",
+            "rule": "2.8",
+            "state": {
+                **one,
+                "layout": {
+                    "kind": "split",
+                    "dir": "row",
+                    "ratio": 0.5,
+                    "a": {"kind": "panel", "id": "open"},
+                    "b": {"kind": "panel", "id": "open"},
+                },
+            },
+        },
+        {
+            "name": "2.5: a selector holding a boolean",
+            "rule": "2.5",
+            "scene": {
+                "variables": {"k": {"kind": "selector", "by": "index", "default": 0}},
+                "views": {"open": {"driver": {"sets": {"set": "open"}, "member": {"var": "k"}}}},
+            },
+            "state": {**one, "variables": {"k": True}},
+        },
+        {
+            "name": "L5: visible naming a choice",
+            "rule": "L5",
+            "scene": {
+                "variables": {"c": {"kind": "choice", "values": ["x"], "default": "x"}},
+                "views": {"open": {"layers": [{"kind": "grid", "visible": {"var": "c"}}]}},
+            },
+        },
+        {"name": "S1: a layer kind that is not implemented", "rule": "S1", "scene": {"views": {"open": {"layers": [{"kind": "points"}]}}}},
+        {
+            "name": "2.7: a trail fraction above 1",
+            "rule": "2.7",
+            "scene": {
+                "views": {
+                    "open": {
+                        "layers": [
+                            {"kind": "track", "sets": {"set": "open"}, "members": "all", "reveal": "trail", "trail": {"fraction": 1.5}}
+                        ]
+                    }
+                }
+            },
+        },
     ]
     doc, data = _write_scene("edge-fraction", scene, cases, rejections, strip_periodic=("nokey",))
     # the rejections point at the extra views below, i.e. a nonmonotone channel, an unaligned offsets view, and a plain channel

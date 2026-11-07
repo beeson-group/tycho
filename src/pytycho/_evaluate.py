@@ -681,6 +681,136 @@ class _Panel:
         # argmin takes the first of equal distances, i.e. the lowest index
         return int(np.argmin(np.abs(data.parameters[parameter] - value)))
 
+    # layers
+
+    def run(self) -> dict[str, Any]:
+        frame = self.value(self.view["frame"])
+        if frame not in self.ev.doc["frames"]:
+            raise EvaluationError(f"2.7: the view displays {frame!r}, which is not a frame")
+        self.frame = frame
+        layers = []
+        for layer in self.view["layers"]:
+            if not isinstance(layer, Mapping) or layer.get("kind") not in KINDS:
+                raise EvaluationError(f"S1: layer kind {layer.get('kind') if isinstance(layer, Mapping) else layer!r} is not implemented")
+            if "visible" in layer:
+                visible = layer["visible"]
+                vid = visible.get("var") if isinstance(visible, Mapping) else None
+                if vid is None or self.ev.variables.get(vid, {}).get("kind") != "toggle":
+                    raise EvaluationError(f"L5: a layer's visible names {vid!r}, which is not a toggle")
+                if self.var(vid) is False:
+                    continue
+            kind = layer["kind"]
+            if kind == "track":
+                layers.append(self.track_layer(layer))
+            elif kind == "body":
+                layers.append(self.body_layer(layer))
+            else:
+                layers.append({"kind": kind})
+        return {"frame": frame, "layers": layers}
+
+    def clamped(self, track: Track, layer: Mapping[str, Any]) -> float | None:
+        """The reading on ``track``, clamped, or None when the track is hidden under rule C3."""
+        u = self.reading.of(track)
+        if u < 0.0:
+            if layer.get("before", "clamp") == "hidden":
+                return None
+            u = 0.0
+        elif u > 1.0:
+            if layer.get("after", "clamp") == "hidden":
+                return None
+            u = 1.0
+        return u
+
+    def track_layer(self, layer: Mapping[str, Any]) -> dict[str, Any]:
+        data = self.one(layer["sets"])
+        if data is None:
+            return {"kind": "track", "set": None, "members": []}
+        reveal = layer.get("reveal", "none")
+        if reveal not in ("none", "grow", "trail"):
+            raise EvaluationError(f"2.7: a track layer's reveal is {reveal!r}, not none, grow, or trail")
+        head = layer.get("head", False)
+        if not isinstance(head, (bool, Mapping)):
+            raise EvaluationError(f"L3: a track layer's head is {head!r}, not a boolean or an object")
+        # a head object gives the same point as true
+        head = head is True or isinstance(head, Mapping)
+        for key in ("before", "after"):
+            if layer.get(key, "clamp") not in ("clamp", "hidden"):
+                raise EvaluationError(f"C3: a track layer's {key} is {layer[key]!r}, not clamp or hidden")
+        fraction = _fraction(layer) if reveal == "trail" else 0.0
+        # under rule C5, a reading is not taken on a track drawn whole and never hidden, whose track set need not carry the clock channels
+        hides = self.reading.mode == "value" and "hidden" in (layer.get("before"), layer.get("after"))
+        reads = reveal != "none" or head or hides
+        laps = self.reading.laps
+        if reads and laps > 1 and not data.periodic:
+            raise EvaluationError(f"C6: a reading is taken on track set {data.id!r}, which is not periodic, and the clock has {laps} laps")
+        members = []
+        for i in self.members(layer["members"], data):
+            track = data.track(i)
+            entry: dict[str, Any] = {"index": i}
+            u = self.clamped(track, layer) if reads else 0.0
+            if u is None:
+                entry["line"] = []
+                if head:
+                    entry["head"] = None
+                members.append(entry)
+                continue
+            loop_reading = laps * u
+            u_samples = track.sample_readings(self.reading.channel) if reads else np.empty(0)
+            if reveal == "none":
+                vertices = whole(track.m, laps, track.periodic)
+            elif reveal == "grow":
+                vertices = loop_polyline(u_samples, 0.0, loop_reading, laps)
+            else:
+                vertices = trail(u_samples, loop_reading, laps, fraction, track.periodic)
+
+            def positions(lap: int, t: Track = track) -> np.ndarray:
+                return self.ev.tree.transform(t.positions, data.frame, self.frame, t.context(lap))
+
+            table = _by_lap(positions)
+            entry["line"] = resolve_vertices(vertices, table)
+            if head:
+                j, within = lap_of(loop_reading, laps)
+                entry["head"] = resolve_vertices([("blend", *segment(u_samples, within), j)], table)[0]
+            members.append(entry)
+        return {"kind": "track", "set": data.id, "members": members}
+
+    def body_layer(self, layer: Mapping[str, Any]) -> dict[str, Any]:
+        body = layer.get("body")
+        if not isinstance(body, str) or body not in self.ev.tree.bodies:
+            raise EvaluationError(f"L4: a body layer draws {body!r}, which is not a body")
+        out: dict[str, Any] = {"kind": "body", "body": body}
+        fraction = _fraction(layer) if "trail" in layer else None
+        if self.driver is None:
+            out["position"] = None
+            if fraction is not None:
+                out["trail"] = []
+            return out
+        data, k_member = self.driver
+        track = data.track(k_member)
+        # a body layer lacks before and after, thus the reading of the driver is clamped
+        u = min(max(self.reading.of(track), 0.0), 1.0)
+        laps = self.reading.laps
+        loop_reading = laps * u
+        u_samples = track.sample_readings(self.reading.channel)
+        tree = self.ev.tree
+        table = _by_lap(lambda lap: tree.body_position(body, self.frame, track.context(lap)))
+        j, within = lap_of(loop_reading, laps)
+        out["position"] = resolve_vertices([("blend", *segment(u_samples, within), j)], table)[0]
+        if fraction is not None:
+            out["trail"] = resolve_vertices(trail(u_samples, loop_reading, laps, fraction, track.periodic), table)
+        return out
+
+
+def _fraction(layer: Mapping[str, Any]) -> float:
+    """The trail fraction ``trail.fraction`` of a layer, in ``(0, 1]`` (section 2.7)."""
+    spec = layer.get("trail")
+    if not isinstance(spec, Mapping) or "fraction" not in spec:
+        raise EvaluationError("2.7: a layer draws a trail but lacks a trail fraction")
+    f = _number(spec["fraction"], "a trail fraction")
+    if not 0.0 < f <= 1.0:
+        raise EvaluationError(f"2.7: the trail fraction {f} is not in (0, 1]")
+    return f
+
 
 def sparse(tracks: int, n: int) -> list[int]:
     """The tracks of ``{"count": n}`` (rule V3), which are every ``step``-th track from the first, and the last.
@@ -692,3 +822,15 @@ def sparse(tracks: int, n: int) -> list[int]:
     if out[-1] != tracks - 1:
         out.append(tracks - 1)
     return out
+
+
+def _by_lap(compute: Callable[[int], np.ndarray]) -> Callable[[int], np.ndarray]:
+    """Returns ``compute`` wrapped in a cache, so that it runs once per lap."""
+    cache: dict[int, np.ndarray] = {}
+
+    def get(lap: int) -> np.ndarray:
+        if lap not in cache:
+            cache[lap] = compute(lap)
+        return cache[lap]
+
+    return get

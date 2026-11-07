@@ -325,3 +325,49 @@ class Container:
                 raise ContainerError(f"D5: chunk {k} of view {name!r} is not an [offset, length] pair of counts")
             if span[0] + span[1] > len(self._payload):
                 raise ContainerError(f"D5: chunk {k} of view {name!r} runs past the end of the file")
+
+    @property
+    def meta(self) -> dict[str, Any]:
+        """The header's ``meta`` object."""
+        return self.header.get("meta", {})
+
+    @property
+    def names(self) -> list[str]:
+        """The view names, in insertion order."""
+        return list(self.header["views"])
+
+    def _info(self, name: str) -> dict[str, Any]:
+        try:
+            return self.header["views"][name]
+        except KeyError:
+            raise KeyError(f"the data container lacks view {name!r}") from None
+
+    def stored_size(self, name: str) -> int:
+        """The number of bytes that the named view takes in the file, without its padding."""
+        info = self._info(name)
+        return info["length"] if info["encoding"] == RAW else sum(length for _, length in info["chunks"])
+
+    def view(self, name: str) -> np.ndarray:
+        """The named view, as a read-only array. A raw view shares the container's memory."""
+        info = self._info(name)
+        dtype = DTYPES[info["dtype"]]
+        if info["encoding"] == RAW:
+            buf = self._payload[info["offset"] : info["offset"] + info["length"]]
+            return np.frombuffer(buf, dtype=dtype).reshape(info["shape"])
+        if name not in self._decoded:
+            shape = info["shape"]
+            out = np.empty(shape, dtype=dtype)
+            bits = _bits(out)
+            rows = info["chunk_rows"]
+            for k, (offset, length) in enumerate(info["chunks"]):
+                block = bits[k * rows : (k + 1) * rows]
+                _decode_chunk(self._payload[offset : offset + length], block.shape[0], bits.shape[1], block, f"chunk {k} of view {name!r}")
+            out.flags.writeable = False
+            self._decoded[name] = out
+        return self._decoded[name]
+
+    @classmethod
+    def read(cls, path: str | os.PathLike[str]) -> Container:
+        """Reads the container at ``path``."""
+        with open(path, "rb") as fh:
+            return cls(fh.read())

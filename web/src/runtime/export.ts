@@ -220,3 +220,85 @@ export async function chooseConfig(width: number, height: number, fps: number, b
   }
   throw new Error(`this browser does not have an H.264 encoder for ${width} by ${height} at ${fps} fps, and an MP4 that QuickTime opens needs H.264`);
 }
+
+const FONT = '"Helvetica Neue", Arial, sans-serif';
+
+/** The first panel in layout order, whose driver the caption reads. */
+function firstLeaf(n: Layout): string {
+  return n.kind === 'panel' ? n.id : firstLeaf(n.a);
+}
+const CAPTION_LINE = 18;
+
+/** Text with a halo of the background, so that it reads over lines. */
+function text(g: CanvasRenderingContext2D, s: string, x: number, y: number, fg: string, bg: string): void {
+  g.lineJoin = 'round';
+  g.lineWidth = 3;
+  g.strokeStyle = bg;
+  g.strokeText(s, x, y);
+  g.fillStyle = fg;
+  g.fillText(s, x, y);
+}
+
+/** Draws a panel label as the page places it, centered vertically on (x, y) and turned to read upward when rotated. Exported for the tests. */
+export function drawLabel(g: CanvasRenderingContext2D, l: PanelLabel, x: number, y: number, fg: string, bg: string): void {
+  g.font = `${l.kind === 'title' ? 13 : 12}px ${FONT}`;
+  g.textAlign = l.align === 'center' ? 'center' : l.align === 'end' ? 'right' : 'left';
+  if (l.rotate) {
+    g.save();
+    g.translate(x, y);
+    g.rotate(-Math.PI / 2);
+    text(g, l.text, 0, 0, fg, bg);
+    g.restore();
+  } else text(g, l.text, x, y, fg, bg);
+  g.textAlign = 'left';
+}
+
+export function drawColorbars(
+  g: CanvasRenderingContext2D,
+  bars: Colorbar[],
+  right: number,
+  top: number,
+  fg: string,
+  dim: string,
+  line: string,
+  bg: string,
+): void {
+  let x = right;
+  g.font = `11px ${FONT}`;
+  for (const b of [...bars].reverse()) {
+    const hi = formatNumber(b.hi, 3);
+    const lo = formatNumber(b.lo, 3);
+    const w = Math.max(g.measureText(b.label).width, 13 + Math.max(g.measureText(hi).width, g.measureText(lo).width));
+    x -= w;
+    g.textBaseline = 'top';
+    text(g, b.label, x, top, dim, bg);
+    const y0 = top + 16;
+    const grad = g.createLinearGradient(0, y0 + 120, 0, y0);
+    for (const [t, css] of b.stops) grad.addColorStop(t, css);
+    g.fillStyle = grad;
+    g.fillRect(x, y0, 8, 120);
+    g.strokeStyle = line;
+    g.lineWidth = 1;
+    g.strokeRect(x + 0.5, y0 + 0.5, 7, 119);
+    if (b.band !== null) {
+      // the part a highlight's kernel lights, shaded over the bar
+      const [r, gr, bl] = hexRgb(fg).map((c) => Math.round(255 * c));
+      g.fillStyle = `rgba(${r}, ${gr}, ${bl}, 0.18)`;
+      g.fillRect(x - 3, y0 + 120 * (1 - b.band[1]), 14, 120 * (b.band[1] - b.band[0]));
+    }
+    text(g, hi, x + 13, y0, dim, bg);
+    g.textBaseline = 'bottom';
+    text(g, lo, x + 13, y0 + 120, dim, bg);
+    if (b.marker !== null) {
+      const my = y0 + 120 * (1 - b.marker);
+      g.fillStyle = fg;
+      g.beginPath();
+      g.moveTo(x - 1, my);
+      g.lineTo(x - 7, my - 4);
+      g.lineTo(x - 7, my + 4);
+      g.closePath();
+      g.fill();
+    }
+    x -= 12;
+  }
+}

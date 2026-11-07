@@ -16,6 +16,7 @@ import urllib.request
 from pathlib import Path
 
 from sphinx.util import logging
+from sphinx.util.docutils import SphinxDirective
 from sphinx.util.tags import Tags
 
 tags: Tags = globals()["tags"]  # Sphinx puts it in this namespace before executing the file
@@ -159,3 +160,22 @@ llms_txt_summary = (
     "TyCHO writes animated, interactive astrodynamics visualizations as one self-contained HTML page: "
     "pytycho declares a scene over NumPy arrays, and the browser runtime draws it."
 )
+
+
+class IncludeIfPresent(SphinxDirective):
+    """Includes a Markdown file when it exists, and renders the directive's content when it does not."""
+
+    required_arguments = 1
+    has_content = True
+
+    def run(self):
+        rel, path = self.env.relfn2path(self.arguments[0], self.env.docname)
+        # Sphinx rereads a page with a missing dependency on every build, thus the file is included once it exists
+        self.env.note_dependency(rel)
+        if Path(path).is_file():
+            return self.parse_text_to_nodes(Path(path).read_text(encoding="utf-8"), allow_section_headings=True)
+        return self.parse_content_to_nodes(allow_section_headings=True)
+
+
+def setup(app):
+    app.add_directive("include-if-present", IncludeIfPresent)

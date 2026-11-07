@@ -321,3 +321,15 @@ def test_readouts_and_sliders_are_checked_against_the_driver():
         scene.readout("panel", {"member": "e", "attr": "mu"})
     with pytest.raises(ty.SceneError, match="digits"):
         scene.readout("panel", {"member": "e", "digits": 0})
+
+
+def test_declarations_fail_at_the_call():
+    scene = ty.Scene()
+    with pytest.raises(ty.SceneError, match=r"2\.5"):
+        scene.selector("k", by="rank")
+    with pytest.raises(ty.SceneError, match=r"2\.5"):
+        scene.selector("e")
+    with pytest.raises(ty.SceneError, match=r"2\.5"):
+        scene.choice("c", ["a", "b"], default="z")
+    with pytest.raises(ty.SceneError, match="D1"):
+        scene.track_set("s", frame=scene.frame("root"), dtype="int32")

@@ -1,3 +1,4 @@
+# The lint job of .github/workflows/ci.yml runs these hooks, and Dependabot updates each rev monthly.
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: "v6.0.0"
@@ -63,3 +64,21 @@ repos:
         language: pygrep
         entry: PyBind|Numpy|Cmake|CCache|Github|PyTest|PyDylan|Pydylan|PyTycho
         exclude: ^\.pre-commit-config\.yaml$
+
+  - repo: https://github.com/abravalheri/validate-pyproject
+    rev: "0.26"
+    hooks:
+      - id: validate-pyproject
+        additional_dependencies: ["validate-pyproject-schema-store[all]"]
+
+  - repo: https://github.com/python-jsonschema/check-jsonschema
+    rev: "0.38.2"
+    hooks:
+      - id: check-dependabot
+      - id: check-github-workflows
+      - id: check-readthedocs
+
+  - repo: https://github.com/zizmorcore/zizmor-pre-commit
+    rev: "v1.30.1"
+    hooks:
+      - id: zizmor

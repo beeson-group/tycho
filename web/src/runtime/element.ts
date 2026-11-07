@@ -83,7 +83,8 @@ const SPEEDS = [0.25, 0.5, 1, 2, 4];
 
 const STYLE = `
 :host { display: block; position: relative; background: var(--bg); color: var(--fg);
-  font: 13px/1.4 "Helvetica Neue", Arial, sans-serif; overflow: hidden; min-height: 240px; }
+  font-family: inherit; font-size: 13px; font-style: normal; font-weight: 400; line-height: 1.4; letter-spacing: normal;
+  text-align: left; text-transform: none; overflow: hidden; min-height: 240px; }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 :focus { outline: none; }
@@ -103,7 +104,7 @@ header h1 { font-size: 17px; font-weight: 600; margin: 0; letter-spacing: 0.01em
 .k { color: var(--dim); font-size: 12px; }
 .chips > .k { margin-right: 2px; }
 .field { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
-.field output { font: 12px ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; min-width: 7ch; color: var(--fg); }
+.field output { font-size: 12px; font-variant-numeric: lining-nums tabular-nums; min-width: 7ch; color: var(--fg); }
 
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--surface); }
 .seg button { background: none; color: var(--dim); border: 0; padding: 4px 10px; cursor: pointer; white-space: nowrap; }
@@ -222,7 +223,7 @@ input[type=range]:disabled { opacity: 0.4; cursor: default; }
 .stack dl { flex-direction: column; gap: 2px; }
 .readout dt { font-size: 11px; color: var(--dim); }
 .readout dd { margin: 0; white-space: nowrap; }
-.readout b { display: inline-block; font: 500 15px/1.25 ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; }
+.readout b { display: inline-block; font-size: 15px; font-weight: 500; line-height: 1.25; font-variant-numeric: lining-nums tabular-nums; }
 .stack b { font-size: 13px; }
 .readout .u { color: var(--dim); font-size: 12px; margin-left: 0.35em; }
 .readout .line { white-space: pre-wrap; font-variant-numeric: tabular-nums; }
@@ -233,7 +234,7 @@ footer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; pad
 .cap .scrub { flex: 1 1 160px; min-width: 100px; width: auto; margin: 0 6px; }
 .cap select { background: none; border-color: transparent; }
 .cap select:hover { background: var(--raised); }
-.frame, .fps { color: var(--dim); font: 12px ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+.frame, .fps { color: var(--dim); font-size: 12px; font-variant-numeric: lining-nums tabular-nums; white-space: nowrap; text-align: right; }
 /* the rate reserves three digits as content, so that the dashes, 9 fps, and 120 fps take one width */
 .fps { box-sizing: content-box; min-width: 7ch; padding: 0 6px 0 4px; }
 .speed { font-variant-numeric: tabular-nums; }

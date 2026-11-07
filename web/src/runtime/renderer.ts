@@ -308,3 +308,99 @@ interface DrawContext {
   theme: Theme;
   disc: THREE.Texture;
 }
+
+// what a panel draws, resolved from the state
+
+export interface TrackPlan {
+  kind: 'track';
+  index: number;
+  layer: TrackLayer;
+  set: SetData | null;
+  /** The members of rule V3, in increasing order. */
+  members: number[];
+  /** The highlighted member, when the highlight's selector resolves to one of the members. */
+  highlight: number | null;
+  /** The track that the highlight's selector resolves to in the set, a member or not, which is the center of its kernel. */
+  selected: number | null;
+  /** The clock channel the layer reads, or null when it does not take a reading. */
+  channel: string | null;
+  /** The layer's color, where a colormap keyed on a choice is resolved to the colormap that the panel's value of the choice maps to (section 2.7). */
+  color: ColorSpec | undefined;
+}
+
+export interface BodyPlan {
+  kind: 'body';
+  index: number;
+  layer: BodyLayer;
+}
+
+export interface MarkPlan {
+  kind: 'axes' | 'grid';
+  index: number;
+  layer: MarkLayer;
+}
+
+export type LayerPlan = TrackPlan | BodyPlan | MarkPlan;
+
+export interface PanelPlan {
+  viewId: string;
+  view: View;
+  display: string;
+  scope: PanelScope;
+  driver: { set: SetData; track: number } | null;
+  layers: LayerPlan[];
+}
+
+/** A layer's color with a colormap keyed on a choice (section 2.7) resolved by the panel's value of the choice (rule V1). */
+export function resolveColor(scope: PanelScope, spec: ColorSpec | undefined): ColorSpec | undefined {
+  if (spec === undefined || typeof spec === 'string' || typeof spec.colormap === 'string') return spec;
+  const by = spec.colormap;
+  if (variableDef(scope.scene, by.var)?.kind !== 'choice') fail('2.7', `the colormap is keyed on ${by.var}, which is not a choice`);
+  const value = variableValue(scope, by.var);
+  const name = typeof value === 'string' && Object.hasOwn(by.map, value) ? by.map[value] : undefined;
+  if (name === undefined) fail('2.7', `the colormap keyed on ${by.var} does not name a colormap for ${JSON.stringify(value)}`);
+  return { ...spec, colormap: name };
+}
+
+/** What a panel of a state draws: its display frame, its driver, and its visible layers resolved. */
+export function planPanel(scene: Scene, geometry: GeometryCache, state: State, pid: string): PanelPlan {
+  const panel = state.panels[pid]!;
+  const view = scene.views[panel.view]!;
+  const scope: PanelScope = { scene, state, panel };
+  const display = displayFrame(scope, view);
+  const laps = clockLaps(scene.clock);
+  const driverId = oneSet(scope, view.driver.sets);
+  const driver = driverId === null ? null : { set: geometry.sets.get(driverId), track: 0 };
+  if (driver) {
+    driver.track = driverMember(scope, view.driver.member, driver.set);
+    if (laps > 1 && !driver.set.periodic) fail('C6', `the driver's track set ${driver.set.id} is not periodic, and the clock has ${laps} laps`);
+  }
+  const layers: LayerPlan[] = [];
+  view.layers.forEach((layer, index) => {
+    if (!layerVisible(scope, layer)) return;
+    if (layer.kind === 'track') {
+      const id = oneSet(scope, layer.sets);
+      const set = id === null ? null : geometry.sets.get(id);
+      const members = set === null ? [] : resolveMembers(scope, layer.members, set);
+      const channel = needsReading(layer, scene.clock) ? state.clock.channel : null;
+      if (set !== null && channel !== null && laps > 1 && !set.periodic)
+        fail('C6', `a reading is taken on track set ${set.id}, which is not periodic, and the clock has ${laps} laps`);
+      const hl = layer.highlight;
+      if (hl?.kernel !== undefined) {
+        const sel = variableDef(scene, hl.var);
+        if (sel?.kind !== 'selector' || (sel.by ?? 'nearest') !== 'nearest' || sel.parameter === undefined)
+          fail('2.7', `a highlight kernel needs a selector by nearest, and ${hl.var} is not one`);
+      }
+      const selected = set !== null && hl !== undefined ? selectorTrack(scope, { var: hl.var }, set) : null;
+      const highlight = selected !== null && members.includes(selected) ? selected : null;
+      layers.push({ kind: 'track', index, layer, set, members, highlight, selected, channel, color: resolveColor(scope, layer.color) });
+    } else if (layer.kind === 'body') layers.push({ kind: 'body', index, layer });
+    else layers.push({ kind: layer.kind, index, layer });
+  });
+  return { viewId: panel.view, view, display, scope, driver, layers };
+}
+
+/** What the camera fit depends on: the view, the display frame, the driver's track set, and the track sets of the track layers. */
+export function contentKey(plan: PanelPlan): string {
+  return [plan.viewId, plan.display, plan.driver?.set.id ?? '', ...plan.layers.map((l) => (l.kind === 'track' ? (l.set?.id ?? '') : ''))].join('\0');
+}

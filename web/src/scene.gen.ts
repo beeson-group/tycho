@@ -77,6 +77,12 @@ export type Camera =
       kind: 'orbit';
       projection?: 'orthographic' | 'perspective';
       up?: 'x' | 'y' | 'z';
+      /**
+       * @minItems 3
+       * @maxItems 3
+       */
+      stretch?: [number, number, number];
+      turn?: number;
     };
 /**
  * This interface was referenced by `Scene`'s JSON-Schema

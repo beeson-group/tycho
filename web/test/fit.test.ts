@@ -188,3 +188,64 @@ describe('a highlight kernel (2.7)', () => {
     expect(mergeColorbars([bar(null, null), { ...bar(null, null), label: 'f' }])).toHaveLength(2);
   });
 });
+
+describe("a plane camera's axes and grid follow the visible rectangle", () => {
+  const camera = (cx: number, cy: number, half: number, aspect: number, zoom = 1) => {
+    const cam = new THREE.OrthographicCamera(-half * aspect, half * aspect, half, -half, -10, 10);
+    cam.position.set(cx, cy, 5);
+    cam.zoom = zoom;
+    return cam;
+  };
+  it('reads the rectangle off the camera, through pan and zoom', () => {
+    const v = planeView(camera(0.3, -0.2, 1.1, 2), { kind: 'plane', plane: 'xy' }, 880, 440);
+    expect([v.x0, v.x1, v.y0, v.y1]).toEqual([0.3 - 2.2, 0.3 + 2.2, -0.2 - 1.1, -0.2 + 1.1].map((x) => expect.closeTo(x, 12)));
+    // 880 / 110 = 8 ticks across 4.4 and 440 / 70 ticks up 2.2
+    expect([v.stepX, v.stepY]).toEqual([0.5, 0.5]);
+    const zoomed = planeView(camera(0.3, -0.2, 1.1, 2, 4), { kind: 'plane', plane: 'xy' }, 880, 440);
+    expect(zoomed.x1 - zoomed.x0).toBeCloseTo(1.1, 12);
+    expect([zoomed.stepX, zoomed.stepY]).toEqual([0.1, 0.1]);
+    const xz = planeView(camera(0, 0, 1, 1), { kind: 'plane', plane: 'xz' }, 500, 500);
+    expect(xz.x1 - xz.x0).toBeCloseTo(2, 12);
+  });
+  it('numbers the lines at the step, with decimals from it, clear of the corners, and titles the two axes', () => {
+    const v = planeView(camera(0, 0, 1.1, 2), { kind: 'plane', plane: 'xy' }, 880, 440);
+    const labels = planeLabels(v, true, ['x\u0303 [DU]', 'y\u0303 [DU]']);
+    const ticks = labels.filter((l) => l.kind === 'tick');
+    const bottom = ticks.filter((l) => l.align === 'center').map((l) => l.text);
+    const left = ticks.filter((l) => l.align === 'end').map((l) => l.text);
+    expect(bottom).toEqual(['\u22121.5', '\u22121.0', '\u22120.5', '0.0', '0.5', '1.0', '1.5', '2.0']);
+    // the left edge skips the top 22 pixels and the bottom 44, where the tick row and the corner are
+    expect(left).toEqual(['\u22120.5', '0.0', '0.5']);
+    for (const t of ticks) expect(t.x > 0 && t.x <= 880 && t.y > 0 && t.y < 440).toBe(true);
+    const titles = labels.filter((l) => l.kind === 'title');
+    expect(titles).toEqual([
+      { text: 'x\u0303 [DU]', x: 440, y: 430, align: 'center', kind: 'title' },
+      { text: 'y\u0303 [DU]', x: 10, y: 220, align: 'center', rotate: true, kind: 'title' },
+    ]);
+    // each title has a separate row. the tick row sits 28 px and the x title 10 px above the bottom edge. the y tick column ends
+    // at 46.5 px for the label of -0.5 and starts at 22 px, clear of the 13 px that the y title spans around x = 10 px
+    expect(new Set(ticks.filter((l) => l.align === 'center').map((l) => l.y))).toEqual(new Set([412]));
+    expect(new Set(ticks.filter((l) => l.align === 'end').map((l) => l.x))).toEqual(new Set([46.5]));
+    expect(planeLabels(v, false, null)).toEqual([]);
+  });
+  it('keeps the y tick column clear of the y title at its widest number, and drops a title that does not have room', () => {
+    const wide = planeView(camera(0, 0, 1100, 2), { kind: 'plane', plane: 'xy' }, 880, 440);
+    const column = planeLabels(wide, true, null).filter((l) => l.align === 'end');
+    expect(column.map((l) => l.text)).toContain('\u2212500');
+    expect(new Set(column.map((l) => l.x))).toEqual(new Set([22 + 7 * 4]));
+    // the x ticks start right of the column
+    expect(
+      Math.min(
+        ...planeLabels(wide, true, null)
+          .filter((l) => l.align === 'center')
+          .map((l) => l.x),
+      ),
+    ).toBeGreaterThan(62);
+    const kinds = (w: number, h: number) =>
+      planeLabels(planeView(camera(0, 0, 1.1, 2), { kind: 'plane', plane: 'xy' }, w, h), true, ['x', 'y'])
+        .filter((l) => l.kind === 'title')
+        .map((l) => l.text);
+    expect([kinds(880, 160), kinds(880, 159), kinds(159, 440), kinds(150, 150)]).toEqual([['x', 'y'], ['y'], ['x'], []]);
+    expect(planeLabels(planeView(camera(0, 0, 1.1, 2), { kind: 'plane', plane: 'xy' }, 880, 150), true, ['x', 'y']).some((l) => l.kind === 'tick')).toBe(true);
+  });
+});

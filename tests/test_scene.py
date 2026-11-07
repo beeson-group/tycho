@@ -166,3 +166,58 @@ def test_v3_fails_at_the_write():
     message = str(info.value)
     assert "V3: view 'v': member index 1 of the driver is not below the track count 1 of track set 'moving'" in message
     assert "V3: view 'v': track set 'still' lacks parameter 'e' for selector 'e'" in message
+
+
+def test_cross_references_fail_at_the_write_all_at_once():
+    scene, moving, _ = small()
+    scene.toggle("show")
+    scene.selector("e", parameter="e")
+    # ids given as strings are checked at the write, and handles of the wrong kind at the call
+    scene.view(
+        "v",
+        frame="nowhere",
+        driver=ty.driver(moving, "show"),
+        layers=[ty.body("ghost"), ty.track(ty.sets({"kind": {"var": "show"}})), ty.track("unset"), ty.track(moving, highlight="show")],
+    )
+    scene.panel("p", "missing", {"show": 3, "e": 0.1})
+    scene.layout(ty.split("row", 0.5, "p", "q"))
+    scene.tabs("show", label="show")
+    scene.readout("caption", {"member": "nope"})
+    with pytest.raises(ty.SceneError) as info:
+        scene.to_document()
+    message = str(info.value)
+    for expected in (
+        "'nowhere', which is not a frame",
+        "V3: the driver of view 'v' names 'show', which is a toggle, not a selector",
+        "'ghost', which is not a body",
+        "V2: a track layer of view 'v' names 'show', which is a toggle, not a choice",
+        "'unset', which is not a track set",
+        "2.7: a highlight of view 'v' names 'show', which is a toggle, not a selector",
+        "'missing', which is not a view",
+        "sets toggle 'show' to 3",
+        "V1: panel 'p' sets 'e', which is scene-scoped",
+        "the layout shows 'q', which is not a panel",
+        "2.9: a tabs control names 'show', which is a toggle, not a choice",
+    ):
+        assert expected in message
+
+
+def test_handles_of_the_wrong_kind_fail_at_the_call():
+    scene, moving, _ = small()
+    show = scene.toggle("show")
+    with pytest.raises(ty.SceneError, match="toggle, not a selector"):
+        ty.driver(moving, show)
+    with pytest.raises(ty.SceneError, match="toggle, not a choice"):
+        ty.sets(kind=show)
+    with pytest.raises(ty.SceneError, match="but lacks a trail"):
+        ty.track(moving, reveal="trail")
+    with pytest.raises(ty.SceneError, match="toggle, not a choice"):
+        scene.tabs(show, label="show")
+    with pytest.raises(ty.SceneError, match="V3: the driver's member"):
+        ty.driver(moving, "all")
+    with pytest.raises(ty.SceneError, match="negative"):
+        ty.track(moving, -1)
+    with pytest.raises(ty.SceneError, match="not in \\(0, 1\\]"):
+        ty.track(moving, trail=1.5)
+    with pytest.raises(ty.SceneError, match=r"2\.7: a camera kind"):
+        scene.view("v", frame="root", driver=ty.driver(moving, 0), layers=[], camera={"kind": "fisheye"})

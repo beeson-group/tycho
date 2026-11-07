@@ -1,0 +1,326 @@
+{
+ "format": "tycho-scene",
+ "version": "0.2",
+ "generator": "pytycho 0.2.0",
+ "title": "Broucke families, three members each",
+ "frames": {
+  "rotating-pulsating": {
+   "label": "rotating-pulsating",
+   "axes": [
+    "x",
+    "y",
+    "z"
+   ]
+  },
+  "rotating": {
+   "label": "rotating",
+   "parent": "rotating-pulsating",
+   "scale": {
+    "channel": "rho"
+   }
+  },
+  "barycentric-inertial": {
+   "label": "barycentric inertial",
+   "parent": "rotating",
+   "rotation": {
+    "axis": "z",
+    "angle": {
+     "channel": "true_anomaly"
+    }
+   }
+  },
+  "inertial-m1": {
+   "label": "inertial, centered on m1",
+   "parent": "barycentric-inertial",
+   "origin": {
+    "body": "m1"
+   }
+  },
+  "inertial-m2": {
+   "label": "inertial, centered on m2",
+   "parent": "barycentric-inertial",
+   "origin": {
+    "body": "m2"
+   }
+  }
+ },
+ "bodies": {
+  "m1": {
+   "label": "m1",
+   "frame": "rotating-pulsating",
+   "position": [
+    {
+     "attr": "mu",
+     "factor": -1.0
+    },
+    0.0,
+    0.0
+   ]
+  },
+  "m2": {
+   "label": "m2",
+   "frame": "rotating-pulsating",
+   "position": [
+    {
+     "attr": "mu",
+     "factor": -1.0,
+     "offset": 1.0
+    },
+    0.0,
+    0.0
+   ]
+  }
+ },
+ "track_sets": {
+  "family-7-periapsis": {
+   "label": "Broucke family 7 periapsis",
+   "frame": "rotating-pulsating",
+   "tags": {
+    "family": "7",
+    "branch": "periapsis"
+   },
+   "attrs": {
+    "mu": 0.012155
+   },
+   "tracks": 3,
+   "offsets": "family-7-periapsis/offsets",
+   "positions": "family-7-periapsis/positions",
+   "channels": {
+    "true_anomaly": {
+     "view": "family-7-periapsis/true_anomaly",
+     "interp": "linear"
+    },
+    "rho": {
+     "view": "family-7-periapsis/rho",
+     "interp": "linear"
+    },
+    "time": {
+     "view": "family-7-periapsis/time",
+     "interp": "linear"
+    }
+   },
+   "parameters": {
+    "eccentricity": {
+     "view": "family-7-periapsis/eccentricity",
+     "label": "eccentricity"
+    }
+   },
+   "periodic": true
+  },
+  "family-7-apoapsis": {
+   "label": "Broucke family 7 apoapsis",
+   "frame": "rotating-pulsating",
+   "tags": {
+    "family": "7",
+    "branch": "apoapsis"
+   },
+   "attrs": {
+    "mu": 0.012155
+   },
+   "tracks": 3,
+   "offsets": "family-7-apoapsis/offsets",
+   "positions": "family-7-apoapsis/positions",
+   "channels": {
+    "true_anomaly": {
+     "view": "family-7-apoapsis/true_anomaly",
+     "interp": "linear"
+    },
+    "rho": {
+     "view": "family-7-apoapsis/rho",
+     "interp": "linear"
+    },
+    "time": {
+     "view": "family-7-apoapsis/time",
+     "interp": "linear"
+    }
+   },
+   "parameters": {
+    "eccentricity": {
+     "view": "family-7-apoapsis/eccentricity",
+     "label": "eccentricity"
+    }
+   },
+   "periodic": true
+  },
+  "family-8-periapsis": {
+   "label": "Broucke family 8 periapsis",
+   "frame": "rotating-pulsating",
+   "tags": {
+    "family": "8",
+    "branch": "periapsis"
+   },
+   "attrs": {
+    "mu": 0.5
+   },
+   "tracks": 3,
+   "offsets": "family-8-periapsis/offsets",
+   "positions": "family-8-periapsis/positions",
+   "channels": {
+    "true_anomaly": {
+     "view": "family-8-periapsis/true_anomaly",
+     "interp": "linear"
+    },
+    "rho": {
+     "view": "family-8-periapsis/rho",
+     "interp": "linear"
+    },
+    "time": {
+     "view": "family-8-periapsis/time",
+     "interp": "linear"
+    }
+   },
+   "parameters": {
+    "eccentricity": {
+     "view": "family-8-periapsis/eccentricity",
+     "label": "eccentricity"
+    }
+   },
+   "periodic": true
+  },
+  "family-8-apoapsis": {
+   "label": "Broucke family 8 apoapsis",
+   "frame": "rotating-pulsating",
+   "tags": {
+    "family": "8",
+    "branch": "apoapsis"
+   },
+   "attrs": {
+    "mu": 0.5
+   },
+   "tracks": 3,
+   "offsets": "family-8-apoapsis/offsets",
+   "positions": "family-8-apoapsis/positions",
+   "channels": {
+    "true_anomaly": {
+     "view": "family-8-apoapsis/true_anomaly",
+     "interp": "linear"
+    },
+    "rho": {
+     "view": "family-8-apoapsis/rho",
+     "interp": "linear"
+    },
+    "time": {
+     "view": "family-8-apoapsis/time",
+     "interp": "linear"
+    }
+   },
+   "parameters": {
+    "eccentricity": {
+     "view": "family-8-apoapsis/eccentricity",
+     "label": "eccentricity"
+    }
+   },
+   "periodic": true
+  }
+ },
+ "variables": {
+  "family": {
+   "kind": "choice",
+   "values": [
+    "7",
+    "8"
+   ],
+   "default": "7",
+   "scope": "scene"
+  },
+  "branch": {
+   "kind": "choice",
+   "values": [
+    "periapsis",
+    "apoapsis"
+   ],
+   "default": "periapsis",
+   "scope": "scene"
+  },
+  "frame": {
+   "kind": "choice",
+   "values": [
+    "rotating-pulsating",
+    "rotating",
+    "barycentric-inertial",
+    "inertial-m1",
+    "inertial-m2"
+   ],
+   "default": "rotating-pulsating",
+   "scope": "panel"
+  },
+  "e": {
+   "kind": "selector",
+   "by": "nearest",
+   "parameter": "eccentricity",
+   "default": 0.0,
+   "scope": "scene"
+  }
+ },
+ "clock": {
+  "mode": "fraction",
+  "channels": [
+   "true_anomaly",
+   "time",
+   "@index"
+  ],
+  "steps": 64
+ },
+ "views": {
+  "main": {
+   "frame": {
+    "var": "frame"
+   },
+   "driver": {
+    "sets": {
+     "tags": {
+      "family": {
+       "var": "family"
+      },
+      "branch": {
+       "var": "branch"
+      }
+     }
+    },
+    "member": {
+     "var": "e"
+    }
+   },
+   "layers": [
+    {
+     "kind": "track",
+     "sets": {
+      "tags": {
+       "family": {
+        "var": "family"
+       },
+       "branch": {
+        "var": "branch"
+       }
+      }
+     },
+     "members": "all",
+     "reveal": "none"
+    },
+    {
+     "kind": "body",
+     "body": "m1"
+    },
+    {
+     "kind": "body",
+     "body": "m2"
+    }
+   ]
+  }
+ },
+ "initial": {
+  "variables": {},
+  "clock": {
+   "channel": "true_anomaly"
+  },
+  "panels": {
+   "p1": {
+    "view": "main"
+   }
+  },
+  "layout": {
+   "kind": "panel",
+   "id": "p1"
+  }
+ }
+}

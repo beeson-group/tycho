@@ -502,3 +502,53 @@ class Scene:
         )
         self._sets[id] = ts
         return ts
+
+    def _variable(self, id: str, spec: dict[str, Any]) -> Variable:
+        self._new(self._variables, id, "variable")
+        spec["scope"] = _enum(spec["scope"], ("scene", "panel"), f"2.5: the scope of variable {id!r}")
+        self._variables[id] = spec
+        return Variable(id, spec["kind"])
+
+    def selector(
+        self, id: str, *, parameter: str | None = None, by: str = "nearest", default: float = 0.0, scope: str = "scene"
+    ) -> Variable:
+        """A selector, whose value is either a parameter value, resolved to the nearest track, or a track index."""
+        _enum(by, ("nearest", "index"), f"2.5: selector {id!r} is by")
+        if by == "nearest" and parameter is None:
+            raise SceneError(f"2.5: selector {id!r} is by nearest but does not name a parameter")
+        spec: dict[str, Any] = {
+            "kind": "selector",
+            "by": by,
+            "default": _finite(default, f"2.5: the default of selector {id!r}"),
+            "scope": scope,
+        }
+        if parameter is not None:
+            spec["parameter"] = _text(parameter, "a parameter name")
+        return self._variable(id, spec)
+
+    def choice(
+        self, id: str, values: Sequence[Any], *, default: Any = None, labels: Sequence[str] | None = None, scope: str = "scene"
+    ) -> Variable:
+        """A choice among strings, or among frames given as handles."""
+        vals = [_id(v) for v in values]
+        if not vals or len(set(vals)) != len(vals) or not all(isinstance(v, str) for v in vals):
+            raise SceneError(f"2.5: the values of choice {id!r} are not distinct strings: {vals!r}")
+        spec: dict[str, Any] = {
+            "kind": "choice",
+            "values": vals,
+            "default": _id(default) if default is not None else vals[0],
+            "scope": scope,
+        }
+        if spec["default"] not in vals:
+            raise SceneError(f"2.5: choice {id!r} defaults to {spec['default']!r}, which is not one of its values")
+        if labels is not None:
+            spec["labels"] = [_text(x, "a choice label") for x in labels]
+            if len(spec["labels"]) != len(vals):
+                raise SceneError(f"2.5: choice {id!r} has {len(spec['labels'])} labels for {len(vals)} values")
+        return self._variable(id, spec)
+
+    def toggle(self, id: str, *, default: bool = False, scope: str = "scene") -> Variable:
+        """A boolean variable."""
+        if not isinstance(default, bool):
+            raise SceneError(f"2.5: toggle {id!r} defaults to {default!r}, not a boolean")
+        return self._variable(id, {"kind": "toggle", "default": default, "scope": scope})

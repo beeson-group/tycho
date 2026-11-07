@@ -160,6 +160,111 @@ const MEASURE = `(async (frames, sets, cache) => {
   return { steps, panels: v.renderer.panels.size, cpu, gpu, renderer };
 })(${frames}, ${JSON.stringify(sets)}, ${cache})`;
 
+// DRAG runs in the page. It simulates a slider drag with one new selector value per frame, then draws the frames after it stops.
+const DRAG = `(async (spec, switches) => {
+  const [id, from, to] = spec.split(':');
+  const v = document.querySelector('tycho-viewer');
+  const R = v.renderer;
+  const glc = R.gl.getContext();
+  const pixel = new Uint8Array(4);
+  const set = (x) => v.store.update((s) => ({ ...s, variables: { ...s.variables, [id]: x } }));
+  // a paused viewer draws only after a change, hence frame() forces a draw for the comparison
+  const frame = () => {
+    v.dirty = true;
+    v.tick(performance.now());
+    if (v.raf) cancelAnimationFrame(v.raf);
+    v.raf = 0;
+  };
+  const sweep = (coarse) => {
+    R.coarseDrags = coarse;
+    const out = [];
+    for (let i = 0; i < 240; i++) {
+      set(Number(from) + ((Number(to) - Number(from)) * (i % 120)) / 119);
+      const t0 = performance.now();
+      frame();
+      glc.readPixels(0, 0, 1, 1, glc.RGBA, glc.UNSIGNED_BYTE, pixel);
+      out.push(performance.now() - t0);
+    }
+    return out;
+  };
+  const fine = sweep(false);
+  const coarse = sweep(true);
+  const w = glc.drawingBufferWidth;
+  const h = glc.drawingBufferHeight;
+  const read = () => {
+    const px = new Uint8Array(4 * w * h);
+    glc.readPixels(0, 0, w, h, glc.RGBA, glc.UNSIGNED_BYTE, px);
+    return px;
+  };
+  // check draws n frames with the cache and compares the last one with a frame drawn without it
+  const check = (label, n) => {
+    for (let i = 0; i < n; i++) frame();
+    const cached = read();
+    R.cacheStatic = false;
+    frame();
+    const ref = read();
+    R.cacheStatic = true;
+    let over32 = 0;
+    for (let i = 0; i < ref.length; i++) if (Math.abs(ref[i] - cached[i]) > 32) over32++;
+    return { label, over32, channels: ref.length };
+  };
+  const checks = [];
+  // the refine comes REFINE_MS after the last coarse rebuild, as a redraw that the renderer requests
+  await new Promise((r) => setTimeout(r, 400));
+  checks.push(check('the refine after the drag', 1));
+  checks.push(check('two frames after the refine', 2));
+  if (switches.length > 0) {
+    for (const [k, value] of switches) v.store.update((s) => ({ ...s, variables: { ...s.variables, [k]: value } }));
+    checks.push(check('the frame of the change', 1));
+    checks.push(check('three frames after the change', 3));
+  }
+  return { fine, coarse, checks };
+})(${JSON.stringify(drag)}, ${JSON.stringify(switches)})`;
+
+// COMPARE runs in the page. It draws each progress once without the cache and twice with it, the second
+// time from the underlay, and compares the two canvases channel by channel.
+const COMPARE = `(async (sets) => {
+  const v = document.querySelector('tycho-viewer');
+  for (const [id, value] of sets) {
+    const variable = v.scene.variables[id];
+    const parsed = variable.kind === 'selector' ? Number(value) : variable.kind === 'toggle' ? value === 'true' : value;
+    v.store.update((s) => ({ ...s, variables: { ...s.variables, [id]: parsed } }));
+  }
+  const glc = v.renderer.gl.getContext();
+  const w = glc.drawingBufferWidth;
+  const h = glc.drawingBufferHeight;
+  const laps = v.scene.clock.laps ?? 1;
+  v.store.setPlaying(true);
+  v.anchor = { index: 0, time: 0 };
+  const at = (q) => (q * 1000 * 8 * laps) / v.speed;
+  const shot = (q) => {
+    v.tick(at(q));
+    if (v.raf) cancelAnimationFrame(v.raf);
+    v.raf = 0;
+    const px = new Uint8Array(4 * w * h);
+    glc.readPixels(0, 0, w, h, glc.RGBA, glc.UNSIGNED_BYTE, px);
+    return px;
+  };
+  const out = [];
+  for (const q of [0.0, 0.37, 0.91]) {
+    v.renderer.cacheStatic = false;
+    const a = shot(q);
+    v.renderer.cacheStatic = true;
+    shot(q);
+    const b = shot(q);
+    let over2 = 0, over32 = 0, max = 0;
+    for (let i = 0; i < a.length; i++) {
+      const d = Math.abs(a[i] - b[i]);
+      if (d > max) max = d;
+      if (d > 2) over2++;
+      if (d > 32) over32++;
+    }
+    out.push({ q, pixels: w * h, max, over2, over32 });
+  }
+  v.store.setPlaying(false);
+  return out;
+})(${JSON.stringify(sets)})`;
+
 const stats = (xs) => {
   const s = [...xs].sort((a, b) => a - b);
   const at = (p) => s[Math.min(s.length - 1, Math.floor(p * s.length))];

@@ -1,0 +1,199 @@
+{
+ "format": "tycho-scene",
+ "version": "0.2",
+ "generator": "pytycho 0.2.0",
+ "title": "edge cases, value mode",
+ "frames": {
+  "p": {},
+  "th": {
+   "parent": "p",
+   "rotation": {
+    "axis": "z",
+    "angle": {
+     "channel": "th"
+    }
+   }
+  }
+ },
+ "bodies": {
+  "b": {
+   "frame": "p",
+   "position": [
+    1.0,
+    0.0,
+    0.0
+   ]
+  }
+ },
+ "track_sets": {
+  "dec": {
+   "frame": "p",
+   "tracks": 1,
+   "offsets": "dec/offsets",
+   "positions": "dec/positions",
+   "channels": {
+    "t": {
+     "view": "dec/channels/t"
+    }
+   },
+   "periodic": false
+  },
+  "drv": {
+   "frame": "p",
+   "tracks": 1,
+   "offsets": "drv/offsets",
+   "positions": "drv/positions",
+   "channels": {
+    "t": {
+     "view": "drv/channels/t"
+    },
+    "th": {
+     "view": "drv/channels/th"
+    }
+   },
+   "periodic": false
+  },
+  "whole": {
+   "frame": "p",
+   "tracks": 1,
+   "offsets": "whole/offsets",
+   "positions": "whole/positions",
+   "channels": {
+    "t": {
+     "view": "whole/channels/t"
+    }
+   },
+   "periodic": false
+  },
+  "idx": {
+   "frame": "p",
+   "tracks": 1,
+   "offsets": "idx/offsets",
+   "positions": "idx/positions",
+   "channels": {
+    "t": {
+     "view": "idx/channels/t"
+    }
+   },
+   "periodic": false
+  }
+ },
+ "clock": {
+  "mode": "value",
+  "channels": [
+   "t",
+   "@index"
+  ],
+  "steps": 8,
+  "range": [
+   2.0,
+   10.0
+  ]
+ },
+ "views": {
+  "v": {
+   "frame": "p",
+   "driver": {
+    "sets": {
+     "set": "drv"
+    },
+    "member": {
+     "index": 0
+    }
+   },
+   "layers": [
+    {
+     "kind": "track",
+     "sets": {
+      "set": "dec"
+     },
+     "members": "all",
+     "reveal": "grow",
+     "head": true,
+     "before": "hidden",
+     "after": "clamp"
+    },
+    {
+     "kind": "track",
+     "sets": {
+      "set": "dec"
+     },
+     "members": "all",
+     "reveal": "grow",
+     "head": true,
+     "before": "clamp",
+     "after": "hidden"
+    },
+    {
+     "kind": "track",
+     "sets": {
+      "set": "whole"
+     },
+     "members": "all",
+     "reveal": "none",
+     "after": "hidden"
+    },
+    {
+     "kind": "track",
+     "sets": {
+      "set": "idx"
+     },
+     "members": "all",
+     "reveal": "grow",
+     "head": true
+    }
+   ]
+  },
+  "body": {
+   "frame": "th",
+   "driver": {
+    "sets": {
+     "set": "drv"
+    },
+    "member": {
+     "index": 0
+    }
+   },
+   "layers": [
+    {
+     "kind": "body",
+     "body": "b"
+    },
+    {
+     "kind": "body",
+     "body": "b",
+     "trail": {
+      "fraction": 0.5
+     }
+    }
+   ]
+  }
+ },
+ "initial": {
+  "variables": {},
+  "clock": {
+   "channel": "t"
+  },
+  "panels": {
+   "v": {
+    "view": "v"
+   },
+   "body": {
+    "view": "body"
+   }
+  },
+  "layout": {
+   "kind": "split",
+   "dir": "row",
+   "ratio": 0.5,
+   "a": {
+    "kind": "panel",
+    "id": "v"
+   },
+   "b": {
+    "kind": "panel",
+    "id": "body"
+   }
+  }
+ }
+}

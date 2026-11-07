@@ -282,6 +282,101 @@ def driver(sets: Any, member: Any) -> dict[str, Any]:
     return {"sets": _query(sets), "member": _member(member, "the driver's member", one=True)}
 
 
+def _fraction(value: Any, what: str) -> dict[str, Any]:
+    f = _finite(value, what)
+    if not 0.0 < f <= 1.0:
+        raise SceneError(f"2.7: {what} is {f}, not in (0, 1]")
+    return {"fraction": f}
+
+
+def _unit_interval(value: Any, what: str) -> float:
+    x = _finite(value, what)
+    if not 0.0 <= x <= 1.0:
+        raise SceneError(f"2.7: {what} is {x}, not in [0, 1]")
+    return x
+
+
+def _taper(value: Any, what: str) -> dict[str, float]:
+    """The trail taper ``trail.taper``, from ``(width, opacity)`` or from a dict with either key."""
+    if isinstance(value, Mapping):
+        spec = dict(value)
+    elif isinstance(value, Sequence) and not isinstance(value, str) and len(value) == 2:
+        spec = {"width": value[0], "opacity": value[1]}
+    else:
+        raise SceneError(f"2.7: the taper of {what} is (width, opacity) or a dict of width and opacity, not {value!r}")
+    if extra := set(spec) - {"width", "opacity"}:
+        raise SceneError(f"2.7: the taper of {what} has unknown keys {sorted(extra)}")
+    return {k: _unit_interval(spec[k], f"the taper {k} of {what}") for k in ("width", "opacity") if k in spec}
+
+
+def _trail(value: Any, what: str) -> dict[str, Any]:
+    """A trail from a fraction or a dict of ``fraction`` and an optional ``taper``."""
+    spec = dict(value) if isinstance(value, Mapping) else {"fraction": value}
+    if "fraction" not in spec or set(spec) - {"fraction", "taper"}:
+        raise SceneError(f"2.7: {what} is a fraction or a dict of fraction and taper, not {value!r}")
+    out = _fraction(spec["fraction"], f"{what} fraction")
+    if "taper" in spec:
+        out["taper"] = _taper(spec["taper"], what)
+    return out
+
+
+def _head(value: Any) -> bool | dict[str, Any]:
+    """The head of a track layer, as a boolean or a dict of an optional ``color`` and ``size`` (rule L3)."""
+    if isinstance(value, bool):
+        return value
+    if not isinstance(value, Mapping):
+        raise SceneError(f"L3: a track layer's head is {value!r}, not a boolean or a dict of color and size")
+    if extra := set(value) - {"color", "size"}:
+        raise SceneError(f"L3: a head has unknown keys {sorted(extra)}")
+    out: dict[str, Any] = {}
+    if "color" in value:
+        out["color"] = _color(value["color"], "a head color")
+    if "size" in value:
+        out["size"] = _finite(value["size"], "a head size")
+        if out["size"] <= 0.0:
+            raise SceneError(f"L3: a head size is {out['size']}, not positive")
+    return out
+
+
+def _has_head(layer: Mapping[str, Any]) -> bool:
+    head = layer.get("head", False)
+    return head is True or isinstance(head, Mapping)
+
+
+def _colormap(value: Any, what: str) -> Any:
+    """A colormap name, or ``{"var": choice, "map": {value: name}}`` (section 2.7)."""
+    if not isinstance(value, Mapping):
+        return _enum(value, COLORMAPS, f"2.7: the colormap of {what}")
+    if set(value) != {"var", "map"} or not isinstance(value["map"], Mapping) or not value["map"]:
+        raise SceneError(f"2.7: the colormap of {what} is a name or a dict of var and a nonempty map, not {value!r}")
+    names = {
+        _text(_id(k), f"a value of the choice keying {what}"): _enum(v, COLORMAPS, f"2.7: the colormap of {what} at {_id(k)!r}")
+        for k, v in value["map"].items()
+    }
+    return {"var": _var(value["var"], f"2.7: the colormap of {what}", "choice")["var"], "map": names}
+
+
+def _color_spec(value: Any, what: str) -> Any:
+    if isinstance(value, str):
+        return _color(value, what)
+    if not isinstance(value, Mapping) or ("parameter" in value) == ("channel" in value):
+        raise SceneError(f"2.7: {what} is a #rrggbb color or a colormap over one parameter or channel, not {value!r}")
+    out: dict[str, Any] = {"colormap": _colormap(value.get("colormap"), what)}
+    key = "parameter" if "parameter" in value else "channel"
+    out[key] = _text(value[key], f"the {key} of {what}")
+    for k in ("range", "clip"):
+        if k in value:
+            pair = value[k]
+            if not isinstance(pair, Sequence) or isinstance(pair, str) or len(pair) != 2:
+                raise SceneError(f"2.7: the {k} of {what} is {pair!r}, not two numbers")
+            out[k] = [_finite(x, f"the {k} of {what}") for x in pair]
+            if k == "clip" and not all(0.0 <= x <= 1.0 for x in out[k]):
+                raise SceneError(f"2.7: the clip of {what} is outside [0, 1]")
+    if extra := set(value) - {"colormap", key, "range", "clip"}:
+        raise SceneError(f"2.7: {what} has unknown keys {sorted(extra)}")
+    return out
+
+
 # track sets
 
 

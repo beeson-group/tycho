@@ -162,6 +162,55 @@ describe('trails (L2, L4)', () => {
   });
 });
 
+describe('references (V1 to V3, L5)', () => {
+  const data = () =>
+    new MemoryStore()
+      .add('off', [0, 2, 4], 'uint32')
+      .add('pos', [
+        [0, 0],
+        [1, 0],
+        [2, 0],
+        [3, 0],
+      ])
+      .add('time', [0, 1, 0, 1])
+      .add('c', [1, 3]);
+  const scene = (): Scene => {
+    const s = baseScene({
+      variables: {
+        near: { kind: 'selector', by: 'nearest', parameter: 'C', default: 2 },
+        idx: { kind: 'selector', by: 'index', default: 7.6, scope: 'panel' },
+        show: { kind: 'toggle', default: true },
+        fam: { kind: 'choice', values: ['x', 'y'], default: 'y' },
+      },
+    });
+    s.track_sets.s = { ...s.track_sets.s!, tracks: 2, parameters: { C: { view: 'c' } }, tags: { family: 'x' } };
+    s.views.main!.layers = [
+      { kind: 'track', sets: { set: 's' }, members: { var: 'near' } },
+      { kind: 'track', sets: { set: 's' }, members: { var: 'idx' }, visible: { var: 'show' } },
+      { kind: 'track', sets: { tags: { family: { var: 'fam' } } }, members: 'all' },
+    ];
+    return s;
+  };
+  it('a selector by nearest takes the lowest index on a tie, and one by index rounds and clamps', () => {
+    const r = evaluate(scene(), data(), state(), 0);
+    expect(track(r, 0).members.map((m) => m.index)).toEqual([0]);
+    expect(track(r, 1).members.map((m) => m.index)).toEqual([1]);
+    expect(track(r, 2)).toEqual({ kind: 'track', set: null, members: [] });
+  });
+  it('panel scope against scene scope, a matching tags query, and a hidden layer (L5)', () => {
+    const st = state();
+    st.variables = { idx: 0, fam: 'x', show: true };
+    st.panels.p1!.variables = { idx: 0 };
+    let r = evaluate(scene(), data(), st, 0);
+    expect(track(r, 1).members.map((m) => m.index)).toEqual([0]);
+    expect(track(r, 2).set).toBe('s');
+    st.panels.p1!.variables = {};
+    st.variables.show = false;
+    r = evaluate(scene(), data(), st, 0);
+    expect(r.panels.p1!.layers.length).toBe(2);
+  });
+});
+
 describe('origin at a body (F2)', () => {
   it('a body in a frame other than the edge parent', () => {
     const data = new MemoryStore()

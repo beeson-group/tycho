@@ -66,6 +66,46 @@ describe('frame edges (F1, F3)', () => {
   });
 });
 
+const lineData = () =>
+  new MemoryStore()
+    .add('off', [0, 5], 'uint32')
+    .add('pos', [
+      [0, 0],
+      [10, 0],
+      [20, 0],
+      [30, 0],
+      [40, 0],
+    ])
+    .add('time', [0, 1, 2, 3, 4]);
+
+describe('clock and reveal (C1 to C4, L1, L3)', () => {
+  it('grow at a reading that falls on a sample, with a head', () => {
+    const scene = baseScene();
+    scene.views.main!.layers = [{ kind: 'track', sets: { set: 's' }, members: 'all', reveal: 'grow', head: true }];
+    const m = track(evaluate(scene, lineData(), state(), 1)).members[0]!;
+    close(m.line, [
+      [0, 0, 0],
+      [10, 0, 0],
+    ]);
+    close([m.head!], [[10, 0, 0]]);
+  });
+  it('value mode at the last sample, and hidden after it', () => {
+    const scene = baseScene({ clock: { mode: 'value', channels: ['time'], steps: 4, range: [0, 8] } });
+    scene.views.main!.layers = [{ kind: 'track', sets: { set: 's' }, members: 'all', reveal: 'grow', head: true }];
+    close([track(evaluate(scene, lineData(), state(), 2)).members[0]!.head!], [[40, 0, 0]]);
+    scene.views.main!.layers = [{ kind: 'track', sets: { set: 's' }, members: 'all', reveal: 'grow', head: true, after: 'hidden' }];
+    expect(track(evaluate(scene, lineData(), state(), 3)).members[0]).toEqual({ index: 0, line: [], head: null });
+  });
+  it('a decreasing clock channel and @index', () => {
+    const data = lineData();
+    data.add('time', [4, 3, 2, 1, 0]);
+    const scene = baseScene();
+    scene.views.main!.layers = [{ kind: 'track', sets: { set: 's' }, members: 'all', reveal: 'none', head: true }];
+    close([track(evaluate(scene, data, state(), 2)).members[0]!.head!], [[20, 0, 0]]);
+    close([track(evaluate(scene, data, state('main', '@index'), 3)).members[0]!.head!], [[30, 0, 0]]);
+  });
+});
+
 describe('origin at a body (F2)', () => {
   it('a body in a frame other than the edge parent', () => {
     const data = new MemoryStore()

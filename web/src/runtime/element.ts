@@ -734,6 +734,125 @@ export class TychoViewerElement extends Base {
   get state(): State | null {
     return this.store?.state ?? null;
   }
+
+  private onChange(change: 'state' | 'frame' | 'playing'): void {
+    const store = this.store!;
+    if (change === 'state') {
+      const st = store.state;
+      if (st.panels !== this.lastPanels) this.syncPanels();
+      if (st.layout !== this.lastLayout || st.panels !== this.lastPanels) this.layoutDom();
+      this.lastPanels = st.panels;
+      this.lastLayout = st.layout;
+      this.syncWidgets();
+      this.save();
+    } else if (change === 'playing') {
+      const t = this.transport;
+      if (t !== null) {
+        const label = store.playing ? 'Pause (k)' : 'Play (k)';
+        t.play.replaceChildren(icon(store.playing ? 'pause' : 'play'));
+        t.play.setAttribute('aria-label', label);
+        t.play.title = label;
+        t.play.classList.toggle('on', store.playing);
+      }
+      this.meter.reset();
+      this.playProgress = null;
+      if (t !== null) this.showRate(null);
+      if (store.playing) this.anchor = { index: store.frame, time: performance.now() };
+    }
+    this.invalidate();
+  }
+
+  private invalidate(): void {
+    this.dirty = true;
+    this.schedule();
+  }
+
+  private schedule(): void {
+    if (this.raf === 0 && this.renderer !== null) this.raf = requestAnimationFrame((t) => this.tick(t));
+  }
+
+  /**
+   * One animation frame. In live playback it maps wall time to a loop position, whose integer part is the
+   * frame index the controls show, and draws at the fractional progress every frame. Otherwise it draws
+   * if anything changed.
+   */
+  private tick(now: number): void {
+    this.raf = 0;
+    const store = this.store!;
+    const clock = this.scene!.clock;
+    if (store.playing) {
+      const x = loopPosition(this.anchor.index, now - this.anchor.time, 1000, clock.steps, this.speed, loopSeconds(clock));
+      store.setFrame(positionIndex(x, clock.steps));
+      this.playProgress = positionProgress(x, clock.steps);
+      this.dirty = true;
+    }
+    if (this.dirty) {
+      this.dirty = false;
+      this.draw();
+      if (store.playing) this.countDraw(now);
+    }
+    if (store.playing) this.schedule();
+  }
+
+  /** Feeds the frame rate shown in the Playback group with a draw presented at `now`. */
+  private countDraw(now: number): void {
+    this.meter.note(now);
+    this.showRate(this.meter.report(now));
+  }
+
+  private showRate(report: FrameReport | null): void {
+    const t = this.transport;
+    if (t === null) return;
+    setText(t.fps, fpsText(report));
+    const title = fpsTitle(report);
+    if (t.fps.title !== title) t.fps.title = title;
+  }
+
+  /** Reads the stage's size once per resize, so that the draw loop never forces a layout. */
+  private measureStage(): void {
+    this.stageSize = { w: this.stage.clientWidth, h: this.stage.clientHeight };
+  }
+
+  private draw(): void {
+    const renderer = this.renderer;
+    const store = this.store!;
+    const scene = this.scene!;
+    if (renderer === null) return;
+    const st = store.state;
+    const { w, h } = this.stageSize;
+    if (w < 1 || h < 1) return;
+    const q = store.playing && this.playProgress !== null ? this.playProgress : store.frame / scene.clock.steps;
+    const errors = renderer.renderAt(st, q, w, h, Math.min(window.devicePixelRatio || 1, 2));
+    for (const [pid, dom] of this.panelDom) {
+      setText(dom.error, errors.get(pid) ?? '');
+      for (const r of dom.readouts) fillReadout(r, this.pieces(pid, r.parts, q));
+      if (dom.barsFor !== st) {
+        this.syncBars(pid, dom);
+        dom.barsFor = st;
+      }
+    }
+    const first = this.firstPanel();
+    for (const r of this.captions) fillReadout(r, first === null ? [] : this.pieces(first, r.parts, q));
+    if (this.transport) {
+      setRange(this.transport.scrub, store.frame);
+      setText(this.transport.frame, `${store.frame} / ${scene.clock.steps}`);
+    }
+  }
+
+  private pieces(pid: string, parts: Readout['parts'], q: number): string[] | { error: string } {
+    try {
+      const ctx = { scene: this.scene!, geometry: this.geometry!, state: this.store!.state, panel: pid, frameIndex: this.store!.frame, progress: q };
+      return readoutPieces(ctx, parts);
+    } catch (e) {
+      if (e instanceof TychoError) return { error: e.message };
+      throw e;
+    }
+  }
+
+  private firstPanel(): string | null {
+    const walk = (n: Layout): string => (n.kind === 'panel' ? n.id : walk(n.a));
+    return this.store === null ? null : walk(this.store.state.layout);
+  }
 }
 
 /**

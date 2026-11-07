@@ -262,6 +262,11 @@ function cameraBasis(cam: Camera): { right: THREE.Vector3; up: THREE.Vector3; no
   return { right, up: e3, normal };
 }
 
+/** The factors by which an orbit camera stretches what it shows along x, y, and z, or 1 along each. */
+function stretchOf(cam: Camera): THREE.Vector3 {
+  return cam.kind === 'orbit' && cam.stretch !== undefined ? new THREE.Vector3(...cam.stretch) : new THREE.Vector3(1, 1, 1);
+}
+
 /** The display-frame axes a plane camera shows across and up the screen, as indices into a frame's `axes`. */
 function planeAxes(cam: Camera & { kind: 'plane' }): [number, number] {
   return cam.plane === 'xz' ? [0, 2] : cam.plane === 'yz' ? [1, 2] : [0, 1];
@@ -1349,7 +1354,7 @@ class MarkDraw implements Draw {
     this.lines.geometry = g;
   }
 
-  layout(box: THREE.Box3, cam: Camera): void {
+  layout(box: THREE.Box3, cam: Camera, stretch = new THREE.Vector3(1, 1, 1)): void {
     if (this.follows) return;
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
@@ -1361,10 +1366,17 @@ class MarkDraw implements Draw {
       col.push(...rgb, alpha, ...rgb, alpha);
     };
     if (this.kind === 'axes') {
-      // under a free aspect each axis is as long as a round fraction of the box along it, or of the box's largest side where it is flat
-      const len = (e: number) => niceStep(freeAspect(cam) && e > 1e-9 * ext ? e : ext, 2);
+      // under a free aspect each axis is as long as a round fraction of the box along it, or of the box's largest side where it is flat.
+      // The lengths are taken in the stretched box and divided by the stretch, which the scene's scale applies again
+      const seen = size.clone().multiply(stretch);
+      const most = Math.max(seen.x, seen.y, seen.z, 1e-9);
+      const len = (e: number) => niceStep(freeAspect(cam) && e > 1e-9 * most ? e : most, 2);
       const fg = hexRgb(this.theme.foreground);
-      this.tips = [new THREE.Vector3(len(size.x), 0, 0), new THREE.Vector3(0, len(size.y), 0), new THREE.Vector3(0, 0, len(size.z))];
+      this.tips = [
+        new THREE.Vector3(len(seen.x) / stretch.x, 0, 0),
+        new THREE.Vector3(0, len(seen.y) / stretch.y, 0),
+        new THREE.Vector3(0, 0, len(seen.z) / stretch.z),
+      ];
       for (const tip of this.tips) add(this.full ? tip.clone().negate() : new THREE.Vector3(), tip, fg, 0.8);
     } else {
       const { right, up, normal } = cameraBasis(cam.kind === 'plane' ? cam : { kind: 'plane', plane: cam.up === 'x' ? 'yz' : cam.up === 'y' ? 'xz' : 'xy' });
@@ -1522,8 +1534,10 @@ class PanelRender {
   /** Half the width and half the height of the orthographic view, at zoom 1. */
   halfWidth = 1;
   halfHeight = 1;
-  /** The box the camera was last fitted to. */
+  /** The box the camera was last fitted to, before an orbit camera's stretch. */
   box: THREE.Box3 | null = null;
+  /** The point the fit aimed the camera at. */
+  readonly target = new THREE.Vector3();
   /** What a plane camera showed at the last frame, or null under an orbit camera. */
   view: PlaneView | null = null;
 
@@ -1671,6 +1685,10 @@ export class StageRenderer {
     p.cameraSpec = spec;
     const ortho = spec.kind === 'plane' || spec.projection === 'orthographic';
     p.camera = ortho ? new THREE.OrthographicCamera(-1, 1, 1, -1, -1, 1) : new THREE.PerspectiveCamera(35, 1, 0.01, 100);
+    const k = stretchOf(spec);
+    p.scene.scale.copy(k);
+    p.staticScene.scale.copy(k);
+    p.underlayDirty = true;
     p.needsFit = true;
     p.userMoved = false;
     this.makeControls(p);
@@ -1827,7 +1845,7 @@ export class StageRenderer {
         let k = 0;
         for (const o of draw.group.children) o.renderOrder = 16 * lp.index + k++;
         p.draws.set(lp.index, draw);
-        if (draw instanceof MarkDraw && p.box !== null) draw.layout(p.box, p.cameraSpec);
+        if (draw instanceof MarkDraw && p.box !== null) draw.layout(p.box, p.cameraSpec, stretchOf(p.cameraSpec));
       }
     } catch (e) {
       if (!(e instanceof TychoError)) throw e;
@@ -1887,15 +1905,18 @@ export class StageRenderer {
     if (b !== null) box.set(new THREE.Vector3(b[0], b[1], b[2]), new THREE.Vector3(b[3], b[4], b[5]));
     else for (const d of p.draws.values()) if (d instanceof BodyDraw && d.group.visible) d.extend(box);
     if (box.isEmpty()) box.set(new THREE.Vector3(-1, -1, -1), new THREE.Vector3(1, 1, 1));
-    const center = box.getCenter(new THREE.Vector3());
-    const size = box.getSize(new THREE.Vector3());
-    const radius = Math.max(size.length() / 2, 1e-9);
     const spec = p.cameraSpec;
+    // the camera sees the box as stretched by the scale of the panel's scenes
+    const k = stretchOf(spec);
+    const seen = new THREE.Box3(box.min.clone().multiply(k), box.max.clone().multiply(k));
+    const center = seen.getCenter(new THREE.Vector3());
+    const size = seen.getSize(new THREE.Vector3());
+    const radius = Math.max(size.length() / 2, 1e-9);
     const { up, normal } = cameraBasis(spec);
     const cam = p.camera;
     p.fitting = true;
     if (cam instanceof THREE.OrthographicCamera) {
-      ({ halfWidth: p.halfWidth, halfHeight: p.halfHeight } = orthoFit(box, spec, p.rect.w / Math.max(1, p.rect.h)));
+      ({ halfWidth: p.halfWidth, halfHeight: p.halfHeight } = orthoFit(seen, spec, p.rect.w / Math.max(1, p.rect.h)));
       const dist = 4 * radius + 1;
       const reach = 10 * (center.length() + dist + radius);
       cam.near = -reach;
@@ -1910,12 +1931,13 @@ export class StageRenderer {
     }
     cam.up.copy(up);
     cam.lookAt(center);
+    p.target.copy(center);
     this.aspect(p);
     if (p.controls) {
       p.controls.target.copy(center);
       p.controls.update();
     }
-    for (const d of p.draws.values()) if (d instanceof MarkDraw) d.layout(box, spec);
+    for (const d of p.draws.values()) if (d instanceof MarkDraw) d.layout(box, spec, k);
     p.box = box;
     p.fitting = false;
     p.needsFit = false;
@@ -2007,8 +2029,9 @@ export class StageRenderer {
     const frame = this.ctx.scene.frames[p.plan.display];
     const names = frame?.axes ?? ['x', 'y', 'z'];
     const { normal } = cameraBasis(p.cameraSpec);
+    const k = stretchOf(p.cameraSpec);
     const add = (text: string, at: THREE.Vector3, dx: number, hide: boolean) => {
-      const s = at.clone().project(p.camera);
+      const s = at.clone().multiply(k).project(p.camera);
       const x = ((s.x + 1) / 2) * p.rect.w + dx;
       const y = ((1 - s.y) / 2) * p.rect.h;
       const inside = s.z > -1 && s.z < 1 && x >= 0 && x <= p.rect.w && y >= 0 && y <= p.rect.h;
@@ -2024,7 +2047,12 @@ export class StageRenderer {
     }
     for (const d of p.draws.values()) {
       if (d instanceof MarkDraw && d.kind === 'axes' && !d.follows) {
-        d.tips.forEach((tip, i) => add(names[i] ?? '', tip, 4, p.cameraSpec.kind === 'plane' && Math.abs(tip.clone().normalize().dot(normal)) > 0.99));
+        d.tips.forEach((tip, i) => {
+          const name = names[i] ?? '';
+          const factor = k.getComponent(i);
+          const title = name !== '' && factor !== 1 ? `${name} ×${Number(factor.toPrecision(4))}` : name;
+          add(title, tip, 4, p.cameraSpec.kind === 'plane' && Math.abs(tip.clone().normalize().dot(normal)) > 0.99);
+        });
       } else if (d instanceof BodyDraw && d.label !== null && d.at !== null && d.group.visible) {
         add(d.label, d.at, d.size / 2 + 3, false);
       }

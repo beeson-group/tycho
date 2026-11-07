@@ -19,6 +19,9 @@ from typing import Any
 
 import numpy as np
 
+from ._evaluate import Context, FrameTree
+from ._thin import select
+
 ID = re.compile(r"[A-Za-z0-9_.-]+")
 HEX = re.compile(r"#[0-9a-fA-F]{6}")
 COLORMAPS = ("viridis", "plasma", "cividis", "blues", "reds")
@@ -299,6 +302,62 @@ class TrackSet:
             entry["label"] = _text(label, "a label")
         if unit is not None:
             entry["unit"] = _text(unit, "a unit")
+
+    def _context(self, i: int) -> Context:
+        chans = dict(self.channels[i])
+        m = len(self.positions[i])
+        chans[INDEX] = np.arange(m, dtype=np.float64)
+        return Context(self.attrs, chans.get, m)
+
+    def thin(
+        self,
+        n: int | None = None,
+        *,
+        tolerance: float | None = None,
+        keep: Sequence[Sequence[int]] | Callable[[int], Sequence[int]] | None = None,
+        frames: Sequence[Any] | None = None,
+    ) -> list[np.ndarray]:
+        """Selects a subset of the stored samples of each track, and does not create new samples. Returns a copy of the kept indices.
+
+        In count mode, ``n`` samples are kept per track at equal steps of blended arclength. The arclength is measured
+        in every frame of ``frames`` (by default the track set's frame), relative to the track set's extent in the same frame.
+        In tolerance mode, the samples are chosen by the Douglas-Peucker algorithm, relative to the same extent. Both
+        endpoints and every index in ``keep`` are always kept, even when they number more than ``n``.
+        """
+        if not self.positions:
+            raise SceneError(f"track set {self.id!r} does not have a track to thin")
+        if self.kept is not None:
+            raise SceneError(f"track set {self.id!r} is already thinned")
+        frame_ids = [_check_id(_id(f), "a frame id") for f in (frames or [self.frame])]
+        for fid in frame_ids:
+            if fid not in self.scene._frames:
+                raise SceneError(f"2.3: thin measures in {fid!r}, which is not a declared frame")
+        if keep is not None and not callable(keep) and len(keep) != len(self.positions):
+            raise SceneError(f"keep has {len(keep)} entries for the {len(self.positions)} tracks of track set {self.id!r}")
+        try:
+            tree = FrameTree(self.scene._frames, self.scene._bodies)
+            in_frames = []
+            for fid in frame_ids:
+                per_track = []
+                for i, p in enumerate(self.positions):
+                    p3 = np.hstack([p, np.zeros((len(p), 1))]) if p.shape[1] == 2 else p
+                    per_track.append(tree.transform(p3, self.frame, fid, self._context(i)))
+                in_frames.append(per_track)
+            kept = select(in_frames, n=n, tolerance=tolerance, keep=keep)
+        except ValueError as exc:
+            raise SceneError(f"track set {self.id!r} cannot be thinned: {exc}") from None
+        self.kept = [np.array(k, dtype=np.int64) for k in kept]
+        for k in self.kept:
+            k.flags.writeable = False
+        return [k.copy() for k in self.kept]
+
+    def _stored(self) -> tuple[list[np.ndarray], list[dict[str, np.ndarray]]]:
+        if self.kept is None:
+            return self.positions, self.channels
+        return (
+            [p[k] for p, k in zip(self.positions, self.kept, strict=True)],
+            [{n: v[k] for n, v in c.items()} for c, k in zip(self.channels, self.kept, strict=True)],
+        )
 
 
 # the scene

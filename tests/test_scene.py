@@ -495,3 +495,40 @@ def test_a_full_document_with_controls_readouts_theme_and_camera_validates_again
     assert doc["controls"][0] == {"kind": "tabs", "variable": "kind", "label": "kind"}
     assert doc["readouts"][0]["parts"][5] == {"attr": "mu", "factor": -1.0, "offset": 1.0}
     evaluate(doc, scene.to_container(), doc["initial"], 3)
+
+
+def periodic_pair(**clock_kw):
+    """Two track sets told apart by a choice, one periodic and one not, and a clock with the given keywords."""
+    scene = ty.Scene()
+    root = scene.frame("root")
+    for sid, periodic in (("closed", True), ("open", False)):
+        ts = scene.track_set(sid, frame=root, tags={"kind": sid}, periodic=periodic, dtype="float64")
+        for k in range(5):
+            ts.add(np.array([[k, 0.0], [k, 1.0], [k, 0.0]]), channels={"t": [0.0, 1.0, 2.0]}, parameters={"e": 0.1 * k})
+    kind = scene.choice("kind", ["closed", "open"])
+    scene.clock(channels=["t"], steps=4, **clock_kw)
+    return scene, kind
+
+
+def test_c6_laps_are_for_a_fraction_clock_and_periodic_read_sets():
+    scene = ty.Scene()
+    with pytest.raises(ty.SceneError, match="C6: the clock is in value mode but has laps"):
+        scene.clock("value", channels=["t"], steps=4, range=[0.0, 1.0], laps=1)
+    with pytest.raises(ty.SceneError, match="C6: the clock has 0 laps"):
+        scene.clock(channels=["t"], steps=4, laps=0)
+    scene, kind = periodic_pair(laps=3)
+    assert scene._clock is not None
+    assert scene._clock["laps"] == 3
+    # drawn whole and never read, a track set that is not periodic is accepted, and has one lap
+    scene.view("v", frame="root", driver=ty.driver("closed", 0), layers=[ty.track("open"), ty.track("closed", trail=0.5)])
+    scene.panel("p", "v")
+    assert scene.to_document()["clock"]["laps"] == 3
+    scene, kind = periodic_pair(laps=3)
+    scene.view("v", frame="root", driver=ty.driver(ty.sets(kind=kind), 0), layers=[ty.track(ty.sets(kind=kind), head={"size": 4})])
+    scene.panel("p", "v")
+    with pytest.raises(ty.SceneError) as info:
+        scene.to_document()
+    message = str(info.value)
+    assert "C6: view 'v' with {'kind': 'open'}: track set 'open', the driver, is not periodic" in message
+    assert "C6: view 'v' with {'kind': 'open'}: track set 'open', on which a reading is taken, is not periodic" in message
+    assert "'closed'" not in message

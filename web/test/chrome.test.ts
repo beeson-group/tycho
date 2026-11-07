@@ -899,6 +899,12 @@ describe('a viewer embedded on a page, under a DOM stand-in', () => {
     });
   });
 
+  it('inherits the font of the host in the chrome, with a fixed size for legibility', () => {
+    const css = readFileSync(new URL('../src/runtime/element.ts', import.meta.url), 'utf8');
+    expect(css).toMatch(/:host \{[^}]*font-family: inherit;[^}]*font-size: 13px;/);
+    expect(css).toMatch(/:host \{[^}]*text-align: left;/);
+    expect(css).not.toMatch(/ui-monospace|Helvetica/);
+  });
 });
 
 /** The background of the chrome for a scene without a `theme` attribute. */

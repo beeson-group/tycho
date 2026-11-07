@@ -293,3 +293,50 @@ export function keyAction(key: string, shift: boolean, steps: number): KeyAction
   }
   return /^[0-9]$/.test(key) ? { kind: 'seek', frame: Math.round((steps * Number(key)) / 10) % steps } : null;
 }
+
+// a colorbar as a slider
+
+/** The scene-scoped selector that dragging a colorbar sets, with the label of its control and the track sets that its stops come from. */
+export interface ColorbarLink {
+  variable: string;
+  label: string;
+  domain: SetQuery;
+}
+
+/** The labels a colorbar over a parameter can carry, written as the renderer writes them, with the label or the name, then the unit. */
+function parameterLabels(scene: Scene, param: string): Set<string> {
+  const out = new Set<string>([param]);
+  for (const set of Object.values(scene.track_sets)) {
+    const params = set?.parameters;
+    if (params === undefined || !Object.hasOwn(params, param)) continue;
+    const def = params[param]!;
+    const label = def.label ?? param;
+    out.add(def.unit ? `${label}, ${def.unit}` : label);
+  }
+  return out;
+}
+
+/**
+ * The selector that a colorbar of `view` sets. It is found from the bar's label, through a track
+ * layer colored by a parameter whose label the bar carries and a scene-scoped selector by nearest over the
+ * same parameter. The stops come from the selector's slider domain, else from the layer's sets.
+ * The result is null when a matching layer or a matching selector does not exist.
+ */
+export function colorbarLink(scene: Scene, view: View, barLabel: string): ColorbarLink | null {
+  for (const layer of view.layers) {
+    if (layer.kind !== 'track' || layer.color === undefined || typeof layer.color === 'string' || !('parameter' in layer.color)) continue;
+    const param = layer.color.parameter;
+    if (!parameterLabels(scene, param).has(barLabel)) continue;
+    for (const [id, v] of Object.entries(scene.variables ?? {})) {
+      if (v === undefined || v.kind !== 'selector' || v.scope === 'panel' || v.by === 'index' || v.parameter !== param) continue;
+      const control = (scene.controls ?? []).find((c): c is Extract<Control, { kind: 'slider' }> => c.kind === 'slider' && c.variable === id);
+      return { variable: id, label: control?.label ?? id, domain: control?.domain ?? layer.sets };
+    }
+  }
+  return null;
+}
+
+/** The index of the stop nearest the value at `t` in [0, 1] along a bar from `lo` to `hi`, or -1 when `stops` is empty. */
+export function stopAt(stops: readonly number[], lo: number, hi: number, t: number): number {
+  return nearestStop(stops, lo + Math.min(1, Math.max(0, t)) * (hi - lo));
+}

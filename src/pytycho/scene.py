@@ -552,3 +552,43 @@ class Scene:
         if not isinstance(default, bool):
             raise SceneError(f"2.5: toggle {id!r} defaults to {default!r}, not a boolean")
         return self._variable(id, {"kind": "toggle", "default": default, "scope": scope})
+
+    def clock(
+        self,
+        mode: str = "fraction",
+        *,
+        channels: Sequence[str],
+        steps: int,
+        range: Sequence[float] | None = None,
+        labels: Sequence[str] | None = None,
+        laps: int | None = None,
+    ) -> None:
+        """The clock (section 2.6). The first channel is the initial one.
+
+        ``laps``, in fraction mode only, is the number of periods that one loop of ``steps`` frames covers (rule C6).
+        """
+        _enum(mode, ("fraction", "value"), "2.6: the clock mode")
+        if isinstance(channels, str) or not channels:
+            raise SceneError(f"2.6: the clock channels are a list of names, not {channels!r}")
+        names = [_text(c, "a clock channel") for c in channels]
+        if len(set(names)) != len(names):
+            raise SceneError(f"2.6: the clock channels repeat a name: {names!r}")
+        n = _integer(steps, "2.6: the clock steps")
+        if n < 1:
+            raise SceneError(f"2.6: the clock has {n} steps, fewer than one")
+        out: dict[str, Any] = {"mode": mode, "channels": names, "steps": n}
+        if laps is not None:
+            if mode == "value":
+                raise SceneError("C6: the clock is in value mode but has laps")
+            out["laps"] = _integer(laps, "C6: the clock laps")
+            if out["laps"] < 1:
+                raise SceneError(f"C6: the clock has {out['laps']} laps, fewer than one")
+        if mode == "value":
+            if range is None or isinstance(range, str) or len(range) != 2:
+                raise SceneError("C2: the clock is in value mode but does not have a range of two numbers")
+            out["range"] = [_finite(x, "C2: a clock range value") for x in range]
+        if labels is not None:
+            out["labels"] = [_text(x, "a clock label") for x in labels]
+            if len(out["labels"]) != len(names):
+                raise SceneError(f"2.6: the clock has {len(out['labels'])} labels for {len(names)} channels")
+        self._clock = out

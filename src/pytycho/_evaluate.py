@@ -20,6 +20,8 @@ from typing import Any
 
 import numpy as np
 
+from .container import Container
+
 INDEX = "@index"
 
 
@@ -299,3 +301,72 @@ class Track:
         """The sample readings ``u_i`` of rule C1 for clock channel ``name``."""
         c = self.clock_values(name)
         return (c - c[0]) / (c[-1] - c[0])
+
+
+class SetData:
+    """A track set of the scene document, read from the container as float64."""
+
+    def __init__(self, sid: str, spec: Mapping[str, Any], container: Container) -> None:
+        self.id = sid
+        self.spec = spec
+        if not isinstance(spec, Mapping) or not all(k in spec for k in ("frame", "tracks", "offsets", "positions")):
+            raise EvaluationError(f"2.1: track set {sid!r} lacks frame, tracks, offsets, or positions")
+
+        def view(name: Any) -> np.ndarray:
+            try:
+                return container.view(name)
+            except (KeyError, TypeError):
+                raise EvaluationError(f"2.1: track set {sid!r} names view {name!r}, which the data container lacks") from None
+
+        self.tracks = spec["tracks"]
+        if isinstance(self.tracks, bool) or not isinstance(self.tracks, int) or self.tracks < 1:
+            raise EvaluationError(f"2.1: track set {sid!r} has tracks {self.tracks!r}, not a count of at least one")
+        offsets = view(spec["offsets"])
+        if offsets.dtype != np.uint32 or offsets.shape != (self.tracks + 1,):
+            raise EvaluationError(
+                f"2.1: track set {sid!r}: offsets view {spec['offsets']!r} is {offsets.dtype} of shape {offsets.shape}, "
+                f"not uint32 of shape ({self.tracks + 1},)"
+            )
+        self.offsets = offsets.astype(np.int64)
+        if self.offsets[0] != 0:
+            raise EvaluationError(f"2.1: track set {sid!r}: offsets[0] is {self.offsets[0]}, not 0")
+        if np.any(np.diff(self.offsets) < 2):
+            t = int(np.flatnonzero(np.diff(self.offsets) < 2)[0])
+            n = int(self.offsets[t + 1] - self.offsets[t])
+            raise EvaluationError(f"T1: track set {sid!r}: the sample count of track {t} is {n}, fewer than two")
+        positions = view(spec["positions"]).astype(np.float64)
+        size = int(self.offsets[-1])
+        if positions.ndim != 2 or positions.shape[0] != size or positions.shape[1] not in (2, 3):
+            raise EvaluationError(
+                f"2.1: track set {sid!r}: positions view {spec['positions']!r} has shape {positions.shape}, not ({size}, 2) or ({size}, 3)"
+            )
+        if positions.shape[1] == 2:
+            positions = np.hstack([positions, np.zeros((size, 1))])
+        self.positions = positions
+        self.channels = {}
+        for name, info in (spec.get("channels") or {}).items():
+            if name == INDEX:
+                raise EvaluationError(f"S3: track set {sid!r} declares a channel named {INDEX}, which is reserved")
+            values = view(info["view"] if isinstance(info, Mapping) else None).astype(np.float64)
+            if values.shape != (size,):
+                raise EvaluationError(f"2.1: track set {sid!r}: channel {name!r} has shape {values.shape}, not ({size},)")
+            self.channels[name] = values
+        self.parameters = {}
+        for name, info in (spec.get("parameters") or {}).items():
+            values = view(info["view"] if isinstance(info, Mapping) else None).astype(np.float64)
+            if values.shape != (self.tracks,):
+                raise EvaluationError(f"2.1: track set {sid!r}: parameter {name!r} has shape {values.shape}, not ({self.tracks},)")
+            if not np.all(np.isfinite(values)):
+                t = int(np.flatnonzero(~np.isfinite(values))[0])
+                raise EvaluationError(f"2.1: parameter {name!r} of track set {sid!r} is not finite at track {t}")
+            self.parameters[name] = values
+        self.attrs = {k: _number(v, f"attribute {k!r} of track set {sid!r}") for k, v in (spec.get("attrs") or {}).items()}
+        self.tags = spec.get("tags") or {}
+        self.frame = spec["frame"]
+        self.periodic = spec.get("periodic", False)
+        if not isinstance(self.periodic, bool):
+            raise EvaluationError(f"T2: track set {sid!r} has periodic {self.periodic!r}, not a boolean")
+
+    def track(self, i: int) -> Track:
+        a, b = self.offsets[i], self.offsets[i + 1]
+        return Track(self.positions[a:b], {k: v[a:b] for k, v in self.channels.items()}, self.attrs, self.periodic)

@@ -208,6 +208,80 @@ def _var(value: Any, what: str, kind: str | None = None) -> dict[str, Any]:
     return {"var": _check_id(value, what)}
 
 
+# layers and queries
+
+
+def sets(tags: Mapping[str, Any] | None = None, **kw: Any) -> dict[str, Any]:
+    """A tags query, with values that are strings or choice variables."""
+    merged = {**(tags or {}), **kw}
+    out: dict[str, Any] = {}
+    for k, v in merged.items():
+        if isinstance(v, Variable):
+            out[_text(k, "a tag name")] = _var(v, "V2: a tag value", "choice")
+        elif isinstance(v, Mapping) and set(v) == {"var"}:
+            out[_text(k, "a tag name")] = _var(v["var"], "V2: a tag value", "choice")
+        else:
+            out[_text(k, "a tag name")] = _text(v, "a tag value")
+    return {"tags": out}
+
+
+def set_id(value: Any) -> dict[str, Any]:
+    """A query for one track set, by id or handle."""
+    return {"set": _check_id(_id(value), "a track set id")}
+
+
+def _query(value: Any) -> dict[str, Any]:
+    if isinstance(value, (str, TrackSet)):
+        return set_id(value)
+    if isinstance(value, Mapping) and set(value) == {"set"}:
+        return set_id(value["set"])
+    if isinstance(value, Mapping) and set(value) == {"tags"} and isinstance(value["tags"], Mapping):
+        return {
+            "tags": {
+                k: (_var(v["var"], "V2: a tag value") if isinstance(v, Mapping) else _text(v, "a tag value"))
+                for k, v in value["tags"].items()
+            }
+        }
+    raise SceneError(f"V2: a set query is a track set id, a handle, or sets(...), not {value!r}")
+
+
+def every(n: int) -> dict[str, int]:
+    """A sparse member reference ``{"count": n}``, which selects every ``s``-th track from the first, and the last (rule V3).
+
+    The step ``s`` is ``floor(tracks / n + 0.5)``, or 1 when ``n`` is at least the number of tracks.
+    """
+    k = _integer(n, "V3: a member count")
+    if k < 1:
+        raise SceneError(f"V3: a member count is {k}, fewer than one")
+    return {"count": k}
+
+
+def _member(value: Any, what: str, *, one: bool = False) -> Any:
+    if isinstance(value, str) and value == "all":
+        if one:
+            raise SceneError(f"V3: {what} is 'all', but a driver resolves to one track")
+        return "all"
+    if isinstance(value, (Variable, str)):
+        return _var(value, what, "selector")
+    if isinstance(value, Mapping) and set(value) == {"count"}:
+        if one:
+            raise SceneError(f"V3: {what} is a count, but a driver resolves to one track")
+        return every(value["count"])
+    if isinstance(value, Mapping) and set(value) == {"index"}:
+        value = value["index"]
+    if isinstance(value, Mapping) and set(value) == {"var"}:
+        return _var(value["var"], what, "selector")
+    k = _integer(value, f"V3: {what}")
+    if k < 0:
+        raise SceneError(f"V3: {what} is {k}, a negative track index")
+    return {"index": k}
+
+
+def driver(sets: Any, member: Any) -> dict[str, Any]:
+    """A view's driver, given by a set query and a member, which is a track index or a selector."""
+    return {"sets": _query(sets), "member": _member(member, "the driver's member", one=True)}
+
+
 # track sets
 
 

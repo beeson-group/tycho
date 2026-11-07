@@ -426,12 +426,16 @@ export function fitBox(plan: PanelPlan, geometry: GeometryCache): Box6 | null {
   return box;
 }
 
+/** Whether a camera is a plane camera with a free aspect, under which the two axes of its plane are scaled separately in the fit (section 2.7). */
+const freeAspect = (cam: Camera): boolean => cam.kind === 'plane' && cam.aspect === 'free';
+
 /**
- * An orthographic fit, given as the center of the box and half the view's height, for a viewport whose
- * width over height is `aspect`. One world unit is as long across the screen as up it, and a tenth of
- * margin is added.
+ * An orthographic fit, given as the center of the box and half the view's width and height, for a viewport
+ * whose width over height is `aspect`. A tenth of margin is added. One world unit is as long across the
+ * screen as up it, unless the camera has a free aspect. The box is then fitted in each direction separately,
+ * and along an axis on which the box is flat the half size is the one of the equal fit.
  */
-export function orthoFit(box: THREE.Box3, cam: Camera, aspect: number): { center: THREE.Vector3; halfHeight: number } {
+export function orthoFit(box: THREE.Box3, cam: Camera, aspect: number): { center: THREE.Vector3; halfWidth: number; halfHeight: number } {
   const center = box.getCenter(new THREE.Vector3());
   const size = box.getSize(new THREE.Vector3());
   const radius = Math.max(size.length() / 2, 1e-9);
@@ -440,7 +444,11 @@ export function orthoFit(box: THREE.Box3, cam: Camera, aspect: number): { center
   const hw = cam.kind === 'plane' ? size.dot(abs(right)) / 2 : radius;
   const hh = cam.kind === 'plane' ? size.dot(abs(up)) / 2 : radius;
   const half = Math.max(hh, hw / aspect) * 1.1;
-  return { center, halfHeight: half > 1e-12 ? half : Math.max(radius, 1) };
+  const halfHeight = half > 1e-12 ? half : Math.max(radius, 1);
+  if (!freeAspect(cam)) return { center, halfWidth: halfHeight * aspect, halfHeight };
+  // an extent below a billionth of the other is flat, e.g. the height of a horizontal line
+  const solid = (a: number, b: number) => a > 1e-12 && a > 1e-9 * b;
+  return { center, halfWidth: solid(hw, hh) ? hw * 1.1 : halfHeight * aspect, halfHeight: solid(hh, hw) ? hh * 1.1 : halfHeight };
 }
 
 /** The opacity of a member at parameter distance `d` from the center of a highlight's kernel (section 2.7). */
@@ -1398,7 +1406,8 @@ class PanelRender {
   needsFit = true;
   userMoved = false;
   fitting = false;
-  /** Half the height of the orthographic view, at zoom 1. */
+  /** Half the width and half the height of the orthographic view, at zoom 1. */
+  halfWidth = 1;
   halfHeight = 1;
   /** The box the camera was last fitted to. */
   box: THREE.Box3 | null = null;
@@ -1772,7 +1781,7 @@ export class StageRenderer {
     const cam = p.camera;
     p.fitting = true;
     if (cam instanceof THREE.OrthographicCamera) {
-      p.halfHeight = orthoFit(box, spec, p.rect.w / Math.max(1, p.rect.h)).halfHeight;
+      ({ halfWidth: p.halfWidth, halfHeight: p.halfHeight } = orthoFit(box, spec, p.rect.w / Math.max(1, p.rect.h)));
       const dist = 4 * radius + 1;
       const reach = 10 * (center.length() + dist + radius);
       cam.near = -reach;
@@ -1798,15 +1807,19 @@ export class StageRenderer {
     p.needsFit = false;
   }
 
-  /** Keeps one world unit the same length across and up the screen in an orthographic view. */
+  /**
+   * Keeps one world unit the same length across and up the screen in an orthographic view. Under a free
+   * aspect the visible rectangle is kept instead, and it is stretched with the panel.
+   */
   private aspect(p: PanelRender): void {
     const aspect = p.rect.w / Math.max(1, p.rect.h);
     const cam = p.camera;
     if (cam instanceof THREE.OrthographicCamera) {
+      if (!freeAspect(p.cameraSpec)) p.halfWidth = p.halfHeight * aspect;
       cam.top = p.halfHeight;
       cam.bottom = -p.halfHeight;
-      cam.left = -p.halfHeight * aspect;
-      cam.right = p.halfHeight * aspect;
+      cam.left = -p.halfWidth;
+      cam.right = p.halfWidth;
     } else cam.aspect = aspect;
     cam.updateProjectionMatrix();
   }

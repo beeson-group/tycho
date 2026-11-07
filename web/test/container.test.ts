@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { Container, decodeEmbedded, type Dtype, type EncodedViewInfo, type TypedArray } from '../src/container';
 import { TychoError } from '../src/errors';
@@ -229,5 +230,23 @@ describe('data.tyd version 1', () => {
   it('decodes embedded base64 and refuses any other encoding (section 1)', async () => {
     expect(Array.from(decodeEmbedded('AAEC\n/w==', 'base64'))).toEqual([0, 1, 2, 255]);
     expect(await rule(() => decodeEmbedded('H4sI', 'gzip+base64'))).toBe('1');
+  });
+});
+
+describe('the container fixtures of spec/conformance/containers', () => {
+  const read = (name: string) => Container.parse(new Uint8Array(readFileSync(new URL(`../../spec/conformance/containers/${name}`, import.meta.url))));
+
+  it('decode, as pytycho wrote them, to the same bits encoded as raw', async () => {
+    const [encoded, raw] = await Promise.all([read('encoded.tyd'), read('raw.tyd')]);
+    expect(encoded.names()).toEqual(raw.names());
+    for (const name of raw.names()) {
+      expect(raw.header.views[name]!.encoding).toBe('raw');
+      const [a, b] = [encoded.view(name), raw.view(name)];
+      expect([a.dtype, a.shape], name).toEqual([b.dtype, b.shape]);
+      expect(bits(a.data), name).toEqual(bits(b.data));
+    }
+    const infos = Object.values(encoded.header.views);
+    expect(new Set(infos.map((v) => v.encoding))).toEqual(new Set(['raw', 'shuffle-delta-deflate']));
+    expect(infos.some((v) => v.encoding === 'shuffle-delta-deflate' && v.chunks.length > 2)).toBe(true);
   });
 });

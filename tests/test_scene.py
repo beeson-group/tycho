@@ -409,6 +409,42 @@ def test_write_html_embeds_both_files_and_reports_sizes(tmp_path):
         ty.build_html(scene.to_document(), scene.to_container(), runtime="</script>")
 
 
+def test_build_embed_holds_the_element_its_blocks_and_attributes_but_not_the_runtime():
+    scene = rotating_loop()
+    document, data = scene.to_document(), scene.to_container()
+    embed = ty.build_embed(document, data, theme="light", autoplay=True, kiosk=False, class_="wide", data_note='a "b"')
+    assert embed.startswith('<tycho-viewer theme="light" autoplay class="wide" data-note="a &quot;b&quot;">\n')
+    assert embed.endswith("</tycho-viewer>")
+    for kind, payload in (("scene", json.dumps(document, separators=(",", ":"), ensure_ascii=False).encode()), ("data", data)):
+        encoded = base64.b64encode(payload).decode()
+        assert embed.count(f'<script type="application/octet-stream" data-tycho="{kind}" data-encoding="base64">{encoded}</script>') == 1
+    assert embed.count("<script") == 2
+    assert "<html" not in embed
+    assert 'id="tycho' not in embed
+    assert "customElements" not in embed
+
+
+def test_build_html_and_build_embed_write_the_same_element():
+    scene = rotating_loop()
+    document, data = scene.to_document(), scene.to_container()
+    assert ty.build_embed(document, data, kiosk=True) in ty.build_html(document, data, runtime="", kiosk=True)
+
+
+@pytest.mark.parametrize("attributes", [{"theme": "sepia"}, {"scene": "a.tys"}, {"data": "a.tyd"}, {"onload x": "1"}])
+def test_build_embed_refuses_attributes_that_would_not_work(attributes):
+    scene = rotating_loop()
+    with pytest.raises(ValueError, match=r"theme|attribute"):
+        ty.build_embed(scene.to_document(), scene.to_container(), **attributes)
+
+
+def test_build_embed_refuses_an_element_over_the_string_limit(monkeypatch):
+    scene = rotating_loop()
+    document, data = scene.to_document(), scene.to_container()
+    monkeypatch.setattr("pytycho.html.MAX_STRING", 1)
+    with pytest.raises(ValueError, match="the base64 of the scene"):
+        ty.build_embed(document, data)
+
+
 def test_build_html_refuses_a_page_over_the_string_limit(monkeypatch):
     import pytycho.html
 

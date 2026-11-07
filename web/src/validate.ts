@@ -50,7 +50,7 @@ const BODY_KEYS = ['label', 'frame', 'position', 'color'];
 const SET_KEYS = ['label', 'frame', 'tags', 'attrs', 'tracks', 'offsets', 'positions', 'channels', 'parameters', 'periodic'];
 const VIEW_KEYS = ['label', 'frame', 'camera', 'driver', 'layers'];
 const PLANE_CAMERA_KEYS = ['kind', 'plane', 'aspect'];
-const ORBIT_CAMERA_KEYS = ['kind', 'projection', 'up'];
+const ORBIT_CAMERA_KEYS = ['kind', 'projection', 'up', 'stretch', 'turn'];
 const LAYER_KEYS: Record<string, readonly string[]> = {
   track: ['kind', 'sets', 'members', 'reveal', 'trail', 'head', 'before', 'after', 'context', 'color', 'opacity', 'width', 'highlight', 'visible'],
   body: ['kind', 'body', 'trail', 'size', 'visible'],
@@ -261,6 +261,12 @@ export function validate(scene: Scene, data?: DataStore, state?: State): string[
     const aspect = (view!.camera as { aspect?: unknown } | undefined)?.aspect;
     if (view!.camera?.kind === 'plane' && aspect !== undefined && aspect !== 'equal' && aspect !== 'free')
       fail('2.7', `view ${id}: a plane camera's aspect is ${JSON.stringify(aspect)}, not equal or free`);
+    if (view!.camera?.kind === 'orbit') {
+      const { stretch, turn } = view!.camera;
+      if (stretch !== undefined && !(Array.isArray(stretch) && stretch.length === 3 && stretch.every((k) => finite(k) && k > 0)))
+        fail('2.7', `view ${id}: an orbit camera's stretch is ${JSON.stringify(stretch)}, not three positive finite factors`);
+      if (turn !== undefined && !finite(turn)) fail('2.7', `view ${id}: an orbit camera's turn is ${JSON.stringify(turn)}, not a finite number of degrees`);
+    }
     for (const layer of view!.layers) {
       if (!LAYER_KINDS.includes(layer.kind)) fail('S1', `view ${id}: layer kind ${JSON.stringify(layer.kind)} is not implemented`);
       if (layer.visible !== undefined) checkVariableRef(scene, layer.visible.var, 'toggle', 'L5');

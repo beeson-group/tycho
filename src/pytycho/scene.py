@@ -1017,3 +1017,77 @@ class Scene:
     def layout(self, node: Any) -> None:
         """The initial layout, given as a panel id or a :func:`split`."""
         self._layout = _node(node)
+
+    def slider(self, variable: Any, *, label: str, domain: Any) -> None:
+        """A slider over a selector by nearest, with its stops taken from the track sets of ``domain``."""
+        self._controls.append(
+            {
+                "kind": "slider",
+                "variable": _var(variable, "2.9: a slider", "selector")["var"],
+                "label": _text(label, "a label"),
+                "domain": _query(domain),
+            }
+        )
+
+    def tabs(self, variable: Any, *, label: str) -> None:
+        """Tabs over a choice."""
+        self._controls.append({"kind": "tabs", "variable": _var(variable, "2.9: tabs", "choice")["var"], "label": _text(label, "a label")})
+
+    def toggle_control(self, variable: Any, *, label: str) -> None:
+        """A toggle control over a toggle variable."""
+        self._controls.append(
+            {"kind": "toggle", "variable": _var(variable, "2.9: a toggle control", "toggle")["var"], "label": _text(label, "a label")}
+        )
+
+    def transport(self) -> None:
+        """The transport, bound to the clock."""
+        self._controls.append({"kind": "transport"})
+
+    def readout(self, place: str, *parts: Any) -> None:
+        """A readout made of strings, variables, channels, attributes, or part dicts (section 2.9)."""
+        _enum(place, ("caption", "panel"), "2.9: a readout place")
+        out: list[str | dict[str, Any]] = []
+        for p in parts:
+            if isinstance(p, str):
+                out.append(p)
+            elif isinstance(p, Variable):
+                out.append(p.to_json())
+            elif isinstance(p, Channel):
+                if p.name == INDEX:
+                    raise SceneError(f"2.9: a readout channel part names {INDEX}, which is not allowed in a readout")
+                out.append(p.to_json())
+            elif isinstance(p, Attr):
+                out.append(p.to_json())
+            elif isinstance(p, Mapping):
+                out.append(self._part(p))
+            else:
+                raise SceneError(f"2.9: a readout part is text, a variable, a channel, an attribute, or a dict, not {p!r}")
+        self._readouts.append({"place": place, "parts": out})
+
+    def _part(self, p: Mapping[str, Any]) -> dict[str, Any]:
+        kinds = [k for k in ("var", "member", "attr", "channel", "clock") if k in p]
+        if len(kinds) != 1:
+            raise SceneError(f"2.9: the readout part {dict(p)!r} names {len(kinds)} of var, member, attr, channel, and clock, not one")
+        kind = kinds[0]
+        allowed = {kind, "digits"} | ({"factor", "offset"} if kind == "attr" else set())
+        if kind == "clock":
+            allowed = {"clock"}
+        if extra := set(p) - allowed:
+            raise SceneError(f"2.9: a readout {kind} part has unknown keys {sorted(extra)}")
+        out: dict[str, Any] = {}
+        if kind == "var":
+            out = _var(p["var"], "2.9: a readout")
+        elif kind == "clock":
+            out["clock"] = _enum(p["clock"], ("index", "steps"), "2.9: a readout clock part")
+        else:
+            out[kind] = _text(p[kind], f"a readout {kind} name")
+            if kind == "channel" and out[kind] == INDEX:
+                raise SceneError(f"2.9: a readout channel part names {INDEX}, which is not allowed in a readout")
+        for k in ("factor", "offset"):
+            if k in p:
+                out[k] = _finite(p[k], f"a readout attr {k}")
+        if "digits" in p:
+            out["digits"] = _integer(p["digits"], "2.9: readout digits")
+            if not 1 <= out["digits"] <= 17:
+                raise SceneError(f"2.9: readout digits is {out['digits']}, not in 1 to 17")
+        return out

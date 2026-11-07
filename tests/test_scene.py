@@ -398,7 +398,8 @@ def test_write_html_embeds_both_files_and_reports_sizes(tmp_path):
     scene = rotating_loop()
     sizes = scene.write_html(tmp_path / "page.html", runtime="console.log('tycho')")
     page = (tmp_path / "page.html").read_text(encoding="utf-8")
-    assert 'scene="#tycho-scene" data="#tycho-data"' in page
+    assert 'data-tycho="scene"' in page
+    assert 'data-tycho="data"' in page
     assert page.count('data-encoding="base64"') == 2
     assert "console.log('tycho')" in page
     # the stored size is below five rows of two float32 values, since the encoding makes it smaller

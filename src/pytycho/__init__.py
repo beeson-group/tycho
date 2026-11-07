@@ -10,7 +10,7 @@ __version__ = "0.2.0"
 
 from ._evaluate import EvaluationError, evaluate
 from .container import Container, ContainerWriter
-from .html import build_html, write_html
+from .html import build_embed, build_html, write_html
 from .scene import (
     Scene,
     SceneError,
@@ -40,6 +40,7 @@ __all__ = [
     "attr",
     "axes",
     "body",
+    "build_embed",
     "build_html",
     "channel",
     "driver",

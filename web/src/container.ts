@@ -172,3 +172,28 @@ function restore(t: Uint8Array, m: number, w: number, size: number, out: ArrayBu
     }
   }
 }
+
+/** The size in bytes of a view's longest chunk once inflated. */
+function chunkBytes(info: EncodedViewInfo): number {
+  return Math.min(info.chunk_rows, info.shape[0]!) * info.shape.slice(1).reduce((a, b) => a * b, 1) * itemSize(info.dtype);
+}
+
+/**
+ * Decodes a shuffle-delta-deflate view into a new array, one chunk after another, each inflated
+ * into `scratch` (rule D5). In Chrome, decoding one chunk at a time is as fast as decoding every chunk
+ * at once, and it leaves less garbage behind.
+ */
+async function decodeView(name: string, info: EncodedViewInfo, payload: Uint8Array, scratch: Uint8Array): Promise<TypedArray> {
+  const size = itemSize(info.dtype);
+  const rows = info.shape[0]!;
+  const width = info.shape.slice(1).reduce((a, b) => a * b, 1);
+  const out = new ArrayBuffer(rows * width * size);
+  for (const [k, [offset, length]] of info.chunks.entries()) {
+    const first = k * info.chunk_rows;
+    const m = Math.min(info.chunk_rows, rows - first);
+    const t = scratch.subarray(0, m * width * size);
+    await inflate(payload.subarray(offset, offset + length), t, `chunk ${k} of view ${name}`);
+    restore(t, m, width, size, out, first * width * size);
+  }
+  return new CONSTRUCTORS[info.dtype](out, 0, rows * width);
+}

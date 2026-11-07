@@ -199,6 +199,59 @@ export class TrackReadings {
   }
 }
 
+/** Geometry and readings, built on first use and kept for the life of the page. */
+export class GeometryCache {
+  readonly scene: Scene;
+  readonly sets: SetCache;
+  readonly frames: Frames;
+  private readonly geometries = new Map<string, TrackGeometry>();
+  private readonly readingsBy = new Map<string, TrackReadings>();
+  private readonly bodyTrails = new Map<string, BodyTrailTable>();
+
+  constructor(scene: Scene, data: DataStore) {
+    this.scene = scene;
+    this.sets = new SetCache(scene, data);
+    this.frames = new Frames(scene);
+  }
+
+  /** Throws an error of rule C6 when the clock is in value mode but has laps. */
+  geometry(setId: string, frame: string): TrackGeometry {
+    const key = `${setId}\0${frame}`;
+    let g = this.geometries.get(key);
+    if (!g) {
+      g = new TrackGeometry(this.sets.get(setId), frame, this.frames, clockLaps(this.scene.clock));
+      this.geometries.set(key, g);
+    }
+    return g;
+  }
+
+  hasChannel(setId: string, channel: string): boolean {
+    return channel === INDEX_CHANNEL || this.sets.get(setId).hasChannel(channel);
+  }
+
+  /** Throws an error of rule C5 when the set lacks the channel. */
+  readings(setId: string, channel: string): TrackReadings {
+    const key = `${setId}\0${channel}`;
+    let r = this.readingsBy.get(key);
+    if (!r) {
+      r = new TrackReadings(this.sets.get(setId), channel);
+      this.readingsBy.set(key, r);
+    }
+    return r;
+  }
+
+  /** The positions of a body along one driver track in one display frame, kept per lap. */
+  bodyTrail(bodyId: string, display: string, setId: string, track: number): BodyTrailTable {
+    const key = `${bodyId}\0${display}\0${setId}\0${track}`;
+    let t = this.bodyTrails.get(key);
+    if (!t) {
+      t = new BodyTrailTable(this.frames, bodyId, display, this.sets.get(setId), track);
+      this.bodyTrails.set(key, t);
+    }
+    return t;
+  }
+}
+
 /**
  * A channel of the driver's track at progress `q`, as a readout shows it (section 2.9). The
  * reading is clamped to [0, 1], and the channel is blended between the samples of rule C4 in the

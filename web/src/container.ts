@@ -52,3 +52,48 @@ export interface DataHeader {
   meta?: Record<string, unknown>;
   views: Record<string, ViewInfo>;
 }
+
+type TypedArrayConstructor = {
+  new (buffer: ArrayBufferLike, byteOffset: number, length: number): TypedArray;
+  new (length: number): TypedArray;
+  readonly BYTES_PER_ELEMENT: number;
+};
+
+const CONSTRUCTORS: Record<Dtype, TypedArrayConstructor> = {
+  int8: Int8Array,
+  uint8: Uint8Array,
+  int16: Int16Array,
+  uint16: Uint16Array,
+  int32: Int32Array,
+  uint32: Uint32Array,
+  float32: Float32Array,
+  float64: Float64Array,
+};
+
+const LITTLE_ENDIAN_HOST = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
+
+export function isDtype(s: unknown): s is Dtype {
+  return typeof s === 'string' && Object.hasOwn(CONSTRUCTORS, s);
+}
+
+export function itemSize(dtype: Dtype): number {
+  return CONSTRUCTORS[dtype].BYTES_PER_ELEMENT;
+}
+
+/** Reads `count` little-endian items starting at `byteOffset`, copying through a DataView. */
+function copyLittleEndian(bytes: DataView, byteOffset: number, count: number, dtype: Dtype): TypedArray {
+  const out = new CONSTRUCTORS[dtype](count);
+  const size = itemSize(dtype);
+  const read: (o: number) => number = {
+    int8: (o: number) => bytes.getInt8(o),
+    uint8: (o: number) => bytes.getUint8(o),
+    int16: (o: number) => bytes.getInt16(o, true),
+    uint16: (o: number) => bytes.getUint16(o, true),
+    int32: (o: number) => bytes.getInt32(o, true),
+    uint32: (o: number) => bytes.getUint32(o, true),
+    float32: (o: number) => bytes.getFloat32(o, true),
+    float64: (o: number) => bytes.getFloat64(o, true),
+  }[dtype];
+  for (let i = 0; i < count; i++) out[i] = read(byteOffset + i * size);
+  return out;
+}

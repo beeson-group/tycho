@@ -547,9 +547,81 @@ def two_panels():
             },
         }
     )
+    absent = state(variables={"group": "absent"})
+    cases.append(
+        {
+            "name": "a driver and a layer whose set query matches nothing",
+            "source": "analytic",
+            "state": absent,
+            "frame_index": 2,
+            "tolerance": TOL,
+            "expected": {
+                "panels": {
+                    "p1": {
+                        "frame": "shift",
+                        "layers": [
+                            None,
+                            None,
+                            {"kind": "track", "set": None, "members": []},
+                            None,
+                            {"kind": "body", "body": "anchor", "position": None, "trail": []},
+                            {"kind": "grid"},
+                        ],
+                    }
+                }
+            },
+        }
+    )
+    # under rule V1, k and frame are panel-scoped, thus their scene values are not read and p1 falls back to the defaults,
+    # root and track 0. e and group are scene-scoped, hence the values in p1 are not read, and the scene's e = 0.31 is nearest to track 2
+    scoped = state(p1={"e": 0.1, "group": "absent"}, p2={"frame": "rot", "k": 1}, variables={"k": 1, "frame": "rot", "e": 0.31})
+    r0 = in_root(tracks[0][0][0], tracks[0][1][0])
+    r2 = in_root(tracks[2][0][0], tracks[2][1][0])
+    rot1 = o + rx(tilt).T @ tracks[1][0][0]
+    cases.append(
+        {
+            "name": "panel scope and scene scope are not read across",
+            "source": "analytic",
+            "state": scoped,
+            "frame_index": 0,
+            "tolerance": TOL,
+            "expected": {
+                "panels": {
+                    "p1": {
+                        "frame": "root",
+                        "layers": [
+                            None,
+                            None,
+                            {"kind": "track", "set": "orbits", "members": [{"index": 0, "line": L([r0]), "head": list(map(float, r0))}]},
+                            {"kind": "track", "set": "orbits", "members": [{"index": 2, "line": L([r2])}]},
+                            None,
+                            {"kind": "grid"},
+                        ],
+                    },
+                    "p2": {
+                        "frame": "rot",
+                        "layers": [
+                            None,
+                            None,
+                            {
+                                "kind": "track",
+                                "set": "orbits",
+                                "members": [{"index": 1, "line": L([rot1]), "head": list(map(float, rot1))}],
+                            },
+                            None,
+                            None,
+                            {"kind": "grid"},
+                        ],
+                    },
+                }
+            },
+        }
+    )
     states = {
         "initial": state(),
         "root and rot, k 1.5 and -0.6": state(p1={"frame": "root", "k": 1.5}, p2={"frame": "rot", "k": -0.6}),
+        "no driver": absent,
+        "scopes": scoped,
     }
     for label, base in states.items():
         for channel in ("t", "@index"):

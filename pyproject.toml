@@ -74,3 +74,12 @@ exclude = ["examples/**/*.csv", "examples/**/*.tys", "examples/**/*.tyd", "examp
 
 [tool.hatch.build.targets.wheel.hooks.custom]
 path = "hatch_build.py"
+
+[tool.pytest]
+minversion = "9.0"
+addopts = ["-ra", "--showlocals"]
+strict = true
+filterwarnings = ["error"]
+log_level = "INFO"
+testpaths = ["tests"]
+markers = ["pydylan: requires a built PyDyLAN"]

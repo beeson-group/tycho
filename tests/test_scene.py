@@ -532,3 +532,21 @@ def test_c6_laps_are_for_a_fraction_clock_and_periodic_read_sets():
     assert "C6: view 'v' with {'kind': 'open'}: track set 'open', the driver, is not periodic" in message
     assert "C6: view 'v' with {'kind': 'open'}: track set 'open', on which a reading is taken, is not periodic" in message
     assert "'closed'" not in message
+
+
+def test_v3_every_names_a_sparse_context():
+    assert ty.every(40) == {"count": 40}
+    scene, _ = periodic_pair()
+    assert ty.track("closed", ty.every(2))["members"] == {"count": 2}
+    assert ty.track("closed", {"count": 3})["members"] == {"count": 3}
+    with pytest.raises(ty.SceneError, match="V3: a member count is 0"):
+        ty.every(0)
+    with pytest.raises(ty.SceneError, match="V3"):
+        ty.every(2.5)  # pyright: ignore[reportArgumentType]
+    with pytest.raises(ty.SceneError, match="V3: the driver's member is a count, but a driver resolves to one track"):
+        ty.driver("closed", {"count": 2})
+    scene.view("v", frame="root", driver=ty.driver("closed", 0), layers=[ty.track("closed", ty.every(2))])
+    scene.panel("p", "v")
+    doc = scene.to_document()
+    out = evaluate(doc, scene.to_container(), doc["initial"], 0)
+    assert [m["index"] for m in out["panels"]["p"]["layers"][0]["members"]] == [0, 3, 4]

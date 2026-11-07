@@ -249,3 +249,25 @@ describe("a plane camera's axes and grid follow the visible rectangle", () => {
     expect(planeLabels(planeView(camera(0, 0, 1.1, 2), { kind: 'plane', plane: 'xy' }, 880, 150), true, ['x', 'y']).some((l) => l.kind === 'tick')).toBe(true);
   });
 });
+
+describe('the laps of a reveal-none layer (C6)', () => {
+  it('draw a pass each, where the laps coincide as where they do not, as the evaluator draws every lap', () => {
+    const c = loadCorpus('laps');
+    const geometry = new GeometryCache(c.scene, c.data);
+    const ctx = { scene: c.scene, geometry, shared: new Shared(), theme: sceneTheme(c.scene), disc: new THREE.Texture() };
+    expect([geometry.geometry('loop', 'rot').invariant, geometry.geometry('loop', 'inertial').invariant]).toEqual([true, false]);
+    for (const frame of ['rot', 'inertial']) {
+      const plan = planPanel(c.scene, geometry, withVariable(c.scene, c.scene.initial, 'frame', frame, 'p1'), 'p1');
+      const layer = plan.layers.find((l) => l.kind === 'track' && l.index === 0) as TrackPlan & { set: SetData };
+      expect(layer.layer.reveal).toBe('none');
+      const draw = new TrackDraw(ctx, layer, plan.display, 'k');
+      draw.update(layer, c.scene, 0.4);
+      const passes = (draw as unknown as { passes: Map<string, { holder: THREE.Object3D }> }).passes;
+      expect(
+        [...passes].filter(([, p]) => p.holder.visible).map(([key]) => key),
+        frame,
+      ).toEqual(['b0', 'b1', 'b2']);
+      draw.dispose();
+    }
+  });
+});

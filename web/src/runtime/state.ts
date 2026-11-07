@@ -232,3 +232,99 @@ export function withPlacement(
     ? withAdd(scene, state, payload, maxPanels, tall)
     : withDrop(scene, state, placement.target, placement.zone, payload, maxPanels);
 }
+
+// storage of the state
+
+/** The 32-bit FNV-1a hash (Fowler-Noll-Vo) of the UTF-8 bytes of `text`, as eight hex digits. */
+export function fnv1a(text: string): string {
+  const bytes = new TextEncoder().encode(text);
+  let h = 0x811c9dc5;
+  for (const b of bytes) {
+    h ^= b;
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16).padStart(8, '0');
+}
+
+/** The key under which a stored state is kept, built from a hash of scene.tys and its length (section 2.8). */
+export function storageKey(sceneText: string): string {
+  return `tycho:state:${fnv1a(sceneText)}:${sceneText.length}`;
+}
+
+const isObject = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
+
+/**
+ * The values of `stored` that a scene can use in `scope`, i.e. those whose variable is declared
+ * and has the scope `scope`, and that fit the variable. Every other value is dropped.
+ */
+function keepValues(scene: Scene, stored: unknown, scope: 'scene' | 'panel'): Values {
+  const out = dict<VariableValue>();
+  if (!isObject(stored)) return out;
+  for (const [id, value] of Object.entries(stored)) {
+    const v = variableDef(scene, id);
+    if (v === undefined || (v.scope === 'panel') !== (scope === 'panel') || !fits(v, value)) continue;
+    out[id] = value as VariableValue;
+  }
+  return out;
+}
+
+/**
+ * The layout without the leaves for which `keep` returns false or that repeat an earlier leaf, with
+ * splits collapsed as closing a panel collapses them. It is undefined when the tree is malformed,
+ * and null when every leaf is dropped.
+ */
+function cleanLayout(node: unknown, keep: (id: string) => boolean, seen: Set<string>): Layout | null | undefined {
+  if (!isObject(node)) return undefined;
+  if (node.kind === 'panel') {
+    if (typeof node.id !== 'string') return undefined;
+    if (!keep(node.id) || seen.has(node.id)) return null;
+    seen.add(node.id);
+    return { kind: 'panel', id: node.id };
+  }
+  if (node.kind !== 'split' || (node.dir !== 'row' && node.dir !== 'col')) return undefined;
+  const a = cleanLayout(node.a, keep, seen);
+  const b = cleanLayout(node.b, keep, seen);
+  if (a === undefined || b === undefined) return undefined;
+  if (a === null) return b;
+  if (b === null) return a;
+  const r = node.ratio;
+  const ratio = typeof r === 'number' && r > 0 && r < 1 ? r : 0.5;
+  return { kind: 'split', dir: node.dir, ratio, a, b };
+}
+
+/**
+ * Repairs a stored state against a scene, as described in section 2.8. A panel whose view the
+ * scene lacks is dropped together with its layout leaf, and a value that does not fit its
+ * variable is dropped, as is a panel value of a scene-scoped variable. The repair falls back to
+ * `initial` once every panel is dropped or when the clock channel is unknown. Beyond section 2.8,
+ * it also drops values that are never read (undeclared ids, and a scene value of a panel-scoped variable),
+ * a panel that the layout does not show or whose id is not an identifier, and a repeated leaf. It falls
+ * back to `initial` as well on input that is not a state at all. It is pure and does not modify `stored`.
+ */
+export function repair(scene: Scene, stored: unknown): State {
+  const initial = (): State => structuredClone(scene.initial);
+  if (!isObject(stored) || !isObject(stored.clock) || !isObject(stored.panels)) return initial();
+  const channel = stored.clock.channel;
+  if (typeof channel !== 'string' || !scene.clock.channels.includes(channel)) return initial();
+
+  const panels = dict<PanelState>();
+  for (const [pid, p] of Object.entries(stored.panels)) {
+    if (!ID_PATTERN.test(pid) || !isObject(p) || typeof p.view !== 'string' || !Object.hasOwn(scene.views, p.view)) continue;
+    panels[pid] = { view: p.view, variables: keepValues(scene, p.variables, 'panel') };
+  }
+  const layout = cleanLayout(stored.layout, (id) => Object.hasOwn(panels, id), new Set());
+  if (layout === undefined || layout === null) return initial();
+  const shown = new Set<string>();
+  const walk = (n: Layout): void => (n.kind === 'panel' ? void shown.add(n.id) : (walk(n.a), walk(n.b)));
+  walk(layout);
+  for (const pid of Object.keys(panels)) if (!shown.has(pid)) delete panels[pid];
+  if (Object.keys(panels).length === 0) return initial();
+
+  const state: State = { variables: keepValues(scene, stored.variables, 'scene'), clock: { channel }, panels, layout };
+  try {
+    checkState(scene, state);
+  } catch {
+    return initial();
+  }
+  return state;
+}

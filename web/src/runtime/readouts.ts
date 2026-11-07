@@ -197,3 +197,61 @@ export function readoutTiles(parts: readonly Part[]): ReadoutTile[] | null {
   const constant = (t: ReadoutTile) => 'attr' in (parts[t.part] as object);
   return [...tiles.filter((t) => !constant(t)), ...tiles.filter(constant)];
 }
+
+// playback
+
+/** How a second of playback went: draws presented, late ones, and the display's refresh interval. */
+export interface FrameReport {
+  /** Draws presented in the last second. */
+  drawn: number;
+  /** Draws that came more than half a refresh interval after the one they should have followed. */
+  late: number;
+  /** The estimated refresh interval of the display in milliseconds. */
+  refresh: number;
+}
+
+/**
+ * Counts the draws presented in the last second, as the Playback group shows it. An average of
+ * intervals hides a dropped refresh among smooth ones. The meter therefore keeps the presentation
+ * times themselves. The refresh interval is estimated as the shortest interval that recurs, taken as the
+ * 10th percentile of the window, and a draw is late when its interval exceeds the refresh interval by half.
+ */
+export class FrameMeter {
+  private readonly times: number[] = [];
+
+  reset(): void {
+    this.times.length = 0;
+  }
+
+  /** Records a draw presented at `now`, in milliseconds, and forgets those over a second old. */
+  note(now: number): void {
+    this.times.push(now);
+    let drop = 0;
+    while (drop < this.times.length && this.times[drop]! < now - 1000) drop++;
+    if (drop > 0) this.times.splice(0, drop);
+  }
+
+  /** The report of the last second, or null until a full second of draws has been seen since the last reset or after a stall. */
+  report(now: number): FrameReport | null {
+    const t = this.times;
+    if (t.length < 2 || now - t[0]! < 900 || now - t[t.length - 1]! > 1000) return null;
+    const intervals = [];
+    for (let i = 1; i < t.length; i++) intervals.push(t[i]! - t[i - 1]!);
+    const sorted = [...intervals].sort((a, b) => a - b);
+    const refresh = sorted[Math.floor(sorted.length / 10)]!;
+    const late = intervals.filter((d) => d > 1.5 * refresh).length;
+    return { drawn: t.length, late, refresh };
+  }
+}
+
+/** The Playback group's frame rate, which shows the draws in the last second, or dashes while paused or before a second has passed. */
+export function fpsText(report: FrameReport | null): string {
+  return report === null ? '–– fps' : `${report.drawn} fps`;
+}
+
+/** The tooltip behind the frame rate. */
+export function fpsTitle(report: FrameReport | null): string {
+  if (report === null) return 'Frames drawn per second during playback';
+  const hz = Math.round(1000 / report.refresh);
+  return `${report.drawn} frames drawn in the last second, ${report.late} late, on a display refreshing about ${hz} times a second`;
+}

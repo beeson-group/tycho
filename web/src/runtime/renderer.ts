@@ -404,3 +404,47 @@ export function planPanel(scene: Scene, geometry: GeometryCache, state: State, p
 export function contentKey(plan: PanelPlan): string {
   return [plan.viewId, plan.display, plan.driver?.set.id ?? '', ...plan.layers.map((l) => (l.kind === 'track' ? (l.set?.id ?? '') : ''))].join('\0');
 }
+
+type Box6 = [number, number, number, number, number, number];
+
+/**
+ * The box a panel's camera fits, which holds every member of every track layer, whole, in every lap
+ * from 0 to the top, in the display frame. It is given as minimum then maximum x, y, z, and is null
+ * when the track layers do not draw anything.
+ */
+export function fitBox(plan: PanelPlan, geometry: GeometryCache): Box6 | null {
+  let box: Box6 | null = null;
+  for (const l of plan.layers) {
+    if (l.kind !== 'track' || l.set === null || l.members.length === 0) continue;
+    const g = geometry.geometry(l.set.id, plan.display);
+    const parts = l.members.length === l.set.tracks ? [g.bounds()] : l.members.map((t) => g.bounds(t));
+    for (const b of parts) {
+      if (box === null) box = [...b];
+      else for (let c = 0; c < 3; c++) ((box[c] = Math.min(box[c]!, b[c]!)), (box[c + 3] = Math.max(box[c + 3]!, b[c + 3]!)));
+    }
+  }
+  return box;
+}
+
+/**
+ * An orthographic fit, given as the center of the box and half the view's height, for a viewport whose
+ * width over height is `aspect`. One world unit is as long across the screen as up it, and a tenth of
+ * margin is added.
+ */
+export function orthoFit(box: THREE.Box3, cam: Camera, aspect: number): { center: THREE.Vector3; halfHeight: number } {
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+  const radius = Math.max(size.length() / 2, 1e-9);
+  const { right, up } = cameraBasis(cam);
+  const abs = (v: THREE.Vector3) => new THREE.Vector3(Math.abs(v.x), Math.abs(v.y), Math.abs(v.z));
+  const hw = cam.kind === 'plane' ? size.dot(abs(right)) / 2 : radius;
+  const hh = cam.kind === 'plane' ? size.dot(abs(up)) / 2 : radius;
+  const half = Math.max(hh, hw / aspect) * 1.1;
+  return { center, halfHeight: half > 1e-12 ? half : Math.max(radius, 1) };
+}
+
+/** The opacity of a member at parameter distance `d` from the center of a highlight's kernel (section 2.7). */
+export function kernelOpacity(floor: number, kernel: { width: number; opacity: number }, extent: number, d: number): number {
+  const ratio = extent > 0 ? d / (kernel.width * extent) : 0;
+  return Math.max(floor, kernel.opacity * Math.exp(-ratio * ratio));
+}

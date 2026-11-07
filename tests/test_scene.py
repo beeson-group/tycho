@@ -50,3 +50,19 @@ def test_rotating_loop_through_the_api_gives_the_corpus_answers():
     document, data = scene.to_document(), scene.to_container()
     for case in json.loads((CORPUS / "rotating-loop" / "cases.json").read_text()):
         compare(evaluate(document, data, case["state"], case["frame_index"]), case["expected"], case["tolerance"])
+
+
+def test_attr_arithmetic():
+    assert (1 - ty.attr("mu")).to_json() == {"attr": "mu", "factor": -1.0, "offset": 1.0}
+    assert (-ty.attr("mu")).to_json() == {"attr": "mu", "factor": -1.0}
+    assert (ty.attr("mu") * 2 + 3).to_json() == {"attr": "mu", "factor": 2.0, "offset": 3.0}
+
+
+def test_s3_and_t1_fail_at_the_call():
+    scene = ty.Scene()
+    with pytest.raises(ty.SceneError, match="S3"):
+        scene.frame("not an id")
+    root = scene.frame("root")
+    ts = scene.track_set("s", frame=root)
+    with pytest.raises(ty.SceneError, match="T1"):
+        ts.add(np.zeros((1, 2)))

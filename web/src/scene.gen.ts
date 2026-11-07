@@ -114,6 +114,7 @@ export type Layer =
           };
       before?: 'clamp' | 'hidden';
       after?: 'clamp' | 'hidden';
+      context?: 'own' | 'driver';
       color?: ColorSpec;
       opacity?: number;
       width?: number;
@@ -234,7 +235,7 @@ export type Layout =
     };
 
 /**
- * Structure of scene.tys, version 0.2. The rules that this schema cannot express are in tycho-scene.md.
+ * Structure of scene.tys, version 0.3. The rules that this schema cannot express are in tycho-scene.md.
  */
 export interface Scene {
   format: 'tycho-scene';

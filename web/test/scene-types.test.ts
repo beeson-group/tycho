@@ -256,4 +256,50 @@ describe('laps, counts, and the options for drawing (C6, V3, L3, 2.7)', () => {
     expect(rule(() => validate(scene))).toBe('V3');
     expect(rule(() => evaluate(scene, data(), state(), 0))).toBe('V3');
   });
+  it('a colormap keyed on a choice names a colormap for every value and only for these values (2.7)', () => {
+    const color = (map: Record<string, string>, v = 'look') => ({ color: { parameter: 'e', colormap: { var: v, map } } }) as Partial<TrackLayer>;
+    expect(validate(withLayer(color({ x: 'viridis', y: 'reds' })), data(), state())).toEqual([]);
+    expect(rule(() => validate(withLayer(color({ x: 'viridis' }))))).toBe('2.7');
+    expect(rule(() => validate(withLayer(color({ x: 'viridis', y: 'reds', z: 'blues' }))))).toBe('2.7');
+    expect(rule(() => validate(withLayer(color({ x: 'viridis', y: 'jet' }))))).toBe('2.7');
+    expect(rule(() => validate(withLayer(color({ x: 'viridis', y: 'reds' }, 'e'))))).toBe('2.7');
+  });
+  it('the kernel, taper, head, span, and labels are checked (2.7, L3)', () => {
+    expect(
+      validate(
+        withLayer({
+          highlight: { var: 'e', kernel: { width: 0.05, opacity: 0.55 } },
+          reveal: 'trail',
+          trail: { fraction: 0.3, taper: { width: 0, opacity: 0 } },
+          head: { color: '#f0e442', size: 9 },
+        }),
+        data(),
+        state(),
+      ),
+    ).toEqual([]);
+    expect(rule(() => validate(withLayer({ highlight: { var: 'k', kernel: { width: 0.05, opacity: 0.55 } } })))).toBe('2.7');
+    expect(rule(() => validate(withLayer({ highlight: { var: 'e', kernel: { width: 0, opacity: 0.55 } } })))).toBe('2.7');
+    expect(rule(() => validate(withLayer({ reveal: 'trail', trail: { fraction: 0.3, taper: { width: 1.5 } } })))).toBe('2.7');
+    expect(rule(() => validate(withLayer({ head: { size: 0 } })))).toBe('L3');
+    expect(rule(() => validate(withLayer({ head: { color: 'yellow' } })))).toBe('L3');
+    const marks = baseScene();
+    marks.views.main!.layers = [
+      { kind: 'axes', span: 'full' },
+      { kind: 'grid', labels: true },
+    ];
+    expect(validate(marks)).toEqual([]);
+    marks.views.main!.layers = [{ kind: 'axes', span: 'half' as 'full' }];
+    expect(rule(() => validate(marks))).toBe('2.7');
+    marks.views.main!.layers = [{ kind: 'grid', labels: 'yes' as unknown as boolean }];
+    expect(rule(() => validate(marks))).toBe('2.7');
+  });
+  it('a head object gives the same point as true and takes a reading (L3, C5)', () => {
+    const scene = withLayer({ head: { color: '#f0e442' } });
+    scene.views.main!.layers.push({ kind: 'track', sets: { set: 's' }, members: 'all', head: true });
+    const r = evaluate(scene, data(), state(), 1).panels.p1!.layers as TrackLayerResult[];
+    expect(r[0]!.members[0]!.head).toEqual(r[1]!.members[0]!.head);
+    scene.track_sets.u = { frame: 'a', tracks: 1, offsets: 'off', positions: 'pos' };
+    scene.views.main!.layers = [{ kind: 'track', sets: { set: 'u' }, members: 'all', head: {} }];
+    expect(rule(() => validate(scene, data(), state()))).toBe('C5');
+  });
 });

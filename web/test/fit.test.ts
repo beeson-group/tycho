@@ -131,6 +131,63 @@ function widePanel(camera: Camera, layers: Layer[] = []) {
   return { stage, p, ends };
 }
 
+/** A panel of 400 by 400 CSS pixels under `camera` that draws one track from (0, 0, 0) to (10, 1, 1) and the axes, planned and fitted without WebGL. */
+function boxPanel(camera: Camera) {
+  const scene = baseScene({ version: '0.3' });
+  scene.views.main!.camera = camera;
+  scene.views.main!.layers.push({ kind: 'axes' });
+  const data = new MemoryStore()
+    .add('off', [0, 2], 'uint32')
+    .add('pos', [
+      [0, 0, 0],
+      [10, 1, 1],
+    ])
+    .add('time', [0, 1]);
+  const geometry = new GeometryCache(scene, data);
+  const ctx = { scene, geometry, shared: new Shared(), theme: sceneTheme(scene), disc: new THREE.Texture() };
+  const stage = Object.assign(Object.create(StageRenderer.prototype), { ctx, panels: new Map(), lastState: null });
+  const p = stage.panel('p1');
+  p.rect = { x: 0, y: 0, w: 400, h: 400 };
+  stage.replan(p, scene.initial);
+  stage.fit(p);
+  return { stage, p };
+}
+
+describe("an orbit camera's stretch and turn (2.7)", () => {
+  it('stretches what the panel draws, fits the stretched box, and draws every axis at one length after the stretch', () => {
+    const { p } = boxPanel({ kind: 'orbit', stretch: [1, 1, 5] });
+    expect(p.scene.scale.toArray()).toEqual([1, 1, 5]);
+    expect(p.staticScene.scale.toArray()).toEqual([1, 1, 5]);
+    expect(p.box.max.toArray()).toEqual([10, 1, 1]);
+    expect(p.target.toArray()).toEqual([5, 0.5, 2.5]);
+    // the stretched box is 10 by 1 by 5, hence every axis is drawn 5 long, the round half of its largest side
+    const drawn = p.draws.get(1).tips.map((t: THREE.Vector3) =>
+      t
+        .clone()
+        .multiply(new THREE.Vector3(1, 1, 5))
+        .length(),
+    );
+    expect(drawn).toEqual([5, 5, 5]);
+    const plain = boxPanel({ kind: 'orbit' }).p;
+    expect(plain.scene.scale.toArray()).toEqual([1, 1, 1]);
+    expect(plain.target.toArray()).toEqual([5, 0.5, 0.5]);
+  });
+  it('titles a stretched axis with its factor and places every label at the stretched point', () => {
+    const { stage, p } = boxPanel({ kind: 'orbit', stretch: [1, 1, 2.5] });
+    const items = stage.labelItems(p);
+    expect(items.map((l: { text: string }) => l.text)).toEqual(['x', 'y', 'z ×2.5']);
+    const tip = p.draws
+      .get(1)
+      .tips[2].clone()
+      .multiply(new THREE.Vector3(1, 1, 2.5))
+      .project(p.camera);
+    expect(items[2].x).toBeCloseTo(((tip.x + 1) / 2) * 400 + 4, 9);
+    expect(items[2].y).toBeCloseTo(((1 - tip.y) / 2) * 400, 9);
+    const plain = boxPanel({ kind: 'orbit' });
+    expect(plain.stage.labelItems(plain.p).map((l: { text: string }) => l.text)).toEqual(['x', 'y', 'z']);
+  });
+});
+
 describe('a plane camera with a free aspect (2.7)', () => {
   it('fits a 10 by 1 track to fill a square panel in both directions, which an equal aspect does not', () => {
     const [a, b] = widePanel({ kind: 'plane', aspect: 'free' }).ends();

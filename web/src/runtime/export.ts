@@ -171,3 +171,52 @@ export class Mp4Writer {
     return new Uint8Array(this.muxer.target.buffer);
   }
 }
+
+// in the browser
+
+export interface ExportOptions {
+  /** A preset, or an explicit size. Defaults to 720p. */
+  size?: SizePreset | ExportSize;
+  fps?: number;
+  loops?: number;
+  /** The playback speed, at which a lap of the clock lasts 8 s divided by the speed. Defaults to 1. */
+  speed?: number;
+  /** The frame index of the first frame. Defaults to 0. */
+  start?: number;
+  bitrate?: number;
+  /** Called with the encoder configuration the browser accepted, before the first frame. */
+  onConfig?: (config: VideoEncoderConfig) => void;
+  onProgress?: (done: number, total: number) => void;
+  signal?: AbortSignal;
+}
+
+/** What an export draws: a scene, its data, and the snapshot to freeze. */
+export interface ExportSource {
+  scene: Scene;
+  geometry: GeometryCache;
+  state: State;
+  /** The stage's size in CSS pixels, for the `stage` preset. */
+  stage?: { w: number; h: number };
+}
+
+export function webCodecsMissing(): string | null {
+  if (typeof VideoEncoder === 'undefined' || typeof VideoFrame === 'undefined') return 'this browser does not have a WebCodecs video encoder';
+  return null;
+}
+
+/**
+ * The first H.264 configuration this browser's encoder accepts, at the lowest level that holds the
+ * size and rate. The profiles high, main, and baseline are tried in turn, in the avc format used in an MP4.
+ */
+export async function chooseConfig(width: number, height: number, fps: number, bitrate: number): Promise<VideoEncoderConfig> {
+  if (!avcFits(width, height, fps)) {
+    throw new Error(
+      `${width} by ${height} at ${fps} fps is past H.264, which needs even sides, at most ${AVC_MAX_SIDE} pixels a side, and a frame size and rate within level 5.2`,
+    );
+  }
+  for (const profile of ['high', 'main', 'baseline'] as const) {
+    const config: VideoEncoderConfig = { codec: avcCodec(width, height, fps, profile)!, width, height, bitrate, framerate: fps, avc: { format: 'avc' } };
+    if ((await VideoEncoder.isConfigSupported(config)).supported === true) return config;
+  }
+  throw new Error(`this browser does not have an H.264 encoder for ${width} by ${height} at ${fps} fps, and an MP4 that QuickTime opens needs H.264`);
+}

@@ -1,6 +1,6 @@
 {
  "format": "tycho-scene",
- "version": "0.2",
+ "version": "0.3",
  "generator": "pytycho 0.2.0",
  "title": "three laps of the rotating loop",
  "frames": {

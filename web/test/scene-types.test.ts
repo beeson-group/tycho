@@ -140,4 +140,47 @@ describe('validate', () => {
     scene.views.main!.frame = 'b';
     expect(rule(() => validate(scene, data(), state()))).toBe('F2');
   });
+  it('a state shows every panel once without repeats and holds values that fit their variables (2.8)', () => {
+    const st = state();
+    st.layout = { kind: 'split', dir: 'row', ratio: 0.5, a: { kind: 'panel', id: 'p1' }, b: { kind: 'panel', id: 'p1' } };
+    expect(rule(() => validate(baseScene(), data(), st))).toBe('2.8');
+    expect(rule(() => evaluate(baseScene(), data(), st, 0))).toBe('2.8');
+    const scene = baseScene({ variables: { k: { kind: 'selector', by: 'index', default: 0 }, show: { kind: 'toggle', default: true } } });
+    const bad = state();
+    bad.variables = { k: true };
+    expect(rule(() => evaluate(scene, data(), bad, 0))).toBe('2.5');
+    bad.variables = { show: 'false' };
+    expect(rule(() => evaluate(scene, data(), bad, 0))).toBe('2.5');
+    const warn = state();
+    warn.panels.p1!.variables = { k: 1 };
+    expect(validate(scene, data(), warn)).toEqual(['panel p1 sets k, which is scene-scoped and never read there']);
+  });
+  it('the driver is resolved for every panel, hence V2, V3 and C5 are checked without a body layer', () => {
+    const scene = baseScene();
+    scene.track_sets.u = { frame: 'a', tracks: 1, offsets: 'off', positions: 'pos' };
+    scene.views.main!.layers = [];
+    scene.views.main!.driver = { sets: { set: 'u' }, member: { index: 0 } };
+    expect(rule(() => evaluate(scene, data(), state(), 0))).toBe('C5');
+    scene.views.main!.driver = { sets: { set: 's' }, member: { index: 3 } };
+    expect(rule(() => evaluate(scene, data(), state(), 0))).toBe('V3');
+    scene.views.main!.driver = { sets: { set: 's' }, member: 'all' as unknown as { index: number } };
+    expect(rule(() => evaluate(scene, data(), state(), 0))).toBe('V3');
+    expect(rule(() => validate(scene))).toBe('V3');
+  });
+  it('a newer minor version and an unknown layer kind break S1, and wrong kinds and ranges break L5 and 2.7', () => {
+    expect(rule(() => validate(baseScene({ version: '0.9' })))).toBe('S1');
+    const scene = baseScene();
+    scene.views.main!.layers = [{ kind: 'points' } as unknown as Layer];
+    expect(rule(() => validate(scene))).toBe('S1');
+    expect(rule(() => evaluate(scene, data(), state(), 0))).toBe('S1');
+    const choice = baseScene({ variables: { c: { kind: 'choice', values: ['x'], default: 'x' } } });
+    choice.views.main!.layers = [{ kind: 'grid', visible: { var: 'c' } }];
+    expect(rule(() => validate(choice))).toBe('L5');
+    expect(rule(() => evaluate(choice, data(), state(), 0))).toBe('L5');
+    const trail = baseScene();
+    trail.views.main!.layers = [{ kind: 'track', sets: { set: 's' }, members: 'all', reveal: 'trail', trail: { fraction: 1.5 } }];
+    expect(rule(() => validate(trail))).toBe('2.7');
+    expect(rule(() => evaluate(trail, data(), state(), 0))).toBe('2.7');
+    expect(rule(() => validate(baseScene({ frames: { a: {}, b: { parent: 'a', rotation: { axis: 'z', angle: { channel: '@index' } } } } })))).toBe('2.2');
+  });
 });

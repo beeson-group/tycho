@@ -288,6 +288,23 @@ def test_a_plane_camera_takes_an_aspect_and_an_orbit_camera_does_not():
         scene.view("w", frame="root", driver=ty.driver(moving, 0), layers=[], camera={"kind": "orbit", "aspect": "free"})
 
 
+def test_a_clock_takes_the_seconds_of_one_loop_in_either_mode():
+    jsonschema = pytest.importorskip("jsonschema")
+    scene, moving, _ = small()
+    scene.clock("value", channels=["t"], steps=4, range=[0.0, 2.0], seconds=24)
+    scene.view("v", frame="root", driver=ty.driver(moving, 0), layers=[ty.track(moving)])
+    scene.panel("p", "v")
+    doc = scene.to_document()
+    assert doc["clock"]["seconds"] == 24.0
+    jsonschema.Draft202012Validator(json.loads((CORPUS.parent / "scene.schema.json").read_text())).validate(doc)
+    scene.clock(channels=["t"], steps=4, laps=2, seconds=30)
+    assert scene._clock is not None
+    assert scene._clock["seconds"] == 30.0
+    for seconds in (0, -1, float("inf")):
+        with pytest.raises(ty.SceneError, match=r"2\.6: the clock seconds"):
+            scene.clock(channels=["t"], steps=4, seconds=seconds)
+
+
 def test_a_point_has_three_scalars_and_every_number_is_finite():
     scene = ty.Scene()
     root = scene.frame("root")

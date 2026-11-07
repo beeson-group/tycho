@@ -6,6 +6,8 @@ The two file formats are versioned apart from the packages, i.e. either format v
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-06
+
 Version 0.2.0 introduces the scene grammar, i.e. a general vocabulary from which a visualization is declared. The packages at this version write and read scene format 0.2, which may still change incompatibly until 1.0, and data container version 1.
 
 ### Added
@@ -25,4 +27,5 @@ Version 0.2.0 introduces the scene grammar, i.e. a general vocabulary from which
 - The npm package bundles three.js and mp4-muxer, and it does not have any runtime dependencies, hence installing it does not install any other package.
 - Both packages declare the license `Apache-2.0 AND MIT`, since the bundle carries MIT-licensed code, and they ship `NOTICE` and `THIRD_PARTY_NOTICES.md`. Every bundle starts with a comment listing the bundled packages. Every page that pytycho writes inlines the bundle, and thus carries the same comment.
 
-[Unreleased]: https://github.com/beeson-group/tycho/commits/main
+[Unreleased]: https://github.com/beeson-group/tycho/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/beeson-group/tycho/releases/tag/v0.2.0

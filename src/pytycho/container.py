@@ -232,3 +232,96 @@ class ContainerWriter:
         """Writes the container to ``path``."""
         with open(path, "wb") as fh:
             fh.write(self.to_bytes())
+
+
+class Container:
+    """The read side of a version 1 container.
+
+    The constructor checks the record of every view, and raises :class:`~pytycho.container.ContainerError` on a version
+    other than 1 (rule D3). It also raises on a view with a key or an encoding that version 1 does not define, or whose bytes run past the
+    end of the file (rule D2). The same holds for an encoded view whose chunks do not match its shape (rule D5).
+    A raw view is read without a copy. An encoded view is decoded on its first access and then cached, and a chunk that
+    inflates to more or fewer bytes than its rows take is rejected on this access (rule D5).
+    """
+
+    def __init__(self, data: bytes) -> None:
+        data = bytes(data)
+        if len(data) < 12 or data[:4] != MAGIC:
+            raise ContainerError(
+                '1: the bytes are not a TyCHO data container, since they lack the 12-byte preamble that starts with the magic "TYCD"'
+            )
+        version, hlen = struct.unpack_from("<II", data, 4)
+        if version != VERSION:
+            raise ContainerError(f"D3: data container version {version} is not supported, since this reader reads only version {VERSION}")
+        if 12 + hlen > len(data):
+            raise ContainerError(f"1: the header length {hlen} runs past the end of the file")
+
+        def constant(name: str) -> Any:
+            raise ValueError(f"{name} is not JSON")
+
+        try:
+            self.header: dict[str, Any] = json.loads(data[12 : 12 + hlen].decode("utf-8"), parse_constant=constant)
+        except (UnicodeDecodeError, ValueError) as exc:
+            raise ContainerError(f"1: the header is not JSON: {exc}") from None
+        if not isinstance(self.header, dict) or self.header.get("format") != "tycho-data":
+            raise ContainerError('1: the header format is not "tycho-data"')
+        if self.header.get("version") != VERSION:
+            raise ContainerError(
+                f"D3: header version {self.header.get('version')!r} is not supported, since this reader reads only version {VERSION}"
+            )
+        if not isinstance(self.header.get("generator", ""), str):
+            raise ContainerError("1: the header generator is not a string")
+        if not isinstance(self.header.get("meta", {}), dict):
+            raise ContainerError("1: the header meta is not an object")
+        views = self.header.get("views")
+        if not isinstance(views, dict):
+            raise ContainerError('1: the header lacks a "views" object')
+        payload_start = 12 + hlen + _pad(12 + hlen)
+        self._payload = memoryview(data)[payload_start:]
+        self._decoded: dict[str, np.ndarray] = {}
+        for name, info in views.items():
+            self._check(name, info)
+
+    def _check(self, name: str, info: Any) -> None:
+        if not isinstance(info, dict):
+            raise ContainerError(f"1: view {name!r} is not an object")
+        encoding = info.get("encoding")
+        if encoding not in VIEW_KEYS:
+            raise ContainerError(f"D2: view {name!r} has encoding {encoding!r}, which this reader does not know")
+        keys = VIEW_KEYS[encoding]
+        if extra := set(info) - keys:
+            raise ContainerError(f"D2: view {name!r} has keys {sorted(extra)} that this reader does not know")
+        if missing := keys - set(info):
+            raise ContainerError(f"D2: view {name!r} lacks the keys {sorted(missing)}")
+        dtype, shape = info["dtype"], info["shape"]
+        if not isinstance(dtype, str) or dtype not in DTYPES:
+            raise ContainerError(f"D1: view {name!r} has dtype {dtype!r}, not one of {', '.join(DTYPES)}")
+        if not isinstance(shape, list) or not shape or not all(map(_is_count, shape)):
+            raise ContainerError(f"D2: view {name!r} has shape {shape!r}, not a nonempty list of counts")
+        size = np.dtype(DTYPES[dtype]).itemsize
+        nbytes = size
+        for n in shape:
+            nbytes *= n
+        if encoding == RAW:
+            offset, length = info["offset"], info["length"]
+            if not _is_count(offset) or not _is_count(length):
+                raise ContainerError(f"D2: view {name!r} has an offset or a length that is not a count")
+            if offset % 8 != 0:
+                raise ContainerError(f"D2: view {name!r} starts at byte {offset}, which is not a multiple of 8")
+            if length != nbytes:
+                raise ContainerError(f"D2: view {name!r} has length {length}, while shape {shape} of {dtype} takes {nbytes} bytes")
+            if offset + length > len(self._payload):
+                raise ContainerError(f"D2: view {name!r} runs past the end of the file")
+            return
+        rows, chunks = info["chunk_rows"], info["chunks"]
+        if not _is_count(rows) or rows < 1:
+            raise ContainerError(f"D5: view {name!r} has chunk_rows {rows!r}, not a positive integer")
+        if not isinstance(chunks, list):
+            raise ContainerError(f"D5: view {name!r} has chunks that are not a list")
+        if len(chunks) != (count := -(-shape[0] // rows)):
+            raise ContainerError(f"D5: view {name!r} has {len(chunks)} chunks, while {shape[0]} rows in chunks of {rows} take {count}")
+        for k, span in enumerate(chunks):
+            if not isinstance(span, list) or len(span) != 2 or not all(map(_is_count, span)):
+                raise ContainerError(f"D5: chunk {k} of view {name!r} is not an [offset, length] pair of counts")
+            if span[0] + span[1] > len(self._payload):
+                raise ContainerError(f"D5: chunk {k} of view {name!r} runs past the end of the file")

@@ -172,3 +172,132 @@ describe('encoder choice', () => {
     expect(asked).toEqual(['avc1.64001f', 'avc1.4d401f', 'avc1.42e01f']);
   });
 });
+
+// a reader of the MP4 boxes that the round trip checks
+
+interface Box {
+  type: string;
+  start: number;
+  end: number;
+  body: number;
+}
+
+const CONTAINERS = new Set(['moov', 'trak', 'mdia', 'minf', 'stbl', 'dinf', 'edts', 'udta']);
+
+function boxes(bytes: Uint8Array, start = 0, end = bytes.length, out: Box[] = []): Box[] {
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  for (let at = start; at + 8 <= end;) {
+    let size = dv.getUint32(at);
+    const type = String.fromCharCode(...bytes.subarray(at + 4, at + 8));
+    let body = at + 8;
+    if (size === 1) {
+      size = Number(dv.getBigUint64(at + 8));
+      body += 8;
+    }
+    if (size === 0) size = end - at;
+    out.push({ type, start: at, end: at + size, body });
+    if (CONTAINERS.has(type)) boxes(bytes, body, at + size, out);
+    // a sample description holds its entries after a version, flags, and a count. a visual
+    // sample entry holds its configuration box after 78 bytes of entry fields
+    else if (type === 'stsd') boxes(bytes, body + 8, at + size, out);
+    else if (type === 'avc1' || type === 'vp09') boxes(bytes, body + 78, at + size, out);
+    at += size;
+  }
+  return out;
+}
+
+function parse(bytes: Uint8Array) {
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const all = boxes(bytes);
+  const one = (type: string) => all.find((b) => b.type === type)!;
+  const u32 = (at: number) => dv.getUint32(at);
+  const full = (b: Box) => b.body + 4;
+  const mdhd = one('mdhd');
+  const timescale = u32(full(mdhd) + 8);
+  const duration = u32(full(mdhd) + 12);
+  const stsz = one('stsz');
+  const count = u32(full(stsz) + 4);
+  const sizes = Array.from({ length: count }, (_, i) => u32(full(stsz) + 8 + 4 * i));
+  const stco = one('stco');
+  const offsets = Array.from({ length: u32(full(stco)) }, (_, i) => u32(full(stco) + 4 + 4 * i));
+  const stsc = one('stsc');
+  const runs = Array.from({ length: u32(full(stsc)) }, (_, i) => [u32(full(stsc) + 4 + 12 * i), u32(full(stsc) + 8 + 12 * i)] as const);
+  // the samples in order, from the chunks the sample-to-chunk runs describe
+  const samples: Uint8Array[] = [];
+  let s = 0;
+  for (let c = 0; c < offsets.length; c++) {
+    const run = [...runs].reverse().find(([first]) => first <= c + 1)!;
+    let at = offsets[c]!;
+    for (let k = 0; k < run[1]; k++, s++) {
+      samples.push(bytes.subarray(at, at + sizes[s]!));
+      at += sizes[s]!;
+    }
+  }
+  const stss = all.find((b) => b.type === 'stss');
+  const sync = stss === undefined ? null : Array.from({ length: u32(full(stss)) }, (_, i) => u32(full(stss) + 4 + 4 * i));
+  const ftyp = one('ftyp');
+  return { all, timescale, duration, samples, sync, brand: String.fromCharCode(...bytes.subarray(ftyp.body, ftyp.body + 4)) };
+}
+
+describe('MP4 muxing of synthetic frames, without a codec', () => {
+  const frames = Array.from({ length: 75 }, (_, k) => Uint8Array.from({ length: 50 + (k % 7) * 13 }, (_, i) => (k * 31 + i) & 255));
+  const description = Uint8Array.from([1, 0x64, 0, 0x1f, 0xff, 0xe1, 0, 4, 0x67, 0x64, 0, 0x1f, 1, 0, 4, 0x68, 0xee, 0x3c, 0x80]);
+
+  it('H.264 keeps every frame in order, syncs the key frames, keeps the decoder record, and lasts 2.5 s at 30 fps', () => {
+    const w = new Mp4Writer(640, 360, 30);
+    frames.forEach((f, k) =>
+      w.add(
+        f,
+        k % 60 === 0,
+        Math.round((k * 1e6) / 30),
+        Math.round(1e6 / 30),
+        k === 0 ? { decoderConfig: { codec: 'avc1.64001e', codedWidth: 640, codedHeight: 360, description } } : undefined,
+      ),
+    );
+    const out = w.finish();
+    const mp4 = parse(out);
+    expect(mp4.brand).toBe('isom');
+    expect(mp4.all.map((b) => b.type)).toEqual(
+      expect.arrayContaining(['ftyp', 'moov', 'mvhd', 'trak', 'tkhd', 'mdhd', 'avc1', 'avcC', 'stts', 'stsz', 'stco', 'mdat']),
+    );
+    expect(mp4.samples.map((x) => Array.from(x))).toEqual(frames.map((x) => Array.from(x)));
+    expect(mp4.sync).toEqual([1, 61]);
+    expect(mp4.duration / mp4.timescale).toBeCloseTo(2.5, 6);
+    const avcC = mp4.all.find((b) => b.type === 'avcC')!;
+    expect(Array.from(out.subarray(avcC.body, avcC.end))).toEqual(Array.from(description));
+  });
+
+  it('H.264 at the stage size of a wide pane has what QuickTime needs, i.e. moov before mdat and even sides in tkhd and avc1', () => {
+    const { width, height } = sizePreset('stage', { w: 2952, h: 1462 }, 2, 60);
+    const w = new Mp4Writer(width, height, 60);
+    frames.forEach((f, k) =>
+      w.add(
+        f,
+        k % 120 === 0,
+        Math.round((k * 1e6) / 60),
+        Math.round(1e6 / 60),
+        k === 0 ? { decoderConfig: { codec: 'avc1.640034', codedWidth: width, codedHeight: height, description } } : undefined,
+      ),
+    );
+    const out = w.finish();
+    const mp4 = parse(out);
+    const types = mp4.all.map((b) => b.type);
+    expect(types.indexOf('moov')).toBeLessThan(types.indexOf('mdat'));
+    expect(types).not.toContain('vp09');
+    const dv = new DataView(out.buffer, out.byteOffset, out.byteLength);
+    const avc1 = mp4.all.find((b) => b.type === 'avc1')!;
+    expect([dv.getUint16(avc1.body + 24), dv.getUint16(avc1.body + 26)]).toEqual([4058, 2010]);
+    // a version 0 tkhd holds its width and height, in 16.16 fixed point, in its last 8 bytes
+    const tkhd = mp4.all.find((b) => b.type === 'tkhd')!;
+    expect([dv.getUint32(tkhd.end - 8) / 65536, dv.getUint32(tkhd.end - 4) / 65536]).toEqual([4058, 2010]);
+    expect(mp4.samples.length).toBe(75);
+    expect(mp4.duration / mp4.timescale).toBeCloseTo(1.25, 6);
+  });
+
+  it('takes H.264 in the avc format only, and even sides only', () => {
+    const w = new Mp4Writer(640, 360, 30);
+    expect(() => w.add(frames[0]!, true, 0, 33333, { decoderConfig: { codec: 'vp09.00.60.08' } })).toThrow(/H\.264 only, not vp09/);
+    expect(() => w.add(frames[0]!, true, 0, 33333, { decoderConfig: { codec: 'avc1.64001e' } })).toThrow(/avcC/);
+    expect(() => new Mp4Writer(641, 360, 30)).toThrow(/even sides/);
+  });
+});

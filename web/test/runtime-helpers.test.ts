@@ -138,3 +138,16 @@ describe('tiles', () => {
     expect(ratioAt(g, 999, 50, 6)).toBe(0.9);
   });
 });
+
+describe('colors', () => {
+  it('parses and mixes hex colors', () => {
+    expect(hexRgb('#ff8000')).toEqual([1, 128 / 255, 0]);
+    expect(mixHex('#000000', '#ffffff', 0.5)).toBe('#808080');
+  });
+  it('places a value on a colormap through its range and clip', () => {
+    expect(colormapPosition(5, [0, 10])).toBe(0.5);
+    expect(colormapPosition(-5, [0, 10])).toBe(0);
+    expect(colormapPosition(5, [0, 10], [0.5, 1])).toBe(0.75);
+    expect(colormapPosition(3, [3, 3])).toBe(0.5);
+  });
+});

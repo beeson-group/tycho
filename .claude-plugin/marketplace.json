@@ -1,0 +1,18 @@
+{
+  "name": "beeson-group",
+  "owner": {
+    "name": "Beeson Group"
+  },
+  "metadata": {
+    "description": "Agent skills for the Beeson Group's astrodynamics tools"
+  },
+  "plugins": [
+    {
+      "name": "tycho",
+      "source": "./",
+      "description": "Write TyCHO scenes with pytycho and render them as one self-contained HTML page",
+      "version": "0.2.0",
+      "category": "visualization"
+    }
+  ]
+}

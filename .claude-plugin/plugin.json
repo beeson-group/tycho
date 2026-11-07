@@ -1,0 +1,12 @@
+{
+  "name": "tycho",
+  "version": "0.2.0",
+  "description": "Write TyCHO scenes with pytycho from NumPy arrays and render them as one self-contained HTML page",
+  "author": {
+    "name": "Claudio Vestini"
+  },
+  "homepage": "https://pytycho.readthedocs.io/",
+  "repository": "https://github.com/beeson-group/tycho",
+  "license": "Apache-2.0",
+  "keywords": ["astrodynamics", "visualization", "three-body", "pytycho"]
+}

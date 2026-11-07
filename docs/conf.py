@@ -84,7 +84,7 @@ for _name in ("scene.schema.json", "tycho-scene.md"):
     shutil.copyfile(ROOT / "spec" / _name, STAGED / _name)
 
 EXAMPLES = EXTRA / "examples"
-EXAMPLE_PAGES = ("broucke",)
+EXAMPLE_PAGES = ("broucke", "manifolds")
 # The example pages are attached to each GitHub Release and are not tracked in git. When Read the Docs sets the READTHEDOCS
 # environment variable, fetch_example_pages() downloads the pages and posters of the latest release from the release download
 # URLs, which work without a token or an API call. A local build stays offline unless TYCHO_DOCS_EXAMPLES=1 is set.

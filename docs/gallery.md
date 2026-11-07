@@ -39,4 +39,29 @@ The page is not part of this build of the documentation. It is attached to each 
 +++
 [`examples/broucke/build.py`](https://github.com/beeson-group/tycho/blob/main/examples/broucke/build.py)
 :::
+
+:::{grid-item-card} Invariant manifolds of Earth–Moon periodic orbits, in 3D
+
+Three periodic orbits of the Earth–Moon circular restricted three-body problem are shown on this page, an L1 halo orbit and the L1 and L2 Lyapunov orbits, each with its stable and unstable manifolds on both sides. Each of the four legs of an orbit holds 40 arcs that leave or reach the orbit along one period, propagated for 8 TU (the time unit of the problem) with PyDyLAN.
+
+One view is shown in two panels, in the rotating frame and in the barycentric inertial frame, under an orbit camera, which can be turned by hand. The clock is a value clock on one absolute time, hence every arc is drawn where it is at the same instant. A stable arc grows toward the orbit and an unstable arc away from it, over 20 seconds of a 24-second loop, and the arcs are held whole for the last 4 seconds. Each arc is drawn only from where it is 0.02 DU (about 7700 km) from its orbit, since closer in the 40 arcs of a leg are drawn over the orbit as one bright band. The halo orbit is nearly flat, hence the view is stretched by a factor of 5 along z, as is shown in the title of the z axis, and the camera is turned by 60° about z over each loop. The controls of the page are the following.
+
+- Tabs pick the orbit and the frame.
+- Two toggles show and hide the stable and the unstable manifolds.
+- The slider picks one arc by the time at which it leaves or reaches the orbit, and this arc is drawn brighter.
+
+```{only} manifolds_page and manifolds_poster
+<a href="examples/manifolds.html"><img class="tycho-poster" src="examples/manifolds.png" alt="A still of the manifolds page"></a>
+```
+
+```{only} manifolds_page
+[Open the manifolds page](site:examples/manifolds.html). The interactive page has a size of {{ manifolds_size }}, about {{ manifolds_transfer }} to download in compressed form, and it opens separately.
+```
+
+```{only} not manifolds_page
+The page is not part of this build of the documentation. It is attached to each [GitHub Release](https://github.com/beeson-group/tycho/releases) after 0.2.0, and you can also build it from its input file, as the docstring of its script describes.
+```
++++
+[`examples/manifolds/build.py`](https://github.com/beeson-group/tycho/blob/main/examples/manifolds/build.py)
+:::
 ::::

@@ -1784,6 +1784,74 @@ export class TychoViewerElement extends Base {
     const variable = d.link.variable;
     this.store!.update((s) => withVariable(this.scene!, s, variable, stops[i]!));
   }
+
+  // drag and drop, with pointer events so that it works on touch
+
+  private startDrag(ev: PointerEvent, payload: DragPayload, handle: HTMLElement, chip: HTMLElement): void {
+    if (ev.button !== 0 || this.store === null) return;
+    ev.preventDefault();
+    this.closeMenu(false);
+    const sx = ev.clientX;
+    const sy = ev.clientY;
+    const shadow = this.shadowRoot!;
+    let ghost: HTMLElement | null = null;
+    let target: { id: string; zone: DropZone } | null = null;
+    handle.setPointerCapture(ev.pointerId);
+    const clear = () => {
+      for (const d of this.panelDom.values()) d.drop.hidden = true;
+    };
+    const move = (e: PointerEvent) => {
+      if (!ghost) {
+        if (Math.hypot(e.clientX - sx, e.clientY - sy) < 4) return;
+        ghost = chip.cloneNode(true) as HTMLElement;
+        ghost.classList.add('ghost');
+        this.root.appendChild(ghost);
+        chip.classList.add('source');
+        this.root.classList.add('dragging');
+      }
+      ghost.style.left = `${e.clientX}px`;
+      ghost.style.top = `${e.clientY}px`;
+      clear();
+      target = null;
+      const under = shadow.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+      const host = under?.closest('.panel') as HTMLElement | null;
+      if (!host) return;
+      const id = host.dataset.id!;
+      if (payload.kind === 'panel' && payload.id === id) return;
+      const dom = this.panelDom.get(id);
+      if (!dom) return;
+      const r = dom.host.getBoundingClientRect();
+      const zone = zoneFor(e.clientX - r.left, e.clientY - r.top, r.width, r.height);
+      target = { id, zone };
+      dom.drop.hidden = false;
+      dom.drop.style.inset =
+        zone === 'left' ? '0 50% 0 0' : zone === 'right' ? '0 0 0 50%' : zone === 'top' ? '0 0 50% 0' : zone === 'bottom' ? '50% 0 0 0' : '0';
+      setText(dom.dropLabel, dropText(payload, zone));
+    };
+    const up = (e: PointerEvent) => {
+      handle.removeEventListener('pointermove', move);
+      handle.removeEventListener('pointerup', up);
+      handle.removeEventListener('pointercancel', up);
+      clear();
+      const dragged = ghost !== null;
+      ghost?.remove();
+      chip.classList.remove('source');
+      this.root.classList.remove('dragging');
+      if (!dragged) {
+        if (payload.kind !== 'panel' && e.type === 'pointerup') this.addPanel(payload);
+        return;
+      }
+      if (target) this.dropOn(target.id, target.zone, payload);
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', up);
+    handle.addEventListener('pointercancel', up);
+  }
+
+  private dropOn(targetId: string, zone: DropZone, payload: DragPayload): void {
+    const scene = this.scene!;
+    this.store!.update((st) => withDrop(scene, st, targetId, zone, payload, MAX_PANELS));
+  }
 }
 
 /**

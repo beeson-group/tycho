@@ -948,10 +948,12 @@ class Scene:
         range: Sequence[float] | None = None,
         labels: Sequence[str] | None = None,
         laps: int | None = None,
+        seconds: float | None = None,
     ) -> None:
         """The clock (section 2.6). The first channel is the initial one.
 
         ``laps``, in fraction mode only, is the number of periods that one loop of ``steps`` frames covers (rule C6).
+        ``seconds`` is how long one loop lasts at speed 1, in either mode, in place of 8 seconds for each lap.
         """
         _enum(mode, ("fraction", "value"), "2.6: the clock mode")
         if isinstance(channels, str) or not channels:
@@ -969,6 +971,10 @@ class Scene:
             out["laps"] = _integer(laps, "C6: the clock laps")
             if out["laps"] < 1:
                 raise SceneError(f"C6: the clock has {out['laps']} laps, fewer than one")
+        if seconds is not None:
+            out["seconds"] = _finite(seconds, "2.6: the clock seconds")
+            if out["seconds"] <= 0:
+                raise SceneError(f"2.6: the clock seconds are {out['seconds']}, not positive")
         if mode == "value":
             if range is None or isinstance(range, str) or len(range) != 2:
                 raise SceneError("C2: the clock is in value mode but does not have a range of two numbers")

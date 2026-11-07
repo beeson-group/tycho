@@ -12,6 +12,7 @@ which reports every failure at once.
 
 from __future__ import annotations
 
+import copy
 import math
 import re
 from collections.abc import Callable, Mapping, Sequence
@@ -19,6 +20,7 @@ from typing import Any
 
 import numpy as np
 
+from . import __version__
 from ._evaluate import Context, FrameTree
 from ._thin import select
 
@@ -1091,6 +1093,59 @@ class Scene:
             if not 1 <= out["digits"] <= 17:
                 raise SceneError(f"2.9: readout digits is {out['digits']}, not in 1 to 17")
         return out
+
+    # output
+
+    def to_document(self) -> dict[str, Any]:
+        """The scene document, ``scene.tys``, as a plain dict that does not share any object with the scene."""
+        if self._clock is None:
+            raise SceneError("2.6: the scene does not have a clock")
+        if not self._panels:
+            raise SceneError("2.8: the scene does not have a panel")
+        doc: dict[str, Any] = {"format": "tycho-scene", "version": "0.2", "generator": f"pytycho {__version__}"}
+        if self.title is not None:
+            doc["title"] = self.title
+        if self.theme is not None:
+            doc["theme"] = self.theme
+        doc["frames"] = self._frames
+        if self._bodies:
+            doc["bodies"] = self._bodies
+        doc["track_sets"] = {}
+        for ts in self._sets.values():
+            spec: dict[str, Any] = {}
+            if ts.label is not None:
+                spec["label"] = ts.label
+            spec["frame"] = ts.frame
+            if ts.tags:
+                spec["tags"] = ts.tags
+            if ts.attrs:
+                spec["attrs"] = ts.attrs
+            spec.update({"tracks": len(ts.positions), "offsets": f"{ts.id}/offsets", "positions": f"{ts.id}/positions"})
+            if ts.positions and ts.channels[0]:
+                spec["channels"] = {n: {"view": f"{ts.id}/channels/{n}", **ts.channel_info.get(n, {})} for n in ts.channels[0]}
+            if ts.positions and ts.parameters[0]:
+                spec["parameters"] = {n: {"view": f"{ts.id}/parameters/{n}", **ts.parameter_info.get(n, {})} for n in ts.parameters[0]}
+            spec["periodic"] = ts.periodic
+            doc["track_sets"][ts.id] = spec
+        if self._variables:
+            doc["variables"] = self._variables
+        doc["clock"] = self._clock
+        doc["views"] = self._views
+        if self._controls:
+            doc["controls"] = self._controls
+        if self._readouts:
+            doc["readouts"] = self._readouts
+        layout = self._layout
+        if layout is None:
+            ids = list(self._panels)
+            layout = _node(ids[-1])
+            for j in range(len(ids) - 2, -1, -1):
+                layout = split("row", 1.0 / (len(ids) - j), ids[j], layout)
+        doc["initial"] = {"variables": {}, "clock": {"channel": self._clock["channels"][0]}, "panels": self._panels, "layout": layout}
+        failures = self._check(doc)
+        if failures:
+            raise SceneError("the scene breaks these rules:\n" + "\n".join(f"  {f}" for f in failures))
+        return copy.deepcopy(doc)
 
     # the write-time check
 

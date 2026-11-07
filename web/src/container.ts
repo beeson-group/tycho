@@ -339,3 +339,20 @@ export class Container implements DataStore {
     return view;
   }
 }
+
+/** Decodes base64 text, ignoring whitespace. */
+export function base64ToBytes(text: string): Uint8Array<ArrayBuffer> {
+  const bin = atob(text.replace(/\s+/g, ''));
+  const out = new Uint8Array(new ArrayBuffer(bin.length));
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+/**
+ * Decodes a file embedded in a page as text. The only encoding is `base64`, which the caller
+ * passes from the `data-encoding` attribute of the element. The function runs without a DOM.
+ */
+export function decodeEmbedded(text: string, encoding = 'base64'): Uint8Array<ArrayBuffer> {
+  if (encoding !== 'base64') fail('1', `data encoding ${encoding} is not base64`);
+  return base64ToBytes(text);
+}

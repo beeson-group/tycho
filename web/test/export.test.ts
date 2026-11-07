@@ -76,3 +76,63 @@ describe('frame schedule', () => {
     expect(checkExport(0, 30)).toMatch(/is 0, not a count of at least one/);
   });
 });
+
+describe('export size and codec', () => {
+  it('lays 720p and 1080p out alike, and keeps the stage even', () => {
+    expect(sizePreset('720p')).toEqual({ width: 1280, height: 720, pixelRatio: 1 });
+    expect(sizePreset('1080p')).toEqual({ width: 1920, height: 1080, pixelRatio: 1.5 });
+    expect(sizePreset('stage', { w: 801, h: 451 }, 1)).toEqual({ width: 800, height: 450, pixelRatio: 1 });
+    expect(sizePreset('stage', { w: 801, h: 451 }, 2)).toEqual({ width: 1600, height: 900, pixelRatio: 2 });
+    expect(sizePreset('stage', { w: 1, h: 1 }, 3)).toEqual({ width: 4, height: 4, pixelRatio: 2 });
+  });
+  it('takes the lowest H.264 level that holds the size and the rate', () => {
+    expect(avcCodec(1280, 720, 30)).toBe('avc1.64001f');
+    expect(avcCodec(1280, 720, 60)).toBe('avc1.640020');
+    expect(avcCodec(1920, 1080, 30)).toBe('avc1.640028');
+    expect(avcCodec(1920, 1080, 60)).toBe('avc1.64002a');
+    expect(avcCodec(3840, 2160, 30)).toBe('avc1.640033');
+    expect(avcCodec(3840, 2160, 60)).toBe('avc1.640034');
+    expect(avcCodec(640, 360, 30)).toBe('avc1.64001e');
+    expect(avcCodec(1280, 720, 30, 'main')).toBe('avc1.4d401f');
+    expect(avcCodec(1280, 720, 30, 'baseline')).toBe('avc1.42e01f');
+    expect(avcCodec(7680, 4320, 30)).toBeNull();
+  });
+  it('fits H.264 with even sides, level 5.2 at most, and 4096 pixels a side', () => {
+    for (const fps of [24, 30, 60]) {
+      expect(avcFits(1280, 720, fps)).toBe(true);
+      expect(avcFits(1920, 1080, fps)).toBe(true);
+    }
+    expect(avcFits(1281, 720, 30)).toBe(false);
+    expect(avcFits(4352, 2160, 30)).toBe(false);
+    expect(avcFits(5904, 2924, 60)).toBe(false);
+    // level 5.2 holds 36864 macroblocks a frame and 2073600 a second, which at 60 fps is 34560 a frame
+    expect(avcFits(4096, 2304, 30)).toBe(true);
+    expect(avcFits(4096, 2304, 60)).toBe(false);
+    expect(avcFits(4096, 2160, 60)).toBe(true);
+  });
+  it('keeps the stage within H.264 on a wide pane at a pixel ratio of 2', () => {
+    // an export of a stage of 2952 by 1462 CSS pixels at a pixel ratio of 2 and 60 fps was refused by QuickTime
+    const s = sizePreset('stage', { w: 2952, h: 1462 }, 2, 60);
+    expect(avcCodec(s.width, s.height, 60)).not.toBeNull();
+    expect(Math.max(s.width, s.height)).toBeLessThanOrEqual(4096);
+    expect(s).toEqual({ width: 4058, height: 2010, pixelRatio: 1.375 });
+    expect(sizePreset('stage', { w: 1500, h: 900 }, 2, 60)).toEqual({ width: 3000, height: 1800, pixelRatio: 2 });
+    // past 4096 CSS pixels the ratio goes below 1, and the size still fits
+    const huge = sizePreset('stage', { w: 9000, h: 3000 }, 1, 30);
+    expect(huge.pixelRatio).toBe(0.375);
+    expect(avcFits(huge.width, huge.height, 30)).toBe(true);
+    for (const fps of [24, 30, 60])
+      for (const dpr of [1, 1.5, 2, 3])
+        // prettier-ignore
+        for (const [w, h] of [[800, 600], [1500, 900], [2560, 1300], [2952, 1462], [3840, 2000], [1200, 2400]] as const) {
+          const s = sizePreset('stage', { w, h }, dpr, fps);
+          expect(avcFits(s.width, s.height, fps), `${w}x${h} at ${dpr} and ${fps} fps`).toBe(true);
+        }
+  });
+  it('aims at 0.08 bits per pixel per frame, within 1 to 40 Mbit/s', () => {
+    expect(exportBitrate(1280, 720, 30)).toBe(2211840);
+    expect(exportBitrate(320, 240, 24)).toBe(1e6);
+    expect(exportBitrate(3840, 2160, 60)).toBe(39813120);
+    expect(exportBitrate(7680, 4320, 30)).toBe(40e6);
+  });
+});

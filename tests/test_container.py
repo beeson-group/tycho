@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import struct
+import zlib
 from pathlib import Path
 
 import numpy as np
@@ -83,3 +84,29 @@ def test_round_trip_of_every_dtype_raw_and_encoded(dtype, shape, chunk_rows):
         assert c.header["version"] == 1
         assert c.header["format"] == "tycho-data"
         assert all(v["offset"] % 8 == 0 for v in c.header["views"].values() if v["encoding"] == "raw")
+
+
+@pytest.mark.parametrize("dtype", list(DTYPES))
+def test_every_dtype_decodes_bit_for_bit_through_the_encoding(dtype):
+    a = values(dtype, (30, 4))
+    stored = a.reshape(30, 4).view(f"<u{a.dtype.itemsize}")
+    for rows in (30, 31, 4):
+        chunks = [_encode_chunk(stored[r : r + rows]) for r in range(0, 30, rows)]
+        spans, at = [], 0
+        for chunk in chunks:
+            spans.append([at, len(chunk)])
+            at += len(chunk)
+        header = {
+            "format": "tycho-data",
+            "version": 1,
+            "views": {"a": {"dtype": dtype, "shape": [30, 4], "encoding": "shuffle-delta-deflate", "chunk_rows": rows, "chunks": spans}},
+        }
+        assert same_bits(Container(_rebuilt(header, b"".join(chunks))).view("a"), a)
+
+
+def test_the_delta_wraps_and_the_shuffle_groups_bytes():
+    bits = np.array([[1, 0xFFFFFFFF], [0, 0], [0xFFFFFFFF, 1]], dtype="<u4")
+    raw = zlib.decompress(_encode_chunk(bits))
+    delta = np.array([[1, 0xFFFFFFFF], [0xFFFFFFFF, 1], [0xFFFFFFFF, 1]], dtype="<u4")
+    assert raw == delta.reshape(-1).view(np.uint8).reshape(-1, 4).T.tobytes()
+    assert raw[:6] == bytes([1, 0xFF, 0xFF, 1, 0xFF, 1])  # the first byte of each of the six values

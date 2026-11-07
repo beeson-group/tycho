@@ -194,3 +194,58 @@ export class FakeDocument {
     return new FakeElement(this, tag, ns);
   }
 }
+
+/** Every element under `root`, depth first, `root` first. */
+export function walk(root: FakeElement): FakeElement[] {
+  return [root, ...root.childNodes.flatMap(walk)];
+}
+
+/** The elements under `root` whose class list holds every class of `cls`, a space-separated list. */
+export function byClass(root: FakeElement, cls: string): FakeElement[] {
+  const want = cls.split(' ');
+  return walk(root).filter((e) => want.every((c) => e.classList.contains(c)));
+}
+
+export function byTag(root: FakeElement, tag: string): FakeElement[] {
+  return walk(root).filter((e) => e.tagName.toLowerCase() === tag);
+}
+
+/** Installs the fake `document`, a minimal `window`, and an in-memory `localStorage`, and returns a function that takes them away. */
+export function installDom(): { doc: FakeDocument; uninstall: () => void } {
+  const g = globalThis as Record<string, unknown>;
+  const names = ['document', 'window', 'cancelAnimationFrame', 'requestAnimationFrame', 'localStorage'];
+  // the descriptors are saved, since reading the localStorage getter that Node defines prints a warning
+  const saved = names.map((k) => [k, Object.getOwnPropertyDescriptor(g, k)] as const);
+  const doc = new FakeDocument();
+  const stored = new Map<string, string>();
+  Object.defineProperty(g, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (k: string) => stored.get(k) ?? null,
+      setItem: (k: string, v: string) => void stored.set(k, String(v)),
+      removeItem: (k: string) => void stored.delete(k),
+    },
+  });
+  const listeners = new FakeElement(doc, 'window');
+  g.document = doc;
+  g.window = {
+    addEventListener: listeners.addEventListener.bind(listeners),
+    removeEventListener: listeners.removeEventListener.bind(listeners),
+    setTimeout: (f: () => void, ms: number) => setTimeout(f, ms),
+    clearTimeout: (t: ReturnType<typeof setTimeout>) => clearTimeout(t),
+    innerWidth: 1280,
+    innerHeight: 800,
+    devicePixelRatio: 1,
+  };
+  g.cancelAnimationFrame = () => undefined;
+  g.requestAnimationFrame = () => 0;
+  return {
+    doc,
+    uninstall: () => {
+      for (const [k, desc] of saved) {
+        if (desc === undefined) delete g[k];
+        else Object.defineProperty(g, k, desc);
+      }
+    },
+  };
+}

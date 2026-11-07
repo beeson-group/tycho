@@ -87,6 +87,29 @@ For Codex, Cursor, Copilot, Gemini CLI, OpenCode, and other agents, the `skills`
 ```sh
 npx skills add beeson-group/tycho
 ```
+
+## Development
+
+The built runtime is not kept in git, hence it has to be built once in a source checkout. The commands below build it and run the tests of both packages.
+
+```sh
+(cd web && npm ci && npm run build)        # the runtime, into web/dist and src/pytycho/_static/tycho.js
+(cd web && npm test && npm run typecheck)   # vitest under node, including every conformance case
+uv run pytest                               # or: pip install -e . --group dev && pytest (pip 25.1+)
+```
+
+Style and static checks run through [pre-commit](https://pre-commit.com), a tool that runs a list of checks, called hooks, on every commit. The command `uvx` runs a Python tool through uv without installing it into the project. After a one-time `uvx pre-commit install`, the hooks below run on every commit, and `uvx pre-commit run --all-files` runs them on demand.
+
+- ruff lints and formats the Python code.
+- pyright checks the types of the Python code.
+- prettier checks the format of the TypeScript, in check mode, i.e. it reports what it would change without changing it.
+- codespell flags common misspellings.
+- The schema checks validate the GitHub workflows and other configuration files against their JSON Schemas.
+
+[nox](https://nox.thea.codes) wraps the rest, as the sessions of `noxfile.py`. A bare `uvx nox` runs the lint and the tests, `uvx nox -s docs` builds the documentation, and `uvx nox -s build` builds the sdist and the wheel. [CONTRIBUTING.md](https://github.com/beeson-group/tycho/blob/main/CONTRIBUTING.md) has the details and the release steps.
+
+The example reads `examples/broucke/broucke-input.tyd`, which is attached to each GitHub Release rather than kept in git, and its test is therefore skipped when this file is missing. The page `web/dev/index.html` loads any conformance scene into the runtime, so that a change can be checked by eye. It runs the development bundle that `npm --prefix web run build:dev` builds, and it is served from the checkout root, e.g. by `python3 -m http.server 8000`.
+
 ## License
 
 TyCHO is licensed under Apache-2.0, whose text is in [`LICENSE`](https://github.com/beeson-group/tycho/blob/main/LICENSE). The runtime bundle, i.e. the one JavaScript file that every page inlines, carries three.js and mp4-muxer, which are both MIT-licensed. The library three.js draws the panels with WebGL, and mp4-muxer writes the MP4 file of a video export. Hence the packages declare `Apache-2.0 AND MIT`, meaning that both licenses apply. [`NOTICE`](https://github.com/beeson-group/tycho/blob/main/NOTICE) lists the two libraries, and [`THIRD_PARTY_NOTICES.md`](https://github.com/beeson-group/tycho/blob/main/THIRD_PARTY_NOTICES.md) holds their license texts.

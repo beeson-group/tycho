@@ -67,6 +67,13 @@ def compare(actual, expected, tol, where="$"):
             compare(actual[k], e, tol, f"{where}.{k}")
 
 
+@pytest.mark.parametrize("path", sorted(CORPUS.glob("*/scene.tys")), ids=lambda p: p.parent.name)
+def test_scene_validates_against_the_schema(path):
+    jsonschema = pytest.importorskip("jsonschema")
+    schema = json.loads((CORPUS.parent / "scene.schema.json").read_text())
+    jsonschema.Draft202012Validator(schema).validate(json.loads(path.read_text()))
+
+
 @pytest.mark.parametrize(("directory", "case"), list(_rejections()))
 def test_rejection(directory, case):
     document = merge(json.loads((directory / "scene.tys").read_text()), case.get("scene", {}))

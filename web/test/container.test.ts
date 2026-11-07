@@ -185,6 +185,30 @@ describe('data.tyd version 1', () => {
     expect(await rule(() => Container.parse(junk))).toBe('D5');
   });
 
+  it('the header length does not count the padding (section 1)', async () => {
+    const bytes = encodeTyd([{ name: 'x', dtype: 'float64', shape: [2], values: [1, 2] }]);
+    const dv = new DataView(bytes.buffer);
+    const stated = dv.getUint32(8, true);
+    expect((12 + stated) % 8).not.toBe(0);
+    dv.setUint32(8, stated + ((8 - ((12 + stated) % 8)) % 8), true);
+    expect(await rule(() => Container.parse(bytes))).toBe('1');
+  });
+
+  it('rejects a view entry that is not an object, a views array, and a byte order mark (section 1)', async () => {
+    const base = encodeTyd([{ name: 'x', dtype: 'float64', shape: [2], values: [1, 2] }]);
+    expect(
+      await rule(() => Container.parse(encodeTyd([{ name: 'x', dtype: 'float64', shape: [2], values: [1, 2] }], { patch: (h) => (h.views.y = null) }))),
+    ).toBe('1');
+    expect(await rule(() => Container.parse(encodeTyd([], { patch: (h) => (h.views = [null]) })))).toBe('1');
+    expect(await rule(() => Container.parse(encodeTyd([], { patch: (h) => (h.generator = 5) })))).toBe('1');
+    const bom = new Uint8Array(base.length + 3);
+    bom.set(base.subarray(0, 12));
+    bom.set([0xef, 0xbb, 0xbf], 12);
+    bom.set(base.subarray(12), 15);
+    new DataView(bom.buffer).setUint32(8, new DataView(base.buffer).getUint32(8, true) + 3, true);
+    expect(await rule(() => Container.parse(bom))).toBe('1');
+  });
+
   it('rejects an offset that is not a multiple of 8 and a shape too large to size (D2)', async () => {
     expect(
       await rule(() =>
@@ -200,5 +224,10 @@ describe('data.tyd version 1', () => {
         Container.parse(encodeTyd([{ name: 'x', dtype: 'uint8', shape: [0], values: [] }], { patch: (h) => (h.views.x.shape = [4294967296, 4294967296]) })),
       ),
     ).toBe('D2');
+  });
+
+  it('decodes embedded base64 and refuses any other encoding (section 1)', async () => {
+    expect(Array.from(decodeEmbedded('AAEC\n/w==', 'base64'))).toEqual([0, 1, 2, 255]);
+    expect(await rule(() => decodeEmbedded('H4sI', 'gzip+base64'))).toBe('1');
   });
 });

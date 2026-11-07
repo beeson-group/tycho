@@ -443,3 +443,35 @@ def resolve_vertices(vertices: Iterable[Vertex], table: Callable[[int], np.ndarr
             _, k, w, _ = vertex
             out.append((1.0 - w) * t[k] + w * t[k + 1])
     return [[float(x) for x in p] for p in out]
+
+
+# the evaluator
+
+
+class _Reading:
+    """The clock at one frame index (rules C1 to C3, and the laps of rule C6)."""
+
+    def __init__(self, clock: Mapping[str, Any], channel: str, q: float) -> None:
+        self.mode = clock["mode"]
+        self.channel = channel
+        self.q = q
+        if self.mode not in ("fraction", "value"):
+            raise EvaluationError(f"2.6: the clock mode is {self.mode!r}, not fraction or value")
+        self.laps = clock.get("laps", 1)
+        if "laps" in clock and self.mode == "value":
+            raise EvaluationError("C6: the clock is in value mode but has laps")
+        if isinstance(self.laps, bool) or not isinstance(self.laps, int) or self.laps < 1:
+            raise EvaluationError(f"C6: the clock has laps {self.laps!r}, not an integer of at least one")
+        if self.mode == "value":
+            rng = clock.get("range")
+            if not isinstance(rng, list) or len(rng) != 2:
+                raise EvaluationError("C2: the clock is in value mode but does not have a range of two numbers")
+            a, b = (_number(x, "a clock range value") for x in rng)
+            self.v = a + q * (b - a)
+
+    def of(self, track: Track) -> float:
+        """The track's reading ``u``, before any clamp."""
+        if self.mode == "fraction":
+            return self.q
+        c = track.clock_values(self.channel)
+        return float((self.v - c[0]) / (c[-1] - c[0]))

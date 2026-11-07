@@ -395,3 +395,51 @@ class Scene:
             out["color"] = _color(color, f"the color of body {id!r}")
         self._bodies[id] = out
         return Body(id)
+
+    def track_set(
+        self,
+        id: str,
+        *,
+        frame: Any,
+        tags: Mapping[str, str] | None = None,
+        attrs: Mapping[str, float] | None = None,
+        periodic: bool = False,
+        dtype: str = "float32",
+        label: str | None = None,
+        channel_dtypes: Mapping[str, str] | None = None,
+    ) -> TrackSet:
+        """Declares a track set. ``dtype`` is the stored dtype of its positions and channels (rule D1).
+
+        The default is float32, and the cast is recorded in the ``meta`` of the data container. A clock channel is stored as
+        float64 instead when, on some track, float32 would make the channel nonmonotone or would round either end of a step
+        between consecutive samples by more than 1% of the step. ``channel_dtypes`` maps a channel name to float32 or float64,
+        and a dtype given there overrides both ``dtype`` and the switch of a clock channel to float64. Parameters are stored
+        as float64, since each is one number per track and a selector compares against it.
+        """
+        if dtype not in ("float32", "float64"):
+            raise SceneError(f"D1: positions and channels of track set {id!r} are stored as float32 or float64, not {dtype!r}")
+        if channel_dtypes is None:
+            channel_dtypes = {}
+        if not isinstance(channel_dtypes, Mapping):
+            raise SceneError(f"D1: channel_dtypes of track set {id!r} is a dict of channel names to dtypes, not {channel_dtypes!r}")
+        for name, cd in channel_dtypes.items():
+            if _text(name, "a channel name") == INDEX:
+                raise SceneError(f"D1: channel_dtypes of track set {id!r} names {INDEX}, which is not stored")
+            if cd not in ("float32", "float64"):
+                raise SceneError(f"D1: channel {name!r} of track set {id!r} is stored as float32 or float64, not {cd!r}")
+        self._new(self._sets, id, "track set")
+        if _id(frame) not in self._frames:
+            raise SceneError(f"2.1: the frame {_id(frame)!r} of track set {id!r} is not declared")
+        ts = TrackSet(
+            self,
+            id,
+            _id(frame),
+            tags or {},
+            attrs or {},
+            periodic,
+            dtype,
+            _text(label, "a track set label") if label is not None else None,
+            channel_dtypes,
+        )
+        self._sets[id] = ts
+        return ts

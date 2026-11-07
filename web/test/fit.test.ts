@@ -154,6 +154,35 @@ describe('a plane camera with a free aspect (2.7)', () => {
     const equal = widePanel({ kind: 'plane' }, [{ kind: 'axes' }]).p.view;
     expect(equal.stepX).toBe(equal.stepY);
   });
+  it('lays a grid without numbers out across the view at the step of each axis', () => {
+    const grid = (camera: Camera) => {
+      const { p } = widePanel(camera, [{ kind: 'grid', labels: false }]);
+      const draw = p.draws.get(1);
+      const pos = draw.lines.geometry.getAttribute('position').array as Float32Array;
+      const xs = new Set<number>();
+      const ys = new Set<number>();
+      for (let i = 0; i < pos.length; i += 6) (pos[i] === pos[i + 3] ? xs : ys).add(Math.round((pos[i] === pos[i + 3] ? pos[i]! : pos[i + 1]!) * 1e6) / 1e6);
+      return { follows: draw.follows, xs: [...xs].sort((a, b) => a - b), ys: [...ys].sort((a, b) => a - b) };
+    };
+    expect(grid({ kind: 'plane', aspect: 'free' })).toEqual({ follows: true, xs: [0, 2, 4, 6, 8, 10], ys: [0, 0.2, 0.4, 0.6, 0.8, 1] });
+    expect(grid({ kind: 'plane' }).follows).toBe(false);
+  });
+  it('draws positive half-axes as long as a round fraction of the box along each axis', () => {
+    const tips = (camera: Camera) =>
+      widePanel(camera, [{ kind: 'axes', span: 'positive' }])
+        .p.draws.get(1)
+        .tips.map((v: THREE.Vector3) => v.toArray());
+    expect(tips({ kind: 'plane', aspect: 'free' })).toEqual([
+      [5, 0, 0],
+      [0, 0.5, 0],
+      [0, 0, 5],
+    ]);
+    expect(tips({ kind: 'plane' })).toEqual([
+      [5, 0, 0],
+      [0, 5, 0],
+      [0, 0, 5],
+    ]);
+  });
 });
 
 describe('lazy geometry and per-track buffers', () => {

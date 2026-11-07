@@ -157,6 +157,57 @@ def test_c5_only_a_set_that_is_read_needs_the_clock_channels():
         scene.to_document()
 
 
+def breathing(driver_channels=("t", "rho")):
+    """A driver in a scaled frame, and a grid of the unscaled frame without any channel."""
+    scene = ty.Scene()
+    pulsating = scene.frame("pulsating")
+    rot = scene.frame("rot", parent=pulsating, scale=ty.channel("rho"))
+    orbit = scene.track_set("orbit", frame=rot, dtype="float64")
+    channels = {"t": [0.0, 1.0, 2.0], "rho": [1.0, 2.0, 3.0]}
+    orbit.add(np.zeros((3, 2)), channels={k: channels[k] for k in driver_channels})
+    grid = scene.track_set("grid", frame=pulsating, dtype="float64")
+    grid.add(np.array([[1.0, 0.0], [1.0, 1.0]]))
+    scene.clock(channels=["t"], steps=4)
+    return scene, orbit, grid
+
+
+def test_a_layer_in_the_driver_context_reads_the_frame_edges_on_the_driver():
+    scene, orbit, grid = breathing()
+    scene.view("v", frame="rot", driver=ty.driver(orbit, 0), layers=[ty.track(grid, context="driver")])
+    scene.panel("p", "v")
+    doc, data = scene.to_document(), scene.to_container()
+    assert (doc["version"], doc["requires"]) == ("0.3", ["layers.driver_context"])
+    assert doc["views"]["v"]["layers"][0]["context"] == "driver"
+    # at frame 1 of 4 the driver reads t = 0.5, halfway between rho = 1 and rho = 2 (rules L4 and L6)
+    line = evaluate(doc, data, doc["initial"], 1)["panels"]["p"]["layers"][0]["members"][0]["line"]
+    assert np.allclose(line, [[1.5, 0.0, 0.0], [1.5, 1.5, 0.0]])
+    scene, orbit, grid = breathing()
+    scene.view("v", frame="rot", driver=ty.driver(orbit, 0), layers=[ty.track(grid)])
+    scene.panel("p", "v")
+    with pytest.raises(ty.SceneError, match=r"F5: view 'v': .*'grid'"):
+        scene.to_document()
+    scene, orbit, grid = breathing(driver_channels=("t",))
+    scene.view("v", frame="rot", driver=ty.driver(orbit, 0), layers=[ty.track(grid, context="driver")])
+    scene.panel("p", "v")
+    with pytest.raises(ty.SceneError, match=r"F5: .*in the driver's context"):
+        scene.to_document()
+
+
+def test_a_layer_in_the_driver_context_is_checked():
+    scene, orbit, grid = breathing()
+    scene.view("v", frame="pulsating", driver=ty.driver(orbit, 0), layers=[ty.track(orbit)])
+    scene.panel("p", "v")
+    assert "requires" not in scene.to_document()
+    with pytest.raises(ty.SceneError, match="L6: a track layer's context"):
+        scene.view("w", frame="pulsating", driver=ty.driver(orbit, 0), layers=[ty.track(grid, context="sample")])
+    # a head reads the clock channel, which the grid lacks also in the driver's context (rule C5)
+    scene, orbit, grid = breathing()
+    scene.view("v", frame="rot", driver=ty.driver(orbit, 0), layers=[ty.track(grid, context="driver", head=True)])
+    scene.panel("p", "v")
+    with pytest.raises(ty.SceneError, match="C5: view 'v': track set 'grid'"):
+        scene.to_document()
+
+
 def test_v3_fails_at_the_write():
     scene, moving, still = small()
     e = scene.selector("e", parameter="e")

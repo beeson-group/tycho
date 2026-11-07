@@ -1,5 +1,7 @@
+// In-memory data for tests: a DataStore over plain arrays, and a data.tyd encoder.
 import { deflateSync } from 'node:zlib';
 import type { ArrayView, DataStore, Dtype, TypedArray } from '../src/container';
+import type { Scene, State } from '../src/scene';
 
 const CTORS = {
   int8: Int8Array,
@@ -11,6 +13,28 @@ const CTORS = {
   float32: Float32Array,
   float64: Float64Array,
 } as const;
+
+export class MemoryStore implements DataStore {
+  private readonly views = new Map<string, ArrayView>();
+
+  add(name: string, values: number[] | number[][], dtype: Dtype = 'float64'): this {
+    const rows = values as (number | number[])[];
+    const flat = rows.flat() as number[];
+    const shape = Array.isArray(rows[0]) ? [rows.length, (rows[0] as number[]).length] : [rows.length];
+    this.views.set(name, { name, dtype, shape, data: CTORS[dtype].from(flat) as TypedArray });
+    return this;
+  }
+
+  has(name: string): boolean {
+    return this.views.has(name);
+  }
+
+  view(name: string): ArrayView {
+    const v = this.views.get(name);
+    if (!v) throw new Error(`no view ${name}`);
+    return v;
+  }
+}
 
 /** One array for `encodeTyd`, raw unless `chunkRows` is given. */
 export interface TydArray {
@@ -84,4 +108,25 @@ export function encodeTyd(arrays: TydArray[], opts: { version?: number; patch?: 
   let at = bodyStart;
   for (const b of bodies) (out.set(b, at), (at += b.length));
   return out;
+}
+
+export const state = (view = 'main', channel = 'time', extra: Partial<State> = {}): State => ({
+  clock: { channel },
+  panels: { p1: { view } },
+  layout: { kind: 'panel', id: 'p1' },
+  ...extra,
+});
+
+/** A minimal scene: one frame "a", one track set "s" in it, and a view "main" drawing every track. */
+export function baseScene(over: Partial<Scene> = {}): Scene {
+  return {
+    format: 'tycho-scene',
+    version: '0.2',
+    frames: { a: {} },
+    track_sets: { s: { frame: 'a', tracks: 1, offsets: 'off', positions: 'pos', channels: { time: { view: 'time' } } } },
+    clock: { mode: 'fraction', channels: ['time', '@index'], steps: 4 },
+    views: { main: { frame: 'a', driver: { sets: { set: 's' }, member: { index: 0 } }, layers: [{ kind: 'track', sets: { set: 's' }, members: 'all' }] } },
+    initial: state(),
+    ...over,
+  };
 }

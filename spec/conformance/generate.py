@@ -1412,6 +1412,12 @@ def driver_context():
 
     rejections = [
         {"name": "L6: a context that is neither own nor driver", "rule": "L6", "scene": with_layer(0, context="sample")},
+        # the reveal, C3, and trail checks come before the check of the context
+        {
+            "name": "2.7: a reveal that is neither none, grow, nor trail, on a layer whose context is neither own nor driver",
+            "rule": "2.7",
+            "scene": with_layer(0, reveal="sweep", context="sample"),
+        },
         {
             "name": "C5: a head on a layer in the driver's context whose set lacks the clock channel f",
             "rule": "C5",

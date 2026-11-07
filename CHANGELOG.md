@@ -12,6 +12,7 @@ Scene format 0.3 is written and read at this version, and a scene of format 0.2 
 
 - A track layer can be drawn in the driver's context, with `context="driver"` in `ty.track`. Every sample of its tracks is then transformed into the display frame with the attributes and channels of the driver's track at its current reading (rule L6). A grid stored in the rotating-pulsating frame of the elliptic problem thus breathes and turns with this frame when the rotating or an inertial frame is shown, and its track set does not need to carry any channel. A scene with such a layer lists the feature `layers.driver_context` in its `requires`. The camera is fitted to the layer as it is drawn at every sample of the driver, or to the images of the 8 corners of its box when the layer has more than 8 points and the driver very many samples. On a layer with both a bad `reveal` and a bad `context`, the error of the reveal is reported first, by pytycho and by the runtime alike.
 - A plane camera can be given `"aspect": "free"`, under which the two axes are scaled separately in the fit, so that a diagram such as a residual against an iteration count is drawn across the whole panel in both directions. Each axis of the axes and grid layers is then ticked at a step for its scale. Under the default, `"equal"`, one unit is as long across the panel as up it.
+- The clock can be given `seconds`, the length of one loop at speed 1, in either mode, with `scene.clock(..., seconds=24)`. Without it, a loop lasts 8 seconds for each lap, as before.
 
 ### Fixed
 

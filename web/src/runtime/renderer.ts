@@ -904,6 +904,136 @@ export class TrackDraw implements Draw {
     this.resolution.value.set(Math.max(1, w), Math.max(1, h));
   }
 
+  /** The color of a vertex of track `t`, which is the layer's color or a blend of the colors of two samples. */
+  private colorAt(t: number, v: Vertex, out: Float32Array, o: number): void {
+    const c = this.src.coloring;
+    if (c.kind === 'constant') {
+      out.set(c.rgb, o);
+      return;
+    }
+    const s = this.set.start(t);
+    if ('sample' in v) {
+      for (let k = 0; k < 3; k++) out[o + k] = c.rgb[3 * (s + v.sample) + k]!;
+      return;
+    }
+    for (let k = 0; k < 3; k++) out[o + k] = (1 - v.w) * c.rgb[3 * (s + v.k) + k]! + v.w * c.rgb[3 * (s + v.k + 1) + k]!;
+  }
+
+  /** Each track's opacity under the highlight's kernel, around the selected track's parameter value. */
+  private fillKernel(): void {
+    const k = this.kernel;
+    if (k === null || this.alphas === null) return;
+    const centre = this.selected === null ? null : k.values[this.selected]!;
+    for (let t = 0; t < this.set.tracks; t++) {
+      this.alphas.data[4 * t] = centre === null ? this.opacity : kernelOpacity(this.opacity, k, k.extent, Math.abs(k.values[t]! - centre));
+    }
+    this.alphas.texture.needsUpdate = true;
+  }
+
+  private showPass(p: Pass): void {
+    p.show(p.spec.highlight ? this.highlight : this.baseWhat);
+    p.mat.uniforms.uSkip!.value = p.spec.highlight ? -1 : this.skip;
+  }
+
+  private pass(lap: number, highlight: boolean): Pass {
+    const key = `${highlight ? 'h' : 'b'}${lap}`;
+    let p = this.passes.get(key);
+    if (p === undefined) {
+      p = new Pass(
+        this.src,
+        { lap, highlight, width: highlight ? this.hiWidth : this.width, opacity: highlight ? this.hiOpacity : this.opacity },
+        this.uniforms,
+      );
+      (highlight ? this.hiHolder : this.baseHolder).add(p.holder);
+      this.passes.set(key, p);
+      this.showPass(p);
+    }
+    return p;
+  }
+
+  /** Shows the passes of the laps that draw a segment, building the ones not built yet, and hides the others. */
+  private syncPasses(base: [number, number], hi: [number, number]): void {
+    for (const p of this.passes.values()) p.holder.visible = false;
+    if (this.baseWhat !== null) for (let lap = base[0]; lap <= base[1]; lap++) this.pass(lap, false).holder.visible = true;
+    if (this.highlight !== null) for (let lap = hi[0]; lap <= hi[1]; lap++) this.pass(lap, true).holder.visible = true;
+  }
+
+  /** True when the layer does not take a reading, so that what it draws changes only with its members, its highlight, and its selection. */
+  get isStatic(): boolean {
+    return this.clocks === null;
+  }
+
+  /** Returns whether the picture changed through new members, a new highlight or selection, or a first fill. */
+  update(plan: TrackPlan, scene: Scene, q: number): boolean {
+    const h = plan.highlight;
+    const changed =
+      plan.members.length !== this.members.length ||
+      plan.members.some((t, i) => t !== this.members[i]) ||
+      h !== this.highlight ||
+      plan.selected !== this.selected;
+    if (changed) {
+      const single = plan.layer.members !== 'all' && plan.members.length === 1 ? plan.members[0]! : -1;
+      this.members = plan.members;
+      this.highlight = h;
+      this.selected = plan.selected;
+      this.baseWhat = single >= 0 ? (single === h ? null : single) : plan.members.length > 0 ? 'set' : null;
+      this.skip = single < 0 && h !== null ? h : -1;
+      for (const p of this.passes.values()) this.showPass(p);
+      for (let t = 0; t < this.set.tracks; t++) this.ranges.data.set(EMPTY_RANGE, 4 * t);
+      this.fillKernel();
+      this.growHeads(plan.members.length);
+      this.filled = false;
+    }
+    if (this.clocks === null && this.filled) return false;
+    const P = this.pieces.begin(2 * plan.members.length);
+    const hp = this.heads?.geometry.getAttribute('position') as THREE.BufferAttribute | undefined;
+    const hc = this.heads?.geometry.getAttribute('color') as THREE.BufferAttribute | undefined;
+    let heads = 0;
+    const base: [number, number] = [Infinity, -Infinity];
+    const hi: [number, number] = [Infinity, -Infinity];
+    for (const t of plan.members) {
+      const tc = this.clocks?.clocks[t] ?? null;
+      const rev = revealTrack(tc, scene.clock, q, this.spec, Math.fround);
+      this.ranges.data.set(rev.range, 4 * t);
+      const isHi = t === h;
+      // every lap draws, also where all laps have the same positions and coincide, as the
+      // line that the evaluator returns holds every lap (rule C6)
+      if (rev.laps !== null) {
+        const r = isHi ? hi : base;
+        r[0] = Math.min(r[0], rev.laps[0]);
+        r[1] = Math.max(r[1], rev.laps[1]);
+      }
+      const width = isHi ? this.hiWidth : this.width;
+      const alpha = isHi ? this.hiOpacity : this.alphas !== null ? this.alphas.data[4 * t]! : this.opacity;
+      const tapered = this.fraction > 0 && rev.loop !== null;
+      for (const piece of rev.pieces) {
+        const o = 16 * this.pieces.n++;
+        piece.forEach((v, e) => {
+          this.geo.vertex(t, v, P, o + 3 * e);
+          this.colorAt(t, v, P, o + 6 + 4 * e);
+          const s = tapered ? clamp01(1 - (rev.loop! - vertexReading(tc!, v)) / this.fraction) : 1;
+          P[o + 9 + 4 * e] = alpha * (tapered ? this.taperOpacity + (1 - this.taperOpacity) * s : 1);
+          P[o + 14 + e] = width > 1 && tapered ? width * (this.taperWidth + (1 - this.taperWidth) * s) : width;
+        });
+      }
+      if (hp !== undefined && hc !== undefined && rev.head !== null && heads < hp.count) {
+        this.geo.vertex(t, rev.head, hp.array as Float32Array, 3 * heads);
+        if (this.headColor !== null) (hc.array as Float32Array).set(this.headColor, 3 * heads);
+        else this.colorAt(t, rev.head, hc.array as Float32Array, 3 * heads);
+        heads++;
+      }
+    }
+    this.pieces.end();
+    if (this.heads !== null) {
+      hp!.needsUpdate = hc!.needsUpdate = true;
+      this.heads.geometry.setDrawRange(0, heads);
+    }
+    this.syncPasses(base, hi);
+    this.ranges.texture.needsUpdate = true;
+    this.filled = true;
+    return true;
+  }
+
   extend(): void {}
 
   dispose(): void {

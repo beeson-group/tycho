@@ -103,8 +103,6 @@ export function driverContexts(driver: NonNullable<Driver>, at: BlendVertex): { 
 
 export function trackLayer(env: LayerEnv, layer: TrackLayer, set: SetData | null, driver: Driver = null): TrackLayerResult {
   if (set === null) return { kind: 'track', set: null, members: [] };
-  const context = layer.context ?? 'own';
-  if (context !== 'own' && context !== 'driver') fail('L6', `a track layer's context is ${JSON.stringify(context)}, not own or driver`);
   const reveal = layer.reveal ?? 'none';
   if (!['none', 'grow', 'trail'].includes(reveal)) fail('2.7', `a track layer's reveal is ${JSON.stringify(reveal)}, not none, grow, or trail`);
   for (const key of ['before', 'after'] as const) {
@@ -112,6 +110,8 @@ export function trackLayer(env: LayerEnv, layer: TrackLayer, set: SetData | null
       fail('C3', `a track layer's ${key} is ${JSON.stringify(layer[key])}, not clamp or hidden`);
   }
   if (reveal === 'trail') layerTrailFraction(layer);
+  const context = layer.context ?? 'own';
+  if (context !== 'own' && context !== 'driver') fail('L6', `a track layer's context is ${JSON.stringify(context)}, not own or driver`);
   const laps = clockLaps(env.clock);
   const from = set.def.frame;
   let f = (ctx: Context): Vec3 => env.frames.transform(set.position(ctx.track, ctx.sample), from, env.display, ctx);

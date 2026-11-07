@@ -139,3 +139,31 @@ def test_the_default_chunk_holds_about_one_mebibyte():
     np.testing.assert_array_equal(Container(w.to_bytes()).view("a"), a)
     with pytest.raises(ContainerError, match="D5: chunk_rows"):
         w.add_view("b", a, chunk_rows=0)
+
+
+def test_encoded_views_are_decoded_once_and_read_only_and_raw_views_share_memory():
+    w = ContainerWriter()
+    w.add_view("smooth", np.linspace(0.0, 1.0, 3000))
+    w.add_view("short", np.array([np.pi, np.e]))
+    c = Container(w.to_bytes())
+    assert c.header["views"]["short"]["encoding"] == "raw"
+    assert c.view("smooth") is c.view("smooth")
+    assert not c.view("smooth").flags.writeable
+    assert not c.view("short").flags.writeable
+    assert c.view("short").base is not None
+    assert c.stored_size("short") == 16
+    assert c.stored_size("smooth") == sum(n for _, n in c.header["views"]["smooth"]["chunks"]) < 24000
+
+
+def test_empty_encoded_views_are_read():
+    header = {
+        "format": "tycho-data",
+        "version": 1,
+        "views": {
+            "none": {"dtype": "float64", "shape": [0, 3], "encoding": "shuffle-delta-deflate", "chunk_rows": 4, "chunks": []},
+            "thin": {"dtype": "int16", "shape": [3, 0], "encoding": "shuffle-delta-deflate", "chunk_rows": 2, "chunks": [[0, 8], [8, 8]]},
+        },
+    }
+    c = Container(_rebuilt(header, zlib.compress(b"") * 2))
+    assert c.view("none").shape == (0, 3)
+    assert c.view("thin").shape == (3, 0)

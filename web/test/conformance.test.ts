@@ -20,6 +20,25 @@ interface Case {
   expected: { panels: Record<string, unknown> };
 }
 
+interface Rejection {
+  name: string;
+  rule: string;
+  scene?: Record<string, unknown>;
+  state?: State;
+  frame_index?: number;
+}
+
+/** A deep merge of `patch` into a copy of `base`, where an object is merged recursively, a null deletes the key, and any other value replaces it. */
+function merge(base: unknown, patch: unknown): unknown {
+  if (base === null || typeof base !== 'object' || Array.isArray(base) || patch === null || typeof patch !== 'object' || Array.isArray(patch)) return patch;
+  const out: Record<string, unknown> = { ...(base as Record<string, unknown>) };
+  for (const [k, v] of Object.entries(patch as Record<string, unknown>)) {
+    if (v === null) delete out[k];
+    else out[k] = merge(out[k], v);
+  }
+  return out;
+}
+
 /** The differences between `actual` and `expected`, as paths. Numbers must agree within `tol`, and every other value must be equal. */
 export function compare(actual: unknown, expected: unknown, tol: number, path = '$', out: string[] = []): string[] {
   if (typeof expected === 'number') {
@@ -89,6 +108,25 @@ describe('conformance corpus', () => {
           const actual = evaluate(scene, data, c.state, c.frame_index);
           expect(compareCase(actual as unknown as { panels: Record<string, unknown> }, c.expected, c.tolerance)).toEqual([]);
         });
+      }
+      const rejectionsPath = join(base, 'rejections.json');
+      if (existsSync(rejectionsPath)) {
+        for (const r of JSON.parse(readFileSync(rejectionsPath, 'utf8')) as Rejection[]) {
+          it(`rejects: ${r.name}`, async () => {
+            const { scene: original, data } = await load();
+            const scene = merge(original, r.scene ?? {}) as Scene;
+            const state = r.state ?? scene.initial;
+            let rule = 'no error';
+            try {
+              validate(scene, data, state);
+              evaluate(scene, data, state, r.frame_index ?? 0);
+            } catch (e) {
+              if (!(e instanceof TychoError)) throw e;
+              rule = e.rule;
+            }
+            expect(rule).toBe(r.rule);
+          });
+        }
       }
     });
   }

@@ -244,3 +244,57 @@ describe('a colorbar as a slider', () => {
     expect(stopAt([], 0, 1, 0.5)).toBe(-1);
   });
 });
+
+describe('chip menus', () => {
+  const { scene } = dressedBroucke();
+  const name = (id: string) => ({ pulsating: 'rotating-pulsating', inertial: 'barycentric-inertial' })[id] ?? id;
+  const payload = { kind: 'value' as const, variable: 'frame', value: 'rotating' };
+  it('offer Add panel, then split right, split below, and replace for every panel in layout order', () => {
+    expect(chipMenu(scene.initial, name, 8).map((m) => [m.label, m.disabled, m.group])).toEqual([
+      ['Add panel', false, false],
+      ['Split rotating-pulsating right', false, true],
+      ['Split rotating-pulsating below', false, false],
+      ['Replace rotating-pulsating', false, false],
+      ['Split barycentric-inertial right', false, true],
+      ['Split barycentric-inertial below', false, false],
+      ['Replace barycentric-inertial', false, false],
+    ]);
+  });
+  it('number panels that share a name, and disable what would pass the limit', () => {
+    const items = chipMenu(scene.initial, () => 'rotating', 2);
+    expect(items.map((m) => m.label)).toContain('Replace rotating (2)');
+    expect(items.filter((m) => m.disabled).map((m) => m.label)).toEqual([
+      'Add panel',
+      'Split rotating (1) right',
+      'Split rotating (1) below',
+      'Split rotating (2) right',
+      'Split rotating (2) below',
+    ]);
+  });
+  it('are state transitions, in which a split makes a panel with the value, a replace changes the target, and add splits the largest panel', () => {
+    const st = scene.initial;
+    const split = withPlacement(scene, st, { kind: 'drop', target: 'inertial', zone: 'bottom' }, payload, 8, () => false);
+    expect(Object.keys(split.panels)).toEqual(['pulsating', 'inertial', 'p3']);
+    expect(split.panels.p3!.variables!.frame).toBe('rotating');
+    expect(split.layout).toEqual({
+      kind: 'split',
+      dir: 'row',
+      ratio: 0.5,
+      a: { kind: 'panel', id: 'pulsating' },
+      b: { kind: 'split', dir: 'col', ratio: 0.5, a: { kind: 'panel', id: 'inertial' }, b: { kind: 'panel', id: 'p3' } },
+    });
+    const replaced = withPlacement(scene, st, { kind: 'drop', target: 'pulsating', zone: 'centre' }, payload, 8, () => false);
+    expect(replaced.panels.pulsating!.variables!.frame).toBe('rotating');
+    expect(replaced.layout).toBe(st.layout);
+    // with equal areas, the first panel in layout order counts as the largest, and it is split below when it is tall
+    const added = withAdd(scene, st, payload, 8, (id) => id === 'pulsating');
+    expect(added.layout.kind === 'split' && added.layout.a).toEqual({
+      kind: 'split',
+      dir: 'col',
+      ratio: 0.5,
+      a: { kind: 'panel', id: 'pulsating' },
+      b: { kind: 'panel', id: 'p3' },
+    });
+    expect(withPlacement(scene, st, { kind: 'add' }, payload, 2, () => false)).toBe(st);
+  });
+});

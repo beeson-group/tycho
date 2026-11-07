@@ -635,6 +635,57 @@ export class TychoViewerElement extends Base {
     this.start();
     if (this.kiosk) this.play();
   }
+
+  // lifecycle
+
+  private start(): void {
+    if (this.scene === null || this.store === null || this.renderer !== null || !this.isConnected) return;
+    this.canvas = el('canvas');
+    this.stage.insertBefore(this.canvas, this.panelsEl);
+    try {
+      this.renderer = new StageRenderer(this.canvas, this.scene, this.geometry!);
+    } catch (e) {
+      this.fail(`WebGL is not available: ${(e as Error).message}`);
+      return;
+    }
+    this.renderer.onChange = () => this.invalidate();
+    this.unsubscribe = this.store.subscribe((change) => this.onChange(change));
+    this.measureStage();
+    this.resizeObserver = new ResizeObserver(() => {
+      this.measureStage();
+      this.layoutDom();
+      this.fitAddGroup();
+      this.invalidate();
+    });
+    this.resizeObserver.observe(this.stage);
+    this.resizeObserver.observe(this.header);
+    window.addEventListener('pagehide', this.onPageHide);
+    this.lastPanels = null;
+    this.lastLayout = null;
+    for (const pid of [...this.panelDom.keys()]) this.removePanelDom(pid);
+    this.onChange('state');
+    if (this.store.playing) this.onChange('playing');
+  }
+
+  private stop(): void {
+    cancelAnimationFrame(this.raf);
+    this.raf = 0;
+    this.flushSave();
+    this.closeMenu(false);
+    window.removeEventListener('pagehide', this.onPageHide);
+    this.unsubscribe?.();
+    this.unsubscribe = null;
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = null;
+    this.renderer?.dispose();
+    this.renderer = null;
+    this.canvas?.remove();
+    this.canvas = null;
+  }
+
+  private applyTheme(): void {
+    for (const [k, v] of Object.entries(chromeTokens(sceneTheme(this.scene!)))) this.style.setProperty(k, v);
+  }
 }
 
 /**

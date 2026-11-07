@@ -125,3 +125,12 @@ ignore = [
 "examples/**" = ["T20"]
 "spec/conformance/*.py" = ["T20"]
 "noxfile.py" = ["T20"]
+
+[tool.pyright]
+include = ["src", "tests", "examples"]
+pythonVersion = "3.10"
+typeCheckingMode = "standard"
+
+[tool.codespell]
+ignore-words-list = ["inout", "istall", "useg"]  # an OpenGL Shading Language keyword, isTall, and a shader uniform in web/src/runtime
+skip = ["web/package-lock.json"]

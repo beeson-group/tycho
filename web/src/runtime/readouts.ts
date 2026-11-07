@@ -53,3 +53,33 @@ export function nearestStop(stops: readonly number[], value: number): number {
   for (let i = 0; i < stops.length; i++) if (best < 0 || Math.abs(stops[i]! - value) < Math.abs(stops[best]! - value)) best = i;
   return best;
 }
+
+/** Seconds one lap of the clock lasts at speed 1, whatever its steps. */
+export const LAP_SECONDS = 8;
+
+/** The seconds that one loop of the clock lasts at speed 1, which are LAP_SECONDS for each of its laps (rule C6). */
+export function loopSeconds(clock: Clock): number {
+  return LAP_SECONDS * (clock.laps ?? 1);
+}
+
+/**
+ * The loop position, in frame indices and unwrapped, `time` after a playback showed frame index
+ * `start`, with `perSecond` units of time to the second. A loop of `steps` lasts `seconds / speed`
+ * seconds. Live playback counts milliseconds and a video export its frames, and one division of
+ * exact products keeps a position that should be an integer exact.
+ */
+export function loopPosition(start: number, time: number, perSecond: number, steps: number, speed: number, seconds: number): number {
+  return start + (Math.max(0, time) * steps * speed) / (perSecond * seconds);
+}
+
+/** The frame index at a loop position, i.e. its integer part wrapped into [0, steps). */
+export function positionIndex(x: number, steps: number): number {
+  const i = Math.floor(x);
+  return ((i % steps) + steps) % steps;
+}
+
+/** The progress q in [0, 1) at a loop position, which lies between two frame indices while playing. */
+export function positionProgress(x: number, steps: number): number {
+  const q = (((x % steps) + steps) % steps) / steps;
+  return q < 1 ? q : 0;
+}

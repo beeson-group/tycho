@@ -644,6 +644,134 @@ def two_panels():
     print(f"two-panels: {len(cases)} cases")
 
 
+def _write_scene(name, scene, cases, rejections=None, strip_periodic=()):
+    """Writes a Scene API scene, dropping the periodic key of the named sets to test rule T2's default."""
+    out = HERE / name
+    out.mkdir(exist_ok=True)
+    doc, data = scene.to_document(), scene.to_container()
+    for sid in strip_periodic:
+        del doc["track_sets"][sid]["periodic"]
+    (out / "scene.tys").write_text(json.dumps(doc, indent=1) + "\n")
+    (out / "data.tyd").write_bytes(data)
+    (out / "cases.json").write_text(json.dumps(cases, indent=1) + "\n")
+    if rejections is not None:
+        (out / "rejections.json").write_text(json.dumps(rejections, indent=1) + "\n")
+    print(f"{name}: {len(cases)} cases" + (f", {len(rejections)} rejections" if rejections else ""))
+    return doc, data
+
+
+def edge_fraction():
+    """The rules that a plausible wrong implementation would still pass in the other scenes, tested in fraction mode."""
+    import pytycho as ty
+
+    scene = ty.Scene(title="edge cases, fraction mode")
+    p = scene.frame("p")
+    scene.frame("c", parent=p, origin=[1.0, 0.0, 0.0], rotation=ty.rotation("z", np.pi / 2))
+    scene.frame("y", parent=p, rotation=ty.rotation("y", np.pi / 2))
+    b = scene.body("b", frame=p, position=[1.0, 0.0, 0.0])
+    tri = np.array([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]])
+    opened = scene.track_set("open", frame=p, periodic=True, dtype="float64")
+    opened.add(tri)
+    nokey = scene.track_set("nokey", frame=p, dtype="float64")
+    nokey.add(tri)
+    off = scene.track_set("off", frame=p, dtype="float64")
+    off.add(np.array([[2.0, 0.0], [0.0, 0.0]]))
+    yrot = scene.track_set("yrot", frame=p, dtype="float64")
+    yrot.add(np.array([[1.0, 0.0, 0.0], [0.0, 0.0, 1.0]]))
+    scene.clock("fraction", channels=["@index"], steps=4)
+    scene.view(
+        "open",
+        frame=p,
+        driver=ty.driver(opened, 0),
+        layers=[ty.track(opened, trail=0.75, head=True), ty.track(nokey, trail=0.5), ty.track(off, head=True), ty.body(b)],
+    )
+    scene.view("c", frame="c", driver=ty.driver(off, 0), layers=[ty.track(off)])
+    scene.view("y", frame="y", driver=ty.driver(yrot, 0), layers=[ty.track(yrot)])
+    for pid in ("open", "c", "y"):
+        scene.panel(pid, pid)
+    initial = {
+        "variables": {},
+        "clock": {"channel": "@index"},
+        "panels": {pid: {"view": pid} for pid in ("open", "c", "y")},
+        "layout": ty.split("row", 0.5, "open", ty.split("row", 0.5, "c", "y")),
+    }
+    cases = [
+        {
+            "name": "L2 joint on an open periodic loop, T2 absent periodic, L3 head on reveal none, a body without a trail, "
+            "F1 origin off the rotation axis, F1 rotation about y",
+            "source": "analytic",
+            "state": initial,
+            "frame_index": 1,
+            "tolerance": TOL,
+            "expected": {
+                "panels": {
+                    # frame 1 has u = 0.25 and the tail at -0.5. the wrapped part thus runs from 0.5 to 1, and its closing sample is dropped
+                    "open": {
+                        "frame": "p",
+                        "layers": [
+                            {
+                                "kind": "track",
+                                "set": "open",
+                                "members": [
+                                    {"index": 0, "line": [[1.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.5, 0.0, 0.0]], "head": [0.5, 0.0, 0.0]}
+                                ],
+                            },
+                            {"kind": "track", "set": "nokey", "members": [{"index": 0, "line": [[0.0, 0.0, 0.0], [0.5, 0.0, 0.0]]}]},
+                            {
+                                "kind": "track",
+                                "set": "off",
+                                "members": [{"index": 0, "line": [[2.0, 0.0, 0.0], [0.0, 0.0, 0.0]], "head": [1.5, 0.0, 0.0]}],
+                            },
+                            {"kind": "body", "body": "b", "position": [1.0, 0.0, 0.0]},
+                        ],
+                    },
+                    "c": {
+                        "frame": "c",
+                        "layers": [{"kind": "track", "set": "off", "members": [{"index": 0, "line": [[0.0, 1.0, 0.0], [0.0, -1.0, 0.0]]}]}],
+                    },
+                    "y": {
+                        "frame": "y",
+                        "layers": [
+                            {"kind": "track", "set": "yrot", "members": [{"index": 0, "line": [[0.0, 0.0, -1.0], [1.0, 0.0, 0.0]]}]}
+                        ],
+                    },
+                }
+            },
+        }
+    ]
+    one = {"variables": {}, "clock": {"channel": "@index"}, "panels": {"open": {"view": "open"}}, "layout": {"kind": "panel", "id": "open"}}
+    rejections = [
+        {"name": "T1: a track of one sample", "rule": "T1", "scene": {"track_sets": {"open": {"tracks": 2, "offsets": "bad/one"}}}},
+        {"name": "2.1: offsets[0] is not 0", "rule": "2.1", "scene": {"track_sets": {"off": {"offsets": "bad/offsets"}}}},
+        {
+            "name": "S3: a set channel named @index",
+            "rule": "S3",
+            "scene": {"track_sets": {"off": {"channels": {"@index": {"view": "bad/time"}}}}},
+        },
+        {
+            "name": "T3: a clock channel that is not monotone",
+            "rule": "T3",
+            "scene": {
+                "track_sets": {"open": {"channels": {"t": {"view": "bad/t"}}}},
+                "clock": {"channels": ["t"]},
+                "initial": {"clock": {"channel": "t"}},
+            },
+            "state": {**one, "clock": {"channel": "t"}},
+        },
+    ]
+    doc, data = _write_scene("edge-fraction", scene, cases, rejections, strip_periodic=("nokey",))
+    # the rejections point at the extra views below, i.e. a nonmonotone channel, an unaligned offsets view, and a plain channel
+    w = ty.ContainerWriter(generator=doc["generator"])
+    c = ty.Container(data)
+    for name in c.names:
+        w.add_view(name, c.view(name))
+    w.add_view("bad/t", np.array([0.0, 2.0, 1.0]))
+    w.add_view("bad/offsets", np.array([1, 2]), dtype="uint32")
+    w.add_view("bad/one", np.array([0, 1, 3]), dtype="uint32")
+    w.add_view("bad/time", np.array([0.0, 1.0, 2.0]))
+    (HERE / "edge-fraction" / "data.tyd").write_bytes(w.to_bytes())
+
+
 def containers():
     """The same views written twice, with the encodings the writer picks and all raw, for a reader to decode bit for bit."""
     rng = np.random.default_rng(78)
@@ -687,4 +815,5 @@ if __name__ == "__main__":
     rotating_loop()
     value_clock()
     two_panels()
+    edge_fraction()
     containers()

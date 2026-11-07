@@ -221,3 +221,38 @@ def test_handles_of_the_wrong_kind_fail_at_the_call():
         ty.track(moving, trail=1.5)
     with pytest.raises(ty.SceneError, match=r"2\.7: a camera kind"):
         scene.view("v", frame="root", driver=ty.driver(moving, 0), layers=[], camera={"kind": "fisheye"})
+
+
+def test_a_point_has_three_scalars_and_every_number_is_finite():
+    scene = ty.Scene()
+    root = scene.frame("root")
+    with pytest.raises(ty.SceneError, match="F2"):
+        scene.frame("shift", parent=root, origin=[1.0, 2.0])
+    with pytest.raises(ty.SceneError, match="F2"):
+        scene.body("b", frame=root, position=[1.0, 2.0, 3.0, 4.0])
+    with pytest.raises(ty.SceneError, match="S4"):
+        scene.track_set("s", frame=root, attrs={"mu": float("nan")})
+    with pytest.raises(ty.SceneError, match="S4"):
+        scene.clock("value", channels=["t"], steps=4, range=[0.0, float("inf")])
+    with pytest.raises(ty.SceneError, match="F2"):
+        scene.frame("z", parent=root, scale=np.int64(0))
+    with pytest.raises(ty.SceneError, match="F2"):
+        scene.frame("z", parent=root, scale=ty.attr("k") * 0)
+    ts = scene.track_set("s", frame=root)
+    with pytest.raises(ty.SceneError, match="not all finite"):
+        ts.add([[0.0, 0.0], [float("nan"), 1.0]])
+    with pytest.raises(ty.SceneError, match="S3"):
+        scene.frame("a\n")
+
+
+def test_an_attribute_scale_that_is_zero_for_a_drawn_set_fails_at_the_write():
+    scene = ty.Scene()
+    root = scene.frame("root")
+    scene.frame("z", parent=root, scale=ty.attr("k"))
+    ts = scene.track_set("s", frame=root, attrs={"k": 0.0}, dtype="float64")
+    ts.add(np.zeros((2, 2)), channels={"t": [0.0, 1.0]})
+    scene.clock(channels=["t"], steps=2)
+    scene.view("v", frame="z", driver=ty.driver(ts, 0), layers=[ty.track(ts)])
+    scene.panel("p", "v")
+    with pytest.raises(ty.SceneError, match="F2: view 'v': the scale of frame 'z' is zero for track set 's'"):
+        scene.to_document()

@@ -1,0 +1,87 @@
+import { deflateSync } from 'node:zlib';
+import type { ArrayView, DataStore, Dtype, TypedArray } from '../src/container';
+
+const CTORS = {
+  int8: Int8Array,
+  uint8: Uint8Array,
+  int16: Int16Array,
+  uint16: Uint16Array,
+  int32: Int32Array,
+  uint32: Uint32Array,
+  float32: Float32Array,
+  float64: Float64Array,
+} as const;
+
+/** One array for `encodeTyd`, raw unless `chunkRows` is given. */
+export interface TydArray {
+  name: string;
+  dtype: Dtype;
+  shape: number[];
+  values: number[];
+  chunkRows?: number;
+}
+
+/** Encodes one chunk of rule D5 from its little-endian bytes, with the delta of the bit patterns, then the byte shuffle, then zlib. */
+function encodeChunk(bytes: Uint8Array, m: number, w: number, size: number): Uint8Array {
+  const n = m * w;
+  const delta = Uint8Array.from(bytes);
+  for (let e = w; e < n; e++) {
+    let borrow = 0;
+    for (let k = 0; k < size; k++) {
+      const x = bytes[e * size + k]! - bytes[(e - w) * size + k]! - borrow;
+      delta[e * size + k] = x & 0xff;
+      borrow = x < 0 ? 1 : 0;
+    }
+  }
+  const shuffled = new Uint8Array(n * size);
+  for (let e = 0; e < n; e++) for (let k = 0; k < size; k++) shuffled[k * n + e] = delta[e * size + k]!;
+  return new Uint8Array(deflateSync(shuffled));
+}
+
+/** Encodes a data.tyd by hand, following section 1 of spec/tycho-scene.md, independently of the readers. */
+export function encodeTyd(arrays: TydArray[], opts: { version?: number; patch?: (h: Record<string, any>) => void } = {}): Uint8Array {
+  const views: Record<string, unknown> = {};
+  const bodies: Uint8Array[] = [];
+  let offset = 0;
+  for (const a of arrays) {
+    const bytes = new Uint8Array(CTORS[a.dtype].from(a.values).buffer);
+    let stored = bytes;
+    if (a.chunkRows === undefined) {
+      views[a.name] = { dtype: a.dtype, shape: a.shape, encoding: 'raw', offset, length: bytes.length };
+    } else {
+      const size = CTORS[a.dtype].BYTES_PER_ELEMENT;
+      const w = a.shape.slice(1).reduce((x, y) => x * y, 1);
+      const chunks: Uint8Array[] = [];
+      for (let r = 0; r < a.shape[0]!; r += a.chunkRows) {
+        const m = Math.min(a.chunkRows, a.shape[0]! - r);
+        chunks.push(encodeChunk(bytes.subarray(r * w * size, (r + m) * w * size), m, w, size));
+      }
+      const spans: [number, number][] = [];
+      stored = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
+      let at = 0;
+      for (const c of chunks) {
+        stored.set(c, at);
+        spans.push([offset + at, c.length]);
+        at += c.length;
+      }
+      views[a.name] = { dtype: a.dtype, shape: a.shape, encoding: 'shuffle-delta-deflate', chunk_rows: a.chunkRows, chunks: spans };
+    }
+    const padded = new Uint8Array(Math.ceil(stored.length / 8) * 8);
+    padded.set(stored);
+    bodies.push(padded);
+    offset += padded.length;
+  }
+  const header: Record<string, any> = { format: 'tycho-data', version: 1, generator: 'test', meta: {}, views };
+  opts.patch?.(header);
+  const json = new TextEncoder().encode(JSON.stringify(header));
+  const bodyStart = Math.ceil((12 + json.length) / 8) * 8;
+  const out = new Uint8Array(bodyStart + offset);
+  out.set([0x54, 0x59, 0x43, 0x44]);
+  const dv = new DataView(out.buffer);
+  dv.setUint32(4, opts.version ?? 1, true);
+  dv.setUint32(8, json.length, true);
+  out.set(json, 12);
+  let at = bodyStart;
+  for (const b of bodies) (out.set(b, at), (at += b.length));
+  return out;
+}

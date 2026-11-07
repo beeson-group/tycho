@@ -463,3 +463,184 @@ export function dropText(payload: { kind: string }, zone: DropZone): string {
 
 /** HTMLElement where there is one, so that importing this module under Node does not throw. */
 const Base = (typeof HTMLElement === 'undefined' ? class {} : HTMLElement) as typeof HTMLElement;
+
+/**
+ * The class of the `<tycho-viewer>` element. It reads its attributes once, when it connects, and shows the error
+ * of a scene that cannot be read in place of the panels.
+ */
+export class TychoViewerElement extends Base {
+  private scene: Scene | null = null;
+  private sceneText = '';
+  private geometry: GeometryCache | null = null;
+  private store: Store | null = null;
+  private renderer: StageRenderer | null = null;
+  private kiosk = false;
+  private loading = false;
+  /** Counts the loads begun, so that a load that a later one overtook drops its result. */
+  private loads = 0;
+  /** The panel-scoped choice that a panel's header chip shows. */
+  private choice: { id: string; def: Choice; label: string } | null = null;
+
+  private root!: HTMLDivElement;
+  private header!: HTMLElement;
+  private titleEl!: HTMLHeadingElement;
+  private varsEl!: HTMLDivElement;
+  private addEl!: HTMLDivElement;
+  private stage!: HTMLDivElement;
+  private panelsEl!: HTMLDivElement;
+  private statusEl!: HTMLDivElement;
+  private statsEl!: HTMLDivElement;
+  private footer!: HTMLElement;
+  private canvas: HTMLCanvasElement | null = null;
+
+  private readonly panelDom = new Map<string, PanelDom>();
+  private readonly gutterDom = new Map<string, HTMLDivElement>();
+  private gutters: Gutter[] = [];
+  private sceneWidgets: Widget[] = [];
+  private captions: ReadoutDom[] = [];
+  private addChips: HTMLElement[] = [];
+  private addButton: HTMLButtonElement | null = null;
+  private addGroup: HTMLElement | null = null;
+  private transport: {
+    play: HTMLButtonElement;
+    scrub: HTMLInputElement;
+    frame: HTMLSpanElement;
+    fps: HTMLSpanElement;
+    channel: { set(id: string): void } | null;
+  } | null = null;
+  private menu: { anchor: HTMLElement; close(focus: boolean): void } | null = null;
+  /** Closes the export row when it is open, and returns whether it was open. */
+  private closeExport: (() => boolean) | null = null;
+
+  private raf = 0;
+  private dirty = true;
+  private anchor = { index: 0, time: 0 };
+  /** The progress that playback last reached, between two frame indices, or null while paused. */
+  private playProgress: number | null = null;
+  private speed = 1;
+  private readonly meter = new FrameMeter();
+  /** The stage's size in CSS pixels, kept by the resize observer so that a draw never forces a layout. */
+  private stageSize = { w: 0, h: 0 };
+  private saveTimer = 0;
+  private resizeObserver: ResizeObserver | null = null;
+  private readonly onPageHide = () => this.flushSave();
+  private unsubscribe: (() => void) | null = null;
+  private lastPanels: State['panels'] | null = null;
+  private lastLayout: Layout | null = null;
+  /** Restates the export's length when the speed changes. */
+  private refreshExport: (() => void) | null = null;
+
+  connectedCallback(): void {
+    if (this.shadowRoot === null) this.buildShell();
+    if (this.scene !== null) {
+      this.start();
+      return;
+    }
+    if (this.loading || !(this.hasAttribute('scene') && this.hasAttribute('data'))) return;
+    this.loading = true;
+    // the scripts that the attributes select may come after the element
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => void this.loadFromAttributes(), { once: true });
+    else void this.loadFromAttributes();
+  }
+
+  disconnectedCallback(): void {
+    this.stop();
+  }
+
+  private buildShell(): void {
+    this.kiosk = this.hasAttribute('kiosk');
+    const shadow = this.attachShadow({ mode: 'open' });
+    const style = el('style');
+    style.textContent = STYLE;
+    shadow.appendChild(style);
+    this.root = el('div', this.kiosk ? 'root kiosk' : 'root');
+    this.header = el('header');
+    this.titleEl = el('h1');
+    this.varsEl = el('div', 'vars');
+    this.varsEl.setAttribute('role', 'group');
+    this.varsEl.setAttribute('aria-label', 'Scene');
+    this.addEl = el('div', 'add');
+    this.addEl.setAttribute('role', 'group');
+    this.addEl.setAttribute('aria-label', 'Add panel');
+    this.header.append(this.titleEl, this.varsEl, this.addEl);
+    this.stage = el('div', 'stage');
+    this.panelsEl = el('div', 'panels');
+    this.statusEl = el('div', 'status', 'loading…');
+    this.stage.append(this.panelsEl, this.statusEl);
+    this.statsEl = el('div', 'stats');
+    this.footer = el('footer');
+    this.root.append(this.header, this.stage, this.statsEl, this.footer);
+    shadow.appendChild(this.root);
+    this.tabIndex = 0;
+    this.addEventListener('keydown', (ev) => this.onKey(ev));
+  }
+
+  private fail(message: string): void {
+    this.statusEl.hidden = false;
+    this.statusEl.className = 'status error';
+    this.statusEl.textContent = message;
+  }
+
+  private async loadFromAttributes(): Promise<void> {
+    try {
+      const find = (attr: string): HTMLElement => {
+        const sel = this.getAttribute(attr);
+        if (!sel) throw new Error(`the ${attr} attribute is missing`);
+        const root = this.getRootNode() as Document | ShadowRoot;
+        const found = (root.querySelector?.(sel) ?? document.querySelector(sel)) as HTMLElement | null;
+        if (found === null) throw new Error(`the ${attr} selector ${sel} does not match an element`);
+        return found;
+      };
+      const read = (e: HTMLElement) => decodeEmbedded(e.textContent ?? '', e.dataset.encoding ?? 'base64');
+      const sceneBytes = read(find('scene'));
+      const dataBytes = read(find('data'));
+      if (this.loads > 0) return;
+      await this.load(new TextDecoder('utf-8').decode(sceneBytes), dataBytes);
+    } catch (e) {
+      this.fail(`the scene did not load: ${(e as Error).message}`);
+    }
+  }
+
+  /**
+   * Loads a scene from the text of scene.tys and the bytes of data.tyd, and resolves once the scene or
+   * its error shows. A load begun later takes precedence over this one.
+   */
+  async load(sceneText: string, dataBytes: Uint8Array): Promise<void> {
+    if (this.shadowRoot === null) this.buildShell();
+    const ticket = ++this.loads;
+    let scene: Scene;
+    let data: Container;
+    try {
+      scene = JSON.parse(sceneText) as Scene;
+      data = await Container.parse(dataBytes);
+      if (ticket !== this.loads) return;
+      for (const w of validate(scene, data)) console.warn(`TyCHO: ${w}`);
+    } catch (e) {
+      if (ticket !== this.loads) return;
+      this.stop();
+      this.fail(e instanceof TychoError ? e.message : `the scene cannot be read: ${(e as Error).message}`);
+      return;
+    }
+    this.stop();
+    this.scene = scene;
+    this.sceneText = sceneText;
+    this.geometry = new GeometryCache(scene, data);
+    this.store = new Store(this.recall(), scene.clock.steps);
+    this.choice = this.templateChoice();
+    this.statusEl.hidden = true;
+    this.applyTheme();
+    this.titleEl.textContent = scene.title ?? '';
+    this.buildTopBar();
+    this.buildFooter();
+    this.start();
+    if (this.kiosk) this.play();
+  }
+}
+
+/**
+ * Registers TychoViewerElement as the custom element `tag`, which a page passes when the default name is taken. It does
+ * not do anything when an element named `tag` is already defined or where the environment lacks custom elements (e.g. Node).
+ */
+export function define(tag = 'tycho-viewer'): void {
+  if (typeof customElements !== 'undefined' && !customElements.get(tag)) customElements.define(tag, TychoViewerElement);
+}

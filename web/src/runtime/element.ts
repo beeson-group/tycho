@@ -2,12 +2,23 @@
  * <tycho-viewer>, the embeddable element of the TyCHO runtime.
  *
  * Attributes:
- *   scene   CSS selector of a `<script type="application/octet-stream">` holding scene.tys
- *   data    CSS selector of one holding data.tyd
- *   kiosk   hides every control and plays at once, for a slide
+ *   scene     URL of scene.tys, or a CSS selector of a block that holds it
+ *   data      URL of data.tyd, or a CSS selector of a block that holds it
+ *   theme     `dark` or `light`, a built-in palette that replaces the scene's theme, followed when it changes
+ *   autoplay  plays as soon as the scene is loaded and the element is visible
+ *   kiosk     hides every control and plays as `autoplay` does, for a slide
  *
- * Both scripts hold base64 text, `data-encoding="base64"`, the default and the only encoding. The
- * page state is the snapshot of section 2.8 of spec/tycho-scene.md, kept in a Store, restored from
+ * A block is a `<script type="application/octet-stream">` with base64 text, and `data-encoding="base64"` is the default and the
+ * only encoding. Each file is taken from the viewer's own child block marked `data-tycho="scene"` or `data-tycho="data"`, else from
+ * its attribute, else from the block with the id `tycho-scene` or `tycho-data`, as on a page written by an older version. The
+ * clock is not started by `autoplay` or `kiosk` under `prefers-reduced-motion: reduce`.
+ *
+ * The custom properties `--tycho-background`, `--tycho-foreground`, and `--tycho-grid` of the host take precedence over the theme.
+ * Text in HTML inherits the font of the host, and text on a canvas is set in `--tycho-font` when it is set. The clock runs only
+ * while the element intersects the viewport and the page is visible, and it resumes from where it stopped. Keys act only while the
+ * element or a descendant has focus, and a key that the viewer uses does not reach the page.
+ *
+ * The page state is the snapshot of section 2.8 of spec/tycho-scene.md, kept in a Store, restored from
  * and saved to localStorage under a hash of scene.tys and repaired before use. Panels tile the
  * stage according to the snapshot's layout.
  *

@@ -533,3 +533,165 @@ export function planeLabels(v: PlaneView, ticks: boolean, titles: [string, strin
   }
   return out;
 }
+
+interface Draw {
+  readonly key: string;
+  readonly group: THREE.Group;
+  extend(box: THREE.Box3): void;
+  resize?(w: number, h: number): void;
+  dispose(): void;
+}
+
+// track layers
+
+interface PassSpec {
+  lap: number;
+  highlight: boolean;
+  width: number;
+  opacity: number;
+}
+
+/** The arrays a track layer draws from, shared by its passes. */
+interface TrackSource {
+  ctx: DrawContext;
+  set: SetData;
+  geo: TrackGeometry;
+  display: string;
+  /** The readings for the comparison, on the layer's channel, or on @index when the layer does not take a reading. */
+  readings: TrackReadings;
+  colorKey: string;
+  coloring: Coloring;
+  /** The base passes read each track's opacity from the kernel's texel. */
+  kernel: boolean;
+}
+
+/**
+ * One pass of a track layer in one lap. It draws the whole set from buffers that every panel shares, or
+ * one track from small per-track buffers, as GL lines when the width is 1 and as quads when it is wider.
+ */
+class Pass {
+  readonly holder = new THREE.Object3D();
+  readonly mat: THREE.ShaderMaterial;
+  readonly spec: PassSpec;
+  private readonly src: TrackSource;
+  private readonly wide: boolean;
+  private obj: THREE.Mesh | THREE.LineSegments | null = null;
+  private sharedNames: string[] = [];
+  private shown = '';
+
+  constructor(src: TrackSource, spec: PassSpec, uniforms: Record<string, THREE.IUniform>) {
+    this.src = src;
+    this.spec = spec;
+    this.wide = spec.width > 1;
+    const own: Record<string, THREE.IUniform> = {
+      ...uniforms,
+      uLap: { value: spec.lap },
+      uSkip: { value: -1 },
+      uOpacity: { value: spec.opacity },
+      uWidth: { value: spec.width },
+      uKernel: { value: src.kernel && !spec.highlight ? 1 : 0 },
+    };
+    const defines = src.coloring.kind === 'sample' ? { USE_TRACK_COLOR: '' } : undefined;
+    this.mat = material(this.wide ? WIDE_VERTEX : NARROW_VERTEX, own, defines);
+  }
+
+  /** Shows the whole set or one track, or clears the pass when `what` is null. */
+  show(what: 'set' | number | null): void {
+    const key = what === null ? '' : String(what);
+    if (key === this.shown) return;
+    this.clear();
+    this.shown = key;
+    if (what === null) return;
+    const geometry = this.wide ? this.quads(what) : this.lines(what);
+    this.obj = this.wide ? new THREE.Mesh(geometry, this.mat) : new THREE.LineSegments(geometry, this.mat);
+    this.obj.frustumCulled = false;
+    this.obj.renderOrder = this.holder.parent?.renderOrder ?? 0;
+    this.holder.add(this.obj);
+  }
+
+  /** The four arrays in pair layout, for the whole set (shared) or for one track. */
+  private arrays(what: 'set' | number): { pos: Float32Array; u: Float32Array; tr: Float32Array; col: Float32Array | null } {
+    const { ctx, set, geo, display, readings, coloring: c, colorKey } = this.src;
+    const lap = this.spec.lap;
+    if (what === 'set') {
+      return {
+        pos: ctx.shared.get(`pos\0${set.id}\0${display}\0${geo.lapKey(lap)}`, () => lapPairs(geo, lap)),
+        u: ctx.shared.get(`u\0${set.id}\0${readings.channel}`, () => pairReadings(set, readings.u)),
+        tr: ctx.shared.get(`t\0${set.id}`, () => pairTracks(set)),
+        col: c.kind === 'sample' ? ctx.shared.get(`c\0${set.id}\0${colorKey}`, () => pairs(set, c.rgb, 3)) : null,
+      };
+    }
+    const s = set.start(what);
+    const m = set.count(what);
+    return {
+      pos: trackLapPairs(geo, what, lap),
+      u: readingPairs(readings.u, s, m),
+      tr: new Float32Array(2 * (m - 1)).fill(what),
+      col: c.kind === 'sample' ? slicePairs(c.rgb, 3, s, m) : null,
+    };
+  }
+
+  private lines(what: 'set' | number): THREE.BufferGeometry {
+    const a = this.arrays(what);
+    const attr = (name: string, array: Float32Array, k: number) =>
+      what === 'set'
+        ? this.src.ctx.shared.get(`gl\0${name}\0${this.src.set.id}\0${keyOf(array)}`, () => new THREE.BufferAttribute(array, k))
+        : new THREE.BufferAttribute(array, k);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', attr('position', a.pos, 3));
+    g.setAttribute('useg', attr('useg', a.u, 2));
+    g.setAttribute('track', attr('track', a.tr, 1));
+    if (a.col) g.setAttribute('tcolor', attr('tcolor', a.col, 3));
+    this.sharedNames = what === 'set' ? Object.keys(g.attributes) : [];
+    return g;
+  }
+
+  private quads(what: 'set' | number): THREE.InstancedBufferGeometry {
+    const a = this.arrays(what);
+    const buffer = (name: string, array: Float32Array, stride: number) =>
+      what === 'set'
+        ? this.src.ctx.shared.get(`gpu\0${name}\0${this.src.set.id}\0${keyOf(array)}`, () => new THREE.InstancedInterleavedBuffer(array, stride))
+        : new THREE.InstancedInterleavedBuffer(array, stride);
+    const g = quadGeometry();
+    const pos = buffer('pos', a.pos, 6);
+    g.setAttribute('instanceStart', new THREE.InterleavedBufferAttribute(pos, 3, 0));
+    g.setAttribute('instanceEnd', new THREE.InterleavedBufferAttribute(pos, 3, 3));
+    g.setAttribute('useg', new THREE.InterleavedBufferAttribute(buffer('u', a.u, 4), 2, 0));
+    g.setAttribute('track', new THREE.InterleavedBufferAttribute(buffer('t', a.tr, 2), 1, 0));
+    if (a.col) {
+      const col = buffer('c', a.col, 6);
+      g.setAttribute('colorStart', new THREE.InterleavedBufferAttribute(col, 3, 0));
+      g.setAttribute('colorEnd', new THREE.InterleavedBufferAttribute(col, 3, 3));
+    }
+    g.instanceCount = a.pos.length / 6;
+    this.sharedNames = what === 'set' ? Object.keys(g.attributes).filter((n) => n !== 'position') : [];
+    return g;
+  }
+
+  /** Removes the current object and disposes of its geometry, after detaching the attributes that the panels share. */
+  private clear(): void {
+    if (this.obj === null) return;
+    this.holder.remove(this.obj);
+    for (const n of this.sharedNames) this.obj.geometry.deleteAttribute(n);
+    this.obj.geometry.dispose();
+    this.obj = null;
+    this.sharedNames = [];
+  }
+
+  dispose(): void {
+    this.clear();
+    this.mat.dispose();
+  }
+}
+
+/** A stable name for a shared array, so that its two GPU wrappers are built once each. */
+const ids = new WeakMap<Float32Array, number>();
+let nextId = 0;
+function keyOf(a: Float32Array): number {
+  let id = ids.get(a);
+  if (id === undefined) {
+    id = nextId++;
+    ids.set(a, id);
+  }
+  return id;
+}

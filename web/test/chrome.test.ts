@@ -119,3 +119,26 @@ describe('frame rate', () => {
     expect(m.report(1190)).toBeNull();
   });
 });
+
+describe('keys', () => {
+  it('map as in common video players', () => {
+    expect(keyAction(' ', false, 480)).toEqual({ kind: 'toggle' });
+    expect(keyAction('k', false, 480)).toEqual({ kind: 'toggle' });
+    expect(keyAction('ArrowRight', false, 480)).toEqual({ kind: 'step', by: 1 });
+    expect(keyAction('ArrowLeft', true, 480)).toEqual({ kind: 'step', by: -10 });
+    expect(keyAction('.', false, 480)).toEqual({ kind: 'step', by: 1 });
+    expect(keyAction(',', false, 480)).toEqual({ kind: 'step', by: -1 });
+    expect(keyAction('<', true, 480)).toEqual({ kind: 'step', by: -10 });
+    expect(keyAction('>', true, 480)).toEqual({ kind: 'step', by: 10 });
+    expect(keyAction('Home', false, 480)).toEqual({ kind: 'seek', frame: 0 });
+    expect(keyAction('0', false, 480)).toEqual({ kind: 'seek', frame: 0 });
+    expect(keyAction('1', false, 480)).toEqual({ kind: 'seek', frame: 48 });
+    expect(keyAction('9', false, 64)).toEqual({ kind: 'seek', frame: 58 });
+    expect(keyAction('f', false, 480)).toEqual({ kind: 'fit' });
+    expect(keyAction('F', true, 480)).toEqual({ kind: 'fit' });
+    expect(keyAction('ArrowUp', false, 480)).toEqual({ kind: 'slider', by: 1 });
+    expect(keyAction('ArrowDown', true, 480)).toEqual({ kind: 'slider', by: -10 });
+    expect(keyAction('x', false, 480)).toBeNull();
+    expect(keyAction('End', false, 480)).toBeNull();
+  });
+});

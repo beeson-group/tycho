@@ -11,7 +11,7 @@
  */
 import { ArrayBufferTarget, Muxer } from 'mp4-muxer';
 import type { Layout, Readout, Scene, State } from '../scene.js';
-import { hexRgb, mixHex, sceneTheme } from './colors.js';
+import { hexRgb, mixHex, sceneTheme, type Theme } from './colors.js';
 import type { GeometryCache } from './geometry.js';
 import type { Colorbar, PanelLabel } from './overlay.js';
 import { formatNumber, LAP_SECONDS, loopPosition, loopSeconds, positionIndex, positionProgress, readoutText } from './readouts.js';
@@ -197,6 +197,10 @@ export interface ExportSource {
   state: State;
   /** The stage's size in CSS pixels, for the `stage` preset. */
   stage?: { w: number; h: number };
+  /** The theme to draw with, by default the scene's. */
+  theme?: Theme;
+  /** The font family of the text on the canvas, by default FONT. */
+  font?: string;
 }
 
 export function webCodecsMissing(): string | null {
@@ -240,8 +244,8 @@ function text(g: CanvasRenderingContext2D, s: string, x: number, y: number, fg: 
 }
 
 /** Draws a panel label as the page places it, centered vertically on (x, y) and turned to read upward when rotated. Exported for the tests. */
-export function drawLabel(g: CanvasRenderingContext2D, l: PanelLabel, x: number, y: number, fg: string, bg: string): void {
-  g.font = `${l.kind === 'title' ? 13 : 12}px ${FONT}`;
+export function drawLabel(g: CanvasRenderingContext2D, l: PanelLabel, x: number, y: number, fg: string, bg: string, font = FONT): void {
+  g.font = `${l.kind === 'title' ? 13 : 12}px ${font}`;
   g.textAlign = l.align === 'center' ? 'center' : l.align === 'end' ? 'right' : 'left';
   if (l.rotate) {
     g.save();
@@ -262,9 +266,10 @@ export function drawColorbars(
   dim: string,
   line: string,
   bg: string,
+  font = FONT,
 ): void {
   let x = right;
-  g.font = `11px ${FONT}`;
+  g.font = `11px ${font}`;
   for (const b of [...bars].reverse()) {
     const hi = formatNumber(b.hi, 3);
     const lo = formatNumber(b.lo, 3);
@@ -345,7 +350,8 @@ export async function exportVideo(source: ExportSource, options: ExportOptions =
   encoder.configure(config);
 
   // each frame holds the stage above a strip of caption lines, laid out in CSS pixels
-  const theme = sceneTheme(scene);
+  const theme = source.theme ?? sceneTheme(scene);
+  const font = source.font ?? FONT;
   const bg = mixHex(theme.background, theme.background, 0);
   const fg = mixHex(theme.foreground, theme.foreground, 0);
   const dim = mixHex(theme.foreground, theme.background, 0.4);
@@ -360,7 +366,7 @@ export async function exportVideo(source: ExportSource, options: ExportOptions =
   const stageH = Math.floor(logicalH - stripH);
   const glCanvas = document.createElement('canvas');
   // the frames are read back from the canvas after each draw
-  const renderer = new StageRenderer(glCanvas, scene, geometry, { preserveDrawingBuffer: true, coarseDrags: false });
+  const renderer = new StageRenderer(glCanvas, scene, geometry, { preserveDrawingBuffer: true, coarseDrags: false, theme });
   const frame = document.createElement('canvas');
   frame.width = width;
   frame.height = height;
@@ -395,9 +401,9 @@ export async function exportVideo(source: ExportSource, options: ExportOptions =
         g.rect(r.x, r.y, r.w, r.h);
         g.clip();
         g.textBaseline = 'middle';
-        for (const l of renderer.labels(pid)) drawLabel(g, l, r.x + l.x, r.y + l.y, fg, bg);
-        drawColorbars(g, renderer.colorbars(pid), r.x + r.w - 10, r.y + 10, fg, dim, line, bg);
-        g.font = `13px ${FONT}`;
+        for (const l of renderer.labels(pid)) drawLabel(g, l, r.x + l.x, r.y + l.y, fg, bg, font);
+        drawColorbars(g, renderer.colorbars(pid), r.x + r.w - 10, r.y + 10, fg, dim, line, bg, font);
+        g.font = `13px ${font}`;
         g.textBaseline = 'bottom';
         const lines = panelReadouts
           .map((ro) => read(pid, ro.parts, index, q))
@@ -411,7 +417,7 @@ export async function exportVideo(source: ExportSource, options: ExportOptions =
         }
         g.restore();
       }
-      g.font = `13px ${FONT}`;
+      g.font = `13px ${font}`;
       g.textBaseline = 'alphabetic';
       captions.forEach((c, i) => text(g, read(first, c.parts, index, q), 14, stageH + 5 + CAPTION_LINE * (i + 1) - 4, fg, bg));
 

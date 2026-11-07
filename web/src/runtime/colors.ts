@@ -21,6 +21,48 @@ export function sceneTheme(scene: Scene): Theme {
   return { ...DEFAULT_THEME, ...(scene.theme ?? {}) };
 }
 
+/** The palettes of the `theme` attribute of `<tycho-viewer>`, which match the dark and light modes of the Beeson group's slide theme. */
+export const PALETTES = {
+  dark: { background: '#050505', foreground: '#f2f2ef', grid: '#232320' },
+  light: { background: '#faf8f3', foreground: '#141413', grid: '#e3e0d8' },
+} as const satisfies Record<string, Theme>;
+
+/**
+ * The value of a CSS color as `#rrggbb`, or null when `value` is empty or is not a color. A form other than `#rgb` and
+ * `#rrggbb` is read only in a browser, by painting it on a canvas. A canvas keeps its previous fill for a color that it rejects,
+ * hence such a color is detected by two different previous fills.
+ */
+export function cssColorHex(value: string): string | null {
+  const text = value.trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(text)) return text.toLowerCase();
+  if (/^#[0-9a-fA-F]{3}$/.test(text)) return `#${[...text.slice(1)].map((c) => c + c).join('')}`.toLowerCase();
+  if (text === '') return null;
+  const g = document.createElement('canvas').getContext?.('2d', { willReadFrequently: true });
+  if (g === null || g === undefined) return null;
+  const paint = (sentinel: string) => {
+    g.fillStyle = sentinel;
+    g.fillStyle = text;
+    return g.fillStyle;
+  };
+  if (paint('#000000') !== paint('#ffffff')) return null;
+  g.fillRect(0, 0, 1, 1);
+  const [r, gr, b] = g.getImageData(0, 0, 1, 1).data;
+  return `#${[r!, gr!, b!].map((c) => c.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/**
+ * The theme that a viewer draws with. `base` is the scene's theme, a `name` of a palette replaces it, and a color read from one of
+ * the custom properties `--tycho-background`, `--tycho-foreground`, and `--tycho-grid` takes precedence over both.
+ */
+export function hostTheme(base: Theme, name: string | null, read: (property: string) => string): Theme {
+  const theme = name === 'dark' || name === 'light' ? PALETTES[name] : base;
+  return {
+    background: cssColorHex(read('--tycho-background')) ?? theme.background,
+    foreground: cssColorHex(read('--tycho-foreground')) ?? theme.foreground,
+    grid: cssColorHex(read('--tycho-grid')) ?? theme.grid,
+  };
+}
+
 /** The brand colors of the viewer's controls (its chrome). Orange marks what is current, and violet what the pointer or the keyboard touches. */
 export const ACCENT = { accent: '#f0a050', hover: '#ffb366', press: '#d98a3a', violet: '#c050f0', violetText: '#d98cff', error: '#ff7a7a' } as const;
 

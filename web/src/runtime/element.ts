@@ -24,7 +24,7 @@ import { TychoError } from '../errors.js';
 import { variableDef, type PanelScope } from '../evaluate/resolve.js';
 import type { Choice, Control, Layout, PanelState, Readout, Scene, State, VariableValue } from '../scene.js';
 import { validate } from '../validate.js';
-import { chromeTokens, sceneTheme } from './colors.js';
+import { chromeTokens, hostTheme, sceneTheme, type Theme } from './colors.js';
 import {
   EXPORT_FPS,
   EXPORT_LOOPS,
@@ -469,15 +469,19 @@ function reducedMotion(): boolean {
 const Base = (typeof HTMLElement === 'undefined' ? class {} : HTMLElement) as typeof HTMLElement;
 
 /**
- * The class of the `<tycho-viewer>` element. It reads its attributes once, when it connects, and shows the error
- * of a scene that cannot be read in place of the panels.
+ * The class of the `<tycho-viewer>` element. It reads its attributes once, when it connects, apart from `theme`, and shows the
+ * error of a scene that cannot be read in place of the panels.
  */
 export class TychoViewerElement extends Base {
+  static readonly observedAttributes = ['theme'];
+
   private scene: Scene | null = null;
   private sceneText = '';
   private geometry: GeometryCache | null = null;
   private store: Store | null = null;
   private renderer: StageRenderer | null = null;
+  /** The colors in use, or null before a scene loads. */
+  private theme: Theme | null = null;
   private kiosk = false;
   private loading = false;
   /** Counts the loads begun, so that a load that a later one overtook drops its result. */
@@ -543,6 +547,7 @@ export class TychoViewerElement extends Base {
   connectedCallback(): void {
     if (this.shadowRoot === null) this.buildShell();
     if (this.scene !== null) {
+      this.applyTheme();
       this.start();
       return;
     }
@@ -555,6 +560,10 @@ export class TychoViewerElement extends Base {
 
   disconnectedCallback(): void {
     this.stop();
+  }
+
+  attributeChangedCallback(): void {
+    this.applyTheme();
   }
 
   private buildShell(): void {
@@ -678,7 +687,7 @@ export class TychoViewerElement extends Base {
     this.canvas = el('canvas');
     this.stage.insertBefore(this.canvas, this.panelsEl);
     try {
-      this.renderer = new StageRenderer(this.canvas, this.scene, this.geometry!);
+      this.renderer = new StageRenderer(this.canvas, this.scene, this.geometry!, { theme: this.theme! });
     } catch (e) {
       this.fail(`WebGL is not available: ${(e as Error).message}`);
       return;
@@ -735,8 +744,18 @@ export class TychoViewerElement extends Base {
     this.canvas = null;
   }
 
+  /** The computed value of a custom property on the host, or an empty string when it is not set. */
+  private hostProperty(name: string): string {
+    return typeof getComputedStyle === 'undefined' ? '' : getComputedStyle(this).getPropertyValue(name).trim();
+  }
+
+  /** Recolors the chrome and a live renderer from the scene's theme, the `theme` attribute, and the custom properties of the host. */
   private applyTheme(): void {
-    for (const [k, v] of Object.entries(chromeTokens(sceneTheme(this.scene!)))) this.style.setProperty(k, v);
+    if (this.scene === null) return;
+    this.theme = hostTheme(sceneTheme(this.scene), this.getAttribute('theme'), (name) => this.hostProperty(name));
+    for (const [k, v] of Object.entries(chromeTokens(this.theme))) this.style.setProperty(k, v);
+    this.renderer?.setTheme(this.theme);
+    this.invalidate();
   }
 
   // state
@@ -1094,7 +1113,9 @@ export class TychoViewerElement extends Base {
   exportVideo(options: ExportOptions = {}): Promise<Blob> {
     if (this.scene === null || this.store === null || this.geometry === null) return Promise.reject(new Error('the viewer has not loaded a scene'));
     const stage = { w: this.stage.clientWidth, h: this.stage.clientHeight };
-    return runExport({ scene: this.scene, geometry: this.geometry, state: this.store.state, stage }, { speed: this.speed, ...options });
+    const font = this.hostProperty('--tycho-font');
+    const look = { ...(this.theme === null ? {} : { theme: this.theme }), ...(font === '' ? {} : { font }) };
+    return runExport({ scene: this.scene, geometry: this.geometry, state: this.store.state, stage, ...look }, { speed: this.speed, ...options });
   }
 
   private buildExport(): void {

@@ -1457,7 +1457,7 @@ export class StageRenderer {
     canvas: HTMLCanvasElement,
     scene: Scene,
     geometry: GeometryCache,
-    options: { preserveDrawingBuffer?: boolean; cacheStatic?: boolean; coarseDrags?: boolean } = {},
+    options: { preserveDrawingBuffer?: boolean; cacheStatic?: boolean; coarseDrags?: boolean; theme?: Theme } = {},
   ) {
     this.canvas = canvas;
     // colors are sRGB as the page gives them, written unconverted
@@ -1472,9 +1472,17 @@ export class StageRenderer {
     });
     this.gl.outputColorSpace = THREE.LinearSRGBColorSpace;
     this.gl.autoClear = false;
-    const theme = sceneTheme(scene);
+    const theme = options.theme ?? sceneTheme(scene);
     this.background = new THREE.Color(...hexRgb(theme.background));
     this.ctx = { scene, geometry, shared: new Shared(), theme, disc: discTexture() };
+  }
+
+  /** Draws with `theme` from the next frame on. The cameras stay, and the next plan rebuilds only the draws that take a color from the theme. */
+  setTheme(theme: Theme): void {
+    this.ctx.theme = theme;
+    this.background.setRGB(...hexRgb(theme.background));
+    this.lastState = null;
+    for (const p of this.panels.values()) p.underlayDirty = true;
   }
 
   private panel(pid: string): PanelRender {
@@ -1665,13 +1673,15 @@ export class StageRenderer {
     }
     p.plan = plan;
     const keep = new Set<number>();
+    const theme = JSON.stringify(this.ctx.theme);
     try {
       for (const lp of plan.layers) {
         let key: string;
         if (lp.kind === 'track') {
           if (lp.set === null) continue;
-          key = `track\0${plan.viewId}\0${lp.index}\0${lp.set.id}\0${plan.display}\0${lp.channel ?? ''}\0${JSON.stringify(lp.color ?? null)}`;
-        } else key = `${lp.kind}\0${plan.viewId}\0${lp.index}\0${plan.display}`;
+          const color = lp.color === undefined ? theme : JSON.stringify(lp.color);
+          key = `track\0${plan.viewId}\0${lp.index}\0${lp.set.id}\0${plan.display}\0${lp.channel ?? ''}\0${color}`;
+        } else key = `${lp.kind}\0${plan.viewId}\0${lp.index}\0${plan.display}\0${theme}`;
         keep.add(lp.index);
         const old = p.draws.get(lp.index);
         if (old !== undefined && old.key === key) {

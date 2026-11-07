@@ -347,6 +347,148 @@ def value_clock():
     write("value-clock", doc, w, cases)
 
 
+def two_panels():
+    """Two panels, a path up to the root and down again, an origin at a body of a third frame, and a selector by index."""
+    import pytycho as ty
+
+    d, k, tilt = 0.5, 2.0, 0.3
+    tracks = [
+        (np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.5], [-1.0, 0.0, 1.0]]), np.array([0.0, 0.4, 0.8]), np.array([0.0, 1.0, 2.0])),
+        (
+            np.array([[2.0, 0.0, 0.0], [1.0, 1.0, 0.0], [0.0, 2.0, 0.25], [-1.0, 1.0, 0.5]]),
+            np.array([0.1, 0.3, 0.9, 1.2]),
+            np.array([0.0, 1.0, 3.0, 4.0]),
+        ),
+        (np.array([[0.0, 0.0, 1.0], [1.0, 1.0, 1.0]]), np.array([0.2, 1.0]), np.array([5.0, 3.0])),
+    ]
+    fixed_p, fixed_th = np.array([[3.0, 0.0, 0.0], [0.0, 3.0, 0.0], [0.0, 0.0, 3.0]]), np.array([0.0, 0.5, 1.0])
+
+    scene = ty.Scene(title="two panels")
+    root = scene.frame("root")
+    rot = scene.frame("rot", parent=root, rotation=ty.rotation("z", ty.channel("th")))
+    tilted = scene.frame("tilt", parent=rot, origin=[ty.attr("d"), 0.0, 0.0], rotation=ty.rotation("x", tilt))
+    anchor = scene.body("anchor", frame=rot, position=[ty.attr("d"), 2 * ty.attr("d"), 0.0])
+    scene.frame("shift", parent=root, origin=anchor, scale=ty.attr("k"))
+    orbits = scene.track_set("orbits", frame=tilted, tags={"group": "moving"}, attrs={"d": d, "k": k}, dtype="float64")
+    for (p, th, t), e in zip(tracks, (0.1, 0.2, 0.4), strict=True):
+        orbits.add(p, channels={"th": th, "t": t}, parameters={"e": e})
+    # fixed carries the channel th, which frame rot reads (rule F5). it is drawn whole and never read, hence it lacks
+    # the clock channel (rule C5)
+    fixed = scene.track_set("fixed", frame=root, tags={"group": "fixed"}, attrs={"d": d, "k": k}, dtype="float64")
+    fixed.add(fixed_p, channels={"th": fixed_th})
+    frame = scene.choice("frame", ["root", "rot", "tilt", "shift"], scope="panel")
+    index = scene.selector("k", by="index", scope="panel")
+    nearest = scene.selector("e", parameter="e", default=0.2)
+    group = scene.choice("group", ["moving", "absent"])
+    scene.clock("fraction", channels=["t", "@index"], steps=6)
+    scene.view(
+        "v",
+        frame=frame,
+        driver=ty.driver(ty.sets(group=group), index),
+        layers=[
+            ty.track(fixed),
+            ty.track(orbits),
+            ty.track(ty.sets(group=group), index, trail=0.4, head=True),
+            ty.track(orbits, nearest, reveal="grow"),
+            ty.body(anchor, trail=0.4),
+            ty.grid(),
+        ],
+    )
+    scene.panel("p1", "v", {"frame": "shift", "k": 0.5})
+    scene.panel("p2", "v", {"frame": "tilt", "k": 2.5})
+    scene.layout(ty.split("row", 0.5, "p1", "p2"))
+    doc, data = scene.to_document(), scene.to_container()
+
+    o, b = np.array([d, 0.0, 0.0]), np.array([d, 2 * d, 0.0])
+
+    def in_root(p, th):
+        return rz(th).T @ (o + rx(tilt).T @ p)
+
+    def in_shift(p, th):
+        return k * (in_root(p, th) - rz(th).T @ b)
+
+    def L(x):
+        return [list(map(float, p)) for p in x]
+
+    def state(p1=None, p2=None, variables=None, channel="t"):
+        return {
+            "variables": variables or {},
+            "clock": {"channel": channel},
+            "panels": {
+                "p1": {"view": "v", "variables": {"frame": "shift", "k": 0.5} if p1 is None else p1},
+                "p2": {"view": "v", "variables": {"frame": "tilt", "k": 2.5} if p2 is None else p2},
+            },
+            "layout": doc["initial"]["layout"],
+        }
+
+    cases = []
+    shift_all = [{"index": i, "line": L([in_shift(q, a) for q, a in zip(p, th, strict=True)])} for i, (p, th, _) in enumerate(tracks)]
+    fixed_shift = L([k * (q - rz(a).T @ b) for q, a in zip(fixed_p, fixed_th, strict=True)])
+    fixed_tilt = L([rx(tilt) @ (rz(a) @ q - o) for q, a in zip(fixed_p, fixed_th, strict=True)])
+    cases.append(
+        {
+            "name": "a set drawn whole without the clock channel, and a path up to the root and down to an origin at a body",
+            "source": "analytic",
+            "state": state(),
+            "frame_index": 0,
+            "tolerance": TOL,
+            "expected": {
+                "panels": {
+                    "p1": {
+                        "frame": "shift",
+                        "layers": [
+                            {"kind": "track", "set": "fixed", "members": [{"index": 0, "line": fixed_shift}]},
+                            {"kind": "track", "set": "orbits", "members": shift_all},
+                            None,
+                            None,
+                            None,
+                            {"kind": "grid"},
+                        ],
+                    },
+                    "p2": {
+                        "frame": "tilt",
+                        "layers": [
+                            {"kind": "track", "set": "fixed", "members": [{"index": 0, "line": fixed_tilt}]},
+                            {
+                                "kind": "track",
+                                "set": "orbits",
+                                "members": [{"index": i, "line": L(p)} for i, (p, _, _) in enumerate(tracks)],
+                            },
+                            None,
+                            None,
+                            None,
+                            {"kind": "grid"},
+                        ],
+                    },
+                }
+            },
+        }
+    )
+    states = {
+        "initial": state(),
+        "root and rot, k 1.5 and -0.6": state(p1={"frame": "root", "k": 1.5}, p2={"frame": "rot", "k": -0.6}),
+    }
+    for label, base in states.items():
+        for channel in ("t", "@index"):
+            for i in (-7, 0, 1, 2, 3, 4, 5):
+                s = {**base, "clock": {"channel": channel}}
+                cases.append(
+                    {
+                        "name": f"{label}, {channel}, frame {i}",
+                        "source": "reference",
+                        "state": s,
+                        "frame_index": i,
+                        "tolerance": TOL,
+                        "expected": evaluate(doc, data, s, i),
+                    }
+                )
+    out = HERE / "two-panels"
+    out.mkdir(exist_ok=True)
+    scene.write(out / "scene.tys", out / "data.tyd")
+    (out / "cases.json").write_text(json.dumps(cases, indent=1) + "\n")
+    print(f"two-panels: {len(cases)} cases")
+
+
 def containers():
     """The same views written twice, with the encodings the writer picks and all raw, for a reader to decode bit for bit."""
     rng = np.random.default_rng(78)
@@ -389,4 +531,5 @@ def containers():
 if __name__ == "__main__":
     rotating_loop()
     value_clock()
+    two_panels()
     containers()

@@ -1460,6 +1460,56 @@ export class TychoViewerElement extends Base {
     this.menu = null;
     m?.close(focus);
   }
+
+  private syncWidgets(): void {
+    const store = this.store!;
+    const scene = this.scene!;
+    const st = store.state;
+    const first = this.firstPanel();
+    if (first !== null) {
+      const scope: PanelScope = { scene, state: st, panel: st.panels[first]! };
+      for (const w of this.sceneWidgets) w.sync(scope);
+    }
+    const views = Object.keys(scene.views).length;
+    const choice = this.choice;
+    for (const [pid, dom] of this.panelDom) {
+      const panel = st.panels[pid];
+      if (panel === undefined) continue;
+      const scope: PanelScope = { scene, state: st, panel };
+      for (const w of dom.widgets) w.sync(scope);
+      const view = scene.views[panel.view]!;
+      dom.title.textContent = view.label ?? panel.view;
+      dom.title.hidden = views < 2;
+      const frame = typeof view.frame === 'string' ? view.frame : String(this.panelValue(scope, view.frame.var));
+      const f = Object.hasOwn(scene.frames, frame) ? scene.frames[frame] : undefined;
+      const frameLabel = f?.label ?? frame;
+      const vf = view.frame;
+      const framedBy = typeof vf === 'string' ? null : vf.var;
+      if (choice !== null && dom.select !== null) {
+        const value = String(this.panelValue(scope, choice.id));
+        dom.select.value = value;
+        setText(dom.chipLabel, choice.def.labels?.[choice.def.values.indexOf(value)] ?? value);
+        dom.meta.textContent = frameLabel;
+        // a panel control over the frame already shows it
+        dom.meta.hidden =
+          framedBy === choice.id ||
+          (framedBy !== null &&
+            (scene.controls ?? []).some((c) => c.kind !== 'transport' && c.variable === framedBy && variableDef(scene, framedBy)?.scope === 'panel'));
+      } else {
+        setText(dom.chipLabel, frameLabel);
+        dom.meta.hidden = true;
+      }
+      dom.close.hidden = Object.keys(st.panels).length < 2;
+    }
+    this.transport?.channel?.set(st.clock.channel);
+  }
+
+  private panelValue(scope: PanelScope, id: string): VariableValue {
+    const v = variableDef(scope.scene, id);
+    if (v === undefined) return '';
+    const values = v.scope === 'panel' ? scope.panel.variables : scope.state.variables;
+    return values !== undefined && Object.hasOwn(values, id) ? values[id]! : v.default;
+  }
 }
 
 /**

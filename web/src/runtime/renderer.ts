@@ -527,9 +527,11 @@ export function orthoFit(box: THREE.Box3, cam: Camera, aspect: number): { center
   const half = Math.max(hh, hw / aspect) * 1.1;
   const halfHeight = half > 1e-12 ? half : Math.max(radius, 1);
   if (!freeAspect(cam)) return { center, halfWidth: halfHeight * aspect, halfHeight };
-  // an extent below a billionth of the other is flat, e.g. the height of a horizontal line
-  const solid = (a: number, b: number) => a > 1e-12 && a > 1e-9 * b;
-  return { center, halfWidth: solid(hw, hh) ? hw * 1.1 : halfHeight * aspect, halfHeight: solid(hh, hw) ? hh * 1.1 : halfHeight };
+  // an axis is flat when its extent is within the rounding of its values, i.e. below a billionth of their magnitude, e.g. the
+  // height of a horizontal line, while a residual of 1e-13 against an iteration count is still solid
+  const magnitude = (v: THREE.Vector3) => Math.max(Math.abs(box.min.dot(v)), Math.abs(box.max.dot(v)));
+  const solid = (extent: number, m: number) => extent > 0 && extent > 1e-9 * m;
+  return { center, halfWidth: solid(hw, magnitude(right)) ? hw * 1.1 : halfHeight * aspect, halfHeight: solid(hh, magnitude(up)) ? hh * 1.1 : halfHeight };
 }
 
 /** The opacity of a member at parameter distance `d` from the center of a highlight's kernel (section 2.7). */

@@ -44,6 +44,14 @@ function values(dtype: Dtype, rows: number, width: number): number[] {
   return Array.from({ length: rows * width }, (_, i) => base[i % base.length]!);
 }
 
+/** Where the first chunk of view x starts in the file, and its length. */
+function firstChunk(bytes: Uint8Array): [number, number] {
+  const length = new DataView(bytes.buffer, bytes.byteOffset).getUint32(8, true);
+  const header = JSON.parse(new TextDecoder().decode(bytes.subarray(12, 12 + length)));
+  const [offset, size] = (header.views.x as EncodedViewInfo).chunks[0]!;
+  return [Math.ceil((12 + length) / 8) * 8 + offset, size];
+}
+
 describe('data.tyd version 1', () => {
   it('round-trips every dtype raw and encoded, bit for bit (D1, D4, D5)', async () => {
     const arrays: TydArray[] = [];
@@ -140,6 +148,41 @@ describe('data.tyd version 1', () => {
     const x = (patch: (h: Record<string, any>) => void) => Container.parse(encodeTyd([{ name: 'x', dtype: 'float64', shape: [1], values: [1] }], { patch }));
     expect(await rule(() => x((h) => (h.views.x.dtype = 'float16')))).toBe('D1');
     expect(await rule(() => x((h) => (h.views.x.shape = [])))).toBe('D2');
+  });
+
+  it('rejects chunks that do not match the shape or run past the end (D5)', async () => {
+    const x = (patch: (h: Record<string, any>) => void) =>
+      Container.parse(encodeTyd([{ name: 'x', dtype: 'float64', shape: [5, 2], values: [...Array(10).keys()], chunkRows: 2 }], { patch }));
+    expect(await rule(() => x(() => {}))).toBe('no error');
+    expect(await rule(() => x((h) => (h.views.x.chunk_rows = 0)))).toBe('D5');
+    expect(await rule(() => x((h) => (h.views.x.chunk_rows = 1.5)))).toBe('D5');
+    expect(await rule(() => x((h) => (h.views.x.chunk_rows = 3)))).toBe('D5');
+    expect(await rule(() => x((h) => h.views.x.chunks.pop()))).toBe('D5');
+    expect(await rule(() => x((h) => (h.views.x.chunks[1][0] += 4096)))).toBe('D5');
+    expect(await rule(() => x((h) => (h.views.x.chunks[1] = [0])))).toBe('D5');
+    expect(await rule(() => x((h) => (h.views.x.chunks = {})))).toBe('D5');
+  });
+
+  it('rejects a chunk that inflates to the wrong size, a corrupted chunk, and a chunk with bytes after its stream (D5)', async () => {
+    const one = (rows: number, patch?: (h: Record<string, any>) => void) =>
+      encodeTyd([{ name: 'x', dtype: 'float32', shape: [rows, 3], values: [...Array(rows * 3).keys()], chunkRows: 4 }], { patch });
+    // three rows in a chunk that the header declares to hold four, and five rows in a chunk of four
+    expect(await rule(() => Container.parse(one(3, (h) => (h.views.x.shape = [4, 3]))))).toBe('D5');
+    expect(await rule(() => Container.parse(one(4, (h) => ((h.views.x.shape = [3, 3]), (h.views.x.chunk_rows = 3)))))).toBe('D5');
+    const bytes = one(4);
+    const [start, length] = firstChunk(bytes);
+    // a byte of the deflate data, and one of the Adler-32 checksum
+    for (const at of [2, length - 1]) {
+      const bad = bytes.slice();
+      bad[start + at]! ^= 0x40;
+      expect(await rule(() => Container.parse(bad)), `byte ${at}`).toBe('D5');
+    }
+    // a chunk one byte longer than its stream, with the byte taken from the padding after it
+    expect(length % 8).not.toBe(0);
+    const junk = one(4, (h) => (h.views.x.chunks[0][1] += 1));
+    const [at, longer] = firstChunk(junk);
+    junk[at + longer - 1] = 7;
+    expect(await rule(() => Container.parse(junk))).toBe('D5');
   });
 
   it('rejects an offset that is not a multiple of 8 and a shape too large to size (D2)', async () => {

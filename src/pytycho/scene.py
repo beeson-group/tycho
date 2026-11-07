@@ -203,3 +203,99 @@ def _var(value: Any, what: str, kind: str | None = None) -> dict[str, Any]:
             raise SceneError(f"{what} names {value.id!r}, which is a {value.kind}, not a {kind}")
         return value.to_json()
     return {"var": _check_id(value, what)}
+
+
+# the scene
+
+
+class Scene:
+    """A TyCHO scene under construction."""
+
+    def __init__(self, title: str | None = None, theme: Mapping[str, str] | None = None) -> None:
+        self.title = _text(title, "a title") if title is not None else None
+        self.theme: dict[str, str] | None = None
+        if theme is not None:
+            if extra := set(theme) - {"background", "foreground", "grid"}:
+                raise SceneError(f"a theme has unknown keys {sorted(extra)}")
+            self.theme = {k: _color(v, f"theme {k}") for k, v in theme.items()}
+        self._frames: dict[str, dict[str, Any]] = {}
+        self._bodies: dict[str, dict[str, Any]] = {}
+        self._sets: dict[str, TrackSet] = {}
+        self._variables: dict[str, dict[str, Any]] = {}
+        self._clock: dict[str, Any] | None = None
+        self._views: dict[str, dict[str, Any]] = {}
+        self._controls: list[dict[str, Any]] = []
+        self._readouts: list[dict[str, Any]] = []
+        self._panels: dict[str, dict[str, Any]] = {}
+        self._layout: dict[str, Any] | None = None
+
+    def _new(self, table: Mapping[str, Any], value: str, what: str) -> str:
+        _check_id(value, what)
+        if value in table:
+            raise SceneError(f"{what} {value!r} is declared twice")
+        return value
+
+    def frame(
+        self,
+        id: str,
+        *,
+        label: str | None = None,
+        axes: Sequence[str] | None = None,
+        unit: str | None = None,
+        parent: Any = None,
+        origin: Any = None,
+        rotation: Rotation | None = None,
+        scale: Any = None,
+    ) -> Frame:
+        """Declares a frame, defined against ``parent`` by ``origin``, ``rotation``, and ``scale`` (rule F1)."""
+        self._new(self._frames, id, "frame")
+        out: dict[str, Any] = {}
+        if label is not None:
+            out["label"] = _text(label, "a frame label")
+        if axes is not None:
+            names = [_text(a, "an axis label") for a in axes]
+            if len(names) > 3:
+                raise SceneError(f"2.3: frame {id!r} has {len(names)} axis labels, more than three")
+            out["axes"] = names + [""] * (3 - len(names))
+        if unit is not None:
+            out["unit"] = _text(unit, "a unit")
+        if parent is None:
+            if any(x is not None for x in (origin, rotation, scale)):
+                raise SceneError(f"2.3: frame {id!r} has an edge but does not have a parent")
+            if any("parent" not in f for f in self._frames.values()):
+                raise SceneError(f"2.3: frame {id!r} would be a second root")
+        else:
+            if _id(parent) not in self._frames:
+                raise SceneError(f"2.3: the parent {_id(parent)!r} of frame {id!r} is not declared")
+            out["parent"] = _id(parent)
+        if isinstance(origin, Body) or (isinstance(origin, Mapping) and set(origin) == {"body"}):
+            bid = _id(origin) if isinstance(origin, Body) else origin["body"]
+            if bid not in self._bodies:
+                raise SceneError(f"F2: the origin of frame {id!r} is at {bid!r}, which is not a declared body")
+            out["origin"] = {"body": bid}
+        elif origin is not None:
+            out["origin"] = _point(origin, f"the origin of frame {id!r}")
+        if rotation is not None:
+            if not isinstance(rotation, Rotation):
+                raise SceneError(f"F1: the rotation of frame {id!r} is {rotation!r}, not rotation(axis, angle)")
+            out["rotation"] = rotation.to_json()
+        if scale is not None:
+            s = _scalar(scale, f"the scale of frame {id!r}")
+            if s == 0.0 or (isinstance(s, Mapping) and "attr" in s and s.get("factor", 1.0) == 0.0 and s.get("offset", 0.0) == 0.0):
+                raise SceneError(f"F2: the scale of frame {id!r} is zero")
+            out["scale"] = s
+        self._frames[id] = out
+        return Frame(id)
+
+    def body(self, id: str, *, frame: Any, position: Sequence[Any], label: str | None = None, color: str | None = None) -> Body:
+        """Declares a body, a point at three numbers or attributes in ``frame``."""
+        self._new(self._bodies, id, "body")
+        if _id(frame) not in self._frames:
+            raise SceneError(f"2.4: the frame {_id(frame)!r} of body {id!r} is not declared")
+        out: dict[str, Any] = {"frame": _id(frame), "position": _point(position, f"the position of body {id!r}")}
+        if label is not None:
+            out["label"] = _text(label, "a body label")
+        if color is not None:
+            out["color"] = _color(color, f"the color of body {id!r}")
+        self._bodies[id] = out
+        return Body(id)

@@ -208,3 +208,52 @@ describe('validate', () => {
     expect(rule(() => validate(scene))).toBe('2.5');
   });
 });
+
+describe('laps, counts, and the options for drawing (C6, V3, L3, 2.7)', () => {
+  const data = () =>
+    new MemoryStore()
+      .add('off', [0, 3], 'uint32')
+      .add('pos', [
+        [0, 0],
+        [1, 0],
+        [0, 0],
+      ])
+      .add('time', [0, 1, 2])
+      .add('e', [0.5]);
+  const withLayer = (layer: Partial<TrackLayer>, variables: NonNullable<ReturnType<typeof baseScene>['variables']> = {}) => {
+    const scene = baseScene({
+      variables: {
+        e: { kind: 'selector', parameter: 'e', default: 0 },
+        k: { kind: 'selector', by: 'index', default: 0 },
+        look: { kind: 'choice', values: ['x', 'y'], default: 'x', scope: 'panel' },
+        ...variables,
+      },
+    });
+    scene.track_sets.s!.parameters = { e: { view: 'e' } };
+    scene.views.main!.layers = [{ kind: 'track', sets: { set: 's' }, members: 'all', ...layer }];
+    return scene;
+  };
+  it('laps need a clock in fraction mode, an integer of at least one, and periodic track sets where a reading is taken (C6)', () => {
+    expect(rule(() => validate(baseScene({ clock: { mode: 'value', channels: ['time'], steps: 4, range: [0, 1], laps: 1 } })))).toBe('C6');
+    expect(rule(() => validate(baseScene({ clock: { mode: 'fraction', channels: ['time'], steps: 4, laps: 1.5 } })))).toBe('C6');
+    const scene = baseScene({ clock: { mode: 'fraction', channels: ['time'], steps: 4, laps: 2 } });
+    expect(rule(() => validate(scene, data(), state()))).toBe('C6');
+    expect(rule(() => evaluate(scene, data(), state(), 0))).toBe('C6');
+    scene.track_sets.s!.periodic = true;
+    expect(validate(scene, data(), state())).toEqual([]);
+    // two laps of a closed three-sample track: lap 0 without its closing sample, then lap 1
+    expect((evaluate(scene, data(), state(), 0).panels.p1!.layers[0] as TrackLayerResult).members[0]!.line.length).toBe(5);
+  });
+  it("a count steps by floor(N / n + 0.5), keeps the last track, and cannot be a driver's member (V3)", () => {
+    expect(sparse(5, 2)).toEqual([0, 3, 4]);
+    expect(sparse(5, 1)).toEqual([0, 4]);
+    expect(sparse(5, 9)).toEqual([0, 1, 2, 3, 4]);
+    expect(sparse(7, 3)).toEqual([0, 2, 4, 6]);
+    expect(sparse(915, 40).length).toBe(41);
+    expect(rule(() => validate(withLayer({ members: { count: 0 } })))).toBe('V3');
+    const scene = baseScene();
+    scene.views.main!.driver.member = { count: 2 } as unknown as { index: number };
+    expect(rule(() => validate(scene))).toBe('V3');
+    expect(rule(() => evaluate(scene, data(), state(), 0))).toBe('V3');
+  });
+});

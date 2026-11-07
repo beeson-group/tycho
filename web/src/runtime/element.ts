@@ -1006,6 +1006,181 @@ export class TychoViewerElement extends Base {
     this.footer.append(view);
     this.buildExport();
   }
+
+  // video export
+
+  /**
+   * Exports a video of the current state, at the viewer's playback speed unless `options.speed` is set,
+   * and resolves to an MP4 blob. It rejects for the reasons that exportVideo in export.ts lists, and when
+   * the viewer has not loaded a scene.
+   */
+  exportVideo(options: ExportOptions = {}): Promise<Blob> {
+    if (this.scene === null || this.store === null || this.geometry === null) return Promise.reject(new Error('the viewer has not loaded a scene'));
+    const stage = { w: this.stage.clientWidth, h: this.stage.clientHeight };
+    return runExport({ scene: this.scene, geometry: this.geometry, state: this.store.state, stage }, { speed: this.speed, ...options });
+  }
+
+  private buildExport(): void {
+    const cap = capsule('Export');
+    const button = el('button', 'disclose');
+    button.type = 'button';
+    button.append(icon('download'), el('span', undefined, 'Export video'), icon('chevronDown', 'chev'));
+    const bar = el('div', 'exportbar');
+    cap.appendChild(button);
+    this.footer.appendChild(cap);
+    this.closeExport = null;
+    const missing = webCodecsMissing();
+    if (missing !== null) {
+      button.disabled = true;
+      this.footer.append(el('span', 'why', `video export is unavailable: ${missing}`));
+      return;
+    }
+    const meter = el('span', 'xprog');
+    meter.hidden = true;
+    button.appendChild(meter);
+    bar.id = 'xbar';
+    bar.setAttribute('role', 'group');
+    bar.setAttribute('aria-label', 'Export options');
+    bar.hidden = true;
+    button.setAttribute('aria-expanded', 'false');
+    button.setAttribute('aria-controls', 'xbar');
+    const setOpen = (open: boolean) => {
+      bar.hidden = !open;
+      button.setAttribute('aria-expanded', String(open));
+      if (open) {
+        preselect();
+        refresh();
+      }
+    };
+    this.closeExport = () => {
+      if (bar.hidden) return false;
+      setOpen(false);
+      button.focus();
+      return true;
+    };
+    button.addEventListener('click', () => setOpen(bar.hidden !== false));
+    const select = (name: string, items: [string, string][]) => {
+      const s = el('select');
+      s.setAttribute('aria-label', name);
+      s.title = name;
+      for (const [value, label] of items) {
+        const o = el('option', undefined, label);
+        o.value = value;
+        s.appendChild(o);
+      }
+      return s;
+    };
+    const size = select('Size', [
+      ['720p', '1280×720'],
+      ['1080p', '1920×1080'],
+      ['stage', 'stage size'],
+    ]);
+    const fps = select(
+      'Frame rate',
+      EXPORT_FPS.map((f) => [String(f), `${f} fps`]),
+    );
+    fps.value = '30';
+    // the stage preset's size depends on the rate, since the size and the rate must fit one H.264 level together
+    const stageSize = () => sizePreset('stage', { w: this.stage.clientWidth, h: this.stage.clientHeight }, window.devicePixelRatio || 1, Number(fps.value));
+    const loops = select(
+      'Loops',
+      EXPORT_LOOPS.map((n) => [String(n), n === 1 ? '1 loop' : `${n} loops`]),
+    );
+    const info = el('span', 'info');
+    const start = el('button', 'btn primary', 'Start');
+    start.type = 'button';
+    const progress = el('progress');
+    progress.hidden = true;
+    const cancel = el('button', 'btn', 'Cancel');
+    cancel.type = 'button';
+    cancel.hidden = true;
+    const close = iconButton('x', 'Close export options', 'Close (Esc)');
+    close.addEventListener('click', () => {
+      setOpen(false);
+      button.focus();
+    });
+    let running: AbortController | null = null;
+    // one loop at the highest rate that fits EXPORT_LIMITS at the current speed, or at the lowest rate when every rate exceeds them
+    const preselect = () => {
+      if (running !== null) return;
+      const clock = this.scene!.clock;
+      loops.value = '1';
+      fps.value = String(defaultExportFps(clock.steps, this.speed, loopSeconds(clock)) ?? EXPORT_FPS[0]);
+    };
+    const refresh = () => {
+      if (running !== null) return;
+      const stageOption = size.options[2]!;
+      const st = stageSize();
+      stageOption.textContent = `stage, ${st.width}×${st.height}`;
+      const clock = this.scene!.clock;
+      const sch = frameSchedule(clock.steps, Number(fps.value), Number(loops.value), this.speed, 0, loopSeconds(clock));
+      const refused = checkExport(sch.count, Number(fps.value));
+      info.textContent = refused ?? `${sch.count} frames, ${sch.duration.toFixed(1)} s at ${this.speed}× speed`;
+      start.disabled = refused !== null;
+    };
+    for (const s of [size, fps, loops]) s.addEventListener('change', refresh);
+    this.refreshExport = () => {
+      if (bar.hidden) return;
+      preselect();
+      refresh();
+    };
+    start.addEventListener('click', () => {
+      const controller = new AbortController();
+      running = controller;
+      start.disabled = true;
+      cancel.hidden = false;
+      progress.hidden = false;
+      progress.value = 0;
+      meter.hidden = false;
+      meter.style.width = '0%';
+      const preset = size.value as SizePreset;
+      const name = `${
+        (this.scene!.title ?? 'tycho')
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-|-$/g, '')
+          .slice(0, 60) || 'tycho'
+      }.mp4`;
+      let video = '';
+      this.exportVideo({
+        size: preset,
+        fps: Number(fps.value),
+        loops: Number(loops.value),
+        signal: controller.signal,
+        onConfig: (c) => (video = `${c.width}×${c.height} H.264 ${c.codec}`),
+        onProgress: (done, total) => {
+          progress.max = total;
+          progress.value = done;
+          meter.style.width = `${total > 0 ? (100 * done) / total : 0}%`;
+          info.textContent = `${video}, frame ${done} of ${total}`;
+        },
+      })
+        .then((blob) => {
+          const url = URL.createObjectURL(blob);
+          const a = el('a');
+          a.href = url;
+          a.download = name;
+          this.shadowRoot!.appendChild(a);
+          a.click();
+          a.remove();
+          window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+          info.textContent = `saved ${name}, ${video}, ${(blob.size / 1e6).toFixed(2)} MB`;
+        })
+        .catch((e: unknown) => {
+          info.textContent = e instanceof DOMException && e.name === 'AbortError' ? 'canceled' : `export failed: ${(e as Error).message}`;
+        })
+        .finally(() => {
+          running = null;
+          start.disabled = false;
+          cancel.hidden = true;
+          progress.hidden = true;
+          meter.hidden = true;
+        });
+    });
+    cancel.addEventListener('click', () => running?.abort());
+    bar.append(size, fps, loops, info, start, progress, cancel, close);
+    this.footer.append(bar);
+  }
 }
 
 /**

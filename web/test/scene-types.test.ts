@@ -183,4 +183,28 @@ describe('validate', () => {
     expect(rule(() => evaluate(trail, data(), state(), 0))).toBe('2.7');
     expect(rule(() => validate(baseScene({ frames: { a: {}, b: { parent: 'a', rotation: { axis: 'z', angle: { channel: '@index' } } } } })))).toBe('2.2');
   });
+  it('readout parts and slider domains are checked against the driver (2.9)', () => {
+    const scene = baseScene({ variables: { e: { kind: 'selector', parameter: 'C', default: 0 }, k: { kind: 'selector', by: 'index', default: 0 } } });
+    scene.track_sets.s!.parameters = { C: { view: 'c' } };
+    scene.track_sets.u = { frame: 'a', tracks: 1, offsets: 'off', positions: 'pos', channels: { time: { view: 'time' } } };
+    scene.readouts = [
+      {
+        place: 'caption',
+        parts: [
+          { member: 'C', digits: 3 },
+          { attr: 'mu', factor: -1, offset: 1 },
+        ],
+      },
+    ];
+    expect(rule(() => validate(scene))).toBe('2.9');
+    scene.track_sets.s!.attrs = { mu: 0.1 };
+    expect(validate(scene)).toEqual([]);
+    scene.controls = [{ kind: 'slider', variable: 'e', label: 'e', domain: { set: 'u' } }];
+    expect(rule(() => validate(scene))).toBe('2.9');
+    scene.controls = [{ kind: 'slider', variable: 'k', label: 'k', domain: { set: 's' } }];
+    expect(rule(() => validate(scene))).toBe('2.9');
+    scene.controls = [];
+    scene.variables!.c = { kind: 'choice', values: ['x', 'y'], default: 'x', labels: ['only one'] };
+    expect(rule(() => validate(scene))).toBe('2.5');
+  });
 });

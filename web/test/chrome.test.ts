@@ -173,3 +173,74 @@ describe('chrome tokens', () => {
     for (const v of Object.values(bad)) expect(v).toMatch(/^(#[0-9a-f]{6}(cc)?|rgba\([0-9., ]+\))$/);
   });
 });
+
+/** The broucke-mini scene dressed as examples/broucke is, with controls, readouts, a colormap by eccentricity, and two panels. */
+function dressedBroucke(): { scene: Scene; text: string; bytes: Uint8Array } {
+  const c = loadCorpus('broucke-mini');
+  const scene = structuredClone(c.scene);
+  scene.title = 'Broucke families, mini';
+  const tags = { family: { var: 'family' }, branch: { var: 'branch' } };
+  const track = scene.views.main!.layers[0] as Extract<Scene['views'][string], object>['layers'][number] & { kind: 'track' };
+  scene.views.main!.layers[0] = { ...track, color: { colormap: 'viridis', parameter: 'eccentricity' }, highlight: { var: 'e' } };
+  scene.controls = [
+    { kind: 'tabs', variable: 'family', label: 'family' },
+    { kind: 'tabs', variable: 'branch', label: 'branch' },
+    { kind: 'slider', variable: 'e', label: 'eccentricity', domain: { tags } },
+    { kind: 'tabs', variable: 'frame', label: 'frame' },
+    { kind: 'transport' },
+  ];
+  scene.readouts = [
+    { place: 'caption', parts: ['e = ', { member: 'eccentricity', digits: 4 }, ', mu = ', { attr: 'mu', digits: 6 }] },
+    { place: 'panel', parts: ['true anomaly = ', { channel: 'true_anomaly', digits: 3 }, ' rad'] },
+  ];
+  scene.initial = {
+    variables: {},
+    clock: { channel: 'true_anomaly' },
+    panels: {
+      pulsating: { view: 'main', variables: { frame: 'rotating-pulsating' } },
+      inertial: { view: 'main', variables: { frame: 'barycentric-inertial' } },
+    },
+    layout: { kind: 'split', dir: 'row', ratio: 0.5, a: { kind: 'panel', id: 'pulsating' }, b: { kind: 'panel', id: 'inertial' } },
+  };
+  validate(scene, c.data);
+  const bytes = new Uint8Array(readFileSync(new URL('../../spec/conformance/broucke-mini/data.tyd', import.meta.url)));
+  return { scene, text: JSON.stringify(scene), bytes };
+}
+
+describe('a colorbar as a slider', () => {
+  it('drives the scene-scoped selector over the parameter the layer is colored by, with the slider stops', () => {
+    const { scene } = dressedBroucke();
+    const view = scene.views.main!;
+    const link = colorbarLink(scene, view, 'eccentricity');
+    expect(link).toEqual({ variable: 'e', label: 'eccentricity', domain: (scene.controls![2] as Extract<Control, { kind: 'slider' }>).domain });
+    expect(colorbarLink(scene, view, 'period')).toBeNull();
+    const noSlider = { ...scene, controls: [] };
+    expect(colorbarLink(noSlider, view, 'eccentricity')).toEqual({ variable: 'e', label: 'e', domain: (view.layers[0] as { sets: unknown }).sets });
+    const panelScoped = structuredClone(scene);
+    panelScoped.variables!.e = { ...panelScoped.variables!.e!, scope: 'panel' } as never;
+    expect(colorbarLink(panelScoped, view, 'eccentricity')).toBeNull();
+  });
+  it('shows one bar for layers that share a scale, with the first marker and the first kernel band any of them has', () => {
+    const bar = { label: 'eccentricity', gradient: 'g', stops: [], lo: 0, hi: 0.5, marker: null, band: null };
+    const merged = mergeColorbars([bar, { ...bar, marker: 0.2 }, { ...bar, marker: 0.4, band: [0.3, 0.5] }, { ...bar, gradient: 'h' }]);
+    expect(merged).toEqual([
+      { ...bar, marker: 0.2, band: [0.3, 0.5] },
+      { ...bar, gradient: 'h' },
+    ]);
+  });
+  it('names the colormap a choice picks, falling back to the first entry', () => {
+    const byFrame = { var: 'frame', map: { rotating: 'blues' as const, inertial: 'plasma' as const } };
+    expect(colormapName('cividis')).toBe('cividis');
+    expect(colormapName(byFrame, (v) => (v === 'frame' ? 'inertial' : undefined))).toBe('plasma');
+    expect(colormapName(byFrame, () => 'other')).toBe('blues');
+    expect(colormapName(byFrame)).toBe('blues');
+  });
+  it('picks the stop nearest the value under the pointer, clamped to the bar', () => {
+    const stops = [0, 0.1, 0.25, 0.5];
+    expect(stopAt(stops, 0, 0.5, 0.45)).toBe(2);
+    expect(stopAt(stops, 0, 0.5, 0.1)).toBe(0);
+    expect(stopAt(stops, 0, 0.5, -3)).toBe(0);
+    expect(stopAt(stops, 0, 0.5, 7)).toBe(3);
+    expect(stopAt([], 0, 1, 0.5)).toBe(-1);
+  });
+});

@@ -1,0 +1,42 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pytycho"
+dynamic = ["version"]
+description = "Animated, interactive astrodynamics visualizations in a single HTML file"
+readme = "README.md"
+license-files = ["LICENSE", "NOTICE", "AUTHORS", "THIRD_PARTY_NOTICES.md"]
+requires-python = ">=3.10"
+authors = [{ name = "Claudio Vestini" }, { name = "Nina Karampela" }, { name = "Jack Sydney Schwartz" }]
+keywords = ["astrodynamics", "visualization", "three-body", "periodic orbits", "webgl"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Scientific/Engineering",
+  "Topic :: Scientific/Engineering :: Astronomy",
+  "Topic :: Scientific/Engineering :: Visualization",
+  "Typing :: Typed",
+]
+dependencies = ["numpy>=1.24"]
+
+[project.urls]
+Homepage = "https://github.com/beeson-group/tycho"
+Documentation = "https://pytycho.readthedocs.io/"
+"Bug Tracker" = "https://github.com/beeson-group/tycho/issues"
+Discussions = "https://github.com/beeson-group/tycho/discussions"
+Changelog = "https://github.com/beeson-group/tycho/blob/main/CHANGELOG.md"
+
+[tool.hatch]
+version.path = "src/pytycho/__init__.py"

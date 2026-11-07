@@ -23,3 +23,43 @@ repos:
       - id: rst-backticks
       - id: rst-directive-colons
       - id: rst-inline-touching-normal
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: "v0.16.10"
+    hooks:
+      - id: ruff-check
+        args: ["--fix", "--show-fixes"]
+      - id: ruff-format
+
+  # pyright is used because src passes its standard mode as written, while mypy would need code changes
+  - repo: https://github.com/RobertCraigie/pyright-python
+    rev: "v1.1.414"
+    hooks:
+      - id: pyright
+        files: ^(src|tests|examples)/
+        additional_dependencies: ["numpy", "pytest", "jsonschema"]
+
+  # prettier runs in check mode, since the TypeScript follows web/.prettierrc.json and is reformatted by hand
+  - repo: https://github.com/rbubley/mirrors-prettier
+    rev: "v3.9.9"
+    hooks:
+      - id: prettier
+        entry: prettier --check --ignore-unknown
+        files: ^web/(src|test|scripts)/
+        types_or: [ts, javascript]
+        exclude: ^web/src/scene\.gen\.ts$  # web/scripts/gen-types.mjs writes it, and a test compares it verbatim
+
+  - repo: https://github.com/codespell-project/codespell
+    rev: "v2.4.3"
+    hooks:
+      - id: codespell
+        additional_dependencies:
+          - tomli; python_version<'3.11'
+
+  - repo: local
+    hooks:
+      - id: disallow-caps
+        name: Disallow improper capitalization
+        language: pygrep
+        entry: PyBind|Numpy|Cmake|CCache|Github|PyTest|PyDylan|Pydylan|PyTycho
+        exclude: ^\.pre-commit-config\.yaml$

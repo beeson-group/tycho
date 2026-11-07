@@ -584,11 +584,20 @@ def _camera(value: Mapping[str, Any]) -> dict[str, Any]:
         if "aspect" in value:
             out["aspect"] = _enum(value["aspect"], ("equal", "free"), "2.7: a camera aspect")
     else:
-        allowed = {"kind", "projection", "up"}
+        allowed = {"kind", "projection", "up", "stretch", "turn"}
         if "projection" in value:
             out["projection"] = _enum(value["projection"], ("orthographic", "perspective"), "2.7: a camera projection")
         if "up" in value:
             out["up"] = _enum(value["up"], ("x", "y", "z"), "2.7: a camera up axis")
+        if "stretch" in value:
+            k = value["stretch"]
+            if isinstance(k, (str, Mapping)) or not isinstance(k, Sequence) or len(k) != 3:
+                raise SceneError(f"2.7: a camera stretch is three factors along x, y, and z, not {k!r}")
+            out["stretch"] = [_finite(x, "2.7: a camera stretch factor") for x in k]
+            if any(x <= 0 for x in out["stretch"]):
+                raise SceneError(f"2.7: a camera stretch is {out['stretch']}, not three positive factors")
+        if "turn" in value:
+            out["turn"] = _finite(value["turn"], "2.7: a camera turn")
     if extra := set(value) - allowed:
         raise SceneError(f"2.7: a {kind} camera has unknown keys {sorted(extra)}")
     return out

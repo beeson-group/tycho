@@ -1,0 +1,73 @@
+{
+  "name": "@beeson-group/tycho",
+  "version": "0.2.0",
+  "description": "The browser runtime of TyCHO, with the scene format reader, its pure evaluator, and the <tycho-viewer> element",
+  "keywords": [
+    "astrodynamics",
+    "visualization",
+    "three-body",
+    "webgl",
+    "web-component"
+  ],
+  "homepage": "https://github.com/beeson-group/tycho",
+  "bugs": {
+    "url": "https://github.com/beeson-group/tycho/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/beeson-group/tycho.git",
+    "directory": "web"
+  },
+  "author": "Claudio Vestini",
+  "contributors": ["Nina Karampela", "Jack Sydney Schwartz"],
+  "license": "Apache-2.0 AND MIT",
+  "type": "module",
+  "main": "./dist/tycho.esm.js",
+  "module": "./dist/tycho.esm.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "default": "./dist/tycho.esm.js"
+    },
+    "./iife": "./dist/tycho.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/tycho.js",
+    "dist/tycho.esm.js",
+    "dist/types",
+    "NOTICE",
+    "AUTHORS",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "sideEffects": true,
+  "scripts": {
+    "build": "npm run build:iife && npm run build:esm && npm run build:py",
+    "build:iife": "esbuild src/index.ts --bundle --format=iife --global-name=tycho --minify --target=es2022 --outfile=dist/tycho.js --banner:js=\"$(node scripts/notices.mjs)\"",
+    "build:esm": "esbuild src/index.ts --bundle --format=esm --minify --target=es2022 --outfile=dist/tycho.esm.js --banner:js=\"$(node scripts/notices.mjs)\"",
+    "build:py": "node -e \"require('fs').mkdirSync('../src/pytycho/_static',{recursive:true});require('fs').copyFileSync('dist/tycho.js','../src/pytycho/_static/tycho.js')\"",
+    "build:dev": "esbuild src/index.ts --bundle --format=iife --global-name=tycho --sourcemap=inline --target=es2022 --outfile=dist/tycho.dev.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p test/tsconfig.json",
+    "test": "vitest run",
+    "gen:types": "node scripts/gen-types.mjs",
+    "build:types": "tsc -p tsconfig.build.json",
+    "notices": "node scripts/notices.mjs --check",
+    "prepack": "npm run notices && npm run build && npm run build:types && node scripts/prepack.mjs",
+    "postpack": "node scripts/prepack.mjs --clean"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "@types/three": "^0.180.0",
+    "ajv": "^8.20.0",
+    "esbuild": "^0.28.2",
+    "json-schema-to-typescript": "^16.0.0",
+    "mp4-muxer": "^5.2.2",
+    "three": "^0.180.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

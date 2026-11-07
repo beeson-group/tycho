@@ -448,6 +448,113 @@ def resolve_vertices(vertices: Iterable[Vertex], table: Callable[[int], np.ndarr
 # the evaluator
 
 
+def evaluate(document: Mapping[str, Any], container: Container | bytes, state: Mapping[str, Any], frame_index: int) -> dict[str, Any]:
+    """Evaluates every panel of ``state`` at clock frame ``frame_index``.
+
+    Returns ``{"panels": {panel id: {"frame": id, "layers": [...]}}}`` as section 3 of
+    ``spec/tycho-scene.md`` gives it, with every position as three float64 numbers in plain
+    lists. The function is pure.
+    """
+    if not isinstance(container, Container):
+        container = Container(container)
+    return _Evaluator(document, container).run(state, frame_index)
+
+
+KINDS = ("track", "body", "axes", "grid")
+
+
+class _Evaluator:
+    def __init__(self, document: Mapping[str, Any], container: Container) -> None:
+        if not isinstance(document, Mapping) or not all(k in document for k in ("frames", "track_sets", "clock", "views")):
+            raise EvaluationError("2: the document lacks frames, track_sets, clock, or views")
+        self.doc = document
+        self.container = container
+        self.tree = FrameTree(document["frames"], document.get("bodies") or {})
+        self.variables = document.get("variables") or {}
+        for vid, spec in self.variables.items():
+            if not isinstance(spec, Mapping) or spec.get("kind") not in ("selector", "choice", "toggle") or "default" not in spec:
+                raise EvaluationError(f"2.5: variable {vid!r} lacks a known kind or a default")
+            if spec["kind"] == "selector" and spec.get("by", "nearest") == "nearest" and "parameter" not in spec:
+                raise EvaluationError(f"2.5: selector {vid!r} is by nearest but does not name a parameter")
+        self._sets: dict[str, SetData] = {}
+
+    def set_data(self, sid: str) -> SetData:
+        if sid not in self._sets:
+            try:
+                spec = self.doc["track_sets"][sid]
+            except KeyError:
+                raise EvaluationError(f"2.1: track set {sid!r} is not declared") from None
+            self._sets[sid] = SetData(sid, spec, self.container)
+        return self._sets[sid]
+
+    def run(self, state: Mapping[str, Any], frame_index: int) -> dict[str, Any]:
+        clock = self.doc["clock"]
+        if not isinstance(state, Mapping) or not all(k in state for k in ("clock", "panels", "layout")):
+            raise EvaluationError("2.8: the state lacks clock, panels, or layout")
+        channel = state["clock"].get("channel") if isinstance(state["clock"], Mapping) else None
+        if not isinstance(channel, str) or channel not in clock.get("channels", []):
+            raise EvaluationError(f"2.6: the state's clock channel {channel!r} is not one of the scene's clock channels")
+        steps = clock.get("steps")
+        if isinstance(steps, bool) or not isinstance(steps, int) or steps < 1:
+            raise EvaluationError(f"2.6: the clock has steps {steps!r}, not a count of at least one")
+        if isinstance(frame_index, bool) or not isinstance(frame_index, (int, np.integer)):
+            raise EvaluationError(f"2.6: the frame index {frame_index!r} is not an integer")
+        q = (int(frame_index) % steps) / steps
+        reading = _Reading(clock, channel, q)
+        self.check_state(state)
+        panels = {}
+        for pid, panel in state["panels"].items():
+            panels[pid] = _Panel(self, state, panel, reading).run()
+        return {"panels": panels}
+
+    def check_state(self, state: Mapping[str, Any]) -> None:
+        """Checks that the values fit their variables and that the layout shows every panel once (section 2.8)."""
+
+        def held(values: Any, where: str) -> None:
+            if values is None:
+                return
+            if not isinstance(values, Mapping):
+                raise EvaluationError(f"2.8: the variables of {where} are not an object")
+            for vid, value in values.items():
+                spec = self.variables.get(vid)
+                if spec is None:
+                    continue
+                kind, choices = spec["kind"], spec.get("values", [])
+                if kind == "selector":
+                    ok = not isinstance(value, bool) and isinstance(value, (int, float)) and math.isfinite(value)
+                elif kind == "choice":
+                    ok = value in choices
+                else:
+                    ok = isinstance(value, bool)
+                if not ok:
+                    raise EvaluationError(f"2.5: {where}: {kind} {vid!r} cannot hold {value!r}")
+
+        held(state.get("variables"), "the state")
+        if not isinstance(state["panels"], Mapping) or not state["panels"]:
+            raise EvaluationError("2.8: the state does not have a panel")
+        for pid, panel in state["panels"].items():
+            if not isinstance(panel, Mapping) or "view" not in panel:
+                raise EvaluationError(f"2.8: panel {pid!r} does not name a view")
+            held(panel.get("variables"), f"panel {pid!r}")
+
+        def leaves(node: Any) -> list[str]:
+            if not isinstance(node, Mapping):
+                raise EvaluationError(f"2.8: the layout node {node!r} is not an object")
+            if node.get("kind") == "panel":
+                if not isinstance(node.get("id"), str):
+                    raise EvaluationError(f"2.8: a layout panel has id {node.get('id')!r}, not a string")
+                return [node["id"]]
+            if node.get("kind") == "split":
+                return leaves(node.get("a")) + leaves(node.get("b"))
+            raise EvaluationError(f"2.8: a layout node has kind {node.get('kind')!r}, not panel or split")
+
+        shown = leaves(state["layout"])
+        if sorted(shown) != sorted(state["panels"]):
+            raise EvaluationError(
+                f"2.8: the layout shows the panels {sorted(shown)}, while the state has the panels {sorted(state['panels'])}"
+            )
+
+
 class _Reading:
     """The clock at one frame index (rules C1 to C3, and the laps of rule C6)."""
 

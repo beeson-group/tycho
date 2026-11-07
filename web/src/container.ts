@@ -54,6 +54,9 @@ export interface DataHeader {
   views: Record<string, ViewInfo>;
 }
 
+export const DATA_VERSION = 1;
+const MAGIC = [0x54, 0x59, 0x43, 0x44]; // "TYCD"
+const PREAMBLE = 12;
 const VIEW_KEYS: Record<string, Set<string>> = {
   raw: new Set(['dtype', 'shape', 'encoding', 'offset', 'length']),
   'shuffle-delta-deflate': new Set(['dtype', 'shape', 'encoding', 'chunk_rows', 'chunks']),
@@ -244,4 +247,95 @@ function checkView(name: string, v: unknown, payloadSize: number): asserts v is 
     if (!Array.isArray(span) || span.length !== 2 || !span.every(isCount)) fail('D5', `chunk ${k} of view ${name} is not an [offset, length] pair of counts`);
     if (span[0] + span[1] > payloadSize) fail('D5', `chunk ${k} of view ${name} runs past the end of the file`);
   });
+}
+
+/** A parsed data.tyd. Raw views are built once, on first access, and encoded views by `parse`. */
+export class Container implements DataStore {
+  readonly header: DataHeader;
+  private readonly bytes: DataView;
+  private readonly payloadStart: number;
+  private readonly cache = new Map<string, ArrayView>();
+
+  private constructor(header: DataHeader, bytes: DataView, payloadStart: number) {
+    this.header = header;
+    this.bytes = bytes;
+    this.payloadStart = payloadStart;
+  }
+
+  /**
+   * Parses a data container, checks rules D1 to D3 and D5 for every view, and decodes every encoded
+   * view. The decoding rejects a chunk that does not inflate to the byte length of its rows (rule D5).
+   */
+  static async parse(input: ArrayBufferLike | ArrayBufferView): Promise<Container> {
+    const bytes = ArrayBuffer.isView(input) ? new DataView(input.buffer, input.byteOffset, input.byteLength) : new DataView(input);
+    const size = bytes.byteLength;
+    if (size < PREAMBLE || MAGIC.some((b, i) => bytes.getUint8(i) !== b)) {
+      fail('1', 'the bytes are not a TyCHO data container, since they lack the 12-byte preamble that starts with the magic "TYCD"');
+    }
+    const version = bytes.getUint32(4, true);
+    if (version !== DATA_VERSION) {
+      fail('D3', `data container version ${version} is not supported, since this reader reads only version ${DATA_VERSION}`);
+    }
+    const headerLength = bytes.getUint32(8, true);
+    if (PREAMBLE + headerLength > size) fail('1', `the header length ${headerLength} runs past the end of the file`);
+
+    // The stated length covers the JSON alone and does not include the zero padding after it. A byte order mark
+    // is kept by the decoder, so that JSON.parse rejects it (section 1).
+    let header: DataHeader;
+    try {
+      const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(new Uint8Array(bytes.buffer, bytes.byteOffset + PREAMBLE, headerLength));
+      header = JSON.parse(text) as DataHeader;
+    } catch (e) {
+      fail('1', `the header is not JSON: ${(e as Error).message}`);
+    }
+    if (header === null || typeof header !== 'object') fail('1', 'the header is not a JSON object');
+    if (header.format !== 'tycho-data') fail('1', `header format is ${JSON.stringify(header.format)}, not "tycho-data"`);
+    if (header.version !== DATA_VERSION) {
+      fail('D3', `header version ${JSON.stringify(header.version)} is not supported, since this reader reads only version ${DATA_VERSION}`);
+    }
+    if (header.generator !== undefined && typeof header.generator !== 'string') fail('1', 'the header generator is not a string');
+    if (header.meta !== undefined && !isObject(header.meta)) fail('1', 'the header meta is not an object');
+    if (!isObject(header.views)) fail('1', 'the header lacks a "views" object');
+
+    const payloadStart = PREAMBLE + headerLength + ((8 - ((PREAMBLE + headerLength) % 8)) % 8);
+    const payloadSize = Math.max(0, size - payloadStart);
+    for (const [name, v] of Object.entries(header.views)) checkView(name, v, payloadSize);
+
+    const container = new Container(header, bytes, payloadStart);
+    const encoded = Object.entries(header.views).filter((e): e is [string, EncodedViewInfo] => e[1].encoding === 'shuffle-delta-deflate');
+    if (encoded.length > 0) {
+      if (typeof DecompressionStream === 'undefined') fail('D5', 'this runtime lacks DecompressionStream, which encoded views need');
+      const payload = new Uint8Array(bytes.buffer, bytes.byteOffset + payloadStart, payloadSize);
+      const scratch = new Uint8Array(Math.max(...encoded.map(([, info]) => chunkBytes(info))));
+      for (const [name, info] of encoded) {
+        const data = await decodeView(name, info, payload, scratch);
+        container.cache.set(name, { name, dtype: info.dtype, shape: [...info.shape], data });
+      }
+    }
+    return container;
+  }
+
+  has(name: string): boolean {
+    return Object.hasOwn(this.header.views, name);
+  }
+
+  names(): string[] {
+    return Object.keys(this.header.views);
+  }
+
+  view(name: string): ArrayView {
+    const cached = this.cache.get(name);
+    if (cached) return cached;
+    if (!this.has(name)) fail('2.1', `the data container lacks view ${JSON.stringify(name)}`);
+    const info = this.header.views[name] as RawViewInfo;
+    const count = info.length / itemSize(info.dtype);
+    const at = this.bytes.byteOffset + this.payloadStart + info.offset;
+    const data =
+      LITTLE_ENDIAN_HOST && at % itemSize(info.dtype) === 0
+        ? new CONSTRUCTORS[info.dtype](this.bytes.buffer, at, count)
+        : copyLittleEndian(this.bytes, this.payloadStart + info.offset, count, info.dtype);
+    const view: ArrayView = { name, dtype: info.dtype, shape: [...info.shape], data };
+    this.cache.set(name, view);
+    return view;
+  }
 }

@@ -189,6 +189,16 @@ describe('validate', () => {
     expect(rule(() => evaluate(scene, data(), state(), 0))).toBe('V3');
     expect(rule(() => validate(scene))).toBe('V3');
   });
+  it('a plane camera takes an aspect of equal or free, in a scene of version 0.3 (2.7, S1)', () => {
+    const scene = baseScene({ version: '0.3' });
+    for (const aspect of ['equal', 'free'] as const) {
+      scene.views.main!.camera = { kind: 'plane', aspect };
+      expect(validate(scene, data(), state())).toEqual([]);
+    }
+    scene.views.main!.camera = { kind: 'plane', aspect: 'stretch' as 'free' };
+    expect(rule(() => validate(scene))).toBe('2.7');
+    expect(rule(() => validate(baseScene({ version: '0.4' })))).toBe('S1');
+  });
   it('a newer minor version and an unknown layer kind break S1, and wrong kinds and ranges break L5 and 2.7', () => {
     expect(rule(() => validate(baseScene({ version: '0.9' })))).toBe('S1');
     const scene = baseScene();

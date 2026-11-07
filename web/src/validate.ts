@@ -252,6 +252,9 @@ export function validate(scene: Scene, data?: DataStore, state?: State): string[
     if ('var' in view!.driver.member) checkVariableRef(scene, view!.driver.member.var, 'selector', 'V3');
     if (view!.camera !== undefined && view!.camera.kind !== 'plane' && view!.camera.kind !== 'orbit')
       fail('2.7', `view ${id}: a camera kind is ${JSON.stringify((view!.camera as { kind: unknown }).kind)}, not plane or orbit`);
+    const aspect = (view!.camera as { aspect?: unknown } | undefined)?.aspect;
+    if (view!.camera?.kind === 'plane' && aspect !== undefined && aspect !== 'equal' && aspect !== 'free')
+      fail('2.7', `view ${id}: a plane camera's aspect is ${JSON.stringify(aspect)}, not equal or free`);
     for (const layer of view!.layers) {
       if (!LAYER_KINDS.includes(layer.kind)) fail('S1', `view ${id}: layer kind ${JSON.stringify(layer.kind)} is not implemented`);
       if (layer.visible !== undefined) checkVariableRef(scene, layer.visible.var, 'toggle', 'L5');

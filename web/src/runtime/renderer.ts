@@ -507,12 +507,16 @@ export function fitBox(plan: PanelPlan, geometry: GeometryCache): Box6 | null {
   return box;
 }
 
+/** Whether a camera is a plane camera with a free aspect, under which the two axes of its plane are scaled separately in the fit (section 2.7). */
+const freeAspect = (cam: Camera): boolean => cam.kind === 'plane' && cam.aspect === 'free';
+
 /**
- * An orthographic fit, given as the center of the box and half the view's height, for a viewport whose
- * width over height is `aspect`. One world unit is as long across the screen as up it, and a tenth of
- * margin is added.
+ * An orthographic fit, given as the center of the box and half the view's width and height, for a viewport
+ * whose width over height is `aspect`. A tenth of margin is added. One world unit is as long across the
+ * screen as up it, unless the camera has a free aspect. The box is then fitted in each direction separately,
+ * and along an axis on which the box is flat the half size is the one of the equal fit.
  */
-export function orthoFit(box: THREE.Box3, cam: Camera, aspect: number): { center: THREE.Vector3; halfHeight: number } {
+export function orthoFit(box: THREE.Box3, cam: Camera, aspect: number): { center: THREE.Vector3; halfWidth: number; halfHeight: number } {
   const center = box.getCenter(new THREE.Vector3());
   const size = box.getSize(new THREE.Vector3());
   const radius = Math.max(size.length() / 2, 1e-9);
@@ -521,7 +525,11 @@ export function orthoFit(box: THREE.Box3, cam: Camera, aspect: number): { center
   const hw = cam.kind === 'plane' ? size.dot(abs(right)) / 2 : radius;
   const hh = cam.kind === 'plane' ? size.dot(abs(up)) / 2 : radius;
   const half = Math.max(hh, hw / aspect) * 1.1;
-  return { center, halfHeight: half > 1e-12 ? half : Math.max(radius, 1) };
+  const halfHeight = half > 1e-12 ? half : Math.max(radius, 1);
+  if (!freeAspect(cam)) return { center, halfWidth: halfHeight * aspect, halfHeight };
+  // an extent below a billionth of the other is flat, e.g. the height of a horizontal line
+  const solid = (a: number, b: number) => a > 1e-12 && a > 1e-9 * b;
+  return { center, halfWidth: solid(hw, hh) ? hw * 1.1 : halfHeight * aspect, halfHeight: solid(hh, hw) ? hh * 1.1 : halfHeight };
 }
 
 /** The opacity of a member at parameter distance `d` from the center of a highlight's kernel (section 2.7). */
@@ -1319,7 +1327,8 @@ class MarkDraw implements Draw {
       this.full = false;
       this.ticks = plane && (layer.labels ?? plane);
     }
-    this.follows = this.ticks;
+    // under a free aspect a grid without numbers is laid out across the view too, at a step for each axis, since one step from the box suits only one of them
+    this.follows = this.ticks || (layer.kind === 'grid' && freeAspect(cam));
     const mat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, depthTest: false, depthWrite: false });
     this.lines = new THREE.LineSegments(new THREE.BufferGeometry(), mat);
     this.lines.frustumCulled = false;
@@ -1346,9 +1355,10 @@ class MarkDraw implements Draw {
       col.push(...rgb, alpha, ...rgb, alpha);
     };
     if (this.kind === 'axes') {
-      const len = niceStep(ext, 2);
+      // under a free aspect each axis is as long as a round fraction of the box along it, or of the box's largest side where it is flat
+      const len = (e: number) => niceStep(freeAspect(cam) && e > 1e-9 * ext ? e : ext, 2);
       const fg = hexRgb(this.theme.foreground);
-      this.tips = [new THREE.Vector3(len, 0, 0), new THREE.Vector3(0, len, 0), new THREE.Vector3(0, 0, len)];
+      this.tips = [new THREE.Vector3(len(size.x), 0, 0), new THREE.Vector3(0, len(size.y), 0), new THREE.Vector3(0, 0, len(size.z))];
       for (const tip of this.tips) add(this.full ? tip.clone().negate() : new THREE.Vector3(), tip, fg, 0.8);
     } else {
       const { right, up, normal } = cameraBasis(cam.kind === 'plane' ? cam : { kind: 'plane', plane: cam.up === 'x' ? 'yz' : cam.up === 'y' ? 'xz' : 'xy' });
@@ -1503,7 +1513,8 @@ class PanelRender {
   needsFit = true;
   userMoved = false;
   fitting = false;
-  /** Half the height of the orthographic view, at zoom 1. */
+  /** Half the width and half the height of the orthographic view, at zoom 1. */
+  halfWidth = 1;
   halfHeight = 1;
   /** The box the camera was last fitted to. */
   box: THREE.Box3 | null = null;
@@ -1878,7 +1889,7 @@ export class StageRenderer {
     const cam = p.camera;
     p.fitting = true;
     if (cam instanceof THREE.OrthographicCamera) {
-      p.halfHeight = orthoFit(box, spec, p.rect.w / Math.max(1, p.rect.h)).halfHeight;
+      ({ halfWidth: p.halfWidth, halfHeight: p.halfHeight } = orthoFit(box, spec, p.rect.w / Math.max(1, p.rect.h)));
       const dist = 4 * radius + 1;
       const reach = 10 * (center.length() + dist + radius);
       cam.near = -reach;
@@ -1904,15 +1915,19 @@ export class StageRenderer {
     p.needsFit = false;
   }
 
-  /** Keeps one world unit the same length across and up the screen in an orthographic view. */
+  /**
+   * Keeps one world unit the same length across and up the screen in an orthographic view. Under a free
+   * aspect the visible rectangle is kept instead, and it is stretched with the panel.
+   */
   private aspect(p: PanelRender): void {
     const aspect = p.rect.w / Math.max(1, p.rect.h);
     const cam = p.camera;
     if (cam instanceof THREE.OrthographicCamera) {
+      if (!freeAspect(p.cameraSpec)) p.halfWidth = p.halfHeight * aspect;
       cam.top = p.halfHeight;
       cam.bottom = -p.halfHeight;
-      cam.left = -p.halfHeight * aspect;
-      cam.right = p.halfHeight * aspect;
+      cam.left = -p.halfWidth;
+      cam.right = p.halfWidth;
     } else cam.aspect = aspect;
     cam.updateProjectionMatrix();
   }

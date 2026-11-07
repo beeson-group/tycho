@@ -275,6 +275,19 @@ def test_handles_of_the_wrong_kind_fail_at_the_call():
         scene.view("v", frame="root", driver=ty.driver(moving, 0), layers=[], camera={"kind": "fisheye"})
 
 
+def test_a_plane_camera_takes_an_aspect_and_an_orbit_camera_does_not():
+    scene, moving, _ = small()
+    scene.view("v", frame="root", driver=ty.driver(moving, 0), layers=[ty.track(moving)], camera={"kind": "plane", "aspect": "free"})
+    scene.panel("p", "v")
+    doc = scene.to_document()
+    assert doc["views"]["v"]["camera"] == {"kind": "plane", "aspect": "free"}
+    assert doc["version"] == "0.3"
+    with pytest.raises(ty.SceneError, match=r"2\.7: a camera aspect is 'stretch', not one of equal, free"):
+        scene.view("w", frame="root", driver=ty.driver(moving, 0), layers=[], camera={"kind": "plane", "aspect": "stretch"})
+    with pytest.raises(ty.SceneError, match=r"2\.7: .* camera has unknown keys \['aspect'\]"):
+        scene.view("w", frame="root", driver=ty.driver(moving, 0), layers=[], camera={"kind": "orbit", "aspect": "free"})
+
+
 def test_a_point_has_three_scalars_and_every_number_is_finite():
     scene = ty.Scene()
     root = scene.frame("root")
@@ -532,7 +545,7 @@ def test_a_full_document_with_controls_readouts_theme_and_camera_validates_again
         "v",
         frame=frame,
         driver=ty.driver(ty.sets(kind=kind), e),
-        camera={"kind": "plane", "plane": "xy"},
+        camera={"kind": "plane", "plane": "xy", "aspect": "free"},
         layers=[
             ty.track(
                 ty.sets(kind=kind),

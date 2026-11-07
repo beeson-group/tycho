@@ -6,11 +6,12 @@ The two file formats are versioned apart from the packages, i.e. either format v
 
 ## [Unreleased]
 
-The packages at this version write and read scene format 0.3, which adds one key to format 0.2, and they still read a scene of format 0.2.
+The packages at this version write and read scene format 0.3, which adds two keys to format 0.2, and they still read a scene of format 0.2.
 
 ### Added
 
 - A track layer can be drawn in the driver's context, with `context="driver"` in `ty.track`. Every sample of its tracks is then transformed into the display frame with the attributes and channels of the driver's track at its current reading (rule L6). A grid stored in the rotating-pulsating frame of the elliptic problem thus breathes and turns with this frame when the rotating or an inertial frame is shown, and its track set does not need to carry any channel. A scene with such a layer lists the feature `layers.driver_context` in its `requires`.
+- A plane camera can be given `"aspect": "free"`, under which the two axes are scaled separately in the fit, so that a diagram such as a residual against an iteration count is drawn across the whole panel in both directions. Each axis of the axes and grid layers is then ticked at a step for its scale. Under the default, `"equal"`, one unit stays as long across the panel as up it. The scene format is at version 0.3, which adds this key.
 
 ### Fixed
 

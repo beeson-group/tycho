@@ -71,6 +71,7 @@ export type Camera =
   | {
       kind: 'plane';
       plane?: 'xy' | 'xz' | 'yz';
+      aspect?: 'equal' | 'free';
     }
   | {
       kind: 'orbit';

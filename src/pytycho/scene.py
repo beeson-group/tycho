@@ -578,9 +578,11 @@ def _camera(value: Mapping[str, Any]) -> dict[str, Any]:
     kind = _enum(value.get("kind"), ("plane", "orbit"), "2.7: a camera kind")
     out: dict[str, Any] = {"kind": kind}
     if kind == "plane":
-        allowed = {"kind", "plane"}
+        allowed = {"kind", "plane", "aspect"}
         if "plane" in value:
             out["plane"] = _enum(value["plane"], ("xy", "xz", "yz"), "2.7: a camera plane")
+        if "aspect" in value:
+            out["aspect"] = _enum(value["aspect"], ("equal", "free"), "2.7: a camera aspect")
     else:
         allowed = {"kind", "projection", "up"}
         if "projection" in value:

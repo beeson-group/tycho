@@ -21,12 +21,14 @@ import {
   planeView,
   planPanel,
   Shared,
+  StageRenderer,
   TrackDraw,
   type TrackPlan,
 } from '../src/runtime/renderer';
 import { withVariable } from '../src/runtime/state';
-import type { Camera, State, TrackLayer } from '../src/scene';
+import type { Camera, Layer, State, TrackLayer } from '../src/scene';
 import { loadCorpus } from './corpus';
+import { baseScene, MemoryStore } from './helpers';
 
 const broucke = () => {
   const c = loadCorpus('broucke-mini');
@@ -83,6 +85,107 @@ describe('orthoFit', () => {
       expect(halfHeight * aspect).toBeGreaterThanOrEqual(2);
       expect(halfHeight).toBeGreaterThanOrEqual(1);
     }
+  });
+  it('under a free aspect fits the two axes separately, and a flat axis at the scale of the equal fit', () => {
+    const wide = new THREE.Box3(new THREE.Vector3(0, 0, 0), new THREE.Vector3(10, 1, 0));
+    const equal = orthoFit(wide, { kind: 'plane', plane: 'xy' }, 1);
+    expect([equal.halfWidth, equal.halfHeight]).toEqual([expect.closeTo(5.5, 12), expect.closeTo(5.5, 12)]);
+    const free = orthoFit(wide, { kind: 'plane', plane: 'xy', aspect: 'free' }, 1);
+    expect([free.halfWidth, free.halfHeight]).toEqual([expect.closeTo(5.5, 12), expect.closeTo(0.55, 12)]);
+    const line = new THREE.Box3(new THREE.Vector3(0, 2, 0), new THREE.Vector3(10, 2, 0));
+    const flat = orthoFit(line, { kind: 'plane', plane: 'xy', aspect: 'free' }, 2);
+    expect([flat.halfWidth, flat.halfHeight]).toEqual([expect.closeTo(5.5, 12), expect.closeTo(2.75, 12)]);
+  });
+});
+
+/** A panel of 400 by 400 CSS pixels that draws one track from (0, 0) to (10, 1) with `layers` after it, planned, fitted, and laid out without WebGL. */
+function widePanel(camera: Camera, layers: Layer[] = []) {
+  const scene = baseScene();
+  scene.views.main!.camera = camera;
+  scene.views.main!.layers.push(...layers);
+  const data = new MemoryStore()
+    .add('off', [0, 2], 'uint32')
+    .add('pos', [
+      [0, 0],
+      [10, 1],
+    ])
+    .add('time', [0, 1]);
+  const geometry = new GeometryCache(scene, data);
+  const ctx = { scene, geometry, shared: new Shared(), theme: sceneTheme(scene), disc: new THREE.Texture() };
+  const stage = Object.assign(Object.create(StageRenderer.prototype), { ctx, panels: new Map(), lastState: null });
+  const p = stage.panel('p1');
+  p.rect = { x: 0, y: 0, w: 400, h: 400 };
+  stage.replan(p, scene.initial);
+  stage.fit(p);
+  stage.follow(p);
+  // the track's two ends in normalized device coordinates, from -1 to 1 across and up the panel
+  const ends = () => {
+    p.camera.updateMatrixWorld();
+    return [new THREE.Vector3(0, 0, 0), new THREE.Vector3(10, 1, 0)].map((v) => v.project(p.camera));
+  };
+  return { stage, p, ends };
+}
+
+describe('a plane camera with a free aspect (2.7)', () => {
+  it('fits a 10 by 1 track to fill a square panel in both directions, which an equal aspect does not', () => {
+    const [a, b] = widePanel({ kind: 'plane', aspect: 'free' }).ends();
+    expect([a!.x, a!.y, b!.x, b!.y]).toEqual([-1 / 1.1, -1 / 1.1, 1 / 1.1, 1 / 1.1].map((x) => expect.closeTo(x, 9)));
+    const [c, d] = widePanel({ kind: 'plane' }).ends();
+    expect(d!.x - c!.x).toBeCloseTo(2 / 1.1, 9);
+    expect(d!.y - c!.y).toBeCloseTo(0.2 / 1.1, 9);
+    const [e, f] = widePanel({ kind: 'plane', aspect: 'equal' }).ends();
+    expect([e!.y, f!.y]).toEqual([c!.y, d!.y]);
+  });
+  it('keeps the rectangle it shows when the panel is resized after the viewer moved the camera, while an equal aspect widens it', () => {
+    for (const [camera, width] of [
+      [{ kind: 'plane', aspect: 'free' }, 11],
+      [{ kind: 'plane' }, 22],
+    ] as const) {
+      const { stage, p } = widePanel(camera);
+      p.userMoved = true;
+      p.rect = { x: 0, y: 0, w: 800, h: 400 };
+      stage.aspect(p);
+      stage.follow(p);
+      expect(p.view.x1 - p.view.x0).toBeCloseTo(width, 9);
+    }
+  });
+  it('ticks and numbers each axis at a step for its scale', () => {
+    const { p } = widePanel({ kind: 'plane', aspect: 'free' }, [{ kind: 'axes' }]);
+    expect([p.view.stepX, p.view.stepY]).toEqual([2, 0.2]);
+    const ticks = planeLabels(p.view, true, null);
+    expect(ticks.filter((l) => l.align === 'center').map((l) => l.text)).toEqual(['2', '4', '6', '8', '10']);
+    expect(ticks.filter((l) => l.align === 'end').map((l) => l.text)).toEqual(['0.2', '0.4', '0.6', '0.8']);
+    const equal = widePanel({ kind: 'plane' }, [{ kind: 'axes' }]).p.view;
+    expect(equal.stepX).toBe(equal.stepY);
+  });
+  it('lays a grid without numbers out across the view at the step of each axis', () => {
+    const grid = (camera: Camera) => {
+      const { p } = widePanel(camera, [{ kind: 'grid', labels: false }]);
+      const draw = p.draws.get(1);
+      const pos = draw.lines.geometry.getAttribute('position').array as Float32Array;
+      const xs = new Set<number>();
+      const ys = new Set<number>();
+      for (let i = 0; i < pos.length; i += 6) (pos[i] === pos[i + 3] ? xs : ys).add(Math.round((pos[i] === pos[i + 3] ? pos[i]! : pos[i + 1]!) * 1e6) / 1e6);
+      return { follows: draw.follows, xs: [...xs].sort((a, b) => a - b), ys: [...ys].sort((a, b) => a - b) };
+    };
+    expect(grid({ kind: 'plane', aspect: 'free' })).toEqual({ follows: true, xs: [0, 2, 4, 6, 8, 10], ys: [0, 0.2, 0.4, 0.6, 0.8, 1] });
+    expect(grid({ kind: 'plane' }).follows).toBe(false);
+  });
+  it('draws positive half-axes as long as a round fraction of the box along each axis', () => {
+    const tips = (camera: Camera) =>
+      widePanel(camera, [{ kind: 'axes', span: 'positive' }])
+        .p.draws.get(1)
+        .tips.map((v: THREE.Vector3) => v.toArray());
+    expect(tips({ kind: 'plane', aspect: 'free' })).toEqual([
+      [5, 0, 0],
+      [0, 0.5, 0],
+      [0, 0, 5],
+    ]);
+    expect(tips({ kind: 'plane' })).toEqual([
+      [5, 0, 0],
+      [0, 5, 0],
+      [0, 0, 5],
+    ]);
   });
 });
 

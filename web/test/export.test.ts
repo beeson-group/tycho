@@ -301,3 +301,64 @@ describe('MP4 muxing of synthetic frames, without a codec', () => {
     expect(() => new Mp4Writer(641, 360, 30)).toThrow(/even sides/);
   });
 });
+
+// the labels and the colorbars drawn on a video frame, on a context that records its calls
+
+function recorder() {
+  const calls: { op: string; args: unknown[]; align: string; fill: unknown; font: string }[] = [];
+  const g: Record<string, any> = { textAlign: 'left', textBaseline: 'alphabetic', font: '', fillStyle: '', strokeStyle: '', lineWidth: 1, lineJoin: 'miter' };
+  // prettier-ignore
+  for (const op of ['save', 'restore', 'translate', 'rotate', 'fillText', 'strokeText', 'fillRect', 'strokeRect', 'beginPath', 'moveTo', 'lineTo', 'closePath', 'fill']) {
+    g[op] = (...args: unknown[]) => calls.push({ op, args, align: g.textAlign, fill: g.fillStyle, font: g.font });
+  }
+  g.measureText = (s: string) => ({ width: 6 * s.length });
+  g.createLinearGradient = () => ({ addColorStop() {} });
+  return { g: g as unknown as CanvasRenderingContext2D, calls };
+}
+
+describe('labels and colorbars on a video frame', () => {
+  it('aligns a tick on its center or its end, and turns a title to read upward, as the page does', () => {
+    const { g, calls } = recorder();
+    drawLabel(g, { text: '0.5', x: 100, y: 50, align: 'center', kind: 'tick' }, 110, 60, '#fff', '#000');
+    drawLabel(g, { text: '1.0', x: 44, y: 70, align: 'end', kind: 'tick' }, 54, 80, '#fff', '#000');
+    drawLabel(g, { text: 'y [DU]', x: 14, y: 200, align: 'center', rotate: true, kind: 'title' }, 24, 210, '#fff', '#000');
+    const texts = calls.filter((c) => c.op === 'fillText');
+    expect(texts.map((c) => [c.args[0], c.args[1], c.args[2], c.align])).toEqual([
+      ['0.5', 110, 60, 'center'],
+      ['1.0', 54, 80, 'right'],
+      ['y [DU]', 0, 0, 'center'],
+    ]);
+    expect(texts[2]!.font).toMatch(/^13px/);
+    expect(calls.filter((c) => c.op === 'translate' || c.op === 'rotate').map((c) => [c.op, ...c.args])).toEqual([
+      ['translate', 24, 210],
+      ['rotate', -Math.PI / 2],
+    ]);
+    expect(g.textAlign).toBe('left');
+  });
+
+  it('shades the band a highlight kernel lights over the bar, under the marker', () => {
+    const { g, calls } = recorder();
+    const bar = {
+      label: 'e',
+      gradient: '',
+      stops: [
+        [0, 'rgb(0,0,0)'],
+        [1, 'rgb(255,255,255)'],
+      ] as [number, string][],
+      lo: 0,
+      hi: 1,
+      marker: 0.5,
+      band: [0.25, 0.75] as [number, number],
+    };
+    drawColorbars(g, [bar], 300, 10, '#d8d8d8', '#888888', '#333333', '#000000');
+    const rects = calls.filter((c) => c.op === 'fillRect');
+    // the bar spans 120 pixels from y = 26, thus the band runs from 26 + 30 to 26 + 90. the bar sits 13
+    // pixels plus its widest number ("1.00", 24 pixels here) left of the right edge
+    expect(rects[1]!.args).toEqual([300 - 37 - 3, 56, 14, 60]);
+    expect(rects[1]!.fill).toBe('rgba(216, 216, 216, 0.18)');
+    expect(calls.findIndex((c) => c.op === 'fillRect' && c === rects[1])).toBeLessThan(calls.findIndex((c) => c.op === 'closePath'));
+    const { g: g2, calls: plain } = recorder();
+    drawColorbars(g2, [{ ...bar, band: null }], 300, 10, '#d8d8d8', '#888888', '#333333', '#000000');
+    expect(plain.filter((c) => c.op === 'fillRect')).toHaveLength(1);
+  });
+});

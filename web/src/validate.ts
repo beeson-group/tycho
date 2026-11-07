@@ -287,5 +287,32 @@ export function validate(scene: Scene, data?: DataStore, state?: State): string[
         fail('2.9', `readout digits is ${String(p.digits)}, not in 1 to 17`);
     }
   }
+
+  if (data !== undefined) {
+    const sets = new SetCache(scene, data);
+    for (const id of Object.keys(scene.track_sets)) {
+      const s = sets.get(id); // checks the shapes of section 2.1 and rule T1
+      for (const name of Object.keys(s.def.channels ?? {})) s.channel(name);
+      for (const name of Object.keys(s.def.parameters ?? {})) {
+        const p = s.parameter(name);
+        for (let t = 0; t < s.tracks; t++) if (!Number.isFinite(p[t]!)) fail('2.1', `parameter ${name} of track set ${id} is not finite at track ${t}`);
+      }
+      for (const ch of scene.clock.channels) {
+        if (ch === INDEX_CHANNEL || !s.hasChannel(ch)) continue;
+        const c = s.channel(ch);
+        for (let t = 0; t < s.tracks; t++) {
+          const a = s.start(t);
+          const m = s.count(t);
+          const sign = Math.sign(c[a + 1]! - c[a]!);
+          for (let i = 0; i < m; i++) {
+            if (!Number.isFinite(c[a + i]!)) fail('T3', `clock channel ${ch} of track set ${id} is not finite along track ${t} at sample ${i}`);
+            if (i + 1 < m && !((c[a + i + 1]! - c[a + i]!) * sign > 0))
+              fail('T3', `clock channel ${ch} of track set ${id} is not strictly monotone along track ${t} at sample ${i}`);
+          }
+          if (!Number.isFinite(c[a + m - 1]! - c[a]!)) fail('T3', `clock channel ${ch} of track set ${id} has an infinite span along track ${t}`);
+        }
+      }
+    }
+  }
   return warnings;
 }

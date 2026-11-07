@@ -1411,3 +1411,138 @@ class PanelRender {
 }
 
 const cameraKey = (c: Camera): string => JSON.stringify(c);
+
+export class StageRenderer {
+  readonly canvas: HTMLCanvasElement;
+  /** Called when the user moves a camera, so that the page redraws. */
+  onChange: () => void = () => undefined;
+  private readonly gl: THREE.WebGLRenderer;
+  private readonly ctx: DrawContext;
+  private readonly panels = new Map<string, PanelRender>();
+  private lastState: State | null = null;
+  private size = { w: 0, h: 0, ratio: 0 };
+  private readonly background: THREE.Color;
+
+  /**
+   * Draws each panel's bottom run of layers that do not take a reading once, and copies it back every
+   * frame. When it is off, every layer is drawn every frame, as the reference the cache is compared with.
+   */
+  cacheStatic: boolean;
+  /**
+   * Draws an underlay without antialiasing when it was drawn again less than DRAG_MS before, as
+   * every frame of a slider or camera drag does, and with antialiasing REFINE_MS after the drag stops.
+   * It is off for a video export, whose frames must all be finished.
+   */
+  coarseDrags: boolean;
+  private refineTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly blit: { scene: THREE.Scene; camera: THREE.Camera; material: THREE.ShaderMaterial };
+  /** Every panel's static layers, each panel in a separate region at the same pixels as on the canvas. */
+  private underlay: THREE.WebGLRenderTarget | null = null;
+  /**
+   * Where a panel's static layers are drawn with antialiasing before they are copied into the
+   * underlay, as large as the largest panel. Reading the antialiased canvas back instead gives, in
+   * Chrome, the right pixels only for the last panel drawn in a frame, and stale pixels for the others.
+   */
+  private scratch: THREE.WebGLRenderTarget | null = null;
+  private readonly viewport = new THREE.Vector4();
+  private readonly buffer = new THREE.Vector2();
+  private readonly region = new THREE.Box2();
+  private readonly corner = new THREE.Vector2();
+
+  /**
+   * The option `preserveDrawingBuffer` is set for a canvas that is read back after the frame, as in a
+   * video export. It is left off for a page, which spares the compositor a copy of the canvas every frame.
+   */
+  constructor(
+    canvas: HTMLCanvasElement,
+    scene: Scene,
+    geometry: GeometryCache,
+    options: { preserveDrawingBuffer?: boolean; cacheStatic?: boolean; coarseDrags?: boolean } = {},
+  ) {
+    this.canvas = canvas;
+    // colors are sRGB as the page gives them, written unconverted
+    THREE.ColorManagement.enabled = false;
+    this.gl = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: options.preserveDrawingBuffer ?? false });
+    this.cacheStatic = options.cacheStatic ?? true;
+    this.coarseDrags = options.coarseDrags ?? true;
+    this.blit = blitPass();
+    // a lost context takes its textures with it, and every underlay is therefore drawn again
+    canvas.addEventListener('webglcontextrestored', () => {
+      for (const p of this.panels.values()) p.underlayDirty = true;
+    });
+    this.gl.outputColorSpace = THREE.LinearSRGBColorSpace;
+    this.gl.autoClear = false;
+    const theme = sceneTheme(scene);
+    this.background = new THREE.Color(...hexRgb(theme.background));
+    this.ctx = { scene, geometry, shared: new Shared(), theme, disc: discTexture() };
+  }
+
+  private panel(pid: string): PanelRender {
+    let p = this.panels.get(pid);
+    if (!p) {
+      p = new PanelRender(pid);
+      this.panels.set(pid, p);
+    }
+    return p;
+  }
+
+  /** Gives a panel the element its camera controls listen on and its labels are written into, or takes it away. */
+  bind(pid: string, element: HTMLElement | null): void {
+    const p = this.panel(pid);
+    if (p.element === element) return;
+    p.controls?.dispose();
+    p.controls = null;
+    p.labels?.remove();
+    p.labels = null;
+    p.element = element;
+    if (element !== null) {
+      p.labels = document.createElement('div');
+      p.labels.className = 'labels';
+      element.append(p.labels);
+      this.makeControls(p);
+    }
+  }
+
+  /** Fits a panel's camera to what it draws at the next frame, forgetting how the user moved the camera. */
+  refit(pid: string): void {
+    const p = this.panels.get(pid);
+    if (p) {
+      p.needsFit = true;
+      p.userMoved = false;
+    }
+  }
+
+  refitAll(): void {
+    for (const pid of this.panels.keys()) this.refit(pid);
+  }
+
+  private makeControls(p: PanelRender): void {
+    p.controls?.dispose();
+    p.controls = null;
+    if (p.element === null) return;
+    const c = new OrbitControls(p.camera, p.element);
+    c.enableDamping = false;
+    c.screenSpacePanning = true;
+    if (p.cameraSpec.kind === 'plane') {
+      c.enableRotate = false;
+      c.zoomToCursor = true;
+      c.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
+      c.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN };
+    }
+    c.addEventListener('change', () => {
+      if (p.fitting) return;
+      p.userMoved = true;
+      this.onChange();
+    });
+    p.controls = c;
+  }
+
+  private setCamera(p: PanelRender, spec: Camera): void {
+    p.cameraSpec = spec;
+    const ortho = spec.kind === 'plane' || spec.projection === 'orthographic';
+    p.camera = ortho ? new THREE.OrthographicCamera(-1, 1, 1, -1, -1, 1) : new THREE.PerspectiveCamera(35, 1, 0.01, 100);
+    p.needsFit = true;
+    p.userMoved = false;
+    this.makeControls(p);
+  }
+}

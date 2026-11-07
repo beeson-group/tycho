@@ -302,3 +302,132 @@ export function drawColorbars(
     x -= 12;
   }
 }
+
+/**
+ * Exports a video of `source` and resolves to an MP4 blob of H.264. Rejects with an AbortError
+ * when `options.signal` aborts, and with an Error that gives the reason when WebCodecs is missing, when
+ * the browser does not have an H.264 encoder for the size, or when the export would exceed EXPORT_LIMITS.
+ */
+export async function exportVideo(source: ExportSource, options: ExportOptions = {}): Promise<Blob> {
+  const missing = webCodecsMissing();
+  if (missing !== null) throw new Error(missing);
+  const { scene, geometry } = source;
+  const state = structuredClone(source.state);
+  const fps = options.fps ?? 30;
+  const size =
+    typeof options.size === 'object'
+      ? options.size
+      : sizePreset(options.size ?? '720p', source.stage, typeof window === 'undefined' ? 1 : window.devicePixelRatio, fps);
+  const schedule = frameSchedule(scene.clock.steps, fps, options.loops ?? 1, options.speed ?? 1, options.start ?? 0, loopSeconds(scene.clock));
+  const refused = checkExport(schedule.count, fps);
+  if (refused !== null) throw new Error(refused);
+  const { width, height, pixelRatio: ratio } = size;
+  const signal = options.signal;
+  const aborted = () => new DOMException('the export was canceled', 'AbortError');
+  if (signal?.aborted) throw aborted();
+
+  const config = await chooseConfig(width, height, fps, options.bitrate ?? exportBitrate(width, height, fps));
+  options.onConfig?.(config);
+  const writer = new Mp4Writer(width, height, fps);
+  let failure: unknown = null;
+  const encoder = new VideoEncoder({
+    output: (chunk, meta) => {
+      const data = new Uint8Array(chunk.byteLength);
+      chunk.copyTo(data);
+      try {
+        writer.add(data, chunk.type === 'key', chunk.timestamp, chunk.duration ?? Math.round(1e6 / fps), meta);
+      } catch (e) {
+        failure ??= e;
+      }
+    },
+    error: (e) => (failure = e),
+  });
+  encoder.configure(config);
+
+  // each frame holds the stage above a strip of caption lines, laid out in CSS pixels
+  const theme = sceneTheme(scene);
+  const bg = mixHex(theme.background, theme.background, 0);
+  const fg = mixHex(theme.foreground, theme.foreground, 0);
+  const dim = mixHex(theme.foreground, theme.background, 0.4);
+  const line = mixHex(theme.foreground, theme.background, 0.8);
+  const gutterColor = mixHex(theme.foreground, theme.background, 0.9);
+  const captions = (scene.readouts ?? []).filter((r) => r.place === 'caption');
+  const panelReadouts = (scene.readouts ?? []).filter((r) => r.place === 'panel');
+  const logicalW = width / ratio;
+  const logicalH = height / ratio;
+  const stripH = captions.length > 0 ? 10 + CAPTION_LINE * captions.length : 0;
+  const stageW = Math.floor(logicalW);
+  const stageH = Math.floor(logicalH - stripH);
+  const glCanvas = document.createElement('canvas');
+  // the frames are read back from the canvas after each draw
+  const renderer = new StageRenderer(glCanvas, scene, geometry, { preserveDrawingBuffer: true, coarseDrags: false });
+  const frame = document.createElement('canvas');
+  frame.width = width;
+  frame.height = height;
+  const g = frame.getContext('2d', { alpha: false })!;
+  const tiles = tile(state.layout, { x: 0, y: 0, w: stageW, h: stageH }, GUTTER);
+  const first = firstLeaf(state.layout);
+  const read = (pid: string, parts: Readout['parts'], index: number, q: number) => {
+    try {
+      return readoutText({ scene, geometry, state, panel: pid, frameIndex: index, progress: q }, parts);
+    } catch (e) {
+      return (e as Error).message;
+    }
+  };
+
+  try {
+    for (let k = 0; k < schedule.count; k++) {
+      if (signal?.aborted) throw aborted();
+      if (failure !== null) throw failure;
+      const index = schedule.index(k);
+      const q = schedule.progress(k);
+      const errors = renderer.renderAt(state, q, stageW, stageH, ratio);
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.fillStyle = bg;
+      g.fillRect(0, 0, width, height);
+      g.drawImage(glCanvas, 0, 0);
+      g.setTransform(ratio, 0, 0, ratio, 0, 0);
+      g.fillStyle = gutterColor;
+      for (const gt of tiles.gutters) g.fillRect(gt.rect.x, gt.rect.y, gt.rect.w, gt.rect.h);
+      for (const [pid, r] of tiles.panels) {
+        g.save();
+        g.beginPath();
+        g.rect(r.x, r.y, r.w, r.h);
+        g.clip();
+        g.textBaseline = 'middle';
+        for (const l of renderer.labels(pid)) drawLabel(g, l, r.x + l.x, r.y + l.y, fg, bg);
+        drawColorbars(g, renderer.colorbars(pid), r.x + r.w - 10, r.y + 10, fg, dim, line, bg);
+        g.font = `13px ${FONT}`;
+        g.textBaseline = 'bottom';
+        const lines = panelReadouts
+          .map((ro) => read(pid, ro.parts, index, q))
+          .join('\n')
+          .split('\n');
+        lines.reverse().forEach((s, i) => text(g, s, r.x + 8, r.y + r.h - 6 - 17 * i, fg, bg));
+        const error = errors.get(pid);
+        if (error !== undefined) {
+          g.textBaseline = 'top';
+          text(g, error, r.x + 12, r.y + 12, '#e0a24a', bg);
+        }
+        g.restore();
+      }
+      g.font = `13px ${FONT}`;
+      g.textBaseline = 'alphabetic';
+      captions.forEach((c, i) => text(g, read(first, c.parts, index, q), 14, stageH + 5 + CAPTION_LINE * (i + 1) - 4, fg, bg));
+
+      const video = new VideoFrame(frame, { timestamp: Math.round((k * 1e6) / fps), duration: Math.round(1e6 / fps) });
+      encoder.encode(video, { keyFrame: k % (2 * fps) === 0 });
+      video.close();
+      options.onProgress?.(k + 1, schedule.count);
+      // keep a few frames in the encoder, and let the page breathe between frames
+      while (encoder.encodeQueueSize > 4) await new Promise((r) => setTimeout(r, 1));
+      await new Promise((r) => setTimeout(r, 0));
+    }
+    await encoder.flush();
+    if (failure !== null) throw failure;
+  } finally {
+    if (encoder.state !== 'closed') encoder.close();
+    renderer.dispose();
+  }
+  return new Blob([writer.finish() as Uint8Array<ArrayBuffer>], { type: 'video/mp4' });
+}

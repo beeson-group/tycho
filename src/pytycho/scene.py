@@ -1206,3 +1206,54 @@ class Scene:
         if extra := [k for k in cmap["map"] if k not in values]:
             out.append(f"{what} keyed on {cmap['var']!r} maps {extra}, which are not its values")
         return out
+
+    def _choices_of(self, view: Mapping[str, Any]) -> set[str]:
+        """The choice variables on which the frame of a view and the track sets of its driver and layers depend."""
+        used = set()
+        if isinstance(view["frame"], Mapping):
+            used.add(view["frame"]["var"])
+        for query in [view["driver"]["sets"]] + [layer["sets"] for layer in view["layers"] if layer["kind"] == "track"]:
+            used |= self._choices_in(query)
+        return used
+
+    def _choices_in(self, query: Mapping[str, Any]) -> set[str]:
+        return {v["var"] for v in query.get("tags", {}).values() if isinstance(v, Mapping)}
+
+    def _check_state(self, state: Mapping[str, Any]) -> list[str]:
+        """Checks section 2.8 and rule V1 on the initial state."""
+        out = []
+
+        def held(values: Mapping[str, Any], where: str, scope: str) -> None:
+            for vid, value in values.items():
+                spec = self._variables.get(vid)
+                if spec is None:
+                    out.append(f"2.8: {where} sets {vid!r}, which is not a variable")
+                    continue
+                if scope == "panel" and spec["scope"] == "scene":
+                    out.append(f"V1: {where} sets {vid!r}, which is scene-scoped and never read there")
+                if spec["kind"] == "choice" and value not in spec["values"]:
+                    out.append(f"2.5: {where} sets choice {vid!r} to {value!r}, which is not one of its values")
+                elif spec["kind"] == "selector" and (isinstance(value, bool) or not isinstance(value, (int, float))):
+                    out.append(f"2.5: {where} sets selector {vid!r} to {value!r}, which is not a number")
+                elif spec["kind"] == "toggle" and not isinstance(value, bool):
+                    out.append(f"2.5: {where} sets toggle {vid!r} to {value!r}, which is not a boolean")
+
+        held(state.get("variables", {}), "the initial state", "scene")
+        for pid, panel in state["panels"].items():
+            if panel["view"] not in self._views:
+                out.append(f"2.8: panel {pid!r} shows {panel['view']!r}, which is not a view")
+            held(panel.get("variables", {}), f"panel {pid!r}", "panel")
+
+        def leaves(node: Mapping[str, Any]) -> list[str]:
+            return [node["id"]] if node["kind"] == "panel" else leaves(node["a"]) + leaves(node["b"])
+
+        shown = leaves(state["layout"])
+        for pid in shown:
+            if pid not in state["panels"]:
+                out.append(f"2.8: the layout shows {pid!r}, which is not a panel")
+        for pid in state["panels"]:
+            if pid not in shown:
+                out.append(f"2.8: the layout does not show panel {pid!r}")
+        if len(set(shown)) != len(shown):
+            out.append("2.8: the layout shows a panel twice")
+        return out

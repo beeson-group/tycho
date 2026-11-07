@@ -40,6 +40,28 @@ Documentation = "https://pytycho.readthedocs.io/"
 Discussions = "https://github.com/beeson-group/tycho/discussions"
 Changelog = "https://github.com/beeson-group/tycho/blob/main/CHANGELOG.md"
 
+[dependency-groups]
+test = [
+  "pytest>=9",
+  "jsonschema>=4.18",  # validates written scenes against spec/scene.schema.json
+]
+docs = [
+  "sphinx>=9.1",
+  "myst-parser>=5.1",
+  "pydata-sphinx-theme>=0.22",
+  "sphinx-autodoc-typehints>=3.13",
+  "sphinx-design>=0.7",
+  "sphinx-llms-txt>=0.7.1",
+]
+dev = [
+  { include-group = "test" },
+  "nox>=2025.5",  # for an editor to resolve the imports of noxfile.py. `uvx nox` does not need it
+  "hatchling>=1.27",  # for an editor to resolve the imports of hatch_build.py. builds get it from build-system anyway
+]
+
+[tool.uv.dependency-groups]
+docs = { requires-python = ">=3.12" }  # Sphinx 9.1 and sphinx-autodoc-typehints 3.13 need Python 3.12
+
 [tool.hatch]
 version.path = "src/pytycho/__init__.py"
 

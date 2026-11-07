@@ -13,14 +13,18 @@
  * width 1 is a GL line. A wider one is a quad per segment, offset in screen space by half the width
  * in CSS pixels on each side, and along a trail the width and the opacity taper from the head to
  * the tail. The CPU draws the pieces at the ends of the range, the heads (rule L3), and the bodies
- * and their trails (rule L4) with the evaluator's functions. Under a plane camera the axes and the
- * grid follow the visible rectangle and give their tick numbers and titles as panel labels.
+ * and their trails (rule L4) with the evaluator's functions. A layer in the driver's context (rule L6)
+ * keeps its buffers in the frame of its set, and its group's matrix is the affine map into the display
+ * frame at the driver's reading, i.e. the blend of the maps in the contexts of two driver samples.
+ * Under a plane camera the axes and the grid follow the visible rectangle and give their tick
+ * numbers and titles as panel labels.
  */
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { fail, TychoError } from '../errors.js';
 import { bound, clockLaps, lapOf } from '../evaluate/clock.js';
-import { hasHead, point, type LayerEnv, type Vertex } from '../evaluate/layers.js';
+import { driverContexts, driverPoint, hasHead, point, type Driver, type LayerEnv, type Vertex } from '../evaluate/layers.js';
+import type { Context, Frames } from '../evaluate/frames.js';
 import {
   displayFrame,
   driverMember,
@@ -326,6 +330,8 @@ export interface TrackPlan {
   channel: string | null;
   /** The layer's color, where a colormap keyed on a choice is resolved to the colormap that the panel's value of the choice maps to (section 2.7). */
   color: ColorSpec | undefined;
+  /** The context its samples are transformed in (rule L6). */
+  context: 'own' | 'driver';
 }
 
 export interface BodyPlan {
@@ -347,7 +353,7 @@ export interface PanelPlan {
   view: View;
   display: string;
   scope: PanelScope;
-  driver: { set: SetData; track: number } | null;
+  driver: Driver;
   layers: LayerPlan[];
 }
 
@@ -383,6 +389,8 @@ export function planPanel(scene: Scene, geometry: GeometryCache, state: State, p
       const set = id === null ? null : geometry.sets.get(id);
       const members = set === null ? [] : resolveMembers(scope, layer.members, set);
       const channel = needsReading(layer, scene.clock) ? state.clock.channel : null;
+      const context = layer.context ?? 'own';
+      if (context !== 'own' && context !== 'driver') fail('L6', `a track layer's context is ${JSON.stringify(context)}, not own or driver`);
       if (set !== null && channel !== null && laps > 1 && !set.periodic)
         fail('C6', `a reading is taken on track set ${set.id}, which is not periodic, and the clock has ${laps} laps`);
       const hl = layer.highlight;
@@ -393,7 +401,7 @@ export function planPanel(scene: Scene, geometry: GeometryCache, state: State, p
       }
       const selected = set !== null && hl !== undefined ? selectorTrack(scope, { var: hl.var }, set) : null;
       const highlight = selected !== null && members.includes(selected) ? selected : null;
-      layers.push({ kind: 'track', index, layer, set, members, highlight, selected, channel, color: resolveColor(scope, layer.color) });
+      layers.push({ kind: 'track', index, layer, set, members, highlight, selected, channel, color: resolveColor(scope, layer.color), context });
     } else if (layer.kind === 'body') layers.push({ kind: 'body', index, layer });
     else layers.push({ kind: layer.kind, index, layer });
   });
@@ -407,17 +415,90 @@ export function contentKey(plan: PanelPlan): string {
 
 type Box6 = [number, number, number, number, number, number];
 
+/** An affine map p -> A p + b, as the rows of A followed by b. */
+type Affine = Float64Array;
+
+/** The affine map of rule F3 from frame `from` to frame `to` in one context, read off the images of the origin and the three unit points. */
+export function affineAt(frames: Frames, from: string, to: string, ctx: Context): Affine {
+  const o = frames.transform([0, 0, 0], from, to, ctx);
+  const m = new Float64Array(12);
+  for (let c = 0; c < 3; c++) {
+    const e = frames.transform([c === 0 ? 1 : 0, c === 1 ? 1 : 0, c === 2 ? 1 : 0], from, to, ctx);
+    for (let r = 0; r < 3; r++) m[3 * r + c] = e[r]! - o[r]!;
+  }
+  m.set(o, 9);
+  return m;
+}
+
+/**
+ * The affine map from frame `from` into the display frame at the driver's reading (rule L6), i.e. the maps in the
+ * contexts of the driver's samples k and k + 1 blended by the weight w, as a matrix of three.js.
+ */
+export function driverMatrix(env: LayerEnv, from: string, driver: NonNullable<Driver>, out = new THREE.Matrix4()): THREE.Matrix4 {
+  const { a, b, w } = driverContexts(driver, driverPoint(env, driver).at);
+  const ma = affineAt(env.frames, from, env.display, a);
+  const mb = affineAt(env.frames, from, env.display, b);
+  const m = ma.map((x, i) => (1 - w) * x + w * mb[i]!);
+  return out.set(m[0]!, m[1]!, m[2]!, m[9]!, m[3]!, m[4]!, m[5]!, m[10]!, m[6]!, m[7]!, m[8]!, m[11]!, 0, 0, 0, 1);
+}
+
+/** Above this many products of a sample and a driver context, the fit of a layer in the driver's context maps the corners of its box. */
+const DRIVER_FIT_BUDGET = 4_000_000;
+
+/**
+ * The box of a layer in the driver's context, which holds its members as they are drawn at every sample of the
+ * driver's track in every lap (rule L6). A point between two driver samples is a blend of the two images, and
+ * the box holds it too. A large layer maps the corners of its box in its own frame instead, which bounds it.
+ */
+function driverFitBox(l: TrackPlan & { set: SetData }, driver: NonNullable<Driver>, display: string, geometry: GeometryCache): Box6 {
+  const frames = geometry.frames;
+  const from = l.set.def.frame;
+  const own = geometry.geometry(l.set.id, from);
+  const laps = driver.set.periodic ? clockLaps(geometry.scene.clock) : 1;
+  // without a channel on the path, every context of the driver's track gives the same map
+  const varies = frames.requirements(from, display).channels.size > 0;
+  const m = varies ? driver.set.count(driver.track) : 1;
+  let points = l.members.length === l.set.tracks ? own.positions : Float64Array.from(l.members.flatMap((t) => [...own.track(t, 0)]));
+  if ((points.length / 3) * m * (varies ? laps : 1) > DRIVER_FIT_BUDGET) {
+    const [x0, y0, z0, x1, y1, z1] = own.bounds();
+    points = Float64Array.from([x0, y0, z0, x1, y0, z0, x0, y1, z0, x1, y1, z0, x0, y0, z1, x1, y0, z1, x0, y1, z1, x1, y1, z1]);
+  }
+  const box: Box6 = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
+  for (let lap = 0; lap < (varies ? laps : 1); lap++) {
+    for (let i = 0; i < m; i++) {
+      const a = affineAt(frames, from, display, { set: driver.set, track: driver.track, sample: i, shifted: false, lap });
+      for (let j = 0; j < points.length; j += 3) {
+        const x = points[j]!;
+        const y = points[j + 1]!;
+        const z = points[j + 2]!;
+        for (let r = 0; r < 3; r++) {
+          const v = a[3 * r]! * x + a[3 * r + 1]! * y + a[3 * r + 2]! * z + a[9 + r]!;
+          if (v < box[r]!) box[r] = v;
+          if (v > box[r + 3]!) box[r + 3] = v;
+        }
+      }
+    }
+  }
+  return box;
+}
+
 /**
  * The box a panel's camera fits, which holds every member of every track layer, whole, in every lap
- * from 0 to the top, in the display frame. It is given as minimum then maximum x, y, z, and is null
- * when the track layers do not draw anything.
+ * from 0 to the top, in the display frame. A layer in the driver's context is held at every sample of
+ * the driver's track. The box is given as minimum then maximum x, y, z, and is null when the track
+ * layers do not draw anything.
  */
 export function fitBox(plan: PanelPlan, geometry: GeometryCache): Box6 | null {
   let box: Box6 | null = null;
   for (const l of plan.layers) {
     if (l.kind !== 'track' || l.set === null || l.members.length === 0) continue;
-    const g = geometry.geometry(l.set.id, plan.display);
-    const parts = l.members.length === l.set.tracks ? [g.bounds()] : l.members.map((t) => g.bounds(t));
+    if (l.context === 'driver' && plan.driver === null) continue;
+    let parts: Box6[];
+    if (l.context === 'driver') parts = [driverFitBox(l as TrackPlan & { set: SetData }, plan.driver!, plan.display, geometry)];
+    else {
+      const g = geometry.geometry(l.set.id, plan.display);
+      parts = l.members.length === l.set.tracks ? [g.bounds()] : l.members.map((t) => g.bounds(t));
+    }
     for (const b of parts) {
       if (box === null) box = [...b];
       else for (let c = 0; c < 3; c++) ((box[c] = Math.min(box[c]!, b[c]!)), (box[c + 3] = Math.max(box[c + 3]!, b[c + 3]!)));
@@ -824,6 +905,8 @@ export class TrackDraw implements Draw {
   private baseWhat: 'set' | number | null = null;
   private skip = -1;
   private filled = false;
+  /** True for a layer in the driver's context (rule L6), whose buffers are in the frame of its set and whose group's matrix moves them. */
+  readonly driverContext: boolean;
 
   constructor(ctx: DrawContext, plan: TrackPlan & { set: SetData }, display: string, key: string) {
     this.key = key;
@@ -831,14 +914,25 @@ export class TrackDraw implements Draw {
     const layer = plan.layer;
     this.set = set;
     this.layer = layer;
-    this.geo = ctx.geometry.geometry(set.id, display);
+    this.driverContext = plan.context === 'driver';
+    if (this.driverContext) this.group.matrixAutoUpdate = false;
+    this.geo = ctx.geometry.geometry(set.id, this.driverContext ? set.def.frame : display);
     this.clocks = plan.channel === null ? null : ctx.geometry.readings(set.id, plan.channel);
     const readings = this.clocks ?? ctx.geometry.readings(set.id, INDEX_CHANNEL);
     this.spec = revealSpec(layer, set.periodic, clockLaps(ctx.scene.clock));
     this.color = plan.color;
     const color = coloring(plan.color, set, hexRgb(ctx.theme.foreground));
     this.kernel = kernelOf(ctx, layer, set);
-    this.src = { ctx, set, geo: this.geo, display, readings, colorKey: JSON.stringify(plan.color ?? null), coloring: color, kernel: this.kernel !== null };
+    this.src = {
+      ctx,
+      set,
+      geo: this.geo,
+      display: this.geo.frame,
+      readings,
+      colorKey: JSON.stringify(plan.color ?? null),
+      coloring: color,
+      kernel: this.kernel !== null,
+    };
     this.width = layer.width ?? 1;
     this.hiWidth = layer.highlight?.width ?? this.width;
     this.opacity = layer.opacity ?? 1;
@@ -958,9 +1052,20 @@ export class TrackDraw implements Draw {
     if (this.highlight !== null) for (let lap = hi[0]; lap <= hi[1]; lap++) this.pass(lap, true).holder.visible = true;
   }
 
-  /** True when the layer does not take a reading, so that what it draws changes only with its members, its highlight, and its selection. */
+  /**
+   * True when the layer does not take a reading and is not in the driver's context, so that what it draws changes only with its
+   * members, its highlight, and its selection.
+   */
   get isStatic(): boolean {
-    return this.clocks === null;
+    return this.clocks === null && !this.driverContext;
+  }
+
+  /** Moves a layer in the driver's context into the display frame at the driver's reading, or hides it when the driver does not match a set (rule L6). */
+  place(env: LayerEnv, driver: Driver): void {
+    this.group.visible = driver !== null;
+    if (driver === null) return;
+    driverMatrix(env, this.set.def.frame, driver, this.group.matrix);
+    this.group.matrixWorldNeedsUpdate = true;
   }
 
   /** Returns whether the picture changed through new members, a new highlight or selection, or a first fill. */
@@ -1749,6 +1854,7 @@ export class StageRenderer {
         const d = p.draws.get(lp.index);
         if (d instanceof TrackDraw && lp.kind === 'track') {
           if (d.update(lp, scene, q) && d.isStatic) p.underlayDirty = true;
+          if (d.driverContext) d.place(env, plan.driver);
         } else if (d instanceof BodyDraw && lp.kind === 'body') d.update(env, lp.layer, plan.driver);
       }
     } catch (e) {

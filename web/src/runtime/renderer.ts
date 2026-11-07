@@ -695,3 +695,94 @@ function keyOf(a: Float32Array): number {
   }
   return id;
 }
+
+/** The end pieces of every drawn track, computed on the CPU, as quads with a color, an opacity, and a width at each end. */
+class Pieces {
+  readonly mesh: THREE.Mesh;
+  private buffer: THREE.InstancedInterleavedBuffer;
+  private readonly mat: THREE.ShaderMaterial;
+  n = 0;
+
+  constructor(capacity: number, resolution: THREE.IUniform) {
+    this.mat = material(PIECE_VERTEX, { uResolution: resolution });
+    this.buffer = this.allocate(capacity);
+    this.mesh = new THREE.Mesh(this.geometry(), this.mat);
+    this.mesh.frustumCulled = false;
+  }
+
+  private allocate(capacity: number): THREE.InstancedInterleavedBuffer {
+    const b = new THREE.InstancedInterleavedBuffer(new Float32Array(16 * Math.max(1, capacity)), 16);
+    b.setUsage(THREE.DynamicDrawUsage);
+    return b;
+  }
+
+  private geometry(): THREE.InstancedBufferGeometry {
+    const g = quadGeometry();
+    const b = this.buffer;
+    g.setAttribute('instanceStart', new THREE.InterleavedBufferAttribute(b, 3, 0));
+    g.setAttribute('instanceEnd', new THREE.InterleavedBufferAttribute(b, 3, 3));
+    g.setAttribute('colorStart', new THREE.InterleavedBufferAttribute(b, 4, 6));
+    g.setAttribute('colorEnd', new THREE.InterleavedBufferAttribute(b, 4, 10));
+    g.setAttribute('widthStart', new THREE.InterleavedBufferAttribute(b, 1, 14));
+    g.setAttribute('widthEnd', new THREE.InterleavedBufferAttribute(b, 1, 15));
+    g.instanceCount = 0;
+    return g;
+  }
+
+  /** The array to write `count` pieces into, grown when it is too small. */
+  begin(count: number): Float32Array {
+    if (16 * count > this.buffer.array.length) {
+      this.mesh.geometry.dispose();
+      this.buffer = this.allocate(2 * count);
+      this.mesh.geometry = this.geometry();
+    }
+    this.n = 0;
+    return this.buffer.array as Float32Array;
+  }
+
+  end(): void {
+    (this.mesh.geometry as THREE.InstancedBufferGeometry).instanceCount = this.n;
+    this.mesh.visible = this.n > 0;
+    this.buffer.clearUpdateRanges();
+    this.buffer.addUpdateRange(0, 16 * this.n);
+    this.buffer.needsUpdate = true;
+  }
+
+  dispose(): void {
+    this.mesh.geometry.dispose();
+    this.mat.dispose();
+  }
+}
+
+/** A highlight's kernel over a layer's set, with the selector's parameter, its values, and their extent. */
+interface Kernel {
+  parameter: string;
+  width: number;
+  opacity: number;
+  values: ArrayLike<number>;
+  extent: number;
+}
+
+function kernelOf(ctx: DrawContext, layer: TrackLayer, set: SetData): Kernel | null {
+  const k = layer.highlight?.kernel;
+  if (k === undefined) return null;
+  const sel = variableDef(ctx.scene, layer.highlight!.var);
+  if (sel?.kind !== 'selector' || sel.parameter === undefined) return null;
+  const values = set.parameter(sel.parameter, '2.7');
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (let i = 0; i < values.length; i++) ((lo = Math.min(lo, values[i]!)), (hi = Math.max(hi, values[i]!)));
+  return { parameter: sel.parameter, width: k.width, opacity: k.opacity, values, extent: hi >= lo ? hi - lo : 0 };
+}
+
+/** A float texture with one RGBA texel per track, in rows of at most 2048. */
+function trackTexture(tracks: number): { data: Float32Array; texture: THREE.DataTexture; width: number } {
+  const width = Math.min(Math.max(tracks, 1), 2048);
+  const height = Math.ceil(Math.max(tracks, 1) / width);
+  const data = new Float32Array(4 * width * height);
+  const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat, THREE.FloatType);
+  texture.minFilter = texture.magFilter = THREE.NearestFilter;
+  texture.generateMipmaps = false;
+  texture.needsUpdate = true;
+  return { data, texture, width };
+}

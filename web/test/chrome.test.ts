@@ -298,3 +298,56 @@ describe('chip menus', () => {
     expect(withPlacement(scene, st, { kind: 'add' }, payload, 2, () => false)).toBe(st);
   });
 });
+
+describe('the chrome under a DOM stand-in', () => {
+  let uninstall: () => void = () => undefined;
+  beforeEach(() => {
+    uninstall = installDom().uninstall;
+  });
+  afterEach(() => uninstall());
+
+  it('draws icons as inline SVG from path strings, the Lucide ones on 24 px with a stroke and the transport ones filled on 16 px', () => {
+    const house = icon('house') as unknown as FakeElement;
+    expect(house.namespaceURI).toBe('http://www.w3.org/2000/svg');
+    expect(house.getAttribute('viewBox')).toBe('0 0 24 24');
+    expect([house.getAttribute('fill'), house.getAttribute('stroke'), house.getAttribute('stroke-width')]).toEqual(['none', 'currentColor', '2']);
+    expect(house.getAttribute('aria-hidden')).toBe('true');
+    expect(byTag(house, 'path').map((p) => p.getAttribute('d'))).toEqual(GLYPHS.house.d);
+    const play = icon('play') as unknown as FakeElement;
+    expect([play.getAttribute('viewBox'), play.getAttribute('fill'), play.getAttribute('stroke')]).toEqual(['0 0 16 16', 'currentColor', 'none']);
+    for (const g of Object.values(GLYPHS)) for (const d of g.d) expect(d).toMatch(/^[Mm][-0-9.,\sMmLlHhVvCcSsQqTtAaZz]+$/);
+  });
+
+  it('builds a chip, a readout as tiles or a line, and names a drop', () => {
+    const chip = buildChip('rotating', 'menu');
+    const root = chip.root as unknown as FakeElement;
+    expect(root.textContent).toBe('rotating');
+    expect(byClass(root, 'grip')).toHaveLength(1);
+    expect(chip.button!.getAttribute('aria-haspopup')).toBe('menu');
+    expect(chip.button!.getAttribute('aria-expanded')).toBe('false');
+    expect(buildChip('x', 'select').select).not.toBeNull();
+    expect(buildChip('x', 'none').button).toBeNull();
+
+    const tiles = buildReadout(BROUCKE_CAPTION, 'wide');
+    const dts = byTag(tiles.root as unknown as FakeElement, 'dt').map((d) => d.textContent);
+    expect(dts).toEqual(['e', 'period', 'closure error', 'mu']);
+    fillReadout(tiles, ['e = ', '0.3000', ', period ', '6.2832', ' rad, closure error ', '9.4e−13', ' DU, mu = ', '0.0121550']);
+    expect(tiles.values.map((b) => b.textContent)).toEqual(['0.3000', '6.2832', '9.4e−13', '0.0121550']);
+    expect(byClass(tiles.root as unknown as FakeElement, 'u').map((u) => u.textContent)).toEqual(['rad', 'DU']);
+    expect(tiles.values[0]!.style.minWidth).toBeUndefined();
+    fillReadout(tiles, { error: 'no set matches' });
+    expect([tiles.list!.hidden, tiles.line.hidden, tiles.line.textContent]).toEqual([true, false, 'no set matches']);
+
+    const line = buildReadout(['frame ', { clock: 'index' }, ' of ', { clock: 'steps' }], 'wide');
+    expect(line.list).toBeNull();
+    fillReadout(line, ['frame ', '3', ' of ', '64']);
+    expect(line.line.textContent).toBe('frame 3 of 64');
+
+    expect([
+      dropText({ kind: 'value' }, 'right'),
+      dropText({ kind: 'view' }, 'centre'),
+      dropText({ kind: 'panel' }, 'centre'),
+      dropText({ kind: 'panel' }, 'bottom'),
+    ]).toEqual(['split right', 'replace', 'swap', 'move below']);
+  });
+});

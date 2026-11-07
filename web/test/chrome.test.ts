@@ -75,3 +75,47 @@ describe('readout tiles', () => {
     expect(readoutPieces({ ...ctx, panel: 'nope' }, parts)).toEqual([]);
   });
 });
+
+describe('frame rate', () => {
+  it('counts the draws presented in the last second, with the late ones and the refresh interval', () => {
+    const m = new FrameMeter();
+    expect(m.report(0)).toBeNull();
+    const step = 1000 / 120;
+    let now = 0;
+    for (let i = 0; i < 130; i++) {
+      now = i * step;
+      m.note(now);
+      if (i < 108) expect(m.report(now)).toBeNull();
+    }
+    const r = m.report(now)!;
+    expect(r.drawn).toBe(121);
+    expect(r.late).toBe(0);
+    expect(r.refresh).toBeCloseTo(step);
+    expect(fpsText(r)).toBe('121 fps');
+    expect(fpsTitle(r)).toContain('121 frames drawn in the last second, 0 late, on a display refreshing about 120 times a second');
+  });
+  it('sees a dropped refresh among smooth ones, which an average would hide', () => {
+    const m = new FrameMeter();
+    const step = 1000 / 120;
+    let now = 0;
+    for (let i = 0; i < 120; i++) {
+      now += i % 5 === 4 ? 2 * step : step;
+      m.note(now);
+    }
+    const r = m.report(now)!;
+    expect(r.refresh).toBeCloseTo(step);
+    expect(r.late).toBeGreaterThanOrEqual(19);
+    expect(r.drawn).toBeLessThan(110);
+  });
+  it('shows dashes while paused, before a second has passed, after a stall, and after a reset', () => {
+    const m = new FrameMeter();
+    expect(fpsText(null)).toBe('–– fps');
+    for (let i = 0; i < 60; i++) m.note(i * 10);
+    expect(m.report(590)).toBeNull();
+    for (let i = 60; i < 120; i++) m.note(i * 10);
+    expect(m.report(1190)).not.toBeNull();
+    expect(m.report(2500)).toBeNull();
+    m.reset();
+    expect(m.report(1190)).toBeNull();
+  });
+});

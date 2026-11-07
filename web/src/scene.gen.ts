@@ -378,6 +378,7 @@ export interface Clock {
    */
   range?: [number, number];
   laps?: number;
+  seconds?: number;
 }
 /**
  * This interface was referenced by `Scene`'s JSON-Schema

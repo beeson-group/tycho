@@ -656,6 +656,10 @@
         "laps": {
           "type": "integer",
           "minimum": 1
+        },
+        "seconds": {
+          "type": "number",
+          "exclusiveMinimum": 0
         }
       },
       "if": {

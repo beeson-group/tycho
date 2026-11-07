@@ -6,6 +6,10 @@ The two file formats are versioned apart from the packages, i.e. either format v
 
 ## [Unreleased]
 
+### Fixed
+
+- The static layers of a panel are no longer lost at a fractional device pixel ratio, e.g. 1.25. At such a ratio, the viewport was rounded up past the end of the drawing buffer, and the copy of these layers was refused by WebGL, which left the panel gray.
+
 ## [0.2.0] - 2026-11-06
 
 Version 0.2.0 introduces the scene grammar, i.e. a general vocabulary from which a visualization is declared. The packages at this version write and read scene format 0.2, which may still change incompatibly until 1.0, and data container version 1.

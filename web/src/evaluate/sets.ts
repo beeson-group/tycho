@@ -133,3 +133,26 @@ export class SetData {
     return v;
   }
 }
+
+/** One SetData per track set, built on first use. */
+export class SetCache {
+  private readonly scene: Scene;
+  private readonly data: DataStore;
+  private readonly sets = new Map<string, SetData>();
+
+  constructor(scene: Scene, data: DataStore) {
+    this.scene = scene;
+    this.data = data;
+  }
+
+  get(id: string): SetData {
+    let s = this.sets.get(id);
+    if (!s) {
+      const def = this.scene.track_sets[id];
+      if (def === undefined || !Object.hasOwn(this.scene.track_sets, id)) fail('2.1', `track set ${JSON.stringify(id)} is not declared`);
+      s = new SetData(id, def, this.data);
+      this.sets.set(id, s);
+    }
+    return s;
+  }
+}

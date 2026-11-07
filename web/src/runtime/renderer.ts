@@ -1069,3 +1069,111 @@ export class TrackDraw implements Draw {
     }
   }
 }
+
+// body layers
+
+class BodyDraw implements Draw {
+  readonly key: string;
+  readonly group = new THREE.Group();
+  readonly label: string | null;
+  readonly size: number;
+  /** The body's position at the last frame, for its label, or null when the driver does not match any set. */
+  at: THREE.Vector3 | null = null;
+  private readonly point: THREE.Points;
+  private readonly trail: THREE.Line;
+  private readonly geometry: GeometryCache;
+  private readonly scratch = new Float64Array(3);
+  private capacity = 0;
+
+  constructor(ctx: DrawContext, layer: BodyLayer, key: string) {
+    this.key = key;
+    this.geometry = ctx.geometry;
+    const bodies = ctx.scene.bodies ?? {};
+    const body = Object.hasOwn(bodies, layer.body) ? bodies[layer.body] : undefined;
+    this.label = body?.label ?? null;
+    this.size = layer.size ?? BODY_SIZE;
+    const color = new THREE.Color(...hexRgb(body?.color ?? ctx.theme.foreground));
+    const pg = new THREE.BufferGeometry();
+    pg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3), 3).setUsage(THREE.DynamicDrawUsage));
+    this.point = new THREE.Points(
+      pg,
+      new THREE.PointsMaterial({
+        color,
+        size: this.size,
+        sizeAttenuation: false,
+        map: ctx.disc,
+        alphaTest: 0.5,
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+      }),
+    );
+    this.point.frustumCulled = false;
+    this.trail = new THREE.Line(
+      new THREE.BufferGeometry(),
+      new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.6, depthTest: false, depthWrite: false }),
+    );
+    this.trail.frustumCulled = false;
+    this.group.add(this.trail, this.point);
+  }
+
+  /**
+   * Rule L4 as `bodyLayer` in evaluate/layers.ts evaluates it, from the positions kept per lap by the
+   * geometry cache. A frame blends the point and the two trail ends, copies the samples between them,
+   * and uploads only the vertices it draws.
+   */
+  update(env: LayerEnv, layer: BodyLayer, driver: PanelPlan['driver']): void {
+    if (driver === null) {
+      this.point.visible = false;
+      this.trail.visible = false;
+      this.at = null;
+      return;
+    }
+    const { set, track } = driver;
+    const laps = clockLaps(env.clock);
+    const tc = this.geometry.readings(set.id, env.channel).clocks[track]!;
+    const table = this.geometry.bodyTrail(layer.body, env.display, set.id, track);
+    const loopReading = laps * bound(tc.reading(env.clock, env.q))!;
+    const at = lapOf(loopReading, laps);
+    const s = this.scratch;
+    table.vertex(point(tc, at.u, false, at.lap), s);
+    this.point.visible = true;
+    this.at = new THREE.Vector3(s[0], s[1], s[2]);
+    const pa = this.point.geometry.getAttribute('position') as THREE.BufferAttribute;
+    pa.setXYZ(0, s[0]!, s[1]!, s[2]!);
+    pa.needsUpdate = true;
+    if (layer.trail === undefined) {
+      this.trail.visible = false;
+      return;
+    }
+    const fraction = layer.trail.fraction;
+    let tail = loopReading - laps * fraction;
+    if (tail < 0 && !set.periodic) tail = 0;
+    const need = trailCapacity(table.m, laps, fraction);
+    if (need > this.capacity) {
+      this.capacity = need;
+      this.trail.geometry.dispose();
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3 * this.capacity), 3).setUsage(THREE.DynamicDrawUsage));
+      this.trail.geometry = g;
+    }
+    const a = this.trail.geometry.getAttribute('position') as THREE.BufferAttribute;
+    const n = table.polyline(tc, tail, loopReading, laps, a.array as Float32Array);
+    a.clearUpdateRanges();
+    a.addUpdateRange(0, 3 * n);
+    a.needsUpdate = true;
+    this.trail.geometry.setDrawRange(0, n);
+    this.trail.visible = n > 1;
+  }
+
+  extend(box: THREE.Box3): void {
+    if (this.at !== null) box.expandByPoint(this.at);
+  }
+
+  dispose(): void {
+    for (const o of [this.point, this.trail]) {
+      o.geometry.dispose();
+      (o.material as THREE.Material).dispose();
+    }
+  }
+}

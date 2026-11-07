@@ -9,6 +9,7 @@ set. A build without the pages still succeeds, and docs/gallery.md then shows wh
 from __future__ import annotations
 
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -18,6 +19,8 @@ sys.path.insert(0, str(ROOT / "src"))
 
 import pytycho  # noqa: E402
 
+# the version of scene.tys that this release writes, which is also the name of the published schema directory
+SCENE_FORMAT = "0.2"
 REPOSITORY = "https://github.com/beeson-group/tycho"
 
 project = "TyCHO"
@@ -58,6 +61,25 @@ highlight_language = "none"
 
 myst_enable_extensions = ["colon_fence", "substitution"]
 myst_heading_anchors = 3
+# site:path links to a file that html_extra_path publishes, which is not a document or a download
+myst_url_schemes = {"http": None, "https": None, "mailto": None, "site": "{{path}}"}
+
+# the published schema and the gallery assets
+
+# html_extra_path copies _extra unchanged to the site root. the schema and the raw spec go to
+# schema/<format>/, the path that the $id of the schema gives, and the example pages to examples/
+EXTRA = DOCS / "_extra"
+STAGED = EXTRA / "schema" / SCENE_FORMAT
+STAGED.mkdir(parents=True, exist_ok=True)
+for _name in ("scene.schema.json", "tycho-scene.md"):
+    shutil.copyfile(ROOT / "spec" / _name, STAGED / _name)
+
+myst_substitutions = {
+    "version": release,
+    "scene_format": SCENE_FORMAT,
+    "schema_link": f"[`schema/{SCENE_FORMAT}/scene.schema.json`](site:schema/{SCENE_FORMAT}/scene.schema.json)",
+    "spec_link": f"[`schema/{SCENE_FORMAT}/tycho-scene.md`](site:schema/{SCENE_FORMAT}/tycho-scene.md)",
+}
 
 # autodoc
 
@@ -77,6 +99,7 @@ html_theme = "pydata_sphinx_theme"
 # the canonical URL of the version Read the Docs is building, which Sphinx writes into every page
 html_baseurl = os.environ.get("READTHEDOCS_CANONICAL_URL", "")
 html_title = f"TyCHO {release}"
+html_extra_path = ["_extra"]
 html_static_path = ["_static"]
 html_css_files = ["tycho.css"]
 html_show_sourcelink = False

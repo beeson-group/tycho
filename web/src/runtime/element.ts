@@ -204,3 +204,88 @@ function setRange(range: HTMLInputElement, value: number): void {
   const max = Number(range.max) - Number(range.min);
   range.style.setProperty('--p', `${max > 0 ? (100 * (Number(range.value) - Number(range.min))) / max : 0}%`);
 }
+
+/**
+ * A chip holds a grip and a label in a body that drags, then a caret. The caret is a menu button for `menu`. For `select` it
+ * is a chevron under a native select at opacity 0, which opens the platform's picker, and for `none` it is left out. The caret
+ * never starts a drag.
+ */
+export function buildChip(text: string, caret: 'menu' | 'select' | 'none') {
+  const root = el('div', 'chip');
+  const body = el('span', 'body');
+  const label = el('span', 'lbl', text);
+  body.append(icon('grip', 'grip'), label);
+  root.appendChild(body);
+  let button: HTMLButtonElement | null = null;
+  let select: HTMLSelectElement | null = null;
+  if (caret === 'menu') {
+    button = el('button', 'caret');
+    button.type = 'button';
+    button.setAttribute('aria-haspopup', 'menu');
+    button.setAttribute('aria-expanded', 'false');
+    button.setAttribute('aria-label', `${text}: placement`);
+    button.title = 'Add, split, or replace a panel';
+    button.appendChild(icon('chevronDown'));
+    button.addEventListener('pointerdown', stop);
+    root.appendChild(button);
+  } else if (caret === 'select') {
+    const holder = el('span', 'caret');
+    select = el('select');
+    holder.append(icon('chevronDown'), select);
+    holder.addEventListener('pointerdown', stop);
+    root.appendChild(holder);
+  }
+  return { root, body, label, button, select };
+}
+
+/** A readout's elements, as stat tiles when `readoutTiles` splits its parts, in a row under the stage or stacked in a panel. */
+export function buildReadout(parts: Readout['parts'], cls: 'wide' | 'stack'): ReadoutDom {
+  const tiles = readoutTiles(parts);
+  const root = el('div', `readout ${cls}`);
+  const line = el('div', 'line');
+  let list: HTMLElement | null = null;
+  const values: HTMLElement[] = [];
+  if (tiles !== null) {
+    list = el('dl');
+    for (const t of tiles) {
+      const item = el('div');
+      const dd = el('dd');
+      const b = el('b');
+      if (t.width !== null) b.style.minWidth = `${t.width}ch`;
+      dd.appendChild(b);
+      if (t.unit !== '') dd.appendChild(el('span', 'u', t.unit));
+      item.append(el('dt', undefined, t.label), dd);
+      list.appendChild(item);
+      values.push(b);
+    }
+    root.appendChild(list);
+    line.hidden = true;
+  }
+  root.appendChild(line);
+  return { parts, tiles, root, list, values, line };
+}
+
+/** Writes a readout: its value parts into the tiles, or the whole text, or an error, as a line. */
+export function fillReadout(r: ReadoutDom, pieces: string[] | { error: string }): void {
+  const ok = Array.isArray(pieces);
+  if (ok && r.tiles !== null && r.list !== null && pieces.length > 0) {
+    r.list.hidden = false;
+    r.line.hidden = true;
+    r.tiles.forEach((t, i) => setText(r.values[i]!, pieces[t.part] ?? ''));
+    return;
+  }
+  if (r.list !== null) r.list.hidden = true;
+  r.line.hidden = false;
+  setText(r.line, ok ? pieces.join('') : pieces.error);
+}
+
+/** The words inside a drop overlay. */
+export function dropText(payload: { kind: string }, zone: DropZone): string {
+  const panel = payload.kind === 'panel';
+  if (zone === 'centre') return panel ? 'swap' : 'replace';
+  const side = { left: 'left', right: 'right', top: 'above', bottom: 'below' }[zone];
+  return `${panel ? 'move' : 'split'} ${side}`;
+}
+
+/** HTMLElement where there is one, so that importing this module under Node does not throw. */
+const Base = (typeof HTMLElement === 'undefined' ? class {} : HTMLElement) as typeof HTMLElement;

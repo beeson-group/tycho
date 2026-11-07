@@ -314,5 +314,139 @@ export function validate(scene: Scene, data?: DataStore, state?: State): string[
       }
     }
   }
+  for (const st of state === undefined ? [scene.initial] : [scene.initial, state]) validateState(scene, frames, st, warnings);
   return warnings;
+}
+
+/** Checks one state against section 2.8, rules F2, F5, C5, C6 and V3, and section 2.9. */
+function validateState(scene: Scene, frames: Frames, state: State, warnings: string[]): void {
+  checkState(scene, state);
+  for (const id of layoutIds(state.layout)) checkId(id, 'panel');
+  const ratios = (node: Layout): void => {
+    if (node.kind === 'panel') return;
+    if (!(node.ratio > 0 && node.ratio < 1)) fail('2.8', `a split ratio is ${String(node.ratio)}, not in (0, 1)`);
+    ratios(node.a);
+    ratios(node.b);
+  };
+  ratios(state.layout);
+  const laps = clockLaps(scene.clock);
+  const relative = (scene.readouts ?? [])
+    .map((r) => ({
+      place: r.place,
+      parts: r.parts.filter((p): p is Exclude<typeof p, string> => typeof p !== 'string' && ('member' in p || 'attr' in p || 'channel' in p)),
+    }))
+    .filter((r) => r.parts.length > 0);
+  const first = layoutIds(state.layout)[0];
+  for (const [pid, panel] of Object.entries(state.panels)) {
+    for (const id of Object.keys(panel!.variables ?? {})) {
+      const v = variableDef(scene, id);
+      if (v !== undefined && v.scope !== 'panel') warnings.push(`panel ${pid} sets ${id}, which is scene-scoped and never read there`);
+    }
+    const view = scene.views[panel!.view]!;
+    const scope: PanelScope = { scene, state, panel: panel! };
+    const display = displayFrame(scope, view);
+    const need = (setId: string, req: { channels: Set<string>; attrs: Set<string> }, what: string) => {
+      const set = scene.track_sets[setId]!;
+      const ch = [...req.channels].filter((c) => c !== INDEX_CHANNEL && !Object.hasOwn(set.channels ?? {}, c));
+      const at = [...req.attrs].filter((a) => !Object.hasOwn(set.attrs ?? {}, a));
+      if (ch.length + at.length > 0) {
+        fail(
+          'F5',
+          `panel ${pid}: track set ${setId} lacks ${[...ch.map((c) => `channel ${c}`), ...at.map((a) => `attribute ${a}`)].join(', ')} for ${what} in frame ${display}`,
+        );
+      }
+      // rule F2 for an attribute scale on the path, which is constant per track set
+      for (const fid of edgesUsed(frames, scene, set.frame, display)) {
+        const s = scene.frames[fid]!.scale;
+        if (s !== undefined && typeof s === 'object' && 'attr' in s && (s.factor ?? 1) * (set.attrs?.[s.attr] ?? NaN) + (s.offset ?? 0) === 0) {
+          fail('F2', `panel ${pid}: the scale of frame ${fid} is zero for track set ${setId}`);
+        }
+      }
+    };
+    const clocked = (setId: string, what: string) => {
+      const set = scene.track_sets[setId]!;
+      const missing = scene.clock.channels.filter((c) => c !== INDEX_CHANNEL && !Object.hasOwn(set.channels ?? {}, c));
+      if (missing.length > 0) fail('C5', `panel ${pid}: track set ${setId}, ${what}, lacks clock channels ${missing.join(', ')}`);
+      if (laps > 1 && set.periodic !== true) fail('C6', `panel ${pid}: track set ${setId}, ${what}, is not periodic, and the clock has ${laps} laps`);
+    };
+    const member = (setId: string, ref: MemberRef) => {
+      const set = scene.track_sets[setId]!;
+      if (ref === 'all' || 'count' in ref) return;
+      if ('index' in ref) {
+        if (ref.index >= set.tracks) fail('V3', `panel ${pid}: member index ${ref.index} is not below the track count ${set.tracks} of track set ${setId}`);
+        return;
+      }
+      const sel = variableDef(scene, ref.var);
+      if (sel?.kind === 'selector' && sel.by !== 'index' && sel.parameter !== undefined && !Object.hasOwn(set.parameters ?? {}, sel.parameter)) {
+        fail('V3', `panel ${pid}: track set ${setId} lacks parameter ${sel.parameter} for selector ${ref.var}`);
+      }
+    };
+    const driver = oneSet(scope, view.driver.sets);
+    if (driver !== null) {
+      need(driver, frames.requirements(scene.track_sets[driver]!.frame, display), 'the driver');
+      clocked(driver, 'the driver');
+      member(driver, view.driver.member);
+      const set = scene.track_sets[driver]!;
+      for (const r of relative) {
+        if (r.place === 'panel' || pid === first) {
+          for (const p of r.parts) {
+            if ('member' in p && !Object.hasOwn(set.parameters ?? {}, p.member))
+              fail('2.9', `the ${r.place} readout through panel ${pid} names parameter ${p.member}, which track set ${driver} lacks`);
+            if ('attr' in p && !Object.hasOwn(set.attrs ?? {}, p.attr))
+              fail('2.9', `the ${r.place} readout through panel ${pid} names attribute ${p.attr}, which track set ${driver} lacks`);
+            if ('channel' in p && !Object.hasOwn(set.channels ?? {}, p.channel))
+              fail('2.9', `the ${r.place} readout through panel ${pid} names channel ${p.channel}, which track set ${driver} lacks`);
+          }
+        }
+      }
+    }
+    for (const layer of view.layers) {
+      if (!layerVisible(scope, layer)) continue;
+      if (layer.kind === 'track') {
+        const id = oneSet(scope, layer.sets);
+        if (id === null) continue;
+        need(id, frames.requirements(scene.track_sets[id]!.frame, display), 'its tracks');
+        member(id, layer.members);
+        if (layer.highlight !== undefined) member(id, { var: layer.highlight.var });
+        const set = scene.track_sets[id]!;
+        if (layer.color !== undefined && typeof layer.color === 'object') {
+          if ('channel' in layer.color && !Object.hasOwn(set.channels ?? {}, layer.color.channel))
+            fail('2.7', `panel ${pid}: track set ${id} lacks channel ${layer.color.channel} for a layer's color`);
+          if ('parameter' in layer.color && !Object.hasOwn(set.parameters ?? {}, layer.color.parameter))
+            fail('2.7', `panel ${pid}: track set ${id} lacks parameter ${layer.color.parameter} for a layer's color`);
+        }
+        const hides = scene.clock.mode === 'value' && (layer.before === 'hidden' || layer.after === 'hidden');
+        if ((layer.reveal ?? 'none') !== 'none' || hasHead(layer) || hides) clocked(id, 'on which a reading is taken');
+      } else if (layer.kind === 'body' && driver !== null) {
+        need(driver, frames.bodyRequirements(layer.body, display), `body ${layer.body}`);
+      }
+    }
+    if (pid === first) {
+      for (const c of scene.controls ?? []) {
+        if (c.kind !== 'slider') continue;
+        const sel = variableDef(scene, c.variable);
+        if (sel?.kind !== 'selector' || sel.parameter === undefined) continue;
+        for (const setId of querySets(scope, c.domain)) {
+          if (!Object.hasOwn(scene.track_sets[setId]!.parameters ?? {}, sel.parameter))
+            fail('2.9', `the slider over ${c.variable} has track set ${setId} in its domain, which lacks parameter ${sel.parameter}`);
+        }
+      }
+    }
+  }
+}
+
+/** The frames whose edge is evaluated to take a point from `from` to `to`, through body origins too. */
+function edgesUsed(frames: Frames, scene: Scene, from: string, to: string, stack: string[] = []): Set<string> {
+  const { up, down } = frames.tree.path(from, to);
+  const used = new Set<string>();
+  for (const fid of [...up, ...down]) {
+    if (stack.includes(fid)) continue;
+    used.add(fid);
+    const o = scene.frames[fid]!.origin;
+    if (o !== undefined && !Array.isArray(o)) {
+      const body = scene.bodies![o.body]!;
+      for (const e of edgesUsed(frames, scene, body.frame, scene.frames[fid]!.parent!, [...stack, fid])) used.add(e);
+    }
+  }
+  return used;
 }

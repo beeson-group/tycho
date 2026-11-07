@@ -205,6 +205,102 @@ def _var(value: Any, what: str, kind: str | None = None) -> dict[str, Any]:
     return {"var": _check_id(value, what)}
 
 
+# track sets
+
+
+class TrackSet:
+    """A collection of tracks that share a frame. Each :meth:`add` gives one track."""
+
+    def __init__(
+        self,
+        scene: Scene,
+        sid: str,
+        frame: str,
+        tags: Mapping[str, str],
+        attrs: Mapping[str, float],
+        periodic: bool,
+        dtype: str,
+        label: str | None,
+        channel_dtypes: Mapping[str, str],
+    ) -> None:
+        self.scene, self.id, self.frame = scene, sid, frame
+        self.tags = {_text(k, "a tag name"): _text(v, f"tag {k!r} of track set {sid!r}") for k, v in tags.items()}
+        self.attrs = {_text(k, "an attribute name"): _finite(v, f"attribute {k!r} of track set {sid!r}") for k, v in attrs.items()}
+        if not isinstance(periodic, bool):
+            raise SceneError(f"T2: track set {sid!r} has periodic {periodic!r}, not a boolean")
+        self.periodic, self.dtype, self.label = periodic, dtype, label
+        self.channel_dtypes = dict(channel_dtypes)
+        self.positions: list[np.ndarray] = []
+        self.channels: list[dict[str, np.ndarray]] = []
+        self.parameters: list[dict[str, float]] = []
+        self.channel_info: dict[str, dict[str, str]] = {}
+        self.parameter_info: dict[str, dict[str, str]] = {}
+        self.kept: list[np.ndarray] | None = None
+
+    @property
+    def tracks(self) -> int:
+        """The number of tracks added so far."""
+        return len(self.positions)
+
+    def add(self, positions: Any, *, channels: Mapping[str, Any] | None = None, parameters: Mapping[str, float] | None = None) -> int:
+        """Adds one track, copying its arrays, and returns its index. Every track must give the same channel and parameter names."""
+        if self.kept is not None:
+            raise SceneError(f"track set {self.id!r} is already thinned")
+        p = np.array(positions, dtype=np.float64, copy=True)
+        if p.ndim != 2 or p.shape[1] not in (2, 3):
+            raise SceneError(f"2.1: track set {self.id!r}: positions have shape {p.shape}, not (m, 2) or (m, 3)")
+        if len(p) < 2:
+            raise SceneError(f"T1: track set {self.id!r}: the sample count of the added track is {len(p)}, fewer than two")
+        if not np.all(np.isfinite(p)):
+            raise SceneError(f"2.1: track set {self.id!r}: positions are not all finite")
+        if self.positions and p.shape[1] != self.positions[0].shape[1]:
+            raise SceneError(f"2.1: track set {self.id!r} mixes 2D and 3D positions")
+        chans = {}
+        for k, v in (channels or {}).items():
+            if _text(k, "a channel name") == INDEX:
+                raise SceneError(f"S3: the channel name {INDEX} is reserved")
+            c = np.array(v, dtype=np.float64, copy=True)
+            if c.shape != (len(p),):
+                raise SceneError(f"2.1: track set {self.id!r}: channel {k!r} has shape {c.shape}, not ({len(p)},)")
+            if not np.all(np.isfinite(c)):
+                raise SceneError(f"2.1: track set {self.id!r}: channel {k!r} is not all finite")
+            chans[k] = c
+        if not self.positions and (missing := sorted(set(self.channel_dtypes) - set(chans))):
+            raise SceneError(f"D1: channel_dtypes of track set {self.id!r} names channels {missing}, which the track set lacks")
+        params = {
+            _text(k, "a parameter name"): _finite(v, f"2.1: parameter {k!r} of track set {self.id!r}")
+            for k, v in (parameters or {}).items()
+        }
+        if self.positions and (set(chans) != set(self.channels[0]) or set(params) != set(self.parameters[0])):
+            raise SceneError(f"2.1: track set {self.id!r}: the added track gives other channel or parameter names than the first")
+        self.positions.append(p)
+        self.channels.append(chans)
+        self.parameters.append(params)
+        return len(self.positions) - 1
+
+    def describe(self, name: str, *, interp: str | None = None, unit: str | None = None, label: str | None = None) -> None:
+        """Sets the ``interp`` and ``unit`` of a channel, or the ``label`` and ``unit`` of a parameter, after the first :meth:`add`."""
+        if not self.positions:
+            raise SceneError(f"track set {self.id!r} does not have a track yet, hence {name!r} cannot be described")
+        is_channel, is_parameter = name in self.channels[0], name in self.parameters[0]
+        if is_channel and is_parameter:
+            raise SceneError(f"2.1: {name!r} is both a channel and a parameter of track set {self.id!r}. Describe it under one name")
+        if not (is_channel or is_parameter):
+            raise SceneError(f"2.1: track set {self.id!r} lacks a channel or a parameter named {name!r}")
+        info = self.channel_info if is_channel else self.parameter_info
+        entry = info.setdefault(name, {})
+        if interp is not None:
+            if is_parameter:
+                raise SceneError(f"2.1: an interp is given for parameter {name!r} of track set {self.id!r}, and only a channel takes one")
+            entry["interp"] = _enum(interp, ("linear", "hold"), f"2.1: the interp of channel {name!r}")
+        if label is not None:
+            if is_channel:
+                raise SceneError(f"2.1: a label is given for channel {name!r} of track set {self.id!r}, and only a parameter takes one")
+            entry["label"] = _text(label, "a label")
+        if unit is not None:
+            entry["unit"] = _text(unit, "a unit")
+
+
 # the scene
 
 

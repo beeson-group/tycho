@@ -256,3 +256,40 @@ def test_an_attribute_scale_that_is_zero_for_a_drawn_set_fails_at_the_write():
     scene.panel("p", "v")
     with pytest.raises(ty.SceneError, match="F2: view 'v': the scale of frame 'z' is zero for track set 's'"):
         scene.to_document()
+
+
+def test_add_copies_its_arrays_and_the_document_shares_nothing():
+    scene, moving, _ = small()
+    buf = np.zeros((3, 2))
+    t = np.array([0.0, 1.0, 2.0])
+    for k in range(3):
+        buf[:] = [[k, 0], [k, 1], [k, 2]]
+        moving.add(buf, channels={"t": t}, parameters={"e": 0.1 * k})
+    t[:] = 5
+    scene.view("v", frame="root", driver=ty.driver(moving, 0), layers=[ty.track(moving)])
+    scene.panel("p", "v")
+    data = ty.Container(scene.to_container())
+    np.testing.assert_array_equal(data.view("moving/positions")[3:6, 0], [0.0, 0.0, 0.0])
+    np.testing.assert_array_equal(data.view("moving/channels/t")[3:6], [0.0, 1.0, 2.0])
+    doc = scene.to_document()
+    doc["frames"]["root"]["scale"] = 0.0
+    assert "scale" not in scene.to_document()["frames"]["root"]
+
+
+def test_describe_keeps_channels_and_parameters_apart():
+    scene, moving, _ = small()
+    moving.describe("t", interp="hold", unit="TU")
+    moving.describe("e", label="eccentricity")
+    with pytest.raises(ty.SceneError, match="only a parameter takes one"):
+        moving.describe("t", label="time")
+    with pytest.raises(ty.SceneError, match="only a channel takes one"):
+        moving.describe("e", interp="hold")
+    with pytest.raises(ty.SceneError, match="not one of linear, hold"):
+        moving.describe("t", interp="cubic")
+    with pytest.raises(ty.SceneError, match="lacks a channel or a parameter named"):
+        moving.describe("nope", unit="x")
+    scene.view("v", frame="root", driver=ty.driver(moving, 0), layers=[])
+    scene.panel("p", "v")
+    doc = scene.to_document()
+    assert doc["track_sets"]["moving"]["channels"]["t"] == {"view": "moving/channels/t", "interp": "hold", "unit": "TU"}
+    assert doc["track_sets"]["moving"]["parameters"]["e"] == {"view": "moving/parameters/e", "label": "eccentricity"}

@@ -1387,6 +1387,79 @@ export class TychoViewerElement extends Base {
     const chip = dom.chipLabel.textContent ?? '';
     return dom.title.hidden ? chip || pid : `${dom.title.textContent ?? pid}, ${chip}`;
   }
+
+  // menus
+
+  /** Opens a menu under `anchor`, or closes it when it is the one open. */
+  private openMenu(anchor: HTMLElement, entries: MenuEntry[]): void {
+    const again = this.menu?.anchor === anchor;
+    this.closeMenu(false);
+    if (again) return;
+    const menu = el('div', 'menu');
+    menu.setAttribute('role', 'menu');
+    const items: HTMLButtonElement[] = [];
+    for (const e of entries) {
+      if (e.group && items.length > 0) {
+        const hr = el('hr');
+        hr.setAttribute('role', 'separator');
+        menu.appendChild(hr);
+      }
+      const b = el('button', undefined, e.label);
+      b.type = 'button';
+      b.setAttribute('role', 'menuitem');
+      b.tabIndex = -1;
+      b.disabled = e.disabled === true;
+      b.addEventListener('click', () => {
+        this.closeMenu(true);
+        e.run();
+      });
+      menu.appendChild(b);
+      items.push(b);
+    }
+    const live = items.filter((b) => !b.disabled);
+    menu.addEventListener('pointerdown', stop);
+    menu.addEventListener('keydown', (ev) => {
+      const i = live.indexOf(this.shadowRoot!.activeElement as HTMLButtonElement);
+      const n = live.length;
+      const go = (k: number) => live[((k % n) + n) % n]?.focus();
+      if (ev.key === 'ArrowDown') go(i + 1);
+      else if (ev.key === 'ArrowUp') go(i - 1);
+      else if (ev.key === 'Home') go(0);
+      else if (ev.key === 'End') go(n - 1);
+      else if (ev.key === 'Escape') this.closeMenu(true);
+      else if (ev.key === 'Tab') this.closeMenu(false);
+      else return;
+      if (ev.key !== 'Tab') ev.preventDefault();
+      ev.stopPropagation();
+    });
+    this.root.appendChild(menu);
+    const r = anchor.getBoundingClientRect();
+    const below = r.bottom + 4 + menu.offsetHeight <= window.innerHeight;
+    menu.style.left = `${Math.max(4, Math.min(r.left, window.innerWidth - menu.offsetWidth - 4))}px`;
+    menu.style.top = `${below ? r.bottom + 4 : Math.max(4, r.top - menu.offsetHeight - 4)}px`;
+    anchor.setAttribute('aria-expanded', 'true');
+    const outside = (ev: Event) => {
+      const path = ev.composedPath();
+      if (!path.includes(menu) && !path.includes(anchor)) this.closeMenu(false);
+    };
+    window.addEventListener('pointerdown', outside, true);
+    this.menu = {
+      anchor,
+      close: (focus) => {
+        menu.remove();
+        anchor.setAttribute('aria-expanded', 'false');
+        window.removeEventListener('pointerdown', outside, true);
+        if (focus) anchor.focus();
+      },
+    };
+    live[0]?.focus();
+  }
+
+  private closeMenu(focus: boolean): void {
+    const m = this.menu;
+    this.menu = null;
+    m?.close(focus);
+  }
 }
 
 /**

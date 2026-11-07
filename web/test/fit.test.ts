@@ -466,6 +466,33 @@ describe('a track layer in the driver context (L6)', () => {
     reading.mockRestore();
     draw.dispose();
   });
+  it('is fitted by the corners of its box when the budget is passed, and only when it has more than 8 points', () => {
+    // the grid has 8 points and the ring 5, hence a budget of 0 leaves the fit by their points
+    const plan = planPanel(c.scene, geometry, c.scene.initial, 'p1');
+    expect(fitBox(plan, geometry, 0)).toEqual(fitBox(plan, geometry));
+    // a circle of 12 points turned by the driver's time is fitted by the corners of its box, whose images reach past the circle
+    const circle = Array.from({ length: 12 }, (_, k) => [Math.cos((k * Math.PI) / 6), Math.sin((k * Math.PI) / 6)]);
+    const scene = baseScene({ frames: { a: {}, b: { parent: 'a', rotation: { axis: 'z', angle: { channel: 'time' } } } } });
+    scene.track_sets.u = { frame: 'a', tracks: 1, offsets: 'uoff', positions: 'upos' };
+    scene.views.main!.frame = 'b';
+    scene.views.main!.layers = [{ kind: 'track', sets: { set: 'u' }, members: 'all', context: 'driver' }];
+    const data = new MemoryStore()
+      .add('off', [0, 2], 'uint32')
+      .add('pos', [
+        [1, 0],
+        [0, 1],
+      ])
+      .add('time', [0, 1])
+      .add('uoff', [0, 12], 'uint32')
+      .add('upos', circle);
+    const g = new GeometryCache(scene, data);
+    const own = planPanel(scene, g, scene.initial, 'p1');
+    const exact = fitBox(own, g)!;
+    const corners = fitBox(own, g, 0)!;
+    for (let k = 0; k < 3; k++) expect(corners[k]! <= exact[k]! && exact[k + 3]! <= corners[k + 3]!).toBe(true);
+    expect(corners[3]!).toBeCloseTo(Math.cos(1) + Math.sin(1), 12);
+    expect(exact[3]!).toBeCloseTo(1, 12);
+  });
   it('is hidden, and is left out of the fit, when the driver does not match a set', () => {
     const st = withVariable(c.scene, c.scene.initial, 'family', 'b');
     const { plan, layer, env } = grid(c.scene, st);

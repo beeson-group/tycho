@@ -191,5 +191,50 @@ export function validate(scene: Scene, data?: DataStore, state?: State): string[
   ] as const) {
     for (const id of Object.keys(table ?? {})) checkId(id, what);
   }
+
+  // The Frames constructor checks the frame tree: one root without edge fields, scales that are not a constant zero, and rule F6.
+  // It also checks that every body origin refers to a declared body.
+  const frames = new Frames(scene);
+  const isFrame = (id: string) => frames.tree.has(id);
+  for (const [id, f] of Object.entries(scene.frames)) {
+    if (Array.isArray(f!.origin)) f!.origin.forEach((s) => checkScalar(s, `the origin of frame ${id}`, true));
+    checkScalar(f!.rotation?.angle, `the rotation of frame ${id}`, false);
+    checkScalar(f!.scale, `the scale of frame ${id}`, false);
+    if (f!.axes !== undefined && f!.axes.length !== 3) fail('2.3', `frame ${id} has ${f!.axes.length} axis labels, not three`);
+  }
+  for (const [id, b] of Object.entries(scene.bodies ?? {})) {
+    if (!isFrame(b!.frame)) fail('2.4', `body ${id} is in frame ${b!.frame}, which is not declared`);
+    b!.position.forEach((s) => checkScalar(s, `the position of body ${id}`, true));
+  }
+  if (Object.keys(scene.track_sets).length === 0) fail('2.1', 'the scene does not have a track set');
+  for (const [id, s] of Object.entries(scene.track_sets)) {
+    if (!isFrame(s!.frame)) fail('2.1', `track set ${id} is in frame ${s!.frame}, which is not declared`);
+    if (!Number.isInteger(s!.tracks) || s!.tracks < 1) fail('2.1', `track set ${id} has tracks ${String(s!.tracks)}, not a count of at least one`);
+    if (Object.hasOwn(s!.channels ?? {}, INDEX_CHANNEL)) fail('S3', `track set ${id} declares a channel named ${INDEX_CHANNEL}, which is reserved`);
+    for (const [k, v] of Object.entries(s!.attrs ?? {})) if (!finite(v)) fail('S4', `attribute ${k} of track set ${id} is not finite`);
+  }
+  for (const [name, v] of Object.entries(scene.variables ?? {})) {
+    if (v!.kind === 'selector') {
+      if (v!.by !== 'index' && v!.parameter === undefined) fail('2.5', `selector ${name} is by nearest but does not name a parameter`);
+      if (!finite(v!.default)) fail('2.5', `selector ${name} defaults to ${String(v!.default)}, not a finite number`);
+    } else if (v!.kind === 'choice') {
+      if (!v!.values.includes(v!.default)) fail('2.5', `choice ${name} defaults to ${JSON.stringify(v!.default)}, which is not one of its values`);
+      if (v!.labels !== undefined && v!.labels.length !== v!.values.length)
+        fail('2.5', `choice ${name} has ${v!.labels.length} labels for ${v!.values.length} values`);
+    } else if (v!.kind === 'toggle') {
+      const d: unknown = v!.default;
+      if (typeof d !== 'boolean') fail('2.5', `toggle ${name} defaults to ${JSON.stringify(d)}, not a boolean`);
+    } else fail('2.5', `variable ${name} has kind ${JSON.stringify((v as { kind: unknown }).kind)}, not selector, choice, or toggle`);
+  }
+  const clock = scene.clock;
+  if (clock.mode !== 'fraction' && clock.mode !== 'value') fail('2.6', `the clock mode is ${JSON.stringify(clock.mode)}, not fraction or value`);
+  if (!Number.isInteger(clock.steps) || clock.steps < 1) fail('2.6', `the clock has steps ${String(clock.steps)}, not a count of at least one`);
+  if (clock.mode === 'value') {
+    if (clock.range === undefined) fail('C2', 'the clock is in value mode but does not have a range of two numbers');
+    if (!clock.range.every(finite)) fail('S4', 'the clock range is not finite');
+  }
+  if (clock.labels !== undefined && clock.labels.length !== clock.channels.length)
+    fail('2.6', `the clock has ${clock.labels.length} labels for ${clock.channels.length} channels`);
+  clockLaps(clock);
   return warnings;
 }

@@ -15,6 +15,7 @@ views in ``encoded.tyd``, with the encodings that the writer picks and several c
 
 from __future__ import annotations
 
+import copy
 import json
 from pathlib import Path
 
@@ -988,6 +989,174 @@ def edge_value():
     print(f"edge-value: {len(cases)} cases with the reference ones")
 
 
+def laps():
+    """The rotating loop over three laps (rule C6), a sparse context (rule V3), and the options that are for drawing only."""
+    import pytycho as ty
+
+    pts = np.array([[1.0, 0.0], [0.0, 1.0], [-1.0, 0.0], [0.0, -1.0], [1.0, 0.0]])
+    a = np.array([0.0, 0.5, 1.0, 1.5, 2.5])
+    d, n, advance = 0.5, 3, 2.5
+    scene = ty.Scene(title="three laps of the rotating loop")
+    rot = scene.frame("rot", label="rotating", axes=("x", "y", "z"), unit="DU")
+    scene.frame("inertial", parent=rot, rotation=ty.rotation("z", ty.channel("a")), label="inertial", axes=("X", "Y", "Z"), unit="DU")
+    b1 = scene.body("b1", frame=rot, position=[ty.attr("d"), 0.0, 0.0])
+    loop = scene.track_set("loop", frame=rot, attrs={"d": d}, periodic=True, dtype="float64")
+    loop.add(pts, channels={"a": a})
+    # fan is not periodic and therefore has one lap. it is drawn whole and never read, hence it is allowed with a clock of three laps
+    fan = scene.track_set("fan", frame=rot, dtype="float64")
+    for j in range(5):
+        fan.add(np.array([[j, 0.0], [j, 1.0]]), channels={"a": [0.0, 0.1 * (j + 1)]}, parameters={"e": 0.1 * j})
+    frame = scene.choice("frame", ["rot", "inertial"], default="inertial", scope="panel")
+    e = scene.selector("e", parameter="e", default=0.2)
+    by_frame = {"parameter": "e", "colormap": {"var": frame, "map": {"rot": "viridis", "inertial": "plasma"}}}
+    scene.clock("fraction", channels=["@index", "a"], steps=24, laps=n)
+    scene.view(
+        "v",
+        frame=frame,
+        driver=ty.driver(loop, 0),
+        camera={"kind": "plane", "plane": "xy"},
+        layers=[
+            ty.track(loop),
+            ty.track(loop, trail=0.25, taper=(0, 0), head={"color": "#f0e442", "size": 9}),
+            ty.track(loop, reveal="grow"),
+            ty.track(loop, trail=0.5),
+            ty.body(b1, trail=0.25),
+            ty.track(fan, ty.every(2), color=by_frame, opacity=0.4),
+            ty.track(fan, color=by_frame, opacity=0.05, highlight={"var": e, "width": 2.5, "kernel": {"width": 0.05, "opacity": 0.55}}),
+            ty.axes(span="full"),
+            ty.grid(labels=True),
+        ],
+    )
+    scene.panel("p1", "v")
+
+    P = np.hstack([pts, np.zeros((5, 1))])
+    b = np.array([d, 0.0, 0.0])
+
+    def L(j, i):
+        """Sample i of lap j in the inertial frame, where every channel is raised by j advances."""
+        return rz(a[i] + j * advance) @ P[i]
+
+    def B(j, i):
+        return rz(a[i] + j * advance) @ b
+
+    def mid(x, y):
+        return 0.5 * x + 0.5 * y
+
+    def pts_(x):
+        return [list(map(float, p)) for p in x]
+
+    fan_lines = {j: pts_([np.array([j, 0.0, 0.0]), rz(0.1 * (j + 1)) @ np.array([j, 1.0, 0.0])]) for j in range(5)}
+    whole = [L(j, i) for j in range(2) for i in range(4)] + [L(2, i) for i in range(5)]
+    marks = [{"kind": "axes"}, {"kind": "grid"}]
+
+    def state(frame="inertial", channel="@index"):
+        return {
+            "variables": {},
+            "clock": {"channel": channel},
+            "panels": {"p1": {"view": "v", "variables": {"frame": frame}}},
+            "layout": {"kind": "panel", "id": "p1"},
+        }
+
+    def expected(layers):
+        return {"panels": {"p1": {"frame": "inertial", "layers": layers}}}
+
+    # on @index, u_i = i / 4. frame 19 has the loop reading U = 3 * 19 / 24 = 2.375, i.e. lap 2 at 0.375, halfway between samples 1 and 2
+    head = mid(L(2, 1), L(2, 2))
+    body = mid(B(2, 1), B(2, 2))
+    cases = [
+        {
+            "name": "C6: reveal none is three laps joined, 13 vertices, a head mid-lap 2, trails across one and two lap joints, "
+            "grow from lap 0, a body trail across a joint, a nonperiodic set drawn once, V3 count 2 of 5 tracks",
+            "source": "analytic",
+            "state": state(),
+            "frame_index": 19,
+            "tolerance": TOL,
+            "expected": expected(
+                [
+                    {"kind": "track", "set": "loop", "members": [{"index": 0, "line": pts_(whole)}]},
+                    # the tail reads 2.375 - 3 * 0.25 = 1.625, i.e. lap 1 at 0.625, halfway between samples 2 and 3
+                    {
+                        "kind": "track",
+                        "set": "loop",
+                        "members": [
+                            {
+                                "index": 0,
+                                "line": pts_([mid(L(1, 2), L(1, 3)), L(1, 3), L(2, 0), L(2, 1), head]),
+                                "head": list(map(float, head)),
+                            }
+                        ],
+                    },
+                    {
+                        "kind": "track",
+                        "set": "loop",
+                        "members": [
+                            {"index": 0, "line": pts_([L(0, i) for i in range(4)] + [L(1, i) for i in range(4)] + [L(2, 0), L(2, 1), head])}
+                        ],
+                    },
+                    # the tail reads 2.375 - 3 * 0.5 = 0.875, i.e. lap 0 at 0.875, halfway between samples 3 and 4
+                    {
+                        "kind": "track",
+                        "set": "loop",
+                        "members": [
+                            {"index": 0, "line": pts_([mid(L(0, 3), L(0, 4))] + [L(1, i) for i in range(4)] + [L(2, 0), L(2, 1), head])}
+                        ],
+                    },
+                    {
+                        "kind": "body",
+                        "body": "b1",
+                        "position": list(map(float, body)),
+                        "trail": pts_([mid(B(1, 2), B(1, 3)), B(1, 3), B(2, 0), B(2, 1), body]),
+                    },
+                    # the step is floor(5 / 2 + 0.5) = 3, which gives tracks 0 and 3, then the last
+                    {"kind": "track", "set": "fan", "members": [{"index": j, "line": fan_lines[j]} for j in (0, 3, 4)]},
+                    {"kind": "track", "set": "fan", "members": [{"index": j, "line": fan_lines[j]} for j in range(5)]},
+                    *marks,
+                ]
+            ),
+        },
+    ]
+    doc, data = _write_scene("laps", scene, cases)
+    for fr in ("rot", "inertial"):
+        for channel in ("@index", "a"):
+            for i in range(-1, 25):
+                st = state(fr, channel)
+                cases.append(
+                    {
+                        "name": f"{fr}, {channel}, frame {i}",
+                        "source": "reference",
+                        "state": st,
+                        "frame_index": i,
+                        "tolerance": TOL,
+                        "expected": evaluate(doc, data, st, i),
+                    }
+                )
+    (HERE / "laps" / "cases.json").write_text(json.dumps(cases, indent=1) + "\n")
+
+    def with_layer(k, **changes):
+        layers = copy.deepcopy(doc["views"]["v"]["layers"])
+        layers[k].update(changes)
+        return {"views": {"v": {"layers": layers}}}
+
+    rejections = [
+        {"name": "C6: laps on a value clock", "rule": "C6", "scene": {"clock": {"mode": "value", "range": [0.0, 1.0]}}},
+        {"name": "C6: laps of zero", "rule": "C6", "scene": {"clock": {"laps": 0}}},
+        {
+            "name": "C6: laps 2 with a driver whose set is not periodic",
+            "rule": "C6",
+            "scene": {"clock": {"laps": 2}, "track_sets": {"loop": {"periodic": False}}},
+        },
+        {"name": "C6: laps 3 with a reading taken on a set that is not periodic", "rule": "C6", "scene": with_layer(5, head=True)},
+        {"name": "V3: a member count of zero", "rule": "V3", "scene": with_layer(5, members={"count": 0})},
+        {
+            "name": "V3: a driver member that is a count",
+            "rule": "V3",
+            "scene": {"views": {"v": {"driver": {"member": {"index": None, "count": 2}}}}},
+        },
+    ]
+    (HERE / "laps" / "rejections.json").write_text(json.dumps(rejections, indent=1) + "\n")
+    print(f"laps: {len(cases)} cases with the reference ones, {len(rejections)} rejections")
+
+
 def containers():
     """The same views written twice, with the encodings the writer picks and all raw, for a reader to decode bit for bit."""
     rng = np.random.default_rng(78)
@@ -1033,4 +1202,5 @@ if __name__ == "__main__":
     two_panels()
     edge_fraction()
     edge_value()
+    laps()
     containers()

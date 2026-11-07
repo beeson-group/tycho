@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -17,6 +18,25 @@ def _cases():
     for path in sorted(CORPUS.glob("*/cases.json")):
         for i, case in enumerate(json.loads(path.read_text())):
             yield pytest.param(path.parent, case, id=f"{path.parent.name}[{i}] {case['name']}")
+
+
+def merge(base, patch):
+    """A deep merge of ``patch`` into a copy of ``base``, where dicts are merged, a null deletes its key, and other values replace."""
+    if not isinstance(base, dict) or not isinstance(patch, dict):
+        return patch
+    out = dict(base)
+    for k, v in patch.items():
+        if v is None:
+            out.pop(k, None)
+        else:
+            out[k] = merge(out.get(k), v)
+    return out
+
+
+def _rejections():
+    for path in sorted(CORPUS.glob("*/rejections.json")):
+        for i, case in enumerate(json.loads(path.read_text())):
+            yield pytest.param(path.parent, case, id=f"{path.parent.name} rejects [{i}] {case['name']}")
 
 
 def compare(actual, expected, tol, where="$"):
@@ -45,6 +65,15 @@ def compare(actual, expected, tol, where="$"):
             assert set(actual) == set(expected), f"{where}: keys {sorted(actual)} != {sorted(expected)}"
         for k, e in expected.items():
             compare(actual[k], e, tol, f"{where}.{k}")
+
+
+@pytest.mark.parametrize(("directory", "case"), list(_rejections()))
+def test_rejection(directory, case):
+    document = merge(json.loads((directory / "scene.tys").read_text()), case.get("scene", {}))
+    container = Container.read(directory / "data.tyd")
+    state = case.get("state", document["initial"])
+    with pytest.raises(ValueError, match=f"^{re.escape(case['rule'])}:"):
+        evaluate(document, container, state, case.get("frame_index", 0))
 
 
 @pytest.mark.parametrize(("directory", "case"), list(_cases()))

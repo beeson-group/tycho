@@ -20,6 +20,9 @@ meaning is given in the scene document, ``scene.tys``.
 
 from __future__ import annotations
 
+import json
+import os
+import struct
 import zlib
 from typing import Any
 
@@ -135,3 +138,97 @@ def _decode_chunk(chunk: bytes | memoryview, rows: int, width: int, out: np.ndar
     planes = np.frombuffer(raw, np.uint8).reshape(size, rows * width)
     delta = np.ascontiguousarray(planes.T).view(out.dtype).reshape(rows, width)
     np.cumsum(delta, axis=0, dtype=out.dtype, out=out)  # the integers are unsigned, hence the cumulative sum wraps around
+
+
+class ContainerWriter:
+    """Accumulates named typed views, then serializes them as a version 1 container.
+
+    Each view is stored shuffle-delta-deflate, or raw when its encoded bytes are not fewer than
+    its raw bytes. ``raw=True`` stores every view raw, for tests and debugging.
+    """
+
+    def __init__(self, generator: str = "pytycho", meta: dict[str, Any] | None = None, *, raw: bool = False) -> None:
+        if not isinstance(generator, str):
+            raise ContainerError(f"the generator is {generator!r}, not a string")
+        if meta is not None and not isinstance(meta, dict):
+            raise ContainerError(f"meta is {meta!r}, not a dict")
+        self.generator = generator
+        self.meta: dict[str, Any] = dict(meta or {})
+        self.raw = raw
+        self._views: dict[str, dict[str, Any]] = {}
+        self._parts: list[bytes] = []
+        self._offset = 0
+
+    @property
+    def views(self) -> dict[str, dict[str, Any]]:
+        """The view records written so far, by name."""
+        return self._views
+
+    def add_view(self, name: str, array: Any, dtype: str | None = None, *, chunk_rows: int | None = None) -> str:
+        """Stores ``array`` under ``name``, and returns the name.
+
+        ``dtype`` is the stored dtype. Without it the dtype of ``array`` is kept (rule D1).
+        ``chunk_rows`` is the number of rows in a chunk of an encoded view. The default chunk
+        holds about 1 MiB of the view's raw bytes, and at least one row.
+        """
+        if not isinstance(name, str) or not name:
+            raise ContainerError(f"the view name {name!r} is not a nonempty string")
+        if name in self._views:
+            raise ContainerError(f"view {name!r} already exists")
+        if chunk_rows is not None and (not _is_count(chunk_rows) or chunk_rows < 1):
+            raise ContainerError(f"D5: chunk_rows is a positive integer, not {chunk_rows!r}")
+        given = np.asarray(array).dtype.name
+        stored = stored_array(array, dtype)
+        record: dict[str, Any] = {"dtype": stored.dtype.name, "shape": [int(n) for n in stored.shape]}
+        raw = stored.tobytes(order="C")
+        chunks: list[bytes] | None = None
+        if not self.raw and raw:
+            bits = _bits(stored)
+            if chunk_rows is None:
+                chunk_rows = max(1, CHUNK_BYTES // max(1, bits.shape[1] * stored.dtype.itemsize))
+            chunks = [_encode_chunk(bits[a : a + chunk_rows]) for a in range(0, bits.shape[0], chunk_rows)]
+            if sum(map(len, chunks)) >= len(raw):
+                chunks = None
+        if chunks is None:
+            record.update(encoding=RAW, offset=self._offset, length=len(raw))
+            data = raw
+        else:
+            spans, at = [], self._offset
+            for c in chunks:
+                spans.append([at, len(c)])
+                at += len(c)
+            record.update(encoding=ENCODED, chunk_rows=chunk_rows, chunks=spans)
+            data = b"".join(chunks)
+        self._views[name] = record
+        if stored.dtype.name != given:
+            # record the cast that the writer made, so that a reader can tell a float32 store from float32 data
+            self.meta.setdefault("casts", {})[name] = given
+        padded = data + b"\0" * _pad(len(data))
+        self._parts.append(padded)
+        self._offset += len(padded)
+        return name
+
+    def header(self) -> dict[str, Any]:
+        """The JSON header, as a dict."""
+        return {
+            "format": "tycho-data",
+            "version": VERSION,
+            "generator": self.generator,
+            "meta": self.meta,
+            "views": self._views,
+        }
+
+    def to_bytes(self) -> bytes:
+        """The whole data container, as bytes."""
+        try:
+            header = json.dumps(self.header(), separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode("utf-8")
+        except ValueError as exc:
+            raise ContainerError(f"meta holds a NaN or an infinity, which the JSON header cannot encode: {exc}") from None
+        head = MAGIC + struct.pack("<II", VERSION, len(header)) + header
+        head += b"\0" * _pad(len(head))
+        return head + b"".join(self._parts)
+
+    def write(self, path: str | os.PathLike[str]) -> None:
+        """Writes the container to ``path``."""
+        with open(path, "wb") as fh:
+            fh.write(self.to_bytes())

@@ -866,6 +866,128 @@ def edge_fraction():
     (HERE / "edge-fraction" / "data.tyd").write_bytes(w.to_bytes())
 
 
+def edge_value():
+    """The rules that a plausible wrong implementation would still pass in the other scenes, tested in value mode."""
+    import pytycho as ty
+
+    scene = ty.Scene(title="edge cases, value mode")
+    p = scene.frame("p")
+    scene.frame("th", parent=p, rotation=ty.rotation("z", ty.channel("th")))
+    b = scene.body("b", frame=p, position=[1.0, 0.0, 0.0])
+    dec = scene.track_set("dec", frame=p, dtype="float64")
+    dec.add(np.array([[0.0, 0.0], [1.0, 0.0]]), channels={"t": [1.0, 0.0]})
+    drv = scene.track_set("drv", frame=p, dtype="float64")
+    drv.add(np.array([[0.0, 0.0], [1.0, 0.0]]), channels={"t": [0.0, 1.0], "th": [0.0, 0.5]})
+    whole = scene.track_set("whole", frame=p, dtype="float64")
+    whole.add(np.array([[0.0, 0.0], [1.0, 0.0]]), channels={"t": [0.0, 1.0]})
+    idx = scene.track_set("idx", frame=p, dtype="float64")
+    idx.add(np.array([[k, 0.0] for k in range(5)]), channels={"t": [0.0, 1.0, 2.0, 3.0, 4.0]})
+    scene.clock("value", channels=["t", "@index"], steps=8, range=[2.0, 10.0])
+    scene.view(
+        "v",
+        frame=p,
+        driver=ty.driver(drv, 0),
+        layers=[
+            ty.track(dec, reveal="grow", head=True, before="hidden", after="clamp"),
+            ty.track(dec, reveal="grow", head=True, before="clamp", after="hidden"),
+            ty.track(whole, after="hidden"),
+            ty.track(idx, reveal="grow", head=True),
+        ],
+    )
+    scene.view("body", frame="th", driver=ty.driver(drv, 0), layers=[ty.body(b), ty.body(b, trail=0.5)])
+    scene.panel("v", "v")
+    scene.panel("body", "body")
+    initial = {
+        "variables": {},
+        "clock": {"channel": "t"},
+        "panels": {"v": {"view": "v"}, "body": {"view": "body"}},
+        "layout": ty.split("row", 0.5, "v", "body"),
+    }
+    c, s = float(np.cos(0.5)), float(np.sin(0.5))
+    cases = [
+        {
+            "name": "C3 on a decreasing channel with before and after apart, C3 and C5 on a reveal-none layer, "
+            "L4 clamp of the driver's reading, a body trail in value mode",
+            "source": "analytic",
+            "state": initial,
+            "frame_index": 0,
+            "tolerance": TOL,
+            "expected": {
+                "panels": {
+                    # frame 0 has v = 2. dec reads u = (2 - 1) / (0 - 1) = -1, before the track, and whole reads u = 2, after it.
+                    # drv reads u = 2, which is clamped to 1
+                    "v": {
+                        "frame": "p",
+                        "layers": [
+                            {"kind": "track", "set": "dec", "members": [{"index": 0, "line": [], "head": None}]},
+                            {"kind": "track", "set": "dec", "members": [{"index": 0, "line": [[0.0, 0.0, 0.0]], "head": [0.0, 0.0, 0.0]}]},
+                            {"kind": "track", "set": "whole", "members": [{"index": 0, "line": []}]},
+                            {
+                                "kind": "track",
+                                "set": "idx",
+                                "members": [
+                                    {"index": 0, "line": [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0]], "head": [2.0, 0.0, 0.0]}
+                                ],
+                            },
+                        ],
+                    },
+                    "body": {
+                        "frame": "th",
+                        "layers": [
+                            {"kind": "body", "body": "b", "position": [c, s, 0.0]},
+                            # the trail runs from u = 0.5 to the clamped 1, i.e. from the blended point to the closing sample
+                            {"kind": "body", "body": "b", "position": [c, s, 0.0], "trail": [[0.5 + 0.5 * c, 0.5 * s, 0.0], [c, s, 0.0]]},
+                        ],
+                    },
+                }
+            },
+        },
+        {
+            "name": "T4: a value-mode clock on @index counts stored samples from 0",
+            "source": "analytic",
+            "state": {**initial, "clock": {"channel": "@index"}},
+            "frame_index": 0,
+            "tolerance": TOL,
+            # on the five-sample track, v = 2 gives u = 2 / 4, and the head sits on sample 2
+            "expected": {
+                "panels": {
+                    "v": {
+                        "frame": "p",
+                        "layers": [
+                            None,
+                            None,
+                            None,
+                            {
+                                "kind": "track",
+                                "set": "idx",
+                                "members": [
+                                    {"index": 0, "line": [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0]], "head": [2.0, 0.0, 0.0]}
+                                ],
+                            },
+                        ],
+                    }
+                }
+            },
+        },
+    ]
+    doc, data = _write_scene("edge-value", scene, cases)
+    for channel in ("t", "@index"):
+        for i in range(-1, 9):
+            st = {**initial, "clock": {"channel": channel}}
+            cases.append(
+                {
+                    "name": f"{channel}, frame {i}",
+                    "source": "reference",
+                    "state": st,
+                    "frame_index": i,
+                    "tolerance": TOL,
+                    "expected": evaluate(doc, data, st, i),
+                }
+            )
+    (HERE / "edge-value" / "cases.json").write_text(json.dumps(cases, indent=1) + "\n")
+    print(f"edge-value: {len(cases)} cases with the reference ones")
+
+
 def containers():
     """The same views written twice, with the encodings the writer picks and all raw, for a reader to decode bit for bit."""
     rng = np.random.default_rng(78)
@@ -910,4 +1032,5 @@ if __name__ == "__main__":
     value_clock()
     two_panels()
     edge_fraction()
+    edge_value()
     containers()

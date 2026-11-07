@@ -6,7 +6,7 @@ The two file formats are versioned apart from the packages, i.e. either format v
 
 ## [Unreleased]
 
-The packages at this version write and read scene format 0.3, which adds two keys to format 0.2, and they still read a scene of format 0.2.
+Scene format 0.3 is written and read at this version, and a scene of format 0.2 is still read. Format 0.3 differs from 0.2 by two keys.
 
 ### Added
 

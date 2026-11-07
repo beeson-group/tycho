@@ -127,3 +127,48 @@ async function inflate(src: Uint8Array, out: Uint8Array, where: string): Promise
   }
   if (at !== expected) fail('D5', `${where} inflates to ${at} bytes, not the ${expected} of its rows`);
 }
+
+/**
+ * Undoes the shuffle and the delta of one chunk of `m` rows of `w` elements of `size` bytes, from
+ * the inflated bytes `t`, into `out` at `byteOffset`. The values are built from their bytes
+ * arithmetically and stored through unsigned arrays, which wrap, so that the result is in the
+ * host's byte order.
+ */
+function restore(t: Uint8Array, m: number, w: number, size: number, out: ArrayBuffer, byteOffset: number): void {
+  const n = m * w;
+  if (size === 1) {
+    const o = new Uint8Array(out, byteOffset, n);
+    o.set(t.subarray(0, Math.min(w, n)));
+    for (let e = w; e < n; e++) o[e] = t[e]! + o[e - w]!;
+  } else if (size === 2) {
+    const o = new Uint16Array(out, byteOffset, n);
+    for (let e = 0; e < n; e++) {
+      const v = t[e]! | (t[n + e]! << 8);
+      o[e] = e < w ? v : v + o[e - w]!;
+    }
+  } else if (size === 4) {
+    const o = new Uint32Array(out, byteOffset, n);
+    const n2 = 2 * n;
+    const n3 = 3 * n;
+    for (let e = 0; e < n; e++) {
+      const v = (t[e]! | (t[n + e]! << 8) | (t[n2 + e]! << 16) | (t[n3 + e]! << 24)) >>> 0;
+      o[e] = e < w ? v : v + o[e - w]!;
+    }
+  } else {
+    // each element is two 32-bit halves, the low one first in memory on a little-endian host
+    const o = new Uint32Array(out, byteOffset, 2 * n);
+    const lo = LITTLE_ENDIAN_HOST ? 0 : 1;
+    const hi = 1 - lo;
+    for (let e = 0; e < n; e++) {
+      let a = (t[e]! | (t[n + e]! << 8) | (t[2 * n + e]! << 16) | (t[3 * n + e]! << 24)) >>> 0;
+      let b = (t[4 * n + e]! | (t[5 * n + e]! << 8) | (t[6 * n + e]! << 16) | (t[7 * n + e]! << 24)) >>> 0;
+      if (e >= w) {
+        const p = 2 * (e - w);
+        a += o[p + lo]!;
+        b += o[p + hi]! + (a > 0xffffffff ? 1 : 0);
+      }
+      o[2 * e + lo] = a;
+      o[2 * e + hi] = b;
+    }
+  }
+}

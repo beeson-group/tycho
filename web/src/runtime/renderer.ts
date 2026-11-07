@@ -1807,4 +1807,80 @@ export class StageRenderer {
     if (p.view === null || spec.kind !== 'plane') return;
     for (const d of p.draws.values()) if (d instanceof MarkDraw) d.follow(p.view, spec);
   }
+
+  /**
+   * The labels of a panel at the last frame, in CSS pixels from the panel's corner. They are the tick
+   * numbers and axis titles of a plane camera, the axis titles at the tips of axes laid out from the
+   * box, and the body labels beside their discs.
+   */
+  private labelItems(p: PanelRender): (PanelLabel & { hidden: boolean })[] {
+    if (p.plan === null) return [];
+    const items: (PanelLabel & { hidden: boolean })[] = [];
+    const frame = this.ctx.scene.frames[p.plan.display];
+    const names = frame?.axes ?? ['x', 'y', 'z'];
+    const { normal } = cameraBasis(p.cameraSpec);
+    const add = (text: string, at: THREE.Vector3, dx: number, hide: boolean) => {
+      const s = at.clone().project(p.camera);
+      const x = ((s.x + 1) / 2) * p.rect.w + dx;
+      const y = ((1 - s.y) / 2) * p.rect.h;
+      const inside = s.z > -1 && s.z < 1 && x >= 0 && x <= p.rect.w && y >= 0 && y <= p.rect.h;
+      items.push({ text, x, y, hidden: hide || !inside });
+    };
+    const marks = [...p.draws.values()].filter((d): d is MarkDraw => d instanceof MarkDraw);
+    if (p.view !== null && p.cameraSpec.kind === 'plane') {
+      const [ix, iy] = planeAxes(p.cameraSpec);
+      const title = (i: number) => (names[i] && frame?.unit ? `${names[i]} [${frame.unit}]` : (names[i] ?? ''));
+      const axes = marks.some((d) => d.follows && d.kind === 'axes');
+      const ticks = marks.some((d) => d.ticks);
+      for (const l of planeLabels(p.view, ticks, axes ? [title(ix), title(iy)] : null)) items.push({ ...l, hidden: false });
+    }
+    for (const d of p.draws.values()) {
+      if (d instanceof MarkDraw && d.kind === 'axes' && !d.follows) {
+        d.tips.forEach((tip, i) => add(names[i] ?? '', tip, 4, p.cameraSpec.kind === 'plane' && Math.abs(tip.clone().normalize().dot(normal)) > 0.99));
+      } else if (d instanceof BodyDraw && d.label !== null && d.at !== null && d.group.visible) {
+        add(d.label, d.at, d.size / 2 + 3, false);
+      }
+    }
+    return items;
+  }
+
+  /** The labels a panel shows at the last frame, for a page or a video frame to write as text. */
+  labels(pid: string): PanelLabel[] {
+    const p = this.panels.get(pid);
+    return p === undefined
+      ? []
+      : this.labelItems(p)
+          .filter((l) => !l.hidden)
+          .map(({ hidden: _, ...l }) => l);
+  }
+
+  /** The colorbars a panel shows, the identical ones merged. */
+  colorbars(pid: string): Colorbar[] {
+    const p = this.panels.get(pid);
+    const bars: Colorbar[] = [];
+    if (p === undefined) return bars;
+    for (const d of p.draws.values()) {
+      if (!(d instanceof TrackDraw) || !d.group.visible) continue;
+      const b = d.colorbar();
+      if (b !== null) bars.push(b);
+    }
+    return mergeColorbars(bars);
+  }
+
+  private placeLabels(p: PanelRender): void {
+    const el = p.labels;
+    if (el === null) return;
+    const items = this.labelItems(p);
+    while (el.children.length < items.length) el.appendChild(document.createElement('span'));
+    while (el.children.length > items.length) el.lastChild!.remove();
+    items.forEach((it, i) => {
+      const span = el.children[i] as HTMLElement;
+      if (span.textContent !== it.text) span.textContent = it.text;
+      span.hidden = it.hidden;
+      const shift = it.align === 'center' ? '-50%' : it.align === 'end' ? '-100%' : '0';
+      span.style.transformOrigin = '0 0';
+      span.style.fontSize = it.kind === 'title' ? '13px' : '';
+      span.style.transform = `translate(${it.x.toFixed(1)}px, ${it.y.toFixed(1)}px)${it.rotate ? ' rotate(-90deg)' : ''} translate(${shift}, -50%)`;
+    });
+  }
 }

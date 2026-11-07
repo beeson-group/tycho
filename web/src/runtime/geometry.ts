@@ -210,3 +210,93 @@ export function channelAtReading(set: SetData, tc: TrackClock, track: number, ch
   const { k, w } = tc.locate(at.u);
   return (1 - w) * set.channelAt(channel, track, k, false, at.lap) + w * set.channelAt(channel, track, k + 1, false, at.lap);
 }
+
+// the revealed part of a track
+
+const identity = (x: number): number => x;
+
+/** A lap number far past any real lap. EMPTY_RANGE runs from lap FAR down to lap -FAR, hence it does not contain any vertex. */
+const FAR = 1 << 20;
+
+/** A range that does not contain any vertex, as [lap, reading, lap, reading] of its two ends. */
+export const EMPTY_RANGE: readonly [number, number, number, number] = [FAR, 0, -FAR, 0];
+
+/** The range every sample of every lap from 0 to `top` lies inside, closing samples included. */
+export const fullRange = (top: number): [number, number, number, number] => [0, -1, top, 2];
+
+/** The part of a polyline the GPU draws and the pieces the CPU draws at its two ends. */
+export interface LoopSpan {
+  /** The lap and the within-lap reading of each end for the GPU, [jA, uA, jB, uB], rounded as the GPU stores readings. */
+  range: [number, number, number, number];
+  /** The lowest and the highest lap whose pass draws a segment, or null when the GPU does not draw any segment. */
+  laps: [number, number] | null;
+  /** Segments the CPU draws, at the ends of the range. */
+  pieces: [Vertex, Vertex][];
+}
+
+/** The first index whose rounded reading is above `x` (or at least `x` when `orEqual`), or the sample count `tc.m` when such an index does not exist. */
+function search(tc: TrackClock, x: number, orEqual: boolean, round: (x: number) => number): number {
+  let lo = 0;
+  let hi = tc.m;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    const r = round(tc.at(mid));
+    if (r > x || (orEqual && r === x)) hi = mid;
+    else lo = mid + 1;
+  }
+  return lo;
+}
+
+/**
+ * Whether the GPU draws, in lap `lap`, a segment whose samples read `ui` and `uj` (as stored),
+ * against a range of `LoopSpan.range`. Both ends must lie strictly inside the range in loop
+ * readings, compared lap first and reading second.
+ */
+export function segmentShown(range: readonly [number, number, number, number], lap: number, ui: number, uj: number): boolean {
+  return (lap > range[0] || (lap === range[0] && range[1] < ui)) && (lap < range[2] || (lap === range[2] && uj < range[3]));
+}
+
+/**
+ * The polyline of rules L1 and C6 between loop readings `ua <= ub`, on a set of `laps` laps. A
+ * vertex is inside when its rounded reading in its lap lies strictly inside the rounded range, as
+ * segmentShown tests it. With `round` the identity, the test selects the vertices of the
+ * evaluator's polyline. With Math.fround, it is the comparison a float32 GPU makes, so that the
+ * CPU's end pieces meet the GPU's segments at the same samples.
+ */
+export function loopSpan(tc: TrackClock, ua: number, ub: number, laps: number, round: (x: number) => number = identity): LoopSpan {
+  if (ua === ub) return { range: [...EMPTY_RANGE], laps: null, pieces: [] };
+  const top = laps - 1;
+  const a = lapOf(ua, laps);
+  const b = lapOf(ub, laps);
+  const start = point(tc, a.u, false, a.lap);
+  const end = point(tc, b.u, false, b.lap);
+  const jA = a.lap;
+  const uA = round(a.u);
+  let jB = b.lap;
+  let uB = round(b.u);
+  // an end at the first sample of a lap is the closing sample of the lap below, where the joint
+  // segment that reaches it is not inside
+  if (uB === 0) (jB--, (uB = 1));
+  const range: [number, number, number, number] = [jA, uA, jB, uB];
+  const r = (i: number) => round(tc.at(i));
+  // the last sample that belongs to a lap. below the top lap, the closing sample is the first sample of the next lap
+  const last = (j: number) => (j < top ? tc.m - 2 : tc.m - 1);
+  const upper = (j: number, x: number) => j < jB || (j === jB && x < uB);
+  const lower = (j: number, x: number) => j > jA || (j === jA && uA < x);
+  const i0 = search(tc, uA, false, round);
+  let first: [number, number] | null = i0 <= last(jA) ? [jA, i0] : jA < top ? [jA + 1, 0] : null;
+  if (first !== null && !upper(first[0], r(first[1]))) first = null;
+  const i1 = Math.min(search(tc, uB, true, round) - 1, last(jB));
+  let final: [number, number] | null = i1 >= 0 ? [jB, i1] : null;
+  if (final !== null && !lower(final[0], r(final[1]))) final = null;
+  if (first === null || final === null || first[0] > final[0] || (first[0] === final[0] && first[1] > final[1])) {
+    return { range, laps: null, pieces: [[start, end]] };
+  }
+  const pieces: [Vertex, Vertex][] = [
+    [start, { sample: first[1], shifted: false, lap: first[0] }],
+    [{ sample: final[1], shifted: false, lap: final[0] }, end],
+  ];
+  // a segment is drawn by the pass of the lap of its first sample
+  const same = first[0] === final[0] && first[1] === final[1];
+  return { range, laps: same ? null : [first[0], final[1] === 0 ? final[0] - 1 : final[0]], pieces };
+}

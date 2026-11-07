@@ -464,6 +464,89 @@ def two_panels():
             },
         }
     )
+    # frame 3 has q = 1/2. in p1, k = 0.5 rounds up to track 1, whose t gives u_i = 0, 1/4, 3/4, 1. the head thus lies
+    # halfway between samples 1 and 2, and the tail at u = 0.1 lies at weight 0.4 between samples 0 and 1.
+    # in p2, k = 2.5 rounds to 3 and clamps to track 2, whose decreasing t gives u_i = 0, 1
+    s1 = [in_shift(q, a) for q, a in zip(tracks[1][0], tracks[1][1], strict=True)]
+    head1 = 0.5 * s1[1] + 0.5 * s1[2]
+    t2 = tracks[2][0]
+    head2 = 0.5 * t2[0] + 0.5 * t2[1]
+    anchor_tilt = list(map(float, rx(tilt) @ (b - o)))
+    cases.append(
+        {
+            "name": "selector by index rounds a half up and clamps, trail between samples of a nonperiodic track",
+            "source": "analytic",
+            "state": state(),
+            "frame_index": 3,
+            "tolerance": TOL,
+            "expected": {
+                "panels": {
+                    "p1": {
+                        "frame": "shift",
+                        "layers": [
+                            None,
+                            None,
+                            {
+                                "kind": "track",
+                                "set": "orbits",
+                                "members": [
+                                    {"index": 1, "line": L([0.6 * s1[0] + 0.4 * s1[1], s1[1], head1]), "head": list(map(float, head1))}
+                                ],
+                            },
+                            None,
+                            {"kind": "body", "body": "anchor", "position": [0.0, 0.0, 0.0], "trail": [[0.0, 0.0, 0.0]] * 3},
+                            {"kind": "grid"},
+                        ],
+                    },
+                    "p2": {
+                        "frame": "tilt",
+                        "layers": [
+                            None,
+                            None,
+                            {
+                                "kind": "track",
+                                "set": "orbits",
+                                "members": [{"index": 2, "line": L([0.9 * t2[0] + 0.1 * t2[1], head2]), "head": list(map(float, head2))}],
+                            },
+                            None,
+                            {"kind": "body", "body": "anchor", "position": anchor_tilt, "trail": [anchor_tilt] * 2},
+                            {"kind": "grid"},
+                        ],
+                    },
+                }
+            },
+        }
+    )
+    # at frame 1, q = 1/6 makes the tail reading negative, and the trail is cut at the first sample (rule L2)
+    head1 = (1.0 / 3.0) * s1[0] + (2.0 / 3.0) * s1[1]
+    cases.append(
+        {
+            "name": "a nonperiodic trail is cut at the first sample",
+            "source": "analytic",
+            "state": state(),
+            "frame_index": 1,
+            "tolerance": TOL,
+            "expected": {
+                "panels": {
+                    "p1": {
+                        "frame": "shift",
+                        "layers": [
+                            None,
+                            None,
+                            {
+                                "kind": "track",
+                                "set": "orbits",
+                                "members": [{"index": 1, "line": L([s1[0], head1]), "head": list(map(float, head1))}],
+                            },
+                            None,
+                            None,
+                            {"kind": "grid"},
+                        ],
+                    }
+                }
+            },
+        }
+    )
     states = {
         "initial": state(),
         "root and rot, k 1.5 and -0.6": state(p1={"frame": "root", "k": 1.5}, p2={"frame": "rot", "k": -0.6}),

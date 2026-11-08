@@ -546,6 +546,14 @@ describe('the chrome under a DOM stand-in', () => {
       v.syncBars('pulsating', dom);
       const grad = one('cbar-g', panels[0]);
       expect([grad.classList.contains('live'), grad.getAttribute('role'), grad.getAttribute('aria-label')]).toEqual([true, 'slider', 'eccentricity']);
+      // the ends of the bar are written as integers when both are integers, as for an iterate count, and to three significant digits otherwise
+      const ticks = one('cbar-n', panels[0]);
+      expect(ticks.children.map((c: FakeElement) => c.textContent)).toEqual(['1', '0']);
+      bars[0]!.hi = 0.9;
+      v.syncBars('pulsating', dom);
+      expect(ticks.children.map((c: FakeElement) => c.textContent)).toEqual(['0.900', '0.00']);
+      bars[0]!.hi = 1;
+      v.syncBars('pulsating', dom);
       // the kernel's band is shaded over the bar, and the marker sits above it
       const band = one('cbar-k', grad);
       expect(grad.children.map((c: FakeElement) => c.tagName.toLowerCase())).toEqual(['span', 'i']);

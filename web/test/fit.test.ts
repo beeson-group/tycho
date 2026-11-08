@@ -445,6 +445,65 @@ describe("a plane camera's axes and grid follow the visible rectangle", () => {
   });
 });
 
+/**
+ * A panel of 400 by 400 CSS pixels under `camera` that draws one track from (0, 0, 0) to (10, 1, 1), the axes, and a
+ * body labeled Moon, planned and fitted without WebGL. The Moon is placed at `place(p)` once the camera is fitted.
+ */
+function moonPanel(camera: Camera, place: (p: any) => [number, number, number]) {
+  const scene = baseScene({ version: '0.3', bodies: { moon: { frame: 'a', position: [0, 0, 0], label: 'Moon' } } });
+  scene.views.main!.camera = camera;
+  scene.views.main!.layers.push({ kind: 'axes' }, { kind: 'body', body: 'moon' });
+  const data = new MemoryStore()
+    .add('off', [0, 2], 'uint32')
+    .add('pos', [
+      [0, 0, 0],
+      [10, 1, 1],
+    ])
+    .add('time', [0, 1]);
+  const geometry = new GeometryCache(scene, data);
+  const ctx = { scene, geometry, shared: new Shared(), theme: sceneTheme(scene), disc: new THREE.Texture() };
+  const stage = Object.assign(Object.create(StageRenderer.prototype), { ctx, panels: new Map(), lastState: null });
+  const p = stage.panel('p1');
+  p.rect = { x: 0, y: 0, w: 400, h: 400 };
+  stage.replan(p, scene.initial);
+  stage.fit(p);
+  stage.follow(p);
+  scene.bodies!.moon!.position = place(p);
+  stage.advance(p, scene.initial, 0);
+  // outside a render, the matrix that projects a label is updated by hand
+  p.camera.updateMatrixWorld();
+  const shown = () =>
+    stage
+      .labelItems(p)
+      .filter((l: { hidden: boolean }) => !l.hidden)
+      .map((l: { text: string }) => l.text);
+  return { stage, p, shown };
+}
+
+describe('an axis title under the label of a body', () => {
+  it('is hidden under an orbit camera, where the Moon is at the tip of the x axis, and the other titles are kept', () => {
+    const tip = (i: number) => (p: any) => p.draws.get(1).tips[i].toArray();
+    expect(moonPanel({ kind: 'orbit' }, tip(0)).shown()).toEqual(['y', 'z', 'Moon']);
+    // the label of a Moon at the origin is clear of every title
+    expect(moonPanel({ kind: 'orbit' }, () => [0, 0, 0]).shown()).toEqual(['x', 'y', 'z', 'Moon']);
+  });
+  it('is hidden under a plane camera, where the Moon is on the row of the x title just left of it, and the y title and the ticks are kept', () => {
+    // the disc of the Moon is 12 px left of the center of the x title, on its row. its label is set 7 px right of the disc,
+    // over the title
+    const beside = (p: any): [number, number, number] => {
+      const v = p.view;
+      const x = planeLabels(v, true, ['x', 'y']).find((l) => l.kind === 'title' && !l.rotate)!;
+      return [v.x0 + ((x.x - 12) / v.w) * (v.x1 - v.x0), v.y0 + ((v.h - x.y) / v.h) * (v.y1 - v.y0), 0];
+    };
+    const { stage, p, shown } = moonPanel({ kind: 'plane', plane: 'xy' }, beside);
+    const items = stage.labelItems(p).filter((l: { hidden: boolean }) => !l.hidden);
+    expect(items.filter((l: { kind?: string }) => l.kind === 'title').map((l: { text: string }) => l.text)).toEqual(['y']);
+    expect(items.some((l: { kind?: string }) => l.kind === 'tick')).toBe(true);
+    expect(shown()).toContain('Moon');
+    expect(moonPanel({ kind: 'plane', plane: 'xy' }, () => [5, 0.5, 0]).shown()).toEqual(expect.arrayContaining(['x', 'y', 'Moon']));
+  });
+});
+
 describe('the laps of a reveal-none layer (C6)', () => {
   it('draw a pass each, where the laps coincide as where they do not, as the evaluator draws every lap', () => {
     const c = loadCorpus('laps');

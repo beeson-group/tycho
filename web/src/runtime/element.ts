@@ -1811,8 +1811,10 @@ export class TychoViewerElement extends Base {
         d.gradient = b.gradient;
         d.grad.style.background = b.gradient;
       }
-      setText(d.hi, formatNumber(b.hi, 3));
-      setText(d.lo, formatNumber(b.lo, 3));
+      // the ends are written as integers when both are integers, as for an iterate count, and to three significant digits otherwise
+      const digits = Number.isInteger(b.lo) && Number.isInteger(b.hi) ? undefined : 3;
+      setText(d.hi, formatNumber(b.hi, digits));
+      setText(d.lo, formatNumber(b.lo, digits));
       d.range = [b.lo, b.hi];
       d.mark.hidden = b.marker === null;
       if (b.marker !== null) d.mark.style.bottom = `${(100 * b.marker).toFixed(2)}%`;

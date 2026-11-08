@@ -17,6 +17,7 @@ Scene format 0.3 is written and read at this version, and a scene of format 0.2 
 - A second example is `examples/manifolds/build.py`. In it, an L1 halo orbit and the L1 and L2 Lyapunov orbits of the Earth–Moon problem are drawn in 3D with the four legs of their invariant manifolds, in the rotating and the barycentric inertial frames. Its input `manifolds-input.tyd` is attached to the GitHub Release, and its page is shown in the gallery. With `--slide dark` or `--slide light`, a page with the halo alone in two stacked panels is written instead, in the palette of the talk template, for a video on a slide.
 - The script `web/scripts/video.mjs` exports the video of a page in headless Chrome, through `exportVideo`, and writes the MP4 and a poster.
 - The clock can be given `seconds`, the length of one loop at speed 1, in either mode, with `scene.clock(..., seconds=24)`. Without it, a loop lasts 8 seconds for each lap, as before.
+- The viewer element takes the attribute `lean`, under which the Add panel group, the icons of the panel heads, the frame and rate readouts, the View group, and Export are hidden, while the title, the controls of the scene, play, the scrubber, and the speed menu stay. It is meant for a slide on which the controls of the scene are worked by hand, where `kiosk` hides too much.
 
 ### Fixed
 

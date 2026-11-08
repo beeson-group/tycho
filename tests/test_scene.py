@@ -761,3 +761,61 @@ def test_drawing_options_kernel_taper_head_axes_and_grid():
     scene.panel("p", "v")
     with pytest.raises(ty.SceneError, match=r"2\.7: a highlight kernel of view 'v' needs a selector by nearest, and 'k' is by index"):
         scene.to_document()
+
+
+def arrows_scene() -> ty.Scene:
+    """The scene of the corpus directory ``arrows``, built through the API."""
+    scene = ty.Scene()
+    rot = scene.frame("rot")
+    scene.frame("inertial", parent=rot, rotation=ty.rotation("z", ty.channel("th")))
+    vel = scene.track_set("vel", frame=rot, tags={"g": "vel"}, attrs={"s": 0.5}, dtype="float64")
+    vel.add(
+        [[1.0, 0.0], [0.0, 1.0], [-1.0, 0.0]],
+        channels={"t": [0.0, 1.0, 2.0], "th": [0.0, 0.5, 1.5], "vx": [0.0, -1.0, 0.0], "vy": [1.0, 0.0, -1.0]},
+    )
+    sticks = scene.track_set("sticks", frame=rot, tags={"g": "sticks"}, dtype="float64")
+    sticks.add([[2.0, 0.0, 0.0]] * 2, channels={"t": [0.5, 1.0], "th": [0.2, 0.4], "vx": [0.0] * 2, "vy": [1.0] * 2, "vz": [0.5] * 2})
+    sticks.add([[0.0, 2.0, 0.0]] * 2, channels={"t": [1.5, 2.0], "th": [0.6, 1.0], "vx": [1.0] * 2, "vy": [0.0] * 2, "vz": [0.5] * 2})
+    scene.clock("value", channels=["t"], steps=8, range=[0.0, 2.0])
+    layers = [
+        ty.arrow(vel, ("vx", "vy"), scale=ty.attr("s")),
+        ty.arrow(sticks, ("vx", "vy", "vz"), scale=0.25, before="hidden", after="hidden", color="#ffffff", width=1.8, head=12),
+        ty.arrow(ty.sets(g="none"), ("vx", "vy")),
+    ]
+    for frame in ("rot", "inertial"):
+        scene.view(frame, frame=frame, driver=ty.driver(vel, 0), layers=layers)
+        scene.panel(frame, frame)
+    scene.layout(ty.split("row", 0.5, "rot", "inertial"))
+    return scene
+
+
+def test_arrows_through_the_api_give_the_corpus_answers():
+    scene = arrows_scene()
+    document, data = scene.to_document(), scene.to_container()
+    assert document["requires"] == ["layers.arrows"]
+    assert document["views"]["rot"]["layers"][1] == json.loads((CORPUS / "arrows" / "scene.tys").read_text())["views"]["rot"]["layers"][1]
+    jsonschema = pytest.importorskip("jsonschema")
+    jsonschema.Draft202012Validator(json.loads((CORPUS.parent / "scene.schema.json").read_text())).validate(document)
+    for case in json.loads((CORPUS / "arrows" / "cases.json").read_text()):
+        compare(evaluate(document, data, case["state"], case["frame_index"]), case["expected"], case["tolerance"])
+
+
+def test_an_arrow_layer_fails_at_the_call_and_at_the_write():
+    for kwargs, message in (
+        ({"vector": ("vx",)}, "L7: an arrow layer's vector"),
+        ({"vector": ("vx", "@index")}, "L7: @index is not allowed"),
+        ({"scale": ty.channel("t")}, "L7: the scale of an arrow layer takes a number or an attribute"),
+        ({"head": 0.0}, "L7: an arrowhead size"),
+        ({"color": "white"}, "L7: an arrow layer's color"),
+        ({"before": "fade"}, "C3: an arrow layer's before"),
+    ):
+        with pytest.raises(ty.SceneError, match=message):
+            ty.arrow("vel", **{"vector": ("vx", "vy"), **kwargs})
+    # the set of the arrows lacks vz, the clock channel t, and the attribute of the scale (rules L7, C5, and F5)
+    scene, moving, still = small()
+    scene.view("v", frame="root", driver=ty.driver(moving, 0), layers=[ty.arrow(still, ("vx", "vz"), scale=ty.attr("k"))])
+    scene.panel("p", "v")
+    with pytest.raises(ty.SceneError) as e:
+        scene.to_document()
+    for expected in ("L7: view 'v': track set 'still' lacks channels ['vx', 'vz']", "C5: view 'v': track set 'still'", "F5: view 'v'"):
+        assert expected in str(e.value)

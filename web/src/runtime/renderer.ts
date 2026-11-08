@@ -23,7 +23,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { fail, TychoError } from '../errors.js';
 import { bound, clockLaps, lapOf, type TrackClock } from '../evaluate/clock.js';
-import { driverContexts, driverPoint, hasHead, point, type Driver, type LayerEnv, type Vertex } from '../evaluate/layers.js';
+import { arrowLayer, driverContexts, driverPoint, hasHead, point, type Driver, type LayerEnv, type Vertex } from '../evaluate/layers.js';
 import type { Context, Frames } from '../evaluate/frames.js';
 import {
   displayFrame,
@@ -37,7 +37,7 @@ import {
   type PanelScope,
 } from '../evaluate/resolve.js';
 import type { SetData } from '../evaluate/sets.js';
-import type { BodyLayer, Camera, ColorSpec, MarkLayer, Scene, State, TrackLayer, View } from '../scene.js';
+import type { ArrowLayer, BodyLayer, Camera, ColorSpec, MarkLayer, Scene, State, TrackLayer, View } from '../scene.js';
 import { INDEX_CHANNEL } from '../scene.js';
 import { colorScale, coloring, gradientCss, gradientStops, hexRgb, mixHex, sceneTheme, type Coloring, type Rgb, type Theme } from './colors.js';
 import {
@@ -65,6 +65,9 @@ import { tile, type Rect } from './tiles.js';
 /** Width of the gutter between two panels, in CSS pixels. */
 export const GUTTER = 6;
 const HEAD_SIZE = 9;
+/** The length of an arrowhead in CSS pixels when the layer does not set one, and its width as a fraction of its length. */
+const ARROWHEAD_SIZE = 10;
+const ARROWHEAD_WIDTH = 0.8;
 const BODY_SIZE = 8;
 /** Along a trail, the width and the opacity at the tail, as fractions of those at the head, when the layer does not set a taper. */
 const TAPER_WIDTH = 0.25;
@@ -217,6 +220,45 @@ void main() {
 }
 `;
 
+/**
+ * The shaft of an arrow, or its head under the define HEAD, laid out in CSS pixels between the projected base and tip. The head is
+ * shortened to the arrow's length on screen, and an arrow whose ends coincide on screen, or that has an end behind a perspective camera, is not drawn.
+ */
+const ARROW_VERTEX = /* glsl */ `
+uniform vec2 uResolution;
+uniform vec4 uColor;
+uniform float uWidth;
+uniform float uHead;
+uniform float uHeadWidth;
+attribute vec3 instanceBase;
+attribute vec3 instanceTip;
+varying vec4 vColor;
+void main() {
+  vColor = uColor;
+  vec4 ca = projectionMatrix * modelViewMatrix * vec4(instanceBase, 1.0);
+  vec4 cb = projectionMatrix * modelViewMatrix * vec4(instanceTip, 1.0);
+  vec2 half_ = 0.5 * uResolution;
+  vec2 a = ca.xy / ca.w * half_;
+  vec2 b = cb.xy / cb.w * half_;
+  float len = length(b - a);
+  if (ca.w <= 0.0 || cb.w <= 0.0 || len < 1e-3) {
+    gl_Position = ${HIDDEN};
+    return;
+  }
+  vec2 dir = (b - a) / len;
+  vec2 nrm = vec2(-dir.y, dir.x);
+  float head = min(uHead, len);
+  vec2 neck = b - dir * head;
+#ifdef HEAD
+  vec2 p = position.y > 0.5 ? b : neck + nrm * position.x * 0.5 * uHeadWidth * head;
+#else
+  // the shaft runs half a pixel into the head, so that the two do not leave a seam
+  vec2 p = (position.y > 0.5 ? neck + dir * min(0.5, head) : a) + nrm * position.x * 0.5 * uWidth;
+#endif
+  gl_Position = vec4(p / half_, 0.0, 1.0);
+}
+`;
+
 const FRAGMENT = /* glsl */ `
 varying vec4 vColor;
 void main() {
@@ -351,7 +393,17 @@ export interface MarkPlan {
   layer: MarkLayer;
 }
 
-export type LayerPlan = TrackPlan | BodyPlan | MarkPlan;
+export interface ArrowPlan {
+  kind: 'arrow';
+  index: number;
+  layer: ArrowLayer;
+  /** Null when the set query does not match any track set. */
+  set: SetData | null;
+  /** The clock channel the layer reads. */
+  channel: string;
+}
+
+export type LayerPlan = TrackPlan | ArrowPlan | BodyPlan | MarkPlan;
 
 export interface PanelPlan {
   viewId: string;
@@ -407,6 +459,9 @@ export function planPanel(scene: Scene, geometry: GeometryCache, state: State, p
       const selected = set !== null && hl !== undefined ? selectorTrack(scope, { var: hl.var }, set) : null;
       const highlight = selected !== null && members.includes(selected) ? selected : null;
       layers.push({ kind: 'track', index, layer, set, members, highlight, selected, channel, color: resolveColor(scope, layer.color), context });
+    } else if (layer.kind === 'arrow') {
+      const id = oneSet(scope, layer.sets);
+      layers.push({ kind: 'arrow', index, layer, set: id === null ? null : geometry.sets.get(id), channel: state.clock.channel });
     } else if (layer.kind === 'body') layers.push({ kind: 'body', index, layer });
     else layers.push({ kind: layer.kind, index, layer });
   });
@@ -1323,6 +1378,90 @@ class BodyDraw implements Draw {
   }
 }
 
+// arrow layers
+
+/** The arrows of an arrow layer, as a shaft and a head per member, drawn in screen space from instance buffers shared by both. */
+class ArrowDraw implements Draw {
+  readonly key: string;
+  readonly group = new THREE.Group();
+  private readonly geometry: GeometryCache;
+  private readonly resolution: THREE.IUniform<THREE.Vector2> = { value: new THREE.Vector2(1, 1) };
+  private readonly shaft: THREE.Mesh<THREE.InstancedBufferGeometry, THREE.ShaderMaterial>;
+  private readonly head: THREE.Mesh<THREE.InstancedBufferGeometry, THREE.ShaderMaterial>;
+  private buffer: THREE.InstancedInterleavedBuffer;
+
+  constructor(ctx: DrawContext, plan: ArrowPlan & { set: SetData }, key: string) {
+    this.key = key;
+    this.geometry = ctx.geometry;
+    const { layer } = plan;
+    const uniforms = {
+      uResolution: this.resolution,
+      uColor: { value: new THREE.Vector4(...hexRgb(layer.color ?? ctx.theme.foreground), layer.opacity ?? 1) },
+      uWidth: { value: layer.width ?? 1 },
+      uHead: { value: layer.head?.size ?? ARROWHEAD_SIZE },
+      uHeadWidth: { value: ARROWHEAD_WIDTH },
+    };
+    this.buffer = this.allocate(plan.set.tracks);
+    const head = new THREE.InstancedBufferGeometry();
+    head.setAttribute('position', new THREE.Float32BufferAttribute([-1, 0, 0, 1, 0, 0, 0, 1, 0], 3));
+    this.shaft = new THREE.Mesh(this.attach(quadGeometry()), material(ARROW_VERTEX, uniforms));
+    this.head = new THREE.Mesh(this.attach(head), material(ARROW_VERTEX, uniforms, { HEAD: '' }));
+    for (const m of [this.shaft, this.head]) m.frustumCulled = false;
+    this.group.add(this.shaft, this.head);
+  }
+
+  private allocate(capacity: number): THREE.InstancedInterleavedBuffer {
+    return new THREE.InstancedInterleavedBuffer(new Float32Array(6 * Math.max(1, capacity)), 6).setUsage(THREE.DynamicDrawUsage);
+  }
+
+  private attach(g: THREE.InstancedBufferGeometry): THREE.InstancedBufferGeometry {
+    g.setAttribute('instanceBase', new THREE.InterleavedBufferAttribute(this.buffer, 3, 0));
+    g.setAttribute('instanceTip', new THREE.InterleavedBufferAttribute(this.buffer, 3, 3));
+    g.instanceCount = 0;
+    return g;
+  }
+
+  /** Rule L7 as `arrowLayer` in evaluate/layers.ts evaluates it, on the clocks that the geometry cache keeps for the set. */
+  update(env: LayerEnv, plan: ArrowPlan & { set: SetData }): void {
+    const clocks = this.geometry.readings(plan.set.id, plan.channel).clocks;
+    const result = arrowLayer(env, plan.layer, plan.set, (t) => clocks[t]!);
+    const shown = result.members.filter((m) => m.base !== null && m.tip !== null);
+    if (6 * shown.length > this.buffer.array.length) {
+      this.buffer = this.allocate(2 * shown.length);
+      for (const m of [this.shaft, this.head]) {
+        m.geometry.deleteAttribute('instanceBase');
+        m.geometry.deleteAttribute('instanceTip');
+        this.attach(m.geometry);
+      }
+    }
+    const a = this.buffer.array as Float32Array;
+    shown.forEach((m, i) => {
+      a.set(m.base!, 6 * i);
+      a.set(m.tip!, 6 * i + 3);
+    });
+    this.buffer.clearUpdateRanges();
+    this.buffer.addUpdateRange(0, 6 * shown.length);
+    this.buffer.needsUpdate = true;
+    for (const m of [this.shaft, this.head]) {
+      m.geometry.instanceCount = shown.length;
+      m.visible = shown.length > 0;
+    }
+  }
+
+  resize(w: number, h: number): void {
+    this.resolution.value.set(Math.max(1, w), Math.max(1, h));
+  }
+
+  extend(): void {}
+
+  dispose(): void {
+    for (const m of [this.shaft, this.head]) {
+      m.geometry.dispose();
+      m.material.dispose();
+    }
+  }
+}
+
 // axes and grid
 
 /**
@@ -1849,6 +1988,10 @@ export class StageRenderer {
           if (lp.set === null) continue;
           const color = lp.color === undefined ? theme : JSON.stringify(lp.color);
           key = `track\0${plan.viewId}\0${lp.index}\0${lp.set.id}\0${plan.display}\0${lp.channel ?? ''}\0${color}`;
+        } else if (lp.kind === 'arrow') {
+          if (lp.set === null) continue;
+          const look = JSON.stringify([lp.layer.color ?? theme, lp.layer.opacity, lp.layer.width, lp.layer.head]);
+          key = `arrow\0${plan.viewId}\0${lp.index}\0${lp.set.id}\0${plan.display}\0${lp.channel}\0${look}`;
         } else key = `${lp.kind}\0${plan.viewId}\0${lp.index}\0${plan.display}\0${theme}`;
         keep.add(lp.index);
         const old = p.draws.get(lp.index);
@@ -1864,9 +2007,11 @@ export class StageRenderer {
         const draw: Draw =
           lp.kind === 'track'
             ? new TrackDraw(this.ctx, lp as TrackPlan & { set: SetData }, plan.display, key)
-            : lp.kind === 'body'
-              ? new BodyDraw(this.ctx, lp.layer, key)
-              : new MarkDraw(this.ctx, lp.layer, p.cameraSpec, key);
+            : lp.kind === 'arrow'
+              ? new ArrowDraw(this.ctx, lp as ArrowPlan & { set: SetData }, key)
+              : lp.kind === 'body'
+                ? new BodyDraw(this.ctx, lp.layer, key)
+                : new MarkDraw(this.ctx, lp.layer, p.cameraSpec, key);
         // layers stack in their order, and within a layer its objects in the order they were added
         draw.group.renderOrder = lp.index;
         let k = 0;
@@ -1917,7 +2062,8 @@ export class StageRenderer {
         if (d instanceof TrackDraw && lp.kind === 'track') {
           if (d.update(lp, scene, q) && d.isStatic) p.underlayDirty = true;
           if (d.driverContext) d.place(env, plan.driver);
-        } else if (d instanceof BodyDraw && lp.kind === 'body') d.update(env, lp.layer, plan.driver);
+        } else if (d instanceof ArrowDraw && lp.kind === 'arrow') d.update(env, lp as ArrowPlan & { set: SetData });
+        else if (d instanceof BodyDraw && lp.kind === 'body') d.update(env, lp.layer, plan.driver);
       }
     } catch (e) {
       if (!(e instanceof TychoError)) throw e;

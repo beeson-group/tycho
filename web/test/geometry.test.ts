@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { TychoError } from '../src/errors';
 import { bound, clockLaps, lapOf, progress } from '../src/evaluate/clock';
 import { evaluate } from '../src/evaluate/index';
-import { bodyLayer, hasHead, point, type LayerEnv } from '../src/evaluate/layers';
+import { arrowLayer, bodyLayer, hasHead, point, type LayerEnv } from '../src/evaluate/layers';
 import { driverMember, layerVisible, oneSet, type PanelScope } from '../src/evaluate/resolve';
-import type { BodyLayerResult, TrackLayerResult, Vec3 } from '../src/evaluate/types';
+import type { ArrowLayerResult, BodyLayerResult, TrackLayerResult, Vec3 } from '../src/evaluate/types';
 import {
   channelAtReading,
   GeometryCache,
@@ -189,6 +189,15 @@ describe('reveal, pieces, and the GPU comparison give the evaluator line (C3, L1
                 const plan = planPanel(scene, geo, state, pid);
                 const env: LayerEnv = { scope, frames: geo.frames, clock: scene.clock, channel: state.clock.channel, q, display: res.frame };
                 defs.forEach((def, li) => {
+                  // the renderer draws an arrow layer from the clocks that the geometry cache keeps for its set (rule L7)
+                  if (def.kind === 'arrow') {
+                    const r = res.layers[li] as ArrowLayerResult;
+                    if (r.set === null) return;
+                    const clocks = geo.readings(r.set, state.clock.channel).clocks;
+                    expect(arrowLayer(env, def, geo.sets.get(r.set), (t) => clocks[t]!)).toEqual(r);
+                    compared += r.members.length;
+                    return;
+                  }
                   const r = res.layers[li] as TrackLayerResult;
                   if (def.kind !== 'track' || r.set === null) return;
                   // a layer in the driver's context is drawn from its own frame by a model matrix, and is hidden without a driver (rule L6)

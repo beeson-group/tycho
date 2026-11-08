@@ -1,12 +1,12 @@
 /** Polylines, trails, and layers by rules L1 to L5, with the point of rule C4 and the laps of rule C6. */
 import { fail } from '../errors.js';
-import type { BodyLayer, Clock, TrackLayer } from '../scene.js';
+import { INDEX_CHANNEL, type ArrowLayer, type BodyLayer, type Clock, type TrackLayer } from '../scene.js';
 import { bound, clockLaps, lapOf, TrackClock } from './clock.js';
-import type { Context, Frames } from './frames.js';
+import { scalarValue, type Context, type Frames } from './frames.js';
 import type { PanelScope } from './resolve.js';
 import { members } from './resolve.js';
 import type { SetData } from './sets.js';
-import type { BodyLayerResult, MemberResult, TrackLayerResult, Vec3 } from './types.js';
+import type { ArrowLayerResult, ArrowMemberResult, BodyLayerResult, MemberResult, TrackLayerResult, Vec3 } from './types.js';
 
 /**
  * A vertex is a stored sample or a point blended between samples k and k + 1, in the context of
@@ -159,6 +159,58 @@ export function trackLayer(env: LayerEnv, layer: TrackLayer, set: SetData | null
     out.push(m);
   }
   return { kind: 'track', set: set.id, members: out };
+}
+
+/** Checks the keys of an arrow layer that rule L7 restricts, and returns its vector channels and its scale. */
+export function arrowParts(layer: ArrowLayer): { vector: string[]; scale: ArrowLayer['scale'] & {} } {
+  const vector = layer.vector as unknown;
+  if (!Array.isArray(vector) || vector.length < 2 || vector.length > 3 || !vector.every((c) => typeof c === 'string'))
+    fail('L7', `an arrow layer's vector is ${JSON.stringify(vector)}, not two or three channel names`);
+  if (vector.includes(INDEX_CHANNEL)) fail('L7', `${INDEX_CHANNEL} is not allowed in the vector of an arrow layer`);
+  const scale = layer.scale ?? 1;
+  if (typeof scale === 'object' && scale !== null && 'channel' in scale)
+    fail('L7', 'the scale of an arrow layer takes a number or an attribute, not a channel');
+  return { vector: vector as string[], scale };
+}
+
+/**
+ * The base and the tip of each member's arrow at the reading (rule L7). A caller that keeps the clocks of the set's tracks on `env.channel` passes them as
+ * `clocks`, which are otherwise built here.
+ */
+export function arrowLayer(env: LayerEnv, layer: ArrowLayer, set: SetData | null, clocks?: (t: number) => TrackClock): ArrowLayerResult {
+  const { vector, scale } = arrowParts(layer);
+  for (const key of ['before', 'after'] as const) {
+    if (layer[key] !== undefined && layer[key] !== 'clamp' && layer[key] !== 'hidden')
+      fail('C3', `an arrow layer's ${key} is ${JSON.stringify(layer[key])}, not clamp or hidden`);
+  }
+  if (set === null) return { kind: 'arrow', set: null, members: [] };
+  for (const name of vector) if (!set.hasChannel(name)) fail('L7', `track set ${set.id} lacks channel ${JSON.stringify(name)} of an arrow layer's vector`);
+  const laps = clockLaps(env.clock);
+  if (laps > 1 && !set.periodic) fail('C6', `a reading is taken on track set ${set.id}, which is not periodic, and the clock has ${laps} laps`);
+  const from = set.def.frame;
+  const channels = vector.map((name) => set.channel(name));
+  const out: ArrowMemberResult[] = [];
+  for (const t of members(env.scope, layer.members, set)) {
+    const tc = clocks ? clocks(t) : new TrackClock(set, t, env.channel);
+    const u = bound(tc.reading(env.clock, env.q), layer.before, layer.after);
+    if (u === null) {
+      out.push({ index: t, base: null, tip: null });
+      continue;
+    }
+    const s = scalarValue(scale, { set, track: t, sample: 0, shifted: false, lap: 0 });
+    const first = set.start(t);
+    const base = (ctx: Context): Vec3 => env.frames.transform(set.position(ctx.track, ctx.sample), from, env.display, ctx);
+    // the vector is read from the stored values in every lap, since rule C6 raises only the context
+    const tip = (ctx: Context): Vec3 => {
+      const p = set.position(ctx.track, ctx.sample);
+      for (let j = 0; j < channels.length; j++) p[j]! += s * channels[j]![first + ctx.sample]!;
+      return env.frames.transform(p, from, env.display, ctx);
+    };
+    const at = lapOf(laps * u, laps);
+    const v = point(tc, at.u, false, at.lap);
+    out.push({ index: t, base: vertexPosition(v, set, t, base), tip: vertexPosition(v, set, t, tip) });
+  }
+  return { kind: 'arrow', set: set.id, members: out };
 }
 
 function layerTrailFraction(layer: TrackLayer | BodyLayer): number {

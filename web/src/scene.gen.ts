@@ -137,6 +137,26 @@ export type Layer =
       visible?: VarRef;
     }
   | {
+      kind: 'arrow';
+      sets: SetQuery;
+      members: MemberRef;
+      /**
+       * @minItems 2
+       * @maxItems 3
+       */
+      vector: [Name, Name] | [Name, Name, Name];
+      scale?: ConstantScalar;
+      before?: 'clamp' | 'hidden';
+      after?: 'clamp' | 'hidden';
+      color?: Color;
+      opacity?: number;
+      width?: number;
+      head?: {
+        size?: number;
+      };
+      visible?: VarRef;
+    }
+  | {
       kind: 'body';
       body: Id;
       trail?: Trail;

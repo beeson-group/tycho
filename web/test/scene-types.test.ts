@@ -41,8 +41,8 @@ describe('validate', () => {
       ])
       .add('time', [0, 1]);
   it('the S1 error names an unknown major version and an unimplemented feature together', () => {
-    const scene = baseScene({ version: '1.0', requires: ['layers.arrows'] });
-    expect(() => validate(scene)).toThrow(/major version 1.*layers\.arrows/);
+    const scene = baseScene({ version: '1.0', requires: ['layers.points'] });
+    expect(() => validate(scene)).toThrow(/major version 1.*layers\.points/);
   });
   it('a drawn track set that lacks a channel on the path is rejected (F5)', () => {
     const scene = baseScene({ frames: { a: {}, b: { parent: 'a', rotation: { axis: 'z', angle: { channel: 'f' } } } } });
@@ -104,9 +104,9 @@ describe('validate', () => {
     scene.views.main!.layers = [{ ...layer, reveal: 'sweep', context: 'sample' } as unknown as Layer];
     expect(rule(() => evaluate(scene, data(), state(), 0))).toBe('2.7');
   });
-  it('a reader implements the feature layers.driver_context of version 0.3 and rejects any other (S1)', () => {
-    validate(baseScene({ version: '0.3', requires: ['layers.driver_context'] }));
-    expect(rule(() => validate(baseScene({ version: '0.3', requires: ['layers.arrows'] })))).toBe('S1');
+  it('a reader implements the features layers.arrows and layers.driver_context of version 0.3 and rejects any other (S1)', () => {
+    validate(baseScene({ version: '0.3', requires: ['layers.arrows', 'layers.driver_context'] }));
+    expect(rule(() => validate(baseScene({ version: '0.3', requires: ['layers.points'] })))).toBe('S1');
   });
   it('a literal index past the last track and a selector whose parameter the track set lacks are rejected (V3)', () => {
     const scene = second();

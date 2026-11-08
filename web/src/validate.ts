@@ -7,7 +7,7 @@ import type { DataStore } from './container.js';
 import { fail } from './errors.js';
 import { clockLaps } from './evaluate/clock.js';
 import { Frames } from './evaluate/frames.js';
-import { hasHead } from './evaluate/layers.js';
+import { arrowParts, hasHead } from './evaluate/layers.js';
 import { checkState, displayFrame, layerVisible, layoutIds, oneSet, querySets, variableDef, type PanelScope } from './evaluate/resolve.js';
 import { SetCache } from './evaluate/sets.js';
 import {
@@ -26,9 +26,10 @@ import {
   type State,
   type Trail,
   type TrackLayer,
+  type ArrowLayer,
 } from './scene.js';
 
-const LAYER_KINDS = ['track', 'body', 'axes', 'grid'];
+const LAYER_KINDS = ['track', 'arrow', 'body', 'axes', 'grid'];
 const CONTROL_KINDS = ['slider', 'tabs', 'toggle', 'transport'];
 const COLORMAPS = ['viridis', 'plasma', 'cividis', 'blues', 'reds'];
 
@@ -53,6 +54,7 @@ const PLANE_CAMERA_KEYS = ['kind', 'plane', 'aspect'];
 const ORBIT_CAMERA_KEYS = ['kind', 'projection', 'up', 'stretch', 'turn'];
 const LAYER_KEYS: Record<string, readonly string[]> = {
   track: ['kind', 'sets', 'members', 'reveal', 'trail', 'head', 'before', 'after', 'context', 'color', 'opacity', 'width', 'highlight', 'visible'],
+  arrow: ['kind', 'sets', 'members', 'vector', 'scale', 'before', 'after', 'color', 'opacity', 'width', 'head', 'visible'],
   body: ['kind', 'body', 'trail', 'size', 'visible'],
   axes: ['kind', 'span', 'visible'],
   grid: ['kind', 'labels', 'visible'],
@@ -110,12 +112,30 @@ function checkTrail(id: string, trail: Trail): void {
   if (trail.taper !== undefined && !(unit(trail.taper.width ?? 0) && unit(trail.taper.opacity ?? 0))) fail('2.7', `view ${id}: a trail taper is not in [0, 1]`);
 }
 
-function checkTrackLayer(scene: Scene, id: string, layer: TrackLayer): void {
+function checkMembers(scene: Scene, id: string, layer: TrackLayer | ArrowLayer): void {
   checkQuery(scene, layer.sets);
   if (typeof layer.members === 'object' && 'var' in layer.members) checkVariableRef(scene, layer.members.var, 'selector', 'V3');
   if (typeof layer.members === 'object' && 'count' in layer.members && !(Number.isInteger(layer.members.count) && layer.members.count >= 1)) {
     fail('V3', `view ${id}: member count ${JSON.stringify(layer.members.count)} is not an integer of at least one`);
   }
+}
+
+function checkArrowLayer(scene: Scene, id: string, layer: ArrowLayer): void {
+  checkMembers(scene, id, layer);
+  arrowParts(layer);
+  for (const key of ['before', 'after'] as const) {
+    if (layer[key] !== undefined && layer[key] !== 'clamp' && layer[key] !== 'hidden')
+      fail('C3', `view ${id}: an arrow layer's ${key} is ${JSON.stringify(layer[key])}, not clamp or hidden`);
+  }
+  if (layer.color !== undefined && !COLOR.test(layer.color))
+    fail('L7', `view ${id}: an arrow layer's color is ${JSON.stringify(layer.color)}, not a #rrggbb color`);
+  if (layer.head?.size !== undefined && !(layer.head.size > 0)) fail('L7', `view ${id}: an arrowhead size is ${layer.head.size}, not positive`);
+  if (layer.opacity !== undefined && !unit(layer.opacity)) fail('2.7', `view ${id}: an arrow layer's opacity is ${layer.opacity}, not in [0, 1]`);
+  if (layer.width !== undefined && !(layer.width > 0)) fail('2.7', `view ${id}: an arrow layer's width is ${layer.width}, not positive`);
+}
+
+function checkTrackLayer(scene: Scene, id: string, layer: TrackLayer): void {
+  checkMembers(scene, id, layer);
   const hl = layer.highlight;
   if (hl !== undefined) {
     checkVariableRef(scene, hl.var, 'selector', '2.7');
@@ -271,6 +291,7 @@ export function validate(scene: Scene, data?: DataStore, state?: State): string[
       if (!LAYER_KINDS.includes(layer.kind)) fail('S1', `view ${id}: layer kind ${JSON.stringify(layer.kind)} is not implemented`);
       if (layer.visible !== undefined) checkVariableRef(scene, layer.visible.var, 'toggle', 'L5');
       if (layer.kind === 'track') checkTrackLayer(scene, id, layer);
+      else if (layer.kind === 'arrow') checkArrowLayer(scene, id, layer);
       else if (layer.kind === 'body') {
         if (!Object.hasOwn(scene.bodies ?? {}, layer.body)) fail('L4', `view ${id} draws ${layer.body}, which is not a body`);
         if (layer.trail !== undefined) checkTrail(id, layer.trail);
@@ -437,6 +458,20 @@ function validateState(scene: Scene, frames: Frames, state: State, warnings: str
         }
         const hides = scene.clock.mode === 'value' && (layer.before === 'hidden' || layer.after === 'hidden');
         if ((layer.reveal ?? 'none') !== 'none' || hasHead(layer) || hides) clocked(id, 'on which a reading is taken');
+      } else if (layer.kind === 'arrow') {
+        const id = oneSet(scope, layer.sets);
+        if (id === null) continue;
+        need(id, scene.track_sets[id]!.frame, 'its arrows');
+        member(id, layer.members);
+        const set = scene.track_sets[id]!;
+        for (const c of layer.vector) {
+          if (c !== INDEX_CHANNEL && !Object.hasOwn(set.channels ?? {}, c))
+            fail('L7', `panel ${pid}: track set ${id} lacks channel ${c} of an arrow layer's vector`);
+        }
+        const scale = layer.scale;
+        if (typeof scale === 'object' && 'attr' in scale && !Object.hasOwn(set.attrs ?? {}, scale.attr))
+          fail('F5', `panel ${pid}: track set ${id} lacks attribute ${scale.attr} for an arrow layer's scale`);
+        clocked(id, 'on which a reading is taken');
       } else if (layer.kind === 'body' && driver !== null) {
         need(driver, scene.track_sets[driver]!.frame, `body ${layer.body}`, frames.bodyRequirements(layer.body, display));
       }

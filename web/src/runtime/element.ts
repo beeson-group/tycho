@@ -7,6 +7,8 @@
  *   theme     `dark` or `light`, a built-in palette that replaces the scene's theme, followed when it changes
  *   autoplay  plays as soon as the scene is loaded and the element is visible
  *   kiosk     hides every control and plays as `autoplay` does, for a slide
+ *   lean      hides the Add panel group, the icons of the panel heads, the frame and rate readouts, the View group, and Export,
+ *             for a slide on which the controls of the scene are still worked by hand
  *
  * A block is a `<script type="application/octet-stream">` with base64 text, and `data-encoding="base64"` is the default and the
  * only encoding. Each file is taken from the viewer's own child block marked `data-tycho="scene"` or `data-tycho="data"`, else from
@@ -104,6 +106,7 @@ button, select, input { font: inherit; color: inherit; margin: 0; }
 .root { position: absolute; inset: 0; display: grid; grid-template-rows: auto 1fr auto auto; }
 .root.kiosk { grid-template-rows: 1fr; }
 .root.kiosk header, .root.kiosk .stats, .root.kiosk footer, .root.kiosk .phead { display: none; }
+.root.lean .add, .root.lean .phead .icon, .root.lean .frame, .root.lean .fps, .root.lean .cap.view, .root.lean .cap.export { display: none; }
 .root.dragging, .root.dragging * { cursor: grabbing !important; }
 
 header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; padding: 10px 14px 8px; }
@@ -496,6 +499,7 @@ export class TychoViewerElement extends Base {
   /** The colors in use, or null before a scene loads. */
   private theme: Theme | null = null;
   private kiosk = false;
+  private lean = false;
   private loading = false;
   /** Counts the loads begun, so that a load that a later one overtook drops its result. */
   private loads = 0;
@@ -581,11 +585,12 @@ export class TychoViewerElement extends Base {
 
   private buildShell(): void {
     this.kiosk = this.hasAttribute('kiosk');
+    this.lean = this.hasAttribute('lean');
     const shadow = this.attachShadow({ mode: 'open' });
     const style = el('style');
     style.textContent = STYLE;
     shadow.appendChild(style);
-    this.root = el('div', this.kiosk ? 'root kiosk' : 'root');
+    this.root = el('div', `root${this.kiosk ? ' kiosk' : ''}${this.lean ? ' lean' : ''}`);
     this.header = el('header');
     this.titleEl = el('h1');
     this.varsEl = el('div', 'vars');
@@ -1117,7 +1122,7 @@ export class TychoViewerElement extends Base {
       this.footer.append(cap);
       this.transport = { play, scrub, frame, fps, channel };
     }
-    const view = capsule('View');
+    const view = capsule('View', 'view');
     const fit = iconButton('house', 'Reset every view', 'Reset every view: fit each panel to what it draws (F)');
     fit.addEventListener('click', () => this.fitAll());
     const reset = iconButton('rotateCcw', 'Reset scene', 'Reset scene: panels, layout, and controls as written');
@@ -1143,7 +1148,7 @@ export class TychoViewerElement extends Base {
   }
 
   private buildExport(): void {
-    const cap = capsule('Export');
+    const cap = capsule('Export', 'export');
     const button = el('button', 'disclose');
     button.type = 'button';
     button.append(icon('download'), el('span', undefined, 'Export video'), icon('chevronDown', 'chev'));

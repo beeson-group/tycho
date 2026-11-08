@@ -27,6 +27,7 @@ Scene format 0.3 is written and read at this version, and a scene of format 0.2 
 
 ### Fixed
 
+- An axis title under the label of a body is hidden, while the label is kept, since it is the name of the disc beside it. In the rotating panel of the manifolds slide, the title of the x axis was drawn over the label of the Moon, which is on the x axis. The overlap is found from boxes estimated from the text, so that the same titles are hidden in a page and in an exported video.
 - The static layers of a panel are no longer lost at a fractional device pixel ratio, e.g. 1.25. At such a ratio, the viewport was rounded up past the end of the drawing buffer, and the copy of these layers was refused by WebGL, which left the panel gray.
 
 ## [0.2.0] - 2026-11-06

@@ -832,6 +832,19 @@ describe('a viewer embedded on a page, under a DOM stand-in', () => {
       expect(byClass(v.footer as unknown as FakeElement, 'speed')).toHaveLength(1);
       expect((await live()).v.root.className).toBe('root');
     });
+    it('keeps the Add panel group and the icons of the panel heads under lean="panels", for a slide on which panels are added by hand', async () => {
+      expect((await live({ lean: 'panels' })).v.root.className).toBe('root lean keep-panels');
+      expect((await live({ lean: 'controls' })).v.root.className).toBe('root lean');
+    });
+    it('links a colorbar to its selector in kiosk mode too, so that a click on the bar of a kiosk page sets the eccentricity', async () => {
+      const { v } = await live({ kiosk: '' });
+      const bars: Colorbar[] = [{ label: 'eccentricity', gradient: 'linear-gradient(red, blue)', stops: [], lo: 0, hi: 1, marker: 0.5, band: null }];
+      v.renderer = { ...v.renderer, colorbars: () => bars };
+      const dom = v.panelDom.get('pulsating');
+      v.syncBars('pulsating', dom);
+      const grad = dom.barDom[0].grad;
+      expect([grad.classList.contains('live'), grad.getAttribute('role'), grad.getAttribute('aria-label')]).toEqual([true, 'slider', 'eccentricity']);
+    });
   });
 
   describe('keys', () => {

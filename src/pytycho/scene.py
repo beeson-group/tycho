@@ -386,7 +386,7 @@ def _check_layer(layer: Any) -> dict[str, Any]:
     """A layer dict in the form that the schema and section 2.7 define, with every value checked."""
     if not isinstance(layer, Mapping) or "kind" not in layer:
         raise SceneError(f"2.7: a layer is a dict with a kind, not {layer!r}")
-    kind = _enum(layer["kind"], ("track", "body", "axes", "grid"), "2.7: a layer kind")
+    kind = _enum(layer["kind"], ("track", "arrow", "body", "axes", "grid"), "2.7: a layer kind")
     out: dict[str, Any] = {"kind": kind}
     allowed = {"kind", "visible"}
     if "visible" in layer:
@@ -441,6 +441,43 @@ def _check_layer(layer: Any) -> dict[str, Any]:
                     raise SceneError(f"2.7: a highlight kernel's width is {w}, not in (0, 1]")
                 hl["kernel"] = {"width": w, "opacity": _unit_interval(k["opacity"], "a highlight kernel's opacity")}
             out["highlight"] = hl
+    elif kind == "arrow":
+        allowed |= {"sets", "members", "vector", "scale", "before", "after", "color", "opacity", "width", "head"}
+        out["sets"] = _query(layer.get("sets"))
+        out["members"] = _member(layer.get("members", "all"), "an arrow layer's members")
+        vector = layer.get("vector")
+        if isinstance(vector, str) or not isinstance(vector, Sequence) or len(vector) not in (2, 3):
+            raise SceneError(f"L7: an arrow layer's vector is {vector!r}, not two or three channel names")
+        out["vector"] = [_check_id(_id(c), "L7: a vector channel") if c != INDEX else c for c in vector]
+        if INDEX in out["vector"]:
+            raise SceneError(f"L7: {INDEX} is not allowed in the vector of an arrow layer")
+        if "scale" in layer:
+            if isinstance(layer["scale"], Channel) or (isinstance(layer["scale"], Mapping) and "channel" in layer["scale"]):
+                raise SceneError("L7: the scale of an arrow layer takes a number or an attribute, not a channel")
+            scale = layer["scale"]
+            if isinstance(scale, Mapping) and ("attr" not in scale or set(scale) - {"attr", "factor", "offset"}):
+                raise SceneError(f"L7: the scale of an arrow layer is {scale!r}, not a number or an attribute")
+            out["scale"] = dict(scale) if isinstance(scale, Mapping) else _scalar(scale, "an arrow layer's scale", constant=True)
+        for key in ("before", "after"):
+            if key in layer:
+                out[key] = _enum(layer[key], ("clamp", "hidden"), f"C3: an arrow layer's {key}")
+        if "color" in layer:
+            out["color"] = _color(layer["color"], "L7: an arrow layer's color")
+        if "opacity" in layer:
+            out["opacity"] = _unit_interval(layer["opacity"], "an arrow layer's opacity")
+        if "width" in layer:
+            out["width"] = _finite(layer["width"], "an arrow layer's width")
+            if out["width"] <= 0.0:
+                raise SceneError(f"2.7: an arrow layer's width is {out['width']}, not positive")
+        if "head" in layer:
+            head = layer["head"]
+            if not isinstance(head, Mapping) or set(head) - {"size"}:
+                raise SceneError(f"L7: an arrowhead is a dict of size, not {head!r}")
+            out["head"] = {}
+            if "size" in head:
+                out["head"]["size"] = _finite(head["size"], "an arrowhead size")
+                if out["head"]["size"] <= 0.0:
+                    raise SceneError(f"L7: an arrowhead size is {out['head']['size']}, not positive")
     elif kind == "body":
         allowed |= {"body", "trail", "size"}
         out["body"] = _check_id(_id(layer.get("body")), "L4: a body layer's body")
@@ -514,6 +551,42 @@ def track(
         ("opacity", opacity),
         ("width", width),
         ("highlight", highlight),
+        ("visible", visible),
+    ):
+        if value is not None:
+            layer[key] = value
+    return _check_layer(layer)
+
+
+def arrow(
+    sets: Any,
+    vector: Sequence[str],
+    members: Any = "all",
+    *,
+    scale: Any = None,
+    before: str | None = None,
+    after: str | None = None,
+    color: str | None = None,
+    opacity: float | None = None,
+    width: float | None = None,
+    head: float | None = None,
+    visible: Any = None,
+) -> dict[str, Any]:
+    """An arrow layer (rule L7), drawn on each member at the reading from the point to the point displaced by ``scale`` times the vector.
+
+    ``vector`` names two or three channels of the set, e.g. ``("vx", "vy")``, which are read without the lap's raise. ``scale`` is a number
+    or an attribute, by default 1. ``head`` is the arrowhead's length in CSS pixels, by default 10. A member is hidden before or after its
+    range of clock values when ``before`` or ``after`` is ``"hidden"``, which shows a track of two samples for a window of the clock.
+    """
+    layer: dict[str, Any] = {"kind": "arrow", "sets": sets, "members": members, "vector": list(vector)}
+    for key, value in (
+        ("scale", scale),
+        ("before", before),
+        ("after", after),
+        ("color", color),
+        ("opacity", opacity),
+        ("width", width),
+        ("head", None if head is None else {"size": head}),
         ("visible", visible),
     ):
         if value is not None:
@@ -1131,8 +1204,17 @@ class Scene:
             raise SceneError("2.8: the scene does not have a panel")
         doc: dict[str, Any] = {"format": "tycho-scene", "version": "0.3"}
         # a reader that does not implement a feature of section 4 then rejects the scene (rule S1)
-        if any(layer.get("context") == "driver" for view in self._views.values() for layer in view["layers"]):
-            doc["requires"] = ["layers.driver_context"]
+        layers = [layer for view in self._views.values() for layer in view["layers"]]
+        requires = [
+            f
+            for f, used in (
+                ("layers.arrows", any(layer["kind"] == "arrow" for layer in layers)),
+                ("layers.driver_context", any(layer.get("context") == "driver" for layer in layers)),
+            )
+            if used
+        ]
+        if requires:
+            doc["requires"] = requires
         doc["generator"] = f"pytycho {__version__}"
         if self.title is not None:
             doc["title"] = self.title
@@ -1324,6 +1406,10 @@ class Scene:
                 color = layer.get("color")
                 if isinstance(color, Mapping) and isinstance(color["colormap"], Mapping):
                     out += self._check_colormap(color["colormap"], where)
+            elif layer["kind"] == "arrow":
+                out += self._check_query(layer["sets"], f"V2: an arrow layer of {where}")
+                if isinstance(layer["members"], Mapping) and "var" in layer["members"]:
+                    out += self._check_var(layer["members"]["var"], "selector", f"V3: an arrow layer of {where}")
             elif layer["kind"] == "body" and layer["body"] not in self._bodies:
                 out.append(f"L4: {where} draws {layer['body']!r}, which is not a body")
         return out
@@ -1348,7 +1434,7 @@ class Scene:
         used = set()
         if isinstance(view["frame"], Mapping):
             used.add(view["frame"]["var"])
-        for query in [view["driver"]["sets"]] + [layer["sets"] for layer in view["layers"] if layer["kind"] == "track"]:
+        for query in [view["driver"]["sets"]] + [layer["sets"] for layer in view["layers"] if layer["kind"] in ("track", "arrow")]:
             used |= self._choices_in(query)
         return used
 
@@ -1492,6 +1578,22 @@ class Scene:
                             out.append(f"2.7: {where}: track set {ts.id!r} lacks channel {color['channel']!r} for a layer's color")
                         if "parameter" in color and color["parameter"] not in ts.parameters[0]:
                             out.append(f"2.7: {where}: track set {ts.id!r} lacks parameter {color['parameter']!r} for a layer's color")
+            elif layer["kind"] == "arrow":
+                matched = self._match(layer["sets"], values)
+                if len(matched) > 1:
+                    out.append(
+                        f"V2: {where}: an arrow layer's set query matches the track sets {[t.id for t in matched]}, where one is needed"
+                    )
+                elif matched:
+                    ts = matched[0]
+                    through(ts, ts.frame, "its arrows")
+                    member(ts, layer["members"], "an arrow layer")
+                    clocked(ts, "on which a reading is taken")
+                    if missing := [c for c in layer["vector"] if c not in ts.channels[0]]:
+                        out.append(f"L7: {where}: track set {ts.id!r} lacks channels {missing} of an arrow layer's vector")
+                    scale = layer.get("scale")
+                    if isinstance(scale, Mapping) and scale["attr"] not in ts.attrs:
+                        out.append(f"F5: {where}: track set {ts.id!r} lacks attribute {scale['attr']!r} for an arrow layer's scale")
             elif layer["kind"] == "body" and len(drivers) == 1:
                 d = drivers[0]
                 body = self._bodies[layer["body"]]

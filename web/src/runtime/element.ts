@@ -1022,8 +1022,10 @@ export class TychoViewerElement extends Base {
     }
     const action = keyAction(ev.key, ev.shiftKey, this.scene!.clock.steps);
     const target = ev.composedPath()[0] as Element | undefined;
+    // a key that a focused control takes itself, such as Space on a button, is left to the control, and the other keys act
+    // on the viewer, so that 0 rewinds the loop right after a click on a tab
     if (target !== undefined && ['INPUT', 'SELECT', 'BUTTON', 'TEXTAREA'].includes(target.tagName)) {
-      return action !== null || controlUsesKey(target.tagName, (target as HTMLInputElement).type, ev.key);
+      if (controlUsesKey(target.tagName, (target as HTMLInputElement).type, ev.key)) return true;
     }
     if (action === null) return false;
     if (action.kind === 'fit') {

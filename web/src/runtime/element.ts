@@ -1816,7 +1816,7 @@ export class TychoViewerElement extends Base {
         d.band.style.bottom = `${(100 * b.band[0]).toFixed(2)}%`;
         d.band.style.height = `${(100 * (b.band[1] - b.band[0])).toFixed(2)}%`;
       }
-      d.link = this.kiosk || view === undefined ? null : colorbarLink(scene, view, b.label);
+      d.link = view === undefined ? null : colorbarLink(scene, view, b.label);
       const g = d.grad;
       g.classList.toggle('live', d.link !== null);
       if (d.link === null) {

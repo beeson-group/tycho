@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { evaluate } from '../src/evaluate/index';
-import type { BodyLayerResult, TrackLayerResult } from '../src/evaluate/types';
+import type { ArrowLayerResult, BodyLayerResult, TrackLayerResult } from '../src/evaluate/types';
 import type { Scene } from '../src/scene';
 import { validate } from '../src/validate';
 import { baseScene, MemoryStore, state } from './helpers';
@@ -230,5 +230,72 @@ describe('origin at a body (F2)', () => {
       [0, 0, 0],
       [1, 0, 0],
     ]);
+  });
+});
+
+describe('arrows (L7)', () => {
+  const data = () =>
+    new MemoryStore()
+      .add('off', [0, 2], 'uint32')
+      .add('pos', [
+        [0, 0],
+        [1, 0],
+      ])
+      .add('time', [0, 1])
+      .add('vx', [1, 1])
+      .add('vy', [0, 2]);
+  const scene = (arrow: Record<string, unknown>, attrs?: Record<string, number>) =>
+    baseScene({
+      version: '0.3',
+      requires: ['layers.arrows'],
+      track_sets: {
+        s: {
+          frame: 'a',
+          tracks: 1,
+          offsets: 'off',
+          positions: 'pos',
+          channels: { time: { view: 'time' }, vx: { view: 'vx' }, vy: { view: 'vy' } },
+          ...(attrs ? { attrs } : {}),
+        },
+      },
+      views: {
+        main: {
+          frame: 'a',
+          driver: { sets: { set: 's' }, member: { index: 0 } },
+          layers: [
+            { kind: 'arrow', sets: { set: 's' }, members: 'all', vector: ['vx', 'vy'], ...arrow } as NonNullable<Scene['views'][string]>['layers'][number],
+          ],
+        },
+      },
+    });
+  const rule = (f: () => void): string | undefined => {
+    try {
+      f();
+    } catch (e) {
+      return (e as { rule?: string }).rule;
+    }
+    return undefined;
+  };
+
+  it('blends the base and the tip at the reading, with the scale of an attribute', () => {
+    const s = scene({ scale: { attr: 'k', factor: 2 } }, { k: 0.25 });
+    validate(s, data(), state());
+    // at frame 2 of 4 the reading is 0.5, halfway between samples 0 and 1
+    const r = evaluate(s, data(), state(), 2).panels.p1!.layers[0] as ArrowLayerResult;
+    close(
+      [r.members[0]!.base!, r.members[0]!.tip!],
+      [
+        [0.5, 0, 0],
+        [1, 0.5, 0],
+      ],
+    );
+  });
+
+  it('checks the drawing keys, and the attribute of the scale on the set', () => {
+    expect(rule(() => validate(scene({ color: 'white' }), data(), state()))).toBe('L7');
+    expect(rule(() => validate(scene({ head: { size: 0 } }), data(), state()))).toBe('L7');
+    expect(rule(() => validate(scene({ opacity: 2 }), data(), state()))).toBe('2.7');
+    expect(rule(() => validate(scene({ scale: { attr: 'k' } }), data(), state()))).toBe('F5');
+    expect(rule(() => validate(scene({ before: 'fade' }), data(), state()))).toBe('C3');
   });
 });

@@ -22,6 +22,8 @@ Scene format 0.3 is written and read at this version, and a scene of format 0.2 
 ### Changed
 
 - The colorbar of a layer colored by a parameter is a slider of the selector of that parameter under `kiosk` too, where the link was off before, so that a click on the bar of a kiosk page sets the value.
+- A key pressed while a tab, a switch, or a button of the viewer has the focus acts on the viewer, unless the control takes the key itself, as a button takes Space and Enter. Hence `0` rewinds the loop right after a click on a tab, where the key was swallowed before.
+- The ends of a colorbar are written as integers when both are integers, as for an iterate count, so that a bar from 0 to 10 is ticked 0 and 10 rather than 0.00 and 10.0.
 
 ### Fixed
 

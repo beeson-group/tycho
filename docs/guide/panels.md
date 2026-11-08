@@ -97,11 +97,11 @@ A colorbar is a strip that shows a colormap against its values. A track layer co
 - A click or a drag on the colorbar jumps the selector to the stop nearest the value under the pointer.
 - With the colorbar focused, the arrow keys move the selector by one stop, PageUp and PageDown by ten stops, and Home and End to the first and the last stop.
 
-The stops are those of the selector's slider, or the parameter's values over the layer's set when the selector does not have a slider. On a kiosk page the colorbar is shown, but it does not act as a slider.
+The stops are those of the selector's slider, or the parameter's values over the layer's set when the selector does not have a slider. The ends of the bar are written as integers when both are integers, as for an iterate count, and to three significant digits otherwise. On a kiosk page the colorbar is shown, but it does not act as a slider.
 
 ## Keys
 
-The keys below act while the viewer element, `<tycho-viewer>`, has the keyboard focus, except when the focus is in one of its inputs.
+The keys below act while the viewer element, `<tycho-viewer>`, has the keyboard focus, also when the focus is on one of its tabs, switches, or buttons, where only a key that the control takes itself, such as Space, is left to it. In a text field or a select, every key is left to the field. Hence `0` rewinds the loop right after a click on a tab.
 
 - Space or `k` plays and pauses.
 - The right and left arrows, or `.` and `,`, step one frame and pause, or ten frames with Shift.

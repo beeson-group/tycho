@@ -8,7 +8,8 @@
  *   autoplay  plays as soon as the scene is loaded and the element is visible
  *   kiosk     hides every control and plays as `autoplay` does, for a slide
  *   lean      hides the Add panel group, the icons of the panel heads, the frame and rate readouts, the View group, and Export,
- *             for a slide on which the controls of the scene are still worked by hand
+ *             for a slide on which the controls of the scene are still worked by hand. With the value `panels`, the Add panel
+ *             group and the icons of the panel heads stay, for a slide on which panels are added by hand
  *
  * A block is a `<script type="application/octet-stream">` with base64 text, and `data-encoding="base64"` is the default and the
  * only encoding. Each file is taken from the viewer's own child block marked `data-tycho="scene"` or `data-tycho="data"`, else from
@@ -106,7 +107,7 @@ button, select, input { font: inherit; color: inherit; margin: 0; }
 .root { position: absolute; inset: 0; display: grid; grid-template-rows: auto 1fr auto auto; }
 .root.kiosk { grid-template-rows: 1fr; }
 .root.kiosk header, .root.kiosk .stats, .root.kiosk footer, .root.kiosk .phead { display: none; }
-.root.lean .add, .root.lean .phead .icon, .root.lean .frame, .root.lean .fps, .root.lean .cap.view, .root.lean .cap.export { display: none; }
+.root.lean:not(.keep-panels) .add, .root.lean:not(.keep-panels) .phead .icon, .root.lean .frame, .root.lean .fps, .root.lean .cap.view, .root.lean .cap.export { display: none; }
 .root.dragging, .root.dragging * { cursor: grabbing !important; }
 
 header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; padding: 10px 14px 8px; }
@@ -500,6 +501,7 @@ export class TychoViewerElement extends Base {
   private theme: Theme | null = null;
   private kiosk = false;
   private lean = false;
+  private keepPanels = false;
   private loading = false;
   /** Counts the loads begun, so that a load that a later one overtook drops its result. */
   private loads = 0;
@@ -586,11 +588,12 @@ export class TychoViewerElement extends Base {
   private buildShell(): void {
     this.kiosk = this.hasAttribute('kiosk');
     this.lean = this.hasAttribute('lean');
+    this.keepPanels = this.lean && (this.getAttribute('lean') ?? '').split(/\s+/).includes('panels');
     const shadow = this.attachShadow({ mode: 'open' });
     const style = el('style');
     style.textContent = STYLE;
     shadow.appendChild(style);
-    this.root = el('div', `root${this.kiosk ? ' kiosk' : ''}${this.lean ? ' lean' : ''}`);
+    this.root = el('div', `root${this.kiosk ? ' kiosk' : ''}${this.lean ? ' lean' : ''}${this.keepPanels ? ' keep-panels' : ''}`);
     this.header = el('header');
     this.titleEl = el('h1');
     this.varsEl = el('div', 'vars');

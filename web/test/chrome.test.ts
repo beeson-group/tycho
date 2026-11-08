@@ -825,6 +825,13 @@ describe('a viewer embedded on a page, under a DOM stand-in', () => {
     it('reports false before a scene loads', () => {
       expect(viewer().v.playing).toBe(false);
     });
+    it('carries the class lean with the attribute, and keeps the scrubber and the speed menu, which a script of a page may set', async () => {
+      const { v } = await live({ lean: '' });
+      expect(v.root.className).toBe('root lean');
+      expect(byClass(v.footer as unknown as FakeElement, 'scrub')).toHaveLength(1);
+      expect(byClass(v.footer as unknown as FakeElement, 'speed')).toHaveLength(1);
+      expect((await live()).v.root.className).toBe('root');
+    });
   });
 
   describe('keys', () => {

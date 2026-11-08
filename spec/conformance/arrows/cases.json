@@ -1,0 +1,1098 @@
+[
+ {
+  "name": "L7: at value 0.0, the arrow at the reading of a track, and the sticks shown in their windows of t (C3)",
+  "source": "analytic",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "t"
+   },
+   "panels": {
+    "rot": {
+     "view": "rot"
+    },
+    "inertial": {
+     "view": "inertial"
+    }
+   },
+   "layout": {
+    "kind": "split",
+    "dir": "row",
+    "ratio": 0.5,
+    "a": {
+     "kind": "panel",
+     "id": "rot"
+    },
+    "b": {
+     "kind": "panel",
+     "id": "inertial"
+    }
+   }
+  },
+  "frame_index": 0,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "rot": {
+     "frame": "rot",
+     "layers": [
+      {
+       "kind": "arrow",
+       "set": "vel",
+       "members": [
+        {
+         "index": 0,
+         "base": [
+          1.0,
+          0.0,
+          0.0
+         ],
+         "tip": [
+          1.0,
+          0.5,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "arrow",
+       "set": "sticks",
+       "members": [
+        {
+         "index": 0,
+         "base": null,
+         "tip": null
+        },
+        {
+         "index": 1,
+         "base": null,
+         "tip": null
+        }
+       ]
+      },
+      {
+       "kind": "arrow",
+       "set": null,
+       "members": []
+      }
+     ]
+    },
+    "inertial": {
+     "frame": "inertial",
+     "layers": [
+      {
+       "kind": "arrow",
+       "set": "vel",
+       "members": [
+        {
+         "index": 0,
+         "base": [
+          1.0,
+          0.0,
+          0.0
+         ],
+         "tip": [
+          1.0,
+          0.5,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "arrow",
+       "set": "sticks",
+       "members": [
+        {
+         "index": 0,
+         "base": null,
+         "tip": null
+        },
+        {
+         "index": 1,
+         "base": null,
+         "tip": null
+        }
+       ]
+      },
+      {
+       "kind": "arrow",
+       "set": null,
+       "members": []
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "L7: at value 0.25, the arrow at the reading of a track, and the sticks shown in their windows of t (C3)",
+  "source": "analytic",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "t"
+   },
+   "panels": {
+    "rot": {
+     "view": "rot"
+    },
+    "inertial": {
+     "view": "inertial"
+    }
+   },
+   "layout": {
+    "kind": "split",
+    "dir": "row",
+    "ratio": 0.5,
+    "a": {
+     "kind": "panel",
+     "id": "rot"
+    },
+    "b": {
+     "kind": "panel",
+     "id": "inertial"
+    }
+   }
+  },
+  "frame_index": 1,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "rot": {
+     "frame": "rot",
+     "layers": [
+      {
+       "kind": "arrow",
+       "set": "vel",
+       "members": [
+        {
+         "index": 0,
+         "base": [
+          0.75,
+          0.25,
+          0.0
+         ],
+         "tip": [
+          0.625,
+          0.625,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "arrow",
+       "set": "sticks",
+       "members": [
+        {
+         "index": 0,
+         "base": null,
+         "tip": null
+        },
+        {
+         "index": 1,
+         "base": null,
+         "tip": null
+        }
+       ]
+      },
+      {
+       "kind": "arrow",
+       "set": null,
+       "members": []
+      }
+     ]
+    },
+    "inertial": {
+     "frame": "inertial",
+     "layers": [
+      {
+       "kind": "arrow",
+       "set": "vel",
+       "members": [
+        {
+         "index": 0,
+         "base": [
+          0.6301436153489492,
+          0.2193956404725932,
+          0.0
+         ],
+         "tip": [
+          0.5204457951126527,
+          0.5344674481470678,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "arrow",
+       "set": "sticks",
+       "members": [
+        {
+         "index": 0,
+         "base": null,
+         "tip": null
+        },
+        {
+         "index": 1,
+         "base": null,
+         "tip": null
+        }
+       ]
+      },
+      {
+       "kind": "arrow",
+       "set": null,
+       "members": []
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "L7: at value 0.5, the arrow at the reading of a track, and the sticks shown in their windows of t (C3)",
+  "source": "analytic",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "t"
+   },
+   "panels": {
+    "rot": {
+     "view": "rot"
+    },
+    "inertial": {
+     "view": "inertial"
+    }
+   },
+   "layout": {
+    "kind": "split",
+    "dir": "row",
+    "ratio": 0.5,
+    "a": {
+     "kind": "panel",
+     "id": "rot"
+    },
+    "b": {
+     "kind": "panel",
+     "id": "inertial"
+    }
+   }
+  },
+  "frame_index": 2,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "rot": {
+     "frame": "rot",
+     "layers": [
+      {
+       "kind": "arrow",
+       "set": "vel",
+       "members": [
+        {
+         "index": 0,
+         "base": [
+          0.5,
+          0.5,
+          0.0
+         ],
+         "tip": [
+          0.25,
+          0.75,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "arrow",
+       "set": "sticks",
+       "members": [
+        {
+         "index": 0,
+         "base": [
+          2.0,
+          0.0,
+          0.0
+         ],
+         "tip": [
+          2.0,
+          0.25,
+          0.125
+         ]
+        },
+        {
+         "index": 1,
+         "base": null,
+         "tip": null
+        }
+       ]
+      },
+      {
+       "kind": "arrow",
+       "set": null,
+       "members": []
+      }
+     ]
+    },
+    "inertial": {
+     "frame": "inertial",
+     "layers": [
+      {
+       "kind": "arrow",
+       "set": "vel",
+       "members": [
+        {
+         "index": 0,
+         "base": [
+          0.2602872306978985,
+          0.4387912809451864,
+          0.0
+         ],
+         "tip": [
+          0.04089159022530531,
+          0.5689348962941356,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "arrow",
+       "set": "sticks",
+       "members": [
+        {
+         "index": 0,
+         "base": [
+          1.9601331556824833,
+          0.39733866159012243,
+          0.0
+         ],
+         "tip": [
+          1.910465822983718,
+          0.6423553060504328,
+          0.125
+         ]
+        },
+        {
+         "index": 1,
+         "base": null,
+         "tip": null
+        }
+       ]
+      },
+      {
+       "kind": "arrow",
+       "set": null,
+       "members": []
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "L7: at value 0.75, the arrow at the reading of a track, and the sticks shown in their windows of t (C3)",
+  "source": "analytic",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "t"
+   },
+   "panels": {
+    "rot": {
+     "view": "rot"
+    },
+    "inertial": {
+     "view": "inertial"
+    }
+   },
+   "layout": {
+    "kind": "split",
+    "dir": "row",
+    "ratio": 0.5,
+    "a": {
+     "kind": "panel",
+     "id": "rot"
+    },
+    "b": {
+     "kind": "panel",
+     "id": "inertial"
+    }
+   }
+  },
+  "frame_index": 3,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "rot": {
+     "frame": "rot",
+     "layers": [
+      {
+       "kind": "arrow",
+       "set": "vel",
+       "members": [
+        {
+         "index": 0,
+         "base": [
+          0.25,
+          0.75,
+          0.0
+         ],
+         "tip": [
+          -0.125,
+          0.875,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "arrow",
+       "set": "sticks",
+       "members": [
+        {
+         "index": 0,
+         "base": [
+          2.0,
+          0.0,
+          0.0
+         ],
+         "tip": [
+          2.0,
+          0.25,
+          0.125
+         ]
+        },
+        {
+         "index": 1,
+         "base": null,
+         "tip": null
+        }
+       ]
+      },
+      {
+       "kind": "arrow",
+       "set": null,
+       "members": []
+      }
+     ]
+    },
+    "inertial": {
+     "frame": "inertial",
+     "layers": [
+      {
+       "kind": "arrow",
+       "set": "vel",
+       "members": [
+        {
+         "index": 0,
+         "base": [
+          -0.10956915395315225,
+          0.6581869214177796,
+          0.0
+         ],
+         "tip": [
+          -0.43866261466204204,
+          0.6034023444412034,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "arrow",
+       "set": "sticks",
+       "members": [
+        {
+         "index": 0,
+         "base": [
+          1.9011275718441267,
+          0.5880876731037117,
+          0.0
+         ],
+         "tip": [
+          1.8276166127061626,
+          0.8257286195842275,
+          0.125
+         ]
+        },
+        {
+         "index": 1,
+         "base": null,
+         "tip": null
+        }
+       ]
+      },
+      {
+       "kind": "arrow",
+       "set": null,
+       "members": []
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "L7: at value 1.0, the arrow at the reading of a track, and the sticks shown in their windows of t (C3)",
+  "source": "analytic",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "t"
+   },
+   "panels": {
+    "rot": {
+     "view": "rot"
+    },
+    "inertial": {
+     "view": "inertial"
+    }
+   },
+   "layout": {
+    "kind": "split",
+    "dir": "row",
+    "ratio": 0.5,
+    "a": {
+     "kind": "panel",
+     "id": "rot"
+    },
+    "b": {
+     "kind": "panel",
+     "id": "inertial"
+    }
+   }
+  },
+  "frame_index": 4,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "rot": {
+     "frame": "rot",
+     "layers": [
+      {
+       "kind": "arrow",
+       "set": "vel",
+       "members": [
+        {
+         "index": 0,
+         "base": [
+          0.0,
+          1.0,
+          0.0
+         ],
+         "tip": [
+          -0.5,
+          1.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "arrow",
+       "set": "sticks",
+       "members": [
+        {
+         "index": 0,
+         "base": [
+          2.0,
+          0.0,
+          0.0
+         ],
+         "tip": [
+          2.0,
+          0.25,
+          0.125
+         ]
+        },
+        {
+         "index": 1,
+         "base": null,
+         "tip": null
+        }
+       ]
+      },
+      {
+       "kind": "arrow",
+       "set": null,
+       "members": []
+      }
+     ]
+    },
+    "inertial": {
+     "frame": "inertial",
+     "layers": [
+      {
+       "kind": "arrow",
+       "set": "vel",
+       "members": [
+        {
+         "index": 0,
+         "base": [
+          -0.479425538604203,
+          0.8775825618903728,
+          0.0
+         ],
+         "tip": [
+          -0.9182168195493894,
+          0.6378697925882713,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "arrow",
+       "set": "sticks",
+       "members": [
+        {
+         "index": 0,
+         "base": [
+          1.8421219880057702,
+          0.778836684617301,
+          0.0
+         ],
+         "tip": [
+          1.7447674024286075,
+          1.0091019331180222,
+          0.125
+         ]
+        },
+        {
+         "index": 1,
+         "base": null,
+         "tip": null
+        }
+       ]
+      },
+      {
+       "kind": "arrow",
+       "set": null,
+       "members": []
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "L7: at value 1.25, the arrow at the reading of a track, and the sticks shown in their windows of t (C3)",
+  "source": "analytic",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "t"
+   },
+   "panels": {
+    "rot": {
+     "view": "rot"
+    },
+    "inertial": {
+     "view": "inertial"
+    }
+   },
+   "layout": {
+    "kind": "split",
+    "dir": "row",
+    "ratio": 0.5,
+    "a": {
+     "kind": "panel",
+     "id": "rot"
+    },
+    "b": {
+     "kind": "panel",
+     "id": "inertial"
+    }
+   }
+  },
+  "frame_index": 5,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "rot": {
+     "frame": "rot",
+     "layers": [
+      {
+       "kind": "arrow",
+       "set": "vel",
+       "members": [
+        {
+         "index": 0,
+         "base": [
+          -0.25,
+          0.75,
+          0.0
+         ],
+         "tip": [
+          -0.625,
+          0.625,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "arrow",
+       "set": "sticks",
+       "members": [
+        {
+         "index": 0,
+         "base": null,
+         "tip": null
+        },
+        {
+         "index": 1,
+         "base": null,
+         "tip": null
+        }
+       ]
+      },
+      {
+       "kind": "arrow",
+       "set": null,
+       "members": []
+      }
+     ]
+    },
+    "inertial": {
+     "frame": "inertial",
+     "layers": [
+      {
+       "kind": "arrow",
+       "set": "vel",
+       "members": [
+        {
+         "index": 0,
+         "base": [
+          -0.37725345437007796,
+          0.40881317476676593,
+          0.0
+         ],
+         "tip": [
+          -0.581660041753461,
+          0.22018644758172695,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "arrow",
+       "set": "sticks",
+       "members": [
+        {
+         "index": 0,
+         "base": null,
+         "tip": null
+        },
+        {
+         "index": 1,
+         "base": null,
+         "tip": null
+        }
+       ]
+      },
+      {
+       "kind": "arrow",
+       "set": null,
+       "members": []
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "L7: at value 1.5, the arrow at the reading of a track, and the sticks shown in their windows of t (C3)",
+  "source": "analytic",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "t"
+   },
+   "panels": {
+    "rot": {
+     "view": "rot"
+    },
+    "inertial": {
+     "view": "inertial"
+    }
+   },
+   "layout": {
+    "kind": "split",
+    "dir": "row",
+    "ratio": 0.5,
+    "a": {
+     "kind": "panel",
+     "id": "rot"
+    },
+    "b": {
+     "kind": "panel",
+     "id": "inertial"
+    }
+   }
+  },
+  "frame_index": 6,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "rot": {
+     "frame": "rot",
+     "layers": [
+      {
+       "kind": "arrow",
+       "set": "vel",
+       "members": [
+        {
+         "index": 0,
+         "base": [
+          -0.5,
+          0.5,
+          0.0
+         ],
+         "tip": [
+          -0.75,
+          0.25,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "arrow",
+       "set": "sticks",
+       "members": [
+        {
+         "index": 0,
+         "base": null,
+         "tip": null
+        },
+        {
+         "index": 1,
+         "base": [
+          0.0,
+          2.0,
+          0.0
+         ],
+         "tip": [
+          0.25,
+          2.0,
+          0.125
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "arrow",
+       "set": null,
+       "members": []
+      }
+     ]
+    },
+    "inertial": {
+     "frame": "inertial",
+     "layers": [
+      {
+       "kind": "arrow",
+       "set": "vel",
+       "members": [
+        {
+         "index": 0,
+         "base": [
+          -0.27508137013595296,
+          -0.05995621235684084,
+          0.0
+         ],
+         "tip": [
+          -0.24510326395753254,
+          -0.19749689742481735,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "arrow",
+       "set": "sticks",
+       "members": [
+        {
+         "index": 0,
+         "base": null,
+         "tip": null
+        },
+        {
+         "index": 1,
+         "base": [
+          -1.1292849467900707,
+          1.6506712298193567,
+          0.0
+         ],
+         "tip": [
+          -0.9229510430626512,
+          1.7918318481681155,
+          0.125
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "arrow",
+       "set": null,
+       "members": []
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "L7: at value 1.75, the arrow at the reading of a track, and the sticks shown in their windows of t (C3)",
+  "source": "analytic",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "t"
+   },
+   "panels": {
+    "rot": {
+     "view": "rot"
+    },
+    "inertial": {
+     "view": "inertial"
+    }
+   },
+   "layout": {
+    "kind": "split",
+    "dir": "row",
+    "ratio": 0.5,
+    "a": {
+     "kind": "panel",
+     "id": "rot"
+    },
+    "b": {
+     "kind": "panel",
+     "id": "inertial"
+    }
+   }
+  },
+  "frame_index": 7,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "rot": {
+     "frame": "rot",
+     "layers": [
+      {
+       "kind": "arrow",
+       "set": "vel",
+       "members": [
+        {
+         "index": 0,
+         "base": [
+          -0.75,
+          0.25,
+          0.0
+         ],
+         "tip": [
+          -0.875,
+          -0.125,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "arrow",
+       "set": "sticks",
+       "members": [
+        {
+         "index": 0,
+         "base": null,
+         "tip": null
+        },
+        {
+         "index": 1,
+         "base": [
+          0.0,
+          2.0,
+          0.0
+         ],
+         "tip": [
+          0.25,
+          2.0,
+          0.125
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "arrow",
+       "set": null,
+       "members": []
+      }
+     ]
+    },
+    "inertial": {
+     "frame": "inertial",
+     "layers": [
+      {
+       "kind": "arrow",
+       "set": "vel",
+       "members": [
+        {
+         "index": 0,
+         "base": [
+          -0.1729092859018279,
+          -0.5287255994804476,
+          0.0
+         ],
+         "tip": [
+          0.0914535138383959,
+          -0.6151802424313616,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "arrow",
+       "set": "sticks",
+       "members": [
+        {
+         "index": 0,
+         "base": null,
+         "tip": null
+        },
+        {
+         "index": 1,
+         "base": [
+          -1.406113458202932,
+          1.365637920777818,
+          0.0
+         ],
+         "tip": [
+          -1.2354087181057045,
+          1.5414021030531846,
+          0.125
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "arrow",
+       "set": null,
+       "members": []
+      }
+     ]
+    }
+   }
+  }
+ }
+]

@@ -1,0 +1,236 @@
+{
+ "format": "tycho-scene",
+ "version": "0.3",
+ "requires": [
+  "layers.arrows"
+ ],
+ "generator": "pytycho 0.2.0, spec/conformance/generate.py",
+ "frames": {
+  "rot": {},
+  "inertial": {
+   "parent": "rot",
+   "rotation": {
+    "axis": "z",
+    "angle": {
+     "channel": "th"
+    }
+   }
+  }
+ },
+ "track_sets": {
+  "vel": {
+   "frame": "rot",
+   "tags": {
+    "g": "vel"
+   },
+   "tracks": 1,
+   "offsets": "vel/offsets",
+   "positions": "vel/positions",
+   "channels": {
+    "t": {
+     "view": "vel/t"
+    },
+    "th": {
+     "view": "vel/th"
+    },
+    "vx": {
+     "view": "vel/vx"
+    },
+    "vy": {
+     "view": "vel/vy"
+    }
+   },
+   "periodic": false,
+   "attrs": {
+    "s": 0.5
+   }
+  },
+  "sticks": {
+   "frame": "rot",
+   "tags": {
+    "g": "sticks"
+   },
+   "tracks": 2,
+   "offsets": "sticks/offsets",
+   "positions": "sticks/positions",
+   "channels": {
+    "t": {
+     "view": "sticks/t"
+    },
+    "th": {
+     "view": "sticks/th"
+    },
+    "vx": {
+     "view": "sticks/vx"
+    },
+    "vy": {
+     "view": "sticks/vy"
+    },
+    "vz": {
+     "view": "sticks/vz"
+    }
+   },
+   "periodic": false
+  }
+ },
+ "clock": {
+  "mode": "value",
+  "channels": [
+   "t"
+  ],
+  "steps": 8,
+  "range": [
+   0.0,
+   2.0
+  ]
+ },
+ "views": {
+  "rot": {
+   "frame": "rot",
+   "driver": {
+    "sets": {
+     "set": "vel"
+    },
+    "member": {
+     "index": 0
+    }
+   },
+   "layers": [
+    {
+     "kind": "arrow",
+     "sets": {
+      "set": "vel"
+     },
+     "members": "all",
+     "vector": [
+      "vx",
+      "vy"
+     ],
+     "scale": {
+      "attr": "s"
+     }
+    },
+    {
+     "kind": "arrow",
+     "sets": {
+      "set": "sticks"
+     },
+     "members": "all",
+     "vector": [
+      "vx",
+      "vy",
+      "vz"
+     ],
+     "scale": 0.25,
+     "before": "hidden",
+     "after": "hidden",
+     "color": "#ffffff",
+     "width": 1.8,
+     "head": {
+      "size": 12
+     }
+    },
+    {
+     "kind": "arrow",
+     "sets": {
+      "tags": {
+       "g": "none"
+      }
+     },
+     "members": "all",
+     "vector": [
+      "vx",
+      "vy"
+     ]
+    }
+   ]
+  },
+  "inertial": {
+   "frame": "inertial",
+   "driver": {
+    "sets": {
+     "set": "vel"
+    },
+    "member": {
+     "index": 0
+    }
+   },
+   "layers": [
+    {
+     "kind": "arrow",
+     "sets": {
+      "set": "vel"
+     },
+     "members": "all",
+     "vector": [
+      "vx",
+      "vy"
+     ],
+     "scale": {
+      "attr": "s"
+     }
+    },
+    {
+     "kind": "arrow",
+     "sets": {
+      "set": "sticks"
+     },
+     "members": "all",
+     "vector": [
+      "vx",
+      "vy",
+      "vz"
+     ],
+     "scale": 0.25,
+     "before": "hidden",
+     "after": "hidden",
+     "color": "#ffffff",
+     "width": 1.8,
+     "head": {
+      "size": 12
+     }
+    },
+    {
+     "kind": "arrow",
+     "sets": {
+      "tags": {
+       "g": "none"
+      }
+     },
+     "members": "all",
+     "vector": [
+      "vx",
+      "vy"
+     ]
+    }
+   ]
+  }
+ },
+ "initial": {
+  "variables": {},
+  "clock": {
+   "channel": "t"
+  },
+  "panels": {
+   "rot": {
+    "view": "rot"
+   },
+   "inertial": {
+    "view": "inertial"
+   }
+  },
+  "layout": {
+   "kind": "split",
+   "dir": "row",
+   "ratio": 0.5,
+   "a": {
+    "kind": "panel",
+    "id": "rot"
+   },
+   "b": {
+    "kind": "panel",
+    "id": "inertial"
+   }
+  }
+ }
+}

@@ -1,0 +1,13 @@
+[
+ {
+  "name": "C6: an arrow layer on a set that is not periodic, under two laps",
+  "rule": "C6",
+  "scene": {
+   "track_sets": {
+    "loop": {
+     "periodic": false
+    }
+   }
+  }
+ }
+]

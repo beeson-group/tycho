@@ -1655,6 +1655,218 @@ def driver_context_value():
     print(f"driver-context-value: {len(cases)} cases with the reference ones")
 
 
+def _arrow_doc(w, clock, track_sets, layers, views=("rot", "inertial")):
+    """A scene document of arrow layers, drawn in the rotating frame and in an inertial frame that turns by the channel th."""
+    return {
+        "format": "tycho-scene",
+        "version": "0.3",
+        "requires": ["layers.arrows"],
+        "generator": w.generator,
+        "frames": {"rot": {}, "inertial": {"parent": "rot", "rotation": {"axis": "z", "angle": {"channel": "th"}}}},
+        "track_sets": track_sets,
+        "clock": clock,
+        "views": {
+            v: {"frame": v, "driver": {"sets": {"set": next(iter(track_sets))}, "member": {"index": 0}}, "layers": layers} for v in views
+        },
+        "initial": {
+            "variables": {},
+            "clock": {"channel": clock["channels"][0]},
+            "panels": {v: {"view": v} for v in views},
+            "layout": {
+                "kind": "split",
+                "dir": "row",
+                "ratio": 0.5,
+                "a": {"kind": "panel", "id": views[0]},
+                "b": {"kind": "panel", "id": views[1]},
+            },
+        },
+    }
+
+
+def _arrow(P, V, th, k, w, scale, frame):
+    """The base and the tip of rule L7 between samples k and k + 1 at weight w. In the inertial frame, each sample turns by its angle th."""
+    R = [rz(a) if frame == "inertial" else np.eye(3) for a in th]
+    base = (1.0 - w) * R[k] @ P[k] + w * R[k + 1] @ P[k + 1]
+    tip = (1.0 - w) * R[k] @ (P[k] + scale * V[k]) + w * R[k + 1] @ (P[k + 1] + scale * V[k + 1])
+    return list(map(float, base)), list(map(float, tip))
+
+
+def arrows():
+    """Arrow layers under a value clock: an arrow on a track, sticks shown in windows of the clock value, and a query matching no set."""
+    w = ContainerWriter(generator=f"pytycho {pytycho.__version__}, spec/conformance/generate.py")
+    vel_p = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [-1.0, 0.0, 0.0]])
+    vel_v = np.array([[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, -1.0, 0.0]])
+    vel_t, vel_th = np.array([0.0, 1.0, 2.0]), np.array([0.0, 0.5, 1.5])
+    w.add_view("vel/offsets", np.array([0, 3]), dtype="uint32")
+    w.add_view("vel/positions", vel_p[:, :2])
+    w.add_view("vel/t", vel_t)
+    w.add_view("vel/th", vel_th)
+    w.add_view("vel/vx", vel_v[:, 0])
+    w.add_view("vel/vy", vel_v[:, 1])
+    # each stick is a track of two samples with one position and one vector, shown while t lies in its window
+    sticks = [((2.0, 0.0, 0.0), (0.0, 1.0, 0.5), (0.5, 1.0), (0.2, 0.4)), ((0.0, 2.0, 0.0), (1.0, 0.0, 0.5), (1.5, 2.0), (0.6, 1.0))]
+    w.add_view("sticks/offsets", np.array([0, 2, 4]), dtype="uint32")
+    w.add_view("sticks/positions", np.array([p for p, _, _, _ in sticks for _ in range(2)]))
+    for j, name in enumerate(("vx", "vy", "vz")):
+        w.add_view(f"sticks/{name}", np.array([v[j] for _, v, _, _ in sticks for _ in range(2)]))
+    w.add_view("sticks/t", np.array([t for _, _, window, _ in sticks for t in window]))
+    w.add_view("sticks/th", np.array([a for _, _, _, angles in sticks for a in angles]))
+
+    def tset(sid, tracks, channels, attrs=None):
+        spec = {
+            "frame": "rot",
+            "tags": {"g": sid},
+            "tracks": tracks,
+            "offsets": f"{sid}/offsets",
+            "positions": f"{sid}/positions",
+            "channels": {c: {"view": f"{sid}/{c}"} for c in channels},
+            "periodic": False,
+        }
+        if attrs:
+            spec["attrs"] = attrs
+        return spec
+
+    layers = [
+        {"kind": "arrow", "sets": {"set": "vel"}, "members": "all", "vector": ["vx", "vy"], "scale": {"attr": "s"}},
+        {
+            "kind": "arrow",
+            "sets": {"set": "sticks"},
+            "members": "all",
+            "vector": ["vx", "vy", "vz"],
+            "scale": 0.25,
+            "before": "hidden",
+            "after": "hidden",
+            "color": "#ffffff",
+            "width": 1.8,
+            "head": {"size": 12},
+        },
+        {"kind": "arrow", "sets": {"tags": {"g": "none"}}, "members": "all", "vector": ["vx", "vy"]},
+    ]
+    doc = _arrow_doc(
+        w,
+        {"mode": "value", "channels": ["t"], "steps": 8, "range": [0.0, 2.0]},
+        {"vel": tset("vel", 1, ("t", "th", "vx", "vy"), {"s": 0.5}), "sticks": tset("sticks", 2, ("t", "th", "vx", "vy", "vz"))},
+        layers,
+    )
+    cases = []
+    for i in range(8):
+        v = 0.25 * i
+        panels = {}
+        for frame in ("rot", "inertial"):
+            k, wt = _segment(vel_t / 2.0, v / 2.0)
+            base, tip = _arrow(vel_p, vel_v, vel_th, k, wt, 0.5, frame)
+            members = []
+            for j, (p, vec, (a, b), angles) in enumerate(sticks):
+                if not a <= v <= b:
+                    members.append({"index": j, "base": None, "tip": None})
+                    continue
+                P, V = np.array([p, p]), np.array([vec, vec])
+                sb, st = _arrow(P, V, angles, 0, (v - a) / (b - a), 0.25, frame)
+                members.append({"index": j, "base": sb, "tip": st})
+            panels[frame] = {
+                "frame": frame,
+                "layers": [
+                    {"kind": "arrow", "set": "vel", "members": [{"index": 0, "base": base, "tip": tip}]},
+                    {"kind": "arrow", "set": "sticks", "members": members},
+                    {"kind": "arrow", "set": None, "members": []},
+                ],
+            }
+        cases.append(
+            {
+                "name": f"L7: at value {v}, the arrow at the reading of a track, and the sticks shown in their windows of t (C3)",
+                "source": "analytic",
+                "state": doc["initial"],
+                "frame_index": i,
+                "tolerance": TOL,
+                "expected": {"panels": panels},
+            }
+        )
+
+    def with_layer(patch):
+        return {"views": {v: {"layers": [{**layers[0], **patch}, *layers[1:]]} for v in ("rot", "inertial")}}
+
+    rejections = [
+        {"name": "L7: @index in the vector of an arrow layer", "rule": "L7", "scene": with_layer({"vector": ["vx", "@index"]})},
+        {"name": "L7: a vector channel that the set lacks", "rule": "L7", "scene": with_layer({"vector": ["vx", "vz"]})},
+        {"name": "L7: a channel as the scale of an arrow layer", "rule": "L7", "scene": with_layer({"scale": {"channel": "t"}})},
+        {
+            "name": "C5: an arrow layer on a set without the clock channel",
+            "rule": "C5",
+            "scene": {"track_sets": {"sticks": {"channels": {"t": None}}}},
+        },
+    ]
+    out = HERE / "arrows"
+    out.mkdir(exist_ok=True)
+    (out / "scene.tys").write_text(json.dumps(doc, indent=1) + "\n")
+    w.write(out / "data.tyd")
+    (out / "cases.json").write_text(json.dumps(cases, indent=1) + "\n")
+    (out / "rejections.json").write_text(json.dumps(rejections, indent=1) + "\n")
+    print(f"arrows: {len(cases)} cases, {len(rejections)} rejections")
+
+
+def arrows_laps():
+    """An arrow on a periodic loop over two laps of a fraction clock, whose vector channels are not raised by the lap (rules L7 and C6)."""
+    w = ContainerWriter(generator=f"pytycho {pytycho.__version__}, spec/conformance/generate.py")
+    P = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [1.0, 0.0, 0.0]])
+    # vx advances by 4 over the loop, which would be added to it in lap 1 if the vector were raised
+    V = np.array([[0.0, 1.0, 0.0], [1.0, 1.0, 0.0], [2.0, 1.0, 0.0], [3.0, 1.0, 0.0], [4.0, 1.0, 0.0]])
+    th = np.array([0.0, 0.5, 1.0, 1.5, 2.0])
+    w.add_view("loop/offsets", np.array([0, 5]), dtype="uint32")
+    w.add_view("loop/positions", P[:, :2])
+    w.add_view("loop/th", th)
+    w.add_view("loop/vx", V[:, 0])
+    w.add_view("loop/vy", V[:, 1])
+    track_sets = {
+        "loop": {
+            "frame": "rot",
+            "tracks": 1,
+            "offsets": "loop/offsets",
+            "positions": "loop/positions",
+            "channels": {c: {"view": f"loop/{c}"} for c in ("th", "vx", "vy")},
+            "periodic": True,
+        }
+    }
+    layers = [{"kind": "arrow", "sets": {"set": "loop"}, "members": {"index": 0}, "vector": ["vx", "vy"], "scale": 0.5}]
+    doc = _arrow_doc(w, {"mode": "fraction", "channels": ["@index"], "steps": 10, "laps": 2}, track_sets, layers)
+    ui = np.arange(5) / 4.0
+    cases = []
+    for i in range(10):
+        loop_reading = 2.0 * i / 10
+        lap = min(int(np.floor(loop_reading)), 1)
+        k, wt = _segment(ui, loop_reading - lap)
+        panels = {}
+        for frame in ("rot", "inertial"):
+            base, tip = _arrow(P, V, th + lap * (th[-1] - th[0]), k, wt, 0.5, frame)
+            panels[frame] = {
+                "frame": frame,
+                "layers": [{"kind": "arrow", "set": "loop", "members": [{"index": 0, "base": base, "tip": tip}]}],
+            }
+        cases.append(
+            {
+                "name": f"L7 and C6: at frame {i}, lap {lap}, the edge angle is raised by the lap and the vector is not",
+                "source": "analytic",
+                "state": doc["initial"],
+                "frame_index": i,
+                "tolerance": TOL,
+                "expected": {"panels": panels},
+            }
+        )
+    rejections = [
+        {
+            "name": "C6: an arrow layer on a set that is not periodic, under two laps",
+            "rule": "C6",
+            "scene": {"track_sets": {"loop": {"periodic": False}}},
+        },
+    ]
+    out = HERE / "arrows-laps"
+    out.mkdir(exist_ok=True)
+    (out / "scene.tys").write_text(json.dumps(doc, indent=1) + "\n")
+    w.write(out / "data.tyd")
+    (out / "cases.json").write_text(json.dumps(cases, indent=1) + "\n")
+    (out / "rejections.json").write_text(json.dumps(rejections, indent=1) + "\n")
+    print(f"arrows-laps: {len(cases)} cases, {len(rejections)} rejections")
+
+
 def containers():
     """The same views written twice, with the encodings the writer picks and all raw, for a reader to decode bit for bit."""
     rng = np.random.default_rng(78)
@@ -1704,4 +1916,6 @@ if __name__ == "__main__":
     driver_context()
     driver_context_laps()
     driver_context_value()
+    arrows()
+    arrows_laps()
     containers()

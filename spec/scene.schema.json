@@ -945,6 +945,75 @@
           "additionalProperties": false,
           "required": [
             "kind",
+            "sets",
+            "members",
+            "vector"
+          ],
+          "properties": {
+            "kind": {
+              "const": "arrow"
+            },
+            "sets": {
+              "$ref": "#/$defs/setQuery"
+            },
+            "members": {
+              "$ref": "#/$defs/memberRef"
+            },
+            "vector": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/name"
+              },
+              "minItems": 2,
+              "maxItems": 3
+            },
+            "scale": {
+              "$ref": "#/$defs/constantScalar"
+            },
+            "before": {
+              "enum": [
+                "clamp",
+                "hidden"
+              ]
+            },
+            "after": {
+              "enum": [
+                "clamp",
+                "hidden"
+              ]
+            },
+            "color": {
+              "$ref": "#/$defs/color"
+            },
+            "opacity": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "width": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "head": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "size": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              }
+            },
+            "visible": {
+              "$ref": "#/$defs/varRef"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
             "body"
           ],
           "properties": {

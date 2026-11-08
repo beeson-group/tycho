@@ -886,7 +886,7 @@ describe('a viewer embedded on a page, under a DOM stand-in', () => {
       for (const key of ['ArrowUp', 'ArrowRight', ' ']) expect(press(host, key).stopped, key).toBe(false);
       expect(press(host, 'f').stopped).toBe(true);
     });
-    it('that a focused control takes do not reach the page, and the viewer does not act on them', async () => {
+    it('that a focused control takes do not reach the page, and the viewer acts on the others, so that 0 rewinds after a click on a tab', async () => {
       const { v, host } = await live();
       const range = new FakeElement(doc as never, 'input');
       range.type = 'range';
@@ -895,8 +895,15 @@ describe('a viewer embedded on a page, under a DOM stand-in', () => {
       const button = new FakeElement(doc as never, 'button');
       expect(press(host, ' ', button)).toEqual({ stopped: true, prevented: false });
       expect(press(host, 'Enter', button).stopped).toBe(true);
-      expect(press(host, 'k', button).stopped).toBe(true);
       expect(v.playing).toBe(false);
+      // a tab of a control is a button, and a key that a button does not take acts on the viewer
+      expect(press(host, 'k', button)).toEqual({ stopped: true, prevented: true });
+      expect(v.playing).toBe(true);
+      press(host, 'k', button);
+      expect(v.playing).toBe(false);
+      v.store.setFrame(5);
+      expect(press(host, '0', button)).toEqual({ stopped: true, prevented: true });
+      expect(v.store.frame).toBe(0);
       expect(press(host, 'n', button).stopped).toBe(false);
     });
     it('know what each form control takes', () => {

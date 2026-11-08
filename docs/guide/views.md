@@ -102,6 +102,20 @@ A track layer that does not take a clock reading draws the same picture at every
 
 The runtime draws the first static layers of a view, i.e. the run of static layers at the start of the list, once per panel. It then copies this picture back at every frame, until the members they draw, the highlighted member, the camera, or the panel's size changes. A dense family therefore costs little during playback. Put the static layers first, since a static layer that comes after a layer that moves is drawn again at every frame. While a slider or the camera is dragged, the static layers are drawn without antialiasing, i.e. without smoothing their jagged edges. They are drawn again with antialiasing once the drag stops. Under an orbit camera with a `turn`, the camera is moved at every frame, hence the static layers are drawn at every frame as well, with antialiasing.
 
+## Arrow layers
+
+An arrow layer draws an arrow on each member at the clock's reading, and {func}`ty.arrow(sets, vector, members, scale=) <pytycho.arrow>` builds one (rule L7). The arrow is based at the point of the track at the reading, as a head is. It points along a vector that is read from two or three channels of the track set, e.g. `("vx", "vy", "vz")` for a velocity, and it is `scale` times as long as this vector. The `scale` is a number or an attribute of the set, and it defaults to 1. The call below draws the velocity of the driver's track at a tenth of its length, in white.
+
+```python
+ty.arrow(orbit, ("vx", "vy", "vz"), 0, scale=0.1, color="#ffffff", width=2.0, head=12.0)
+```
+
+The base and the tip are both transformed into the display frame, hence an arrow drawn in the rotating frame and shown in an inertial frame is turned with the frame. The vector channels are read as they are stored in every lap, and they are not raised by the lap as the channels of the frame edges are (rule C6). A reading is taken on every member, hence the set must carry the clock channels (rule C5).
+
+The head is a filled triangle `head` CSS pixels long, 10 by default, and 0.8 times as wide as it is long, at every zoom. The head of an arrow shorter than its head on screen is shortened to the arrow, and an arrow whose ends meet on screen is not drawn. The `width` is the width of the shaft in CSS pixels, and the `color` and the `opacity` default to the foreground of the theme and to 1. The camera is not fitted to the arrows, since they move with the reading.
+
+Under a clock in value mode, `before="hidden"` and `after="hidden"` hide an arrow while the clock value is outside the values of its track (rule C3). An arrow shown for a window of time is thus a track of two samples with the same position and vector, whose clock channel holds the start and the end of the window. The velocity at a node of a guess can thus be drawn for the iteration in which the guess is shown.
+
 ## Body, axes, and grid layers
 
 A body layer draws a body, i.e. a named point such as the primary, at the driver's reading, and {func}`ty.body(body, trail=, size=) <pytycho.body>` builds one. Its `trail` is a fraction of the loop, as on a track layer, and its `size` is the diameter of the body in CSS pixels ([bodies and drivers](bodies.md)).
@@ -114,7 +128,7 @@ Under an orbit camera, `span` defaults to `"positive"` and `labels` to false. Th
 
 ## What a view evaluates to
 
-The evaluator computes what a scene draws, as numbers rather than pixels. For a state of the page and a frame index, every panel evaluates to its display frame and one entry per layer ([section 3](../spec.md#3-what-an-evaluator-returns)). The entry of a track layer holds the set it draws from and, for every member drawn, the member's polyline and head. The entry of a body layer holds the body's position and trail. The function {func}`pytycho.evaluate` returns this result, which is the same answer that the browser draws, since the browser runtime implements the same evaluator. This is how a test asserts that a scene draws what it should. The call below evaluates the initial state at frame index 100 and reads the head of the first member drawn by the second layer of panel `p2`.
+The evaluator computes what a scene draws, as numbers rather than pixels. For a state of the page and a frame index, every panel evaluates to its display frame and one entry per layer ([section 3](../spec.md#3-what-an-evaluator-returns)). The entry of a track layer holds the set it draws from and, for every member drawn, the member's polyline and head. In the entry of an arrow layer, the base and the tip of the arrow are given for every member, and both are null while the member is hidden. The entry of a body layer holds the body's position and trail. The function {func}`pytycho.evaluate` returns this result, which is the same answer that the browser draws, since the browser runtime implements the same evaluator. This is how a test asserts that a scene draws what it should. The call below evaluates the initial state at frame index 100 and reads the head of the first member drawn by the second layer of panel `p2`.
 
 ```python
 result = ty.evaluate(scene.to_document(), scene.to_container(), scene.to_document()["initial"], frame_index=100)

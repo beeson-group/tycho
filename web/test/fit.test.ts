@@ -16,6 +16,8 @@ import {
   contentKey,
   fitBox,
   kernelOpacity,
+  labelBox,
+  labelsOverlap,
   orthoFit,
   planeLabels,
   planeView,
@@ -501,6 +503,31 @@ describe('an axis title under the label of a body', () => {
     expect(items.some((l: { kind?: string }) => l.kind === 'tick')).toBe(true);
     expect(shown()).toContain('Moon');
     expect(moonPanel({ kind: 'plane', plane: 'xy' }, () => [5, 0.5, 0]).shown()).toEqual(expect.arrayContaining(['x', 'y', 'Moon']));
+  });
+  it('is shown when the label of the body is hidden, as for a body just below the bottom edge', () => {
+    // the label of the Moon is centered 1 px below the edge, outside the panel, and its box is 1.5 px deep into the box of
+    // the x title
+    const below = (p: any): [number, number, number] => {
+      const v = p.view;
+      const x = planeLabels(v, true, ['x', 'y']).find((l) => l.kind === 'title' && !l.rotate)!;
+      return [v.x0 + ((x.x - 12) / v.w) * (v.x1 - v.x0), v.y0 - (1 / v.h) * (v.y1 - v.y0), 0];
+    };
+    expect(moonPanel({ kind: 'plane', plane: 'xy' }, below).shown()).toEqual(expect.arrayContaining(['x', 'y']));
+    expect(moonPanel({ kind: 'plane', plane: 'xy' }, below).shown()).not.toContain('Moon');
+  });
+  it('is found from boxes estimated from the text at 12 px, or 13 px for a title, turned with a rotated label', () => {
+    expect(labelBox({ text: 'Moon', x: 100, y: 50 })).toEqual([100, 44, 128, 56]);
+    expect(labelBox({ text: 'Moon', x: 100, y: 50, align: 'end' })).toEqual([72, 44, 100, 56]);
+    // a title of one letter is 7 * 13 / 12 px long, and the rotated y title is set upward, centered on its point
+    const along = (7 * 13) / 12;
+    const near = (b: number[]) => b.map((v) => expect.closeTo(v, 12));
+    expect(labelBox({ text: 'x', x: 200, y: 390, align: 'center', kind: 'title' })).toEqual(near([200 - along / 2, 383.5, 200 + along / 2, 396.5]));
+    expect(labelBox({ text: 'y', x: 10, y: 200, align: 'center', rotate: true, kind: 'title' })).toEqual(near([3.5, 200 - along / 2, 16.5, 200 + along / 2]));
+    expect(labelBox({ text: 'y', x: 10, y: 200, rotate: true })).toEqual([4, 193, 16, 200]);
+    // two rows of text at 12 px are not overlapping when 12 px apart, and are overlapping when 11 px apart
+    expect(labelsOverlap({ text: 'Moon', x: 100, y: 50 }, { text: 'x', x: 110, y: 62 })).toBe(false);
+    expect(labelsOverlap({ text: 'Moon', x: 100, y: 50 }, { text: 'x', x: 110, y: 61 })).toBe(true);
+    expect(labelsOverlap({ text: 'Moon', x: 100, y: 50 }, { text: 'x', x: 128, y: 50 })).toBe(false);
   });
 });
 

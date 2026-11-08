@@ -473,7 +473,7 @@ def evaluate(document: Mapping[str, Any], container: Container | bytes, state: M
     return _Evaluator(document, container).run(state, frame_index)
 
 
-KINDS = ("track", "body", "axes", "grid")
+KINDS = ("track", "arrow", "body", "axes", "grid")
 
 
 class _Evaluator:
@@ -715,6 +715,8 @@ class _Panel:
             kind = layer["kind"]
             if kind == "track":
                 layers.append(self.track_layer(layer))
+            elif kind == "arrow":
+                layers.append(self.arrow_layer(layer))
             elif kind == "body":
                 layers.append(self.body_layer(layer))
             else:
@@ -794,6 +796,50 @@ class _Panel:
                 entry["head"] = resolve_vertices([("blend", *segment(u_samples, within), j)], table)[0]
             members.append(entry)
         return {"kind": "track", "set": data.id, "members": members}
+
+    def arrow_layer(self, layer: Mapping[str, Any]) -> dict[str, Any]:
+        """The base and the tip of each member's arrow at the reading (rule L7)."""
+        vector = layer.get("vector")
+        if not isinstance(vector, list) or len(vector) not in (2, 3) or not all(isinstance(c, str) for c in vector):
+            raise EvaluationError(f"L7: an arrow layer's vector is {vector!r}, not two or three channel names")
+        if INDEX in vector:
+            raise EvaluationError(f"L7: {INDEX} is not allowed in the vector of an arrow layer")
+        scale = layer.get("scale", 1.0)
+        if isinstance(scale, Mapping) and "channel" in scale:
+            raise EvaluationError("L7: the scale of an arrow layer takes a number or an attribute, not a channel")
+        for key in ("before", "after"):
+            if layer.get(key, "clamp") not in ("clamp", "hidden"):
+                raise EvaluationError(f"C3: an arrow layer's {key} is {layer[key]!r}, not clamp or hidden")
+        data = self.one(layer["sets"])
+        if data is None:
+            return {"kind": "arrow", "set": None, "members": []}
+        for name in vector:
+            if name not in data.channels:
+                raise EvaluationError(f"L7: track set {data.id!r} lacks channel {name!r} of an arrow layer's vector")
+        laps = self.reading.laps
+        if laps > 1 and not data.periodic:
+            raise EvaluationError(f"C6: a reading is taken on track set {data.id!r}, which is not periodic, and the clock has {laps} laps")
+        members = []
+        for i in self.members(layer["members"], data):
+            track = data.track(i)
+            u = self.clamped(track, layer)
+            if u is None:
+                members.append({"index": i, "base": None, "tip": None})
+                continue
+            # the vector is read from the stored values in every lap, since rule C6 raises only the context
+            v = np.zeros((track.m, 3))
+            for j, name in enumerate(vector):
+                v[:, j] = track.channels[name]
+            tips = track.positions + scalar(scale, track.context()) * v
+
+            def table(points: np.ndarray, t: Track = track) -> Callable[[int], np.ndarray]:
+                return _by_lap(lambda lap: self.ev.tree.transform(points, data.frame, self.frame, t.context(lap)))
+
+            j, within = lap_of(laps * u, laps)
+            at = [("blend", *segment(track.sample_readings(self.reading.channel), within), j)]
+            base = resolve_vertices(at, table(track.positions))[0]
+            members.append({"index": i, "base": base, "tip": resolve_vertices(at, table(tips))[0]})
+        return {"kind": "arrow", "set": data.id, "members": members}
 
     def driver_point(self) -> tuple[Track, np.ndarray, float, int, int, float]:
         """The driver's track, its sample readings, its loop reading, and the lap, segment, and weight of the point at the reading.

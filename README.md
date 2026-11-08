@@ -66,7 +66,7 @@ To put a scene on a slide, paste the output of `ty.build_embed(scene.to_document
 |---|---|
 | `theme` | `dark` or `light`, a built-in palette that replaces the theme of the scene and can change at any time |
 | `autoplay` | plays once the scene is loaded and the element is visible, unless the user asked for reduced motion |
-| `lean` | hides the chrome of the viewer, i.e. the Add panel group, the icons of the panel heads, the frame and rate readouts, the View group, and Export, for a slide on which the controls of the scene are still used |
+| `lean` | hides the chrome of the viewer, i.e. the Add panel group, the icons of the panel heads, the frame and rate readouts, the View group, and Export, for a slide on which the controls of the scene are still used. With the value `panels`, i.e. `lean="panels"`, the Add panel group and the icons of the panel heads stay, for a slide on which panels are added by hand |
 | `scene`, `data` | URLs of the two files, used when the element does not have child blocks |
 
 ## Files

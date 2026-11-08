@@ -597,6 +597,27 @@ function tickText(v: number, step: number): string {
 /** A label's width in CSS pixels at the 12 px of a tick number, a little over the widest digit and the minus. */
 const tickWidth = (s: string): number => 7 * s.length - 3.5 * (s.split('.').length - 1);
 
+/**
+ * A label's box in CSS pixels from the panel's corner, as [left, top, right, bottom]. Its length is estimated from its text as
+ * `tickWidth` estimates a tick number, scaled to 13 px for a title and kept at 12 px for any other label, and its height is
+ * the font size. The box is estimated rather than measured, so that the same titles are hidden in a page and in a video frame,
+ * although their text is set in different fonts.
+ */
+export function labelBox(l: PanelLabel): [number, number, number, number] {
+  const size = l.kind === 'title' ? 13 : 12;
+  const along = (tickWidth(l.text) * size) / 12;
+  const from = l.align === 'center' ? -along / 2 : l.align === 'end' ? -along : 0;
+  // a rotated label is set upward, hence its start is at the bottom of its box
+  return l.rotate ? [l.x - size / 2, l.y - from - along, l.x + size / 2, l.y - from] : [l.x + from, l.y - size / 2, l.x + from + along, l.y + size / 2];
+}
+
+/** True when the boxes of two labels are overlapping, as `labelBox` estimates them, and false when they are only touching. */
+export function labelsOverlap(a: PanelLabel, b: PanelLabel): boolean {
+  const [al, at, ar, ab] = labelBox(a);
+  const [bl, bt, br, bb] = labelBox(b);
+  return al < br && bl < ar && at < bb && bt < ab;
+}
+
 /** The height below which a panel does not have room for the x title under its tick row, and the width below which it does not have room for the y title. */
 const TITLE_ROOM = 160;
 
@@ -2046,21 +2067,27 @@ export class StageRenderer {
   /**
    * The labels of a panel at the last frame, in CSS pixels from the panel's corner. They are the tick
    * numbers and axis titles of a plane camera, the axis titles at the tips of axes laid out from the
-   * box, and the body labels beside their discs.
+   * box, and the body labels beside their discs. An axis title under a shown body label is hidden,
+   * since the body label is the name of the disc beside it.
    */
   private labelItems(p: PanelRender): (PanelLabel & { hidden: boolean })[] {
     if (p.plan === null) return [];
-    const items: (PanelLabel & { hidden: boolean })[] = [];
+    type Item = PanelLabel & { hidden: boolean };
+    const items: Item[] = [];
+    const titles: Item[] = [];
+    const bodies: Item[] = [];
     const frame = this.ctx.scene.frames[p.plan.display];
     const names = frame?.axes ?? ['x', 'y', 'z'];
     const { normal } = cameraBasis(p.cameraSpec);
     const k = stretchOf(p.cameraSpec);
-    const add = (text: string, at: THREE.Vector3, dx: number, hide: boolean) => {
+    const add = (text: string, at: THREE.Vector3, dx: number, hide: boolean): Item => {
       const s = at.clone().multiply(k).project(p.camera);
       const x = ((s.x + 1) / 2) * p.rect.w + dx;
       const y = ((1 - s.y) / 2) * p.rect.h;
       const inside = s.z > -1 && s.z < 1 && x >= 0 && x <= p.rect.w && y >= 0 && y <= p.rect.h;
-      items.push({ text, x, y, hidden: hide || !inside });
+      const item = { text, x, y, hidden: hide || !inside };
+      items.push(item);
+      return item;
     };
     const marks = [...p.draws.values()].filter((d): d is MarkDraw => d instanceof MarkDraw);
     if (p.view !== null && p.cameraSpec.kind === 'plane') {
@@ -2068,7 +2095,11 @@ export class StageRenderer {
       const title = (i: number) => (names[i] && frame?.unit ? `${names[i]} [${frame.unit}]` : (names[i] ?? ''));
       const axes = marks.some((d) => d.follows && d.kind === 'axes');
       const ticks = marks.some((d) => d.ticks);
-      for (const l of planeLabels(p.view, ticks, axes ? [title(ix), title(iy)] : null)) items.push({ ...l, hidden: false });
+      for (const l of planeLabels(p.view, ticks, axes ? [title(ix), title(iy)] : null)) {
+        const item = { ...l, hidden: false };
+        items.push(item);
+        if (l.kind === 'title') titles.push(item);
+      }
     }
     for (const d of p.draws.values()) {
       if (d instanceof MarkDraw && d.kind === 'axes' && !d.follows) {
@@ -2076,12 +2107,14 @@ export class StageRenderer {
           const name = names[i] ?? '';
           const factor = k.getComponent(i);
           const title = name !== '' && factor !== 1 ? `${name} ×${Number(factor.toPrecision(4))}` : name;
-          add(title, tip, 4, p.cameraSpec.kind === 'plane' && Math.abs(tip.clone().normalize().dot(normal)) > 0.99);
+          titles.push(add(title, tip, 4, p.cameraSpec.kind === 'plane' && Math.abs(tip.clone().normalize().dot(normal)) > 0.99));
         });
       } else if (d instanceof BodyDraw && d.label !== null && d.at !== null && d.group.visible) {
-        add(d.label, d.at, d.size / 2 + 3, false);
+        bodies.push(add(d.label, d.at, d.size / 2 + 3, false));
       }
     }
+    const shown = bodies.filter((b) => !b.hidden);
+    for (const t of titles) if (shown.some((b) => labelsOverlap(t, b))) t.hidden = true;
     return items;
   }
 

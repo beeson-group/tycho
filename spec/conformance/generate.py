@@ -1867,6 +1867,165 @@ def arrows_laps():
     print(f"arrows-laps: {len(cases)} cases, {len(rejections)} rejections")
 
 
+def outlines():
+    """Outline layers under a value clock, from a magnified frame whose origin and scale are driver channels (rules L8 and F2)."""
+    w = ContainerWriter(generator=f"pytycho {pytycho.__version__}, spec/conformance/generate.py")
+    P = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [-1.0, 0.5, 0.0]])
+    t = np.array([0.0, 1.0, 2.0])
+    # the frame zoom is magnified k times about the middle (mx, my), and the frame inertial turns by th
+    mx, my, k, th = np.array([0.5, 0.0, -0.5]), np.array([0.0, 0.25, 0.5]), np.array([2.0, 4.0, 10.0]), np.array([0.0, 0.5, 1.5])
+    w.add_view("drv/offsets", np.array([0, 3]), dtype="uint32")
+    w.add_view("drv/positions", P[:, :2])
+    for name, values in (("t", t), ("mx", mx), ("my", my), ("k", k), ("th", th)):
+        w.add_view(f"drv/{name}", values)
+    outline = {"kind": "outline", "view": "closeup", "color": "#ffffff", "opacity": 0.5, "width": 1.5, "dash": [4, 3], "min_size": 12}
+    drawn = {"kind": "track", "sets": {"set": "drv"}, "members": "all"}
+
+    def view(frame, layers, driver=None):
+        return {"frame": frame, "driver": {"sets": driver or {"set": "drv"}, "member": {"index": 0}}, "layers": layers}
+
+    doc = {
+        "format": "tycho-scene",
+        "version": "0.3",
+        "requires": ["layers.outline", "frames.origin_channel"],
+        "generator": w.generator,
+        "frames": {
+            "rot": {},
+            "zoom": {"parent": "rot", "origin": [{"channel": "mx"}, {"channel": "my"}, 0.0], "scale": {"channel": "k"}},
+            "inertial": {"parent": "rot", "rotation": {"axis": "z", "angle": {"channel": "th"}}},
+        },
+        "track_sets": {
+            "drv": {
+                "frame": "rot",
+                "tags": {"g": "drv"},
+                "tracks": 1,
+                "offsets": "drv/offsets",
+                "positions": "drv/positions",
+                "channels": {c: {"view": f"drv/{c}"} for c in ("t", "mx", "my", "k", "th")},
+                "periodic": False,
+            }
+        },
+        "clock": {"mode": "value", "channels": ["t"], "steps": 8, "range": [0.0, 2.0]},
+        "views": {
+            "rot": view("rot", [drawn, outline]),
+            "inertial": view("inertial", [drawn, outline]),
+            "closeup": {**view("zoom", [drawn]), "camera": {"kind": "plane", "plane": "xy"}},
+            "lost": view("rot", [outline], {"tags": {"g": "none"}}),
+        },
+    }
+
+    def state(panels, layout):
+        return {"variables": {}, "clock": {"channel": "t"}, "panels": {pid: {"view": v} for pid, v in panels.items()}, "layout": layout}
+
+    def leaf(pid):
+        return {"kind": "panel", "id": pid}
+
+    def row(a, b):
+        return {"kind": "split", "dir": "row", "ratio": 0.5, "a": a, "b": b}
+
+    doc["initial"] = state(
+        {"rot": "rot", "inertial": "inertial", "closeup": "closeup"}, row(leaf("rot"), row(leaf("inertial"), leaf("closeup")))
+    )
+
+    def mapped(frame, i):
+        """The images of the origin and the unit points of zoom in frame, in the context of sample i (rule F1)."""
+        R = rz(th[i]) if frame == "inertial" else np.eye(3)
+        o = np.array([mx[i], my[i], 0.0])
+        return R @ o, [R @ e / k[i] for e in np.eye(3)]
+
+    def expected_outline(frame, v, panel="closeup"):
+        s, wt = _segment(t / 2.0, v / 2.0)
+        (oa, xa), (ob, xb) = mapped(frame, s), mapped(frame, s + 1)
+        origin = (1.0 - wt) * oa + wt * ob
+        axes = [list(map(float, (1.0 - wt) * a + wt * b)) for a, b in zip(xa, xb, strict=True)]
+        return {"kind": "outline", "view": "closeup", "panel": panel, "frame": "zoom", "origin": list(map(float, origin)), "axes": axes}
+
+    def line(frame):
+        if frame == "zoom":
+            return [list(map(float, k[i] * (P[i] - np.array([mx[i], my[i], 0.0])))) for i in range(3)]
+        return [list(map(float, (rz(th[i]) if frame == "inertial" else np.eye(3)) @ P[i])) for i in range(3)]
+
+    def track(frame):
+        return {"kind": "track", "set": "drv", "members": [{"index": 0, "line": line(frame)}]}
+
+    cases = []
+    for i in range(8):
+        v = 0.25 * i
+        panels = {f: {"frame": f, "layers": [track(f), expected_outline(f, v)]} for f in ("rot", "inertial")}
+        panels["closeup"] = {"frame": "zoom", "layers": [track("zoom")]}
+        cases.append(
+            {
+                "name": f"L8 and F2: at value {v}, the map from the frame zoom, whose edge reads driver channels, blended at the reading",
+                "source": "analytic",
+                "state": doc["initial"],
+                "frame_index": i,
+                "tolerance": TOL,
+                "expected": {"panels": panels},
+            }
+        )
+    absent = {"kind": "outline", "view": "closeup", "panel": None, "frame": None, "origin": None, "axes": None}
+    cases.append(
+        {
+            "name": "L8: the layout does not show the view closeup, hence the outline does not have a target panel",
+            "source": "analytic",
+            "state": state({"rot": "rot"}, leaf("rot")),
+            "frame_index": 3,
+            "tolerance": TOL,
+            "expected": {"panels": {"rot": {"frame": "rot", "layers": [track("rot"), absent]}}},
+        }
+    )
+    cases.append(
+        {
+            "name": "L8: two panels show the view closeup, and the target panel is the first in layout order",
+            "source": "analytic",
+            "state": state({"rot": "rot", "zb": "closeup", "za": "closeup"}, row(leaf("rot"), row(leaf("zb"), leaf("za")))),
+            "frame_index": 5,
+            "tolerance": TOL,
+            "expected": {"panels": {"rot": {"frame": "rot", "layers": [track("rot"), expected_outline("rot", 1.25, "zb")]}}},
+        }
+    )
+    cases.append(
+        {
+            "name": "L8: the driver's set query does not match any set, hence the map is null",
+            "source": "analytic",
+            "state": state({"lost": "lost", "closeup": "closeup"}, row(leaf("lost"), leaf("closeup"))),
+            "frame_index": 2,
+            "tolerance": TOL,
+            "expected": {"panels": {"lost": {"frame": "rot", "layers": [{**absent, "panel": "closeup", "frame": "zoom"}]}}},
+        }
+    )
+
+    def with_outline(patch):
+        return {"views": {"rot": {"layers": [drawn, {**outline, **patch}]}}}
+
+    rejections = [
+        {"name": "L8: an outline layer names a view that is not declared", "rule": "L8", "scene": with_outline({"view": "nowhere"})},
+        {"name": "L8: an outline layer names the view that holds it", "rule": "L8", "scene": with_outline({"view": "rot"})},
+        {
+            "name": "L8: an outline layer names a view with an orbit camera",
+            "rule": "L8",
+            "scene": {"views": {"closeup": {"camera": {"kind": "orbit"}}}},
+        },
+        {
+            "name": "F5: the driver's set lacks a channel of the origin of the frame zoom",
+            "rule": "F5",
+            "scene": {"track_sets": {"drv": {"channels": {"my": None}}}},
+        },
+        {
+            "name": "2.2: @index in the origin of a frame",
+            "rule": "2.2",
+            "scene": {"frames": {"zoom": {"origin": [{"channel": "@index"}, {"channel": "my"}, 0.0]}}},
+        },
+    ]
+    out = HERE / "outlines"
+    out.mkdir(exist_ok=True)
+    (out / "scene.tys").write_text(json.dumps(doc, indent=1) + "\n")
+    w.write(out / "data.tyd")
+    (out / "cases.json").write_text(json.dumps(cases, indent=1) + "\n")
+    (out / "rejections.json").write_text(json.dumps(rejections, indent=1) + "\n")
+    print(f"outlines: {len(cases)} cases, {len(rejections)} rejections")
+
+
 def containers():
     """The same views written twice, with the encodings the writer picks and all raw, for a reader to decode bit for bit."""
     rng = np.random.default_rng(78)
@@ -1918,4 +2077,5 @@ if __name__ == "__main__":
     driver_context_value()
     arrows()
     arrows_laps()
+    outlines()
     containers()

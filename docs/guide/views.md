@@ -116,6 +116,23 @@ The head is a filled triangle `head` CSS pixels long, 10 by default, and 0.8 tim
 
 Under a clock in value mode, `before="hidden"` and `after="hidden"` hide an arrow while the clock value is outside the values of its track (rule C3). An arrow shown for a window of time is thus a track of two samples with the same position and vector, whose clock channel holds the start and the end of the window. The velocity at a node of a guess can thus be drawn for the iteration in which the guess is shown.
 
+## Outline layers
+
+An outline layer draws the rectangle that another panel currently shows, e.g. a faint box on a large panel around the part that a small panel magnifies, and {func}`ty.outline(view, color=, opacity=, width=, dash=, min_size=) <pytycho.outline>` builds one (rule L8). The argument `view` names the target view, which must have a plane camera and must differ from the view of the layer. The target panel is the first panel in layout order that shows the target view, and the outline follows its camera as the person viewing the page pans and zooms it. When the layout does not show the target view, the outline is not drawn. The call below draws a dashed white box around what the view `closeup` shows.
+
+```python
+ty.outline("closeup", color="#ffffff", opacity=0.6, width=1.0, dash=(4, 3), min_size=12)
+```
+
+The rectangle is mapped from the display frame of the target panel into the display frame of the layer's panel, at the reading of the layer's driver, as a track layer in the driver's context is mapped (rule L6). A close-up that magnifies the part of the rotating frame around a moving point is thus a child frame of the rotating frame whose origin and scale are channels of the driver's set. Its edge is `u = s (p - o)`, where `p` is a point of the rotating frame, `u` the same point in the close-up, `o` the origin, and `s` the scale. In the lines below, the channels `tx` and `ty` hold the point and `inv_w` holds one over the half width of the close-up, at every sample of the driver.
+
+```python
+rp = scene.frame("rp")
+zoom = scene.frame("zoom", parent=rp, origin=[ty.channel("tx"), ty.channel("ty"), 0.0], scale=ty.channel("inv_w"))
+```
+
+The driver's set must then carry the channels of every edge between the two frames (rule F5). The `width` and the dash `(on, off)` are in CSS pixels, and the `color` and the `opacity` default to the foreground of the theme and to 1. An outline narrower or shorter on the screen than `min_size` CSS pixels, 8 by default, is stretched about its center to this size, hence the window of a deep close-up stays visible. The camera is not fitted to the outline, since the outline moves with another panel's camera.
+
 ## Body, axes, and grid layers
 
 A body layer draws a body, i.e. a named point such as the primary, at the driver's reading, and {func}`ty.body(body, trail=, size=) <pytycho.body>` builds one. Its `trail` is a fraction of the loop, as on a track layer, and its `size` is the diameter of the body in CSS pixels ([bodies and drivers](bodies.md)).
@@ -128,7 +145,7 @@ Under an orbit camera, `span` defaults to `"positive"` and `labels` to false. Th
 
 ## What a view evaluates to
 
-The evaluator computes what a scene draws, as numbers rather than pixels. For a state of the page and a frame index, every panel evaluates to its display frame and one entry per layer ([section 3](../spec.md#3-what-an-evaluator-returns)). The entry of a track layer holds the set it draws from and, for every member drawn, the member's polyline and head. In the entry of an arrow layer, the base and the tip of the arrow are given for every member, and both are null while the member is hidden. The entry of a body layer holds the body's position and trail. The function {func}`pytycho.evaluate` returns this result, which is the same answer that the browser draws, since the browser runtime implements the same evaluator. This is how a test asserts that a scene draws what it should. The call below evaluates the initial state at frame index 100 and reads the head of the first member drawn by the second layer of panel `p2`.
+The evaluator computes what a scene draws, as numbers rather than pixels. For a state of the page and a frame index, every panel evaluates to its display frame and one entry per layer ([section 3](../spec.md#3-what-an-evaluator-returns)). The entry of a track layer holds the set it draws from and, for every member drawn, the member's polyline and head. In the entry of an arrow layer, the base and the tip of the arrow are given for every member, and both are null while the member is hidden. The entry of an outline layer holds the target panel, its display frame, and the map into the display frame as an `origin` and three `axes`, and the rectangle itself is left to the browser, since it depends on the camera. The entry of a body layer holds the body's position and trail. The function {func}`pytycho.evaluate` returns this result, which is the same answer that the browser draws, since the browser runtime implements the same evaluator. This is how a test asserts that a scene draws what it should. The call below evaluates the initial state at frame index 100 and reads the head of the first member drawn by the second layer of panel `p2`.
 
 ```python
 result = ty.evaluate(scene.to_document(), scene.to_container(), scene.to_document()["initial"], frame_index=100)

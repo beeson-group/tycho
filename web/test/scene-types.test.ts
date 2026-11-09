@@ -104,8 +104,8 @@ describe('validate', () => {
     scene.views.main!.layers = [{ ...layer, reveal: 'sweep', context: 'sample' } as unknown as Layer];
     expect(rule(() => evaluate(scene, data(), state(), 0))).toBe('2.7');
   });
-  it('a reader implements the features layers.arrows and layers.driver_context of version 0.3 and rejects any other (S1)', () => {
-    validate(baseScene({ version: '0.3', requires: ['layers.arrows', 'layers.driver_context'] }));
+  it('a reader implements the four features of version 0.3 and rejects any other (S1)', () => {
+    validate(baseScene({ version: '0.3', requires: ['frames.origin_channel', 'layers.arrows', 'layers.driver_context', 'layers.outline'] }));
     expect(rule(() => validate(baseScene({ version: '0.3', requires: ['layers.points'] })))).toBe('S1');
   });
   it('a literal index past the last track and a selector whose parameter the track set lacks are rejected (V3)', () => {

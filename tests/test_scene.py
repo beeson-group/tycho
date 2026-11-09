@@ -800,6 +800,83 @@ def test_arrows_through_the_api_give_the_corpus_answers():
         compare(evaluate(document, data, case["state"], case["frame_index"]), case["expected"], case["tolerance"])
 
 
+def outlines_scene() -> ty.Scene:
+    """The scene of the corpus directory ``outlines`` without its view ``lost``, built through the API."""
+    scene = ty.Scene()
+    rot = scene.frame("rot")
+    scene.frame("zoom", parent=rot, origin=[ty.channel("mx"), ty.channel("my"), 0.0], scale=ty.channel("k"))
+    scene.frame("inertial", parent=rot, rotation=ty.rotation("z", ty.channel("th")))
+    drv = scene.track_set("drv", frame=rot, tags={"g": "drv"}, dtype="float64")
+    drv.add(
+        [[1.0, 0.0], [0.0, 1.0], [-1.0, 0.5]],
+        channels={"t": [0.0, 1.0, 2.0], "mx": [0.5, 0.0, -0.5], "my": [0.0, 0.25, 0.5], "k": [2.0, 4.0, 10.0], "th": [0.0, 0.5, 1.5]},
+    )
+    scene.clock("value", channels=["t"], steps=8, range=[0.0, 2.0])
+    box = ty.outline("closeup", color="#ffffff", opacity=0.5, width=1.5, dash=(4, 3), min_size=12)
+    for frame in ("rot", "inertial"):
+        scene.view(frame, frame=frame, driver=ty.driver(drv, 0), layers=[ty.track(drv), box])
+    scene.view("closeup", frame="zoom", camera={"kind": "plane", "plane": "xy"}, driver=ty.driver(drv, 0), layers=[ty.track(drv)])
+    for pid in ("rot", "inertial", "closeup"):
+        scene.panel(pid, pid)
+    scene.layout(ty.split("row", 0.5, "rot", ty.split("row", 0.5, "inertial", "closeup")))
+    return scene
+
+
+def test_outlines_through_the_api_give_the_corpus_answers():
+    scene = outlines_scene()
+    document, data = scene.to_document(), scene.to_container()
+    corpus = json.loads((CORPUS / "outlines" / "scene.tys").read_text())
+    assert document["requires"] == ["layers.outline", "frames.origin_channel"]
+    assert document["frames"]["zoom"] == corpus["frames"]["zoom"]
+    assert document["views"]["rot"]["layers"][1] == corpus["views"]["rot"]["layers"][1]
+    jsonschema = pytest.importorskip("jsonschema")
+    jsonschema.Draft202012Validator(json.loads((CORPUS.parent / "scene.schema.json").read_text())).validate(document)
+    compared = 0
+    for case in json.loads((CORPUS / "outlines" / "cases.json").read_text()):
+        if any(panel["view"] == "lost" for panel in case["state"]["panels"].values()):
+            continue
+        compare(evaluate(document, data, case["state"], case["frame_index"]), case["expected"], case["tolerance"])
+        compared += 1
+    assert compared == 10
+
+
+def test_an_outline_layer_fails_at_the_call_and_at_the_write():
+    calls: tuple[tuple[dict[str, Any], str], ...] = (
+        ({"dash": (4,)}, "L8: an outline layer's dash"),
+        ({"dash": (4, 0)}, "L8: an outline layer's dash"),
+        ({"min_size": -1}, "L8: an outline layer's min_size"),
+        ({"color": "white"}, "L8: an outline layer's color"),
+        ({"width": 0}, "2.7: an outline layer's width"),
+        ({"opacity": 2}, "opacity"),
+    )
+    for kwargs, message in calls:
+        with pytest.raises(ty.SceneError, match=message):
+            ty.outline("closeup", **kwargs)
+    scene = ty.Scene()
+    rot = scene.frame("rot")
+    with pytest.raises(ty.SceneError, match="F2: the position of body"):
+        scene.body("b", frame=rot, position=[ty.channel("x"), 0.0, 0.0])
+    with pytest.raises(ty.SceneError, match=r"2\.2: the origin of frame"):
+        scene.frame("zoom", parent=rot, origin=[ty.channel("@index"), 0.0, 0.0])
+    for patch, message in (
+        ({"layers": [ty.outline("nowhere")]}, "L8: an outline layer of view 'rot' names 'nowhere', which is not a view"),
+        ({"layers": [ty.outline("rot")]}, "L8: an outline layer of view 'rot' names its own view"),
+    ):
+        scene = outlines_scene()
+        scene._views["rot"] = {**scene._views["rot"], **patch}
+        with pytest.raises(ty.SceneError, match=message):
+            scene.to_document()
+    # the driver of the view rot lacks the channel my of the origin of the target frame zoom (rule F5)
+    scene = outlines_scene()
+    other = scene.track_set("other", frame="rot", tags={"g": "other"}, dtype="float64")
+    other.add([[1.0, 0.0], [0.0, 1.0]], channels={"t": [0.0, 2.0], "mx": [0.0, 0.0], "k": [1.0, 1.0]})
+    scene._views["rot"] = {**scene._views["rot"], "driver": {"sets": {"set": "other"}, "member": {"index": 0}}}
+    with pytest.raises(
+        ty.SceneError, match=r"F5: view 'rot': track set 'other' lacks \['my'\] for the outline of view 'closeup' in frame 'rot'"
+    ):
+        scene.to_document()
+
+
 def test_an_arrow_layer_fails_at_the_call_and_at_the_write():
     for kwargs, message in (
         ({"vector": ("vx",)}, "L7: an arrow layer's vector"),

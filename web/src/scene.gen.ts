@@ -14,6 +14,16 @@ export type Color = string;
  */
 export type Id = string;
 /**
+ * This interface was referenced by `Scene`'s JSON-Schema
+ * via the `definition` "scalar".
+ */
+export type Scalar = number | Attr | ChannelRef;
+/**
+ * This interface was referenced by `Scene`'s JSON-Schema
+ * via the `definition` "name".
+ */
+export type Name = string;
+/**
  * @minItems 3
  * @maxItems 3
  *
@@ -26,16 +36,6 @@ export type Point = [ConstantScalar, ConstantScalar, ConstantScalar];
  * via the `definition` "constantScalar".
  */
 export type ConstantScalar = number | Attr;
-/**
- * This interface was referenced by `Scene`'s JSON-Schema
- * via the `definition` "name".
- */
-export type Name = string;
-/**
- * This interface was referenced by `Scene`'s JSON-Schema
- * via the `definition` "scalar".
- */
-export type Scalar = number | Attr | ChannelRef;
 /**
  * This interface was referenced by `Scene`'s JSON-Schema
  * via the `definition` "variable".
@@ -154,6 +154,20 @@ export type Layer =
       head?: {
         size?: number;
       };
+      visible?: VarRef;
+    }
+  | {
+      kind: 'outline';
+      view: Id;
+      color?: Color;
+      opacity?: number;
+      width?: number;
+      /**
+       * @minItems 2
+       * @maxItems 2
+       */
+      dash?: [number, number];
+      min_size?: number;
       visible?: VarRef;
     }
   | {
@@ -314,7 +328,7 @@ export interface Frame {
   unit?: string;
   parent?: Id;
   origin?:
-    | Point
+    | [Scalar, Scalar, Scalar]
     | {
         body: Id;
       };

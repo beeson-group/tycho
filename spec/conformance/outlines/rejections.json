@@ -1,0 +1,109 @@
+[
+ {
+  "name": "L8: an outline layer names a view that is not declared",
+  "rule": "L8",
+  "scene": {
+   "views": {
+    "rot": {
+     "layers": [
+      {
+       "kind": "track",
+       "sets": {
+        "set": "drv"
+       },
+       "members": "all"
+      },
+      {
+       "kind": "outline",
+       "view": "nowhere",
+       "color": "#ffffff",
+       "opacity": 0.5,
+       "width": 1.5,
+       "dash": [
+        4,
+        3
+       ],
+       "min_size": 12
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "L8: an outline layer names the view that holds it",
+  "rule": "L8",
+  "scene": {
+   "views": {
+    "rot": {
+     "layers": [
+      {
+       "kind": "track",
+       "sets": {
+        "set": "drv"
+       },
+       "members": "all"
+      },
+      {
+       "kind": "outline",
+       "view": "rot",
+       "color": "#ffffff",
+       "opacity": 0.5,
+       "width": 1.5,
+       "dash": [
+        4,
+        3
+       ],
+       "min_size": 12
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "L8: an outline layer names a view with an orbit camera",
+  "rule": "L8",
+  "scene": {
+   "views": {
+    "closeup": {
+     "camera": {
+      "kind": "orbit"
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "F5: the driver's set lacks a channel of the origin of the frame zoom",
+  "rule": "F5",
+  "scene": {
+   "track_sets": {
+    "drv": {
+     "channels": {
+      "my": null
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "2.2: @index in the origin of a frame",
+  "rule": "2.2",
+  "scene": {
+   "frames": {
+    "zoom": {
+     "origin": [
+      {
+       "channel": "@index"
+      },
+      {
+       "channel": "my"
+      },
+      0.0
+     ]
+    }
+   }
+  }
+ }
+]

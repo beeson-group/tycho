@@ -8,7 +8,7 @@ import { fail } from '../errors.js';
 import type { Scene, State } from '../scene.js';
 import { clockLaps, progress } from './clock.js';
 import { Frames } from './frames.js';
-import { arrowLayer, bodyLayer, trackLayer, type LayerEnv } from './layers.js';
+import { arrowLayer, bodyLayer, outlineLayer, trackLayer, type LayerEnv } from './layers.js';
 import { checkState, displayFrame, driverMember, layerVisible, oneSet, type PanelScope } from './resolve.js';
 import { INDEX_CHANNEL } from '../scene.js';
 import { SetCache } from './sets.js';
@@ -45,7 +45,8 @@ export function evaluate(scene: Scene, data: DataStore, state: State, frameIndex
     const env: LayerEnv = { scope, frames, clock: scene.clock, channel, q, display };
     const layers: LayerResult[] = [];
     for (const layer of view.layers) {
-      if (!['track', 'arrow', 'body', 'axes', 'grid'].includes(layer.kind)) fail('S1', `layer kind ${JSON.stringify(layer.kind)} is not implemented`);
+      if (!['track', 'arrow', 'outline', 'body', 'axes', 'grid'].includes(layer.kind))
+        fail('S1', `layer kind ${JSON.stringify(layer.kind)} is not implemented`);
       if (!layerVisible(scope, layer)) continue;
       if (layer.kind === 'track') {
         const id = oneSet(scope, layer.sets);
@@ -53,6 +54,8 @@ export function evaluate(scene: Scene, data: DataStore, state: State, frameIndex
       } else if (layer.kind === 'arrow') {
         const id = oneSet(scope, layer.sets);
         layers.push(arrowLayer(env, layer, id === null ? null : sets.get(id)));
+      } else if (layer.kind === 'outline') {
+        layers.push(outlineLayer(env, layer, driver));
       } else if (layer.kind === 'body') {
         layers.push(bodyLayer(env, layer, driver));
       } else {

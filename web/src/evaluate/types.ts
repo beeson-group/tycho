@@ -34,6 +34,19 @@ export interface ArrowLayerResult {
   members: ArrowMemberResult[];
 }
 
+export interface OutlineLayerResult {
+  kind: 'outline';
+  view: string;
+  /** The first panel in layout order that shows `view`, or null when the layout does not show it, and the four keys below are then null. */
+  panel: string | null;
+  /** The display frame of the target panel. */
+  frame: string | null;
+  /** The image of the origin of the target frame in the display frame, at the driver's reading. Null when the view's driver does not resolve to a track. */
+  origin: Vec3 | null;
+  /** The images of the three unit points of the target frame minus `origin`, i.e. the columns of the linear part of the map. Null as `origin` is. */
+  axes: [Vec3, Vec3, Vec3] | null;
+}
+
 export interface BodyLayerResult {
   kind: 'body';
   body: string;
@@ -47,7 +60,7 @@ export interface MarkLayerResult {
   kind: 'axes' | 'grid';
 }
 
-export type LayerResult = TrackLayerResult | ArrowLayerResult | BodyLayerResult | MarkLayerResult;
+export type LayerResult = TrackLayerResult | ArrowLayerResult | OutlineLayerResult | BodyLayerResult | MarkLayerResult;
 
 export interface PanelResult {
   frame: string;

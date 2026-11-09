@@ -163,11 +163,11 @@ def _scalar(value: Any, what: str, *, constant: bool = False) -> Any:
     return _finite(value, what)
 
 
-def _point(values: Any, what: str) -> list[Any]:
-    """A list of three constant scalars (rules F2 and 2.4)."""
+def _point(values: Any, what: str, *, channels: bool = False) -> list[Any]:
+    """A list of three scalars, which are constant unless ``channels``, as in the origin of a frame (rules F2 and 2.4)."""
     if isinstance(values, (str, bytes, Mapping)) or not isinstance(values, (Sequence, np.ndarray)) or len(values) != 3:
         raise SceneError(f"F2: {what} is {values!r}, not three scalars")
-    return [_scalar(v, what, constant=True) for v in values]
+    return [_scalar(v, what, constant=not channels) for v in values]
 
 
 # handles
@@ -386,7 +386,7 @@ def _check_layer(layer: Any) -> dict[str, Any]:
     """A layer dict in the form that the schema and section 2.7 define, with every value checked."""
     if not isinstance(layer, Mapping) or "kind" not in layer:
         raise SceneError(f"2.7: a layer is a dict with a kind, not {layer!r}")
-    kind = _enum(layer["kind"], ("track", "arrow", "body", "axes", "grid"), "2.7: a layer kind")
+    kind = _enum(layer["kind"], ("track", "arrow", "outline", "body", "axes", "grid"), "2.7: a layer kind")
     out: dict[str, Any] = {"kind": kind}
     allowed = {"kind", "visible"}
     if "visible" in layer:
@@ -478,6 +478,28 @@ def _check_layer(layer: Any) -> dict[str, Any]:
                 out["head"]["size"] = _finite(head["size"], "an arrowhead size")
                 if out["head"]["size"] <= 0.0:
                     raise SceneError(f"L7: an arrowhead size is {out['head']['size']}, not positive")
+    elif kind == "outline":
+        allowed |= {"view", "color", "opacity", "width", "dash", "min_size"}
+        out["view"] = _check_id(_id(layer.get("view")), "L8: an outline layer's view")
+        if "color" in layer:
+            out["color"] = _color(layer["color"], "L8: an outline layer's color")
+        if "opacity" in layer:
+            out["opacity"] = _unit_interval(layer["opacity"], "an outline layer's opacity")
+        if "width" in layer:
+            out["width"] = _finite(layer["width"], "an outline layer's width")
+            if out["width"] <= 0.0:
+                raise SceneError(f"2.7: an outline layer's width is {out['width']}, not positive")
+        if "dash" in layer:
+            dash = layer["dash"]
+            if isinstance(dash, (str, bytes, Mapping)) or not isinstance(dash, (Sequence, np.ndarray)) or len(dash) != 2:
+                raise SceneError(f"L8: an outline layer's dash is {dash!r}, not two lengths")
+            out["dash"] = [_finite(d, "an outline layer's dash") for d in dash]
+            if min(out["dash"]) <= 0.0:
+                raise SceneError(f"L8: an outline layer's dash is {out['dash']}, not two positive lengths")
+        if "min_size" in layer:
+            out["min_size"] = _finite(layer["min_size"], "an outline layer's min_size")
+            if out["min_size"] < 0.0:
+                raise SceneError(f"L8: an outline layer's min_size is {out['min_size']}, not a nonnegative length")
     elif kind == "body":
         allowed |= {"body", "trail", "size"}
         out["body"] = _check_id(_id(layer.get("body")), "L4: a body layer's body")
@@ -587,6 +609,38 @@ def arrow(
         ("opacity", opacity),
         ("width", width),
         ("head", None if head is None else {"size": head}),
+        ("visible", visible),
+    ):
+        if value is not None:
+            layer[key] = value
+    return _check_layer(layer)
+
+
+def outline(
+    view: Any,
+    *,
+    color: str | None = None,
+    opacity: float | None = None,
+    width: float | None = None,
+    dash: Sequence[float] | None = None,
+    min_size: float | None = None,
+    visible: Any = None,
+) -> dict[str, Any]:
+    """An outline layer (rule L8), which draws the rectangle that the first panel showing ``view`` shows, as the viewer pans and zooms it.
+
+    ``view`` is the id of another view with a plane camera. The rectangle is mapped from the display frame of that panel into the
+    display frame of the panel that holds the layer, at the reading of the holder's driver, hence the driver's set carries the channels
+    of the frames between them. ``width`` is in CSS pixels, by default 1, ``dash`` is ``(on, off)`` in CSS pixels, and ``min_size`` is
+    the least width and height of the outline on the screen, by default 8 CSS pixels. The outline is not part of the camera fit, and it
+    is not drawn while the layout does not show ``view``.
+    """
+    layer: dict[str, Any] = {"kind": "outline", "view": view}
+    for key, value in (
+        ("color", color),
+        ("opacity", opacity),
+        ("width", width),
+        ("dash", None if dash is None else list(dash)),
+        ("min_size", min_size),
         ("visible", visible),
     ):
         if value is not None:
@@ -897,7 +951,7 @@ class Scene:
                 raise SceneError(f"F2: the origin of frame {id!r} is at {bid!r}, which is not a declared body")
             out["origin"] = {"body": bid}
         elif origin is not None:
-            out["origin"] = _point(origin, f"the origin of frame {id!r}")
+            out["origin"] = _point(origin, f"the origin of frame {id!r}", channels=True)
         if rotation is not None:
             if not isinstance(rotation, Rotation):
                 raise SceneError(f"F1: the rotation of frame {id!r} is {rotation!r}, not rotation(axis, angle)")
@@ -1210,6 +1264,16 @@ class Scene:
             for f, used in (
                 ("layers.arrows", any(layer["kind"] == "arrow" for layer in layers)),
                 ("layers.driver_context", any(layer.get("context") == "driver" for layer in layers)),
+                ("layers.outline", any(layer["kind"] == "outline" for layer in layers)),
+                (
+                    "frames.origin_channel",
+                    any(
+                        isinstance(x, Mapping) and "channel" in x
+                        for f in self._frames.values()
+                        if isinstance(f.get("origin"), list)
+                        for x in f["origin"]
+                    ),
+                ),
             )
             if used
         ]
@@ -1410,6 +1474,14 @@ class Scene:
                 out += self._check_query(layer["sets"], f"V2: an arrow layer of {where}")
                 if isinstance(layer["members"], Mapping) and "var" in layer["members"]:
                     out += self._check_var(layer["members"]["var"], "selector", f"V3: an arrow layer of {where}")
+            elif layer["kind"] == "outline":
+                target = self._views.get(layer["view"])
+                if target is None:
+                    out.append(f"L8: an outline layer of {where} names {layer['view']!r}, which is not a view")
+                elif layer["view"] == vid:
+                    out.append(f"L8: an outline layer of {where} names its own view")
+                elif (target.get("camera") or {"kind": "plane"})["kind"] != "plane":
+                    out.append(f"L8: an outline layer of {where} names view {layer['view']!r}, whose camera is not a plane camera")
             elif layer["kind"] == "body" and layer["body"] not in self._bodies:
                 out.append(f"L4: {where} draws {layer['body']!r}, which is not a body")
         return out
@@ -1434,6 +1506,11 @@ class Scene:
         used = set()
         if isinstance(view["frame"], Mapping):
             used.add(view["frame"]["var"])
+        # the frame of an outline's target view, which may be a choice too (rule L8)
+        for layer in view["layers"]:
+            target = self._views.get(layer["view"]) if layer["kind"] == "outline" else None
+            if target is not None and isinstance(target["frame"], Mapping):
+                used.add(target["frame"]["var"])
         for query in [view["driver"]["sets"]] + [layer["sets"] for layer in view["layers"] if layer["kind"] in ("track", "arrow")]:
             used |= self._choices_in(query)
         return used
@@ -1594,6 +1671,10 @@ class Scene:
                     scale = layer.get("scale")
                     if isinstance(scale, Mapping) and scale["attr"] not in ts.attrs:
                         out.append(f"F5: {where}: track set {ts.id!r} lacks attribute {scale['attr']!r} for an arrow layer's scale")
+            elif layer["kind"] == "outline" and len(drivers) == 1:
+                target = self._views[layer["view"]]["frame"]
+                target = values[target["var"]] if isinstance(target, Mapping) else target
+                through(drivers[0], target, f"the outline of view {layer['view']!r}")
             elif layer["kind"] == "body" and len(drivers) == 1:
                 d = drivers[0]
                 body = self._bodies[layer["body"]]

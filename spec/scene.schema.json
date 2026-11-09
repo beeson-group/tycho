@@ -218,7 +218,12 @@
         "origin": {
           "anyOf": [
             {
-              "$ref": "#/$defs/point"
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/scalar"
+              },
+              "minItems": 3,
+              "maxItems": 3
             },
             {
               "type": "object",
@@ -1003,6 +1008,50 @@
                   "exclusiveMinimum": 0
                 }
               }
+            },
+            "visible": {
+              "$ref": "#/$defs/varRef"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "view"
+          ],
+          "properties": {
+            "kind": {
+              "const": "outline"
+            },
+            "view": {
+              "$ref": "#/$defs/id"
+            },
+            "color": {
+              "$ref": "#/$defs/color"
+            },
+            "opacity": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "width": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "dash": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "min_size": {
+              "type": "number",
+              "minimum": 0
             },
             "visible": {
               "$ref": "#/$defs/varRef"

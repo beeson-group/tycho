@@ -137,6 +137,17 @@ export function driverMember(scope: PanelScope, ref: { index: number } | VarRef,
 }
 
 /** The display frame of a view in a panel (section 2.7). */
+/**
+ * The target panel of an outline layer, i.e. the first panel in layout order that shows view `viewId`, and its display frame read with its
+ * own values of the variables (rule L8), or null when the layout does not show the view.
+ */
+export function outlineTarget(scope: PanelScope, viewId: string): { panel: string; frame: string } | null {
+  const { scene, state } = scope;
+  const panel = layoutIds(state.layout).find((pid) => state.panels[pid]?.view === viewId);
+  if (panel === undefined) return null;
+  return { panel, frame: displayFrame({ scene, state, panel: state.panels[panel]! }, scene.views[viewId]!) };
+}
+
 export function displayFrame(scope: PanelScope, view: View): string {
   const id = typeof view.frame === 'string' ? view.frame : variableValue(scope, view.frame.var);
   if (typeof id !== 'string' || !Object.hasOwn(scope.scene.frames, id)) fail('2.7', `the view displays ${JSON.stringify(id)}, which is not a frame`);

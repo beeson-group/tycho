@@ -1,12 +1,12 @@
 /** Polylines, trails, and layers by rules L1 to L5, with the point of rule C4 and the laps of rule C6. */
 import { fail } from '../errors.js';
-import { INDEX_CHANNEL, type ArrowLayer, type BodyLayer, type Clock, type TrackLayer } from '../scene.js';
+import { INDEX_CHANNEL, type ArrowLayer, type BodyLayer, type Clock, type OutlineLayer, type TrackLayer } from '../scene.js';
 import { bound, clockLaps, lapOf, TrackClock } from './clock.js';
 import { scalarValue, type Context, type Frames } from './frames.js';
 import type { PanelScope } from './resolve.js';
-import { members } from './resolve.js';
+import { members, outlineTarget } from './resolve.js';
 import type { SetData } from './sets.js';
-import type { ArrowLayerResult, ArrowMemberResult, BodyLayerResult, MemberResult, TrackLayerResult, Vec3 } from './types.js';
+import type { ArrowLayerResult, ArrowMemberResult, BodyLayerResult, MemberResult, OutlineLayerResult, TrackLayerResult, Vec3 } from './types.js';
 
 /**
  * A vertex is a stored sample or a point blended between samples k and k + 1, in the context of
@@ -211,6 +211,40 @@ export function arrowLayer(env: LayerEnv, layer: ArrowLayer, set: SetData | null
     out.push({ index: t, base: vertexPosition(v, set, t, base), tip: vertexPosition(v, set, t, tip) });
   }
   return { kind: 'arrow', set: set.id, members: out };
+}
+
+/** Checks that the view of an outline layer is declared, is not the view `host` that holds the layer, and has a plane camera (rule L8). */
+export function checkOutlineView(scene: { views: Record<string, { camera?: { kind: string } } | undefined> }, host: string, layer: OutlineLayer): void {
+  const view = layer.view as unknown;
+  if (typeof view !== 'string' || !Object.hasOwn(scene.views, view)) fail('L8', `an outline layer names ${JSON.stringify(view)}, which is not a view`);
+  if (view === host) fail('L8', `an outline layer of view ${host} names its own view`);
+  if ((scene.views[view]!.camera?.kind ?? 'plane') !== 'plane') fail('L8', `an outline layer names view ${view}, whose camera is not a plane camera`);
+}
+
+/** The target panel and frame of an outline layer, and the affine map from the target frame into the display frame at the driver's reading (rule L8). */
+export function outlineLayer(env: LayerEnv, layer: OutlineLayer, driver: Driver): OutlineLayerResult {
+  checkOutlineView(env.scope.scene, env.scope.panel.view, layer);
+  const result: OutlineLayerResult = { kind: 'outline', view: layer.view, panel: null, frame: null, origin: null, axes: null };
+  const target = outlineTarget(env.scope, layer.view);
+  if (target === null) return result;
+  result.panel = target.panel;
+  result.frame = target.frame;
+  if (driver === null) return result;
+  const { a, b, w } = driverContexts(driver, driverPoint(env, driver).at);
+  // every edge is affine for a fixed context, and so is the blend of two, hence the images of the origin and the unit points give the map
+  const image = (p: Vec3): Vec3 => {
+    const pa = env.frames.transform(p, target.frame, env.display, a);
+    const pb = env.frames.transform(p, target.frame, env.display, b);
+    return [(1 - w) * pa[0] + w * pb[0], (1 - w) * pa[1] + w * pb[1], (1 - w) * pa[2] + w * pb[2]];
+  };
+  const o = image([0, 0, 0]);
+  const axis = (e: Vec3): Vec3 => {
+    const p = image(e);
+    return [p[0] - o[0], p[1] - o[1], p[2] - o[2]];
+  };
+  result.origin = o;
+  result.axes = [axis([1, 0, 0]), axis([0, 1, 0]), axis([0, 0, 1])];
+  return result;
 }
 
 function layerTrailFraction(layer: TrackLayer | BodyLayer): number {

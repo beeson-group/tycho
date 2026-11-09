@@ -4,7 +4,7 @@ The evaluator is the reference for the behavior that TyCHO defines, i.e. the edg
 clock reading, the blend between two stored samples, the trail, and the laps of a periodic track. It does not hold
 the frame formula of any dynamical model. Every frame is instead the generic edge ``p_child = s * R * (p_parent - o)``
 of rule F1. The scale ``s`` and the angle of the rotation ``R`` are each a number, a track set attribute, or a per-sample
-channel, and the origin ``o`` is three numbers or attributes, or the position of a body (rule F2). The TypeScript
+channel, and the origin ``o`` is three numbers, attributes, or channels, or the position of a body (rule F2). The TypeScript
 evaluator in ``web/`` is the second implementation, and both must reproduce every case of the conformance corpus in
 ``spec/conformance/``. Every computation runs in float64.
 
@@ -78,14 +78,14 @@ def scalar(spec: Any, ctx: Context) -> float | np.ndarray:
     return _number(spec, "a scalar")
 
 
-def _point(spec: Any, ctx: Context) -> np.ndarray:
-    """A list of three constant scalars, as an ``(n, 3)`` array (rules F2 and 2.4)."""
+def _point(spec: Any, ctx: Context, *, channels: bool = False) -> np.ndarray:
+    """Three scalars as an ``(n, 3)`` array, with a channel allowed only under ``channels``, i.e. in an origin (rules F2 and 2.4)."""
     if not isinstance(spec, list) or len(spec) != 3:
         raise EvaluationError(f"F2: an origin or a position is three scalars, not {spec!r}")
     out = np.empty((ctx.n, 3))
     for j, value in enumerate(spec):
-        if isinstance(value, Mapping) and "channel" in value:
-            raise EvaluationError("F2: an origin or a position takes a number or an attribute, not a channel")
+        if not channels and isinstance(value, Mapping) and "channel" in value:
+            raise EvaluationError("F2: the position of a body takes a number or an attribute, not a channel")
         out[:, j] = scalar(value, ctx)
     return out
 
@@ -180,7 +180,7 @@ class FrameTree:
                 raise EvaluationError(f"F6: the origin of frame {fid!r} depends on itself")
             o = self.body_position(origin["body"], frame["parent"], ctx, (*stack, fid))
         else:
-            o = _point(origin, ctx)
+            o = _point(origin, ctx, channels=True)
         rotation = frame.get("rotation")
         axis = angle = None
         if rotation is not None:
@@ -473,7 +473,7 @@ def evaluate(document: Mapping[str, Any], container: Container | bytes, state: M
     return _Evaluator(document, container).run(state, frame_index)
 
 
-KINDS = ("track", "arrow", "body", "axes", "grid")
+KINDS = ("track", "arrow", "outline", "body", "axes", "grid")
 
 
 class _Evaluator:
@@ -550,22 +550,24 @@ class _Evaluator:
                 raise EvaluationError(f"2.8: panel {pid!r} does not name a view")
             held(panel.get("variables"), f"panel {pid!r}")
 
-        def leaves(node: Any) -> list[str]:
-            if not isinstance(node, Mapping):
-                raise EvaluationError(f"2.8: the layout node {node!r} is not an object")
-            if node.get("kind") == "panel":
-                if not isinstance(node.get("id"), str):
-                    raise EvaluationError(f"2.8: a layout panel has id {node.get('id')!r}, not a string")
-                return [node["id"]]
-            if node.get("kind") == "split":
-                return leaves(node.get("a")) + leaves(node.get("b"))
-            raise EvaluationError(f"2.8: a layout node has kind {node.get('kind')!r}, not panel or split")
-
-        shown = leaves(state["layout"])
+        shown = _leaves(state["layout"])
         if sorted(shown) != sorted(state["panels"]):
             raise EvaluationError(
                 f"2.8: the layout shows the panels {sorted(shown)}, while the state has the panels {sorted(state['panels'])}"
             )
+
+
+def _leaves(node: Any) -> list[str]:
+    """The panel ids of a layout, in layout order (section 2.8)."""
+    if not isinstance(node, Mapping):
+        raise EvaluationError(f"2.8: the layout node {node!r} is not an object")
+    if node.get("kind") == "panel":
+        if not isinstance(node.get("id"), str):
+            raise EvaluationError(f"2.8: a layout panel has id {node.get('id')!r}, not a string")
+        return [node["id"]]
+    if node.get("kind") == "split":
+        return _leaves(node.get("a")) + _leaves(node.get("b"))
+    raise EvaluationError(f"2.8: a layout node has kind {node.get('kind')!r}, not panel or split")
 
 
 class _Reading:
@@ -627,17 +629,21 @@ class _Panel:
 
     # variables (rule V1)
 
-    def var(self, vid: str) -> Any:
+    def var(self, vid: str, panel: Mapping[str, Any] | None = None) -> Any:
+        """The value of a variable in this panel, or in ``panel`` when given (rule V1)."""
         try:
             spec = self.ev.variables[vid]
         except KeyError:
             raise EvaluationError(f"2.5: variable {vid!r} is not declared") from None
-        values = self.panel.get("variables", {}) if spec.get("scope", "scene") == "panel" else self.state.get("variables", {})
+        if spec.get("scope", "scene") == "panel":
+            values = (self.panel if panel is None else panel).get("variables", {})
+        else:
+            values = self.state.get("variables", {})
         return values.get(vid, spec["default"])
 
-    def value(self, spec: Any) -> Any:
+    def value(self, spec: Any, panel: Mapping[str, Any] | None = None) -> Any:
         if isinstance(spec, Mapping) and "var" in spec:
-            return self.var(spec["var"])
+            return self.var(spec["var"], panel)
         return spec
 
     # set queries and members (rules V2 and V3)
@@ -717,6 +723,8 @@ class _Panel:
                 layers.append(self.track_layer(layer))
             elif kind == "arrow":
                 layers.append(self.arrow_layer(layer))
+            elif kind == "outline":
+                layers.append(self.outline_layer(layer))
             elif kind == "body":
                 layers.append(self.body_layer(layer))
             else:
@@ -840,6 +848,35 @@ class _Panel:
             base = resolve_vertices(at, table(track.positions))[0]
             members.append({"index": i, "base": base, "tip": resolve_vertices(at, table(tips))[0]})
         return {"kind": "arrow", "set": data.id, "members": members}
+
+    def outline_layer(self, layer: Mapping[str, Any]) -> dict[str, Any]:
+        """The target panel and frame of an outline layer, and the affine map from the target frame at the driver's reading (rule L8)."""
+        views = self.ev.doc["views"]
+        vid = layer.get("view")
+        if not isinstance(vid, str) or vid not in views:
+            raise EvaluationError(f"L8: an outline layer names {vid!r}, which is not a view")
+        if vid == self.panel["view"]:
+            raise EvaluationError(f"L8: an outline layer of view {vid!r} names its own view")
+        camera = views[vid].get("camera") or {"kind": "plane"}
+        if camera.get("kind") != "plane":
+            raise EvaluationError(f"L8: an outline layer names view {vid!r}, whose camera is not a plane camera")
+        out: dict[str, Any] = {"kind": "outline", "view": vid, "panel": None, "frame": None, "origin": None, "axes": None}
+        panels = self.state["panels"]
+        target = next((pid for pid in _leaves(self.state["layout"]) if panels[pid].get("view") == vid), None)
+        if target is None:
+            return out
+        frame = self.value(views[vid]["frame"], panels[target])
+        if frame not in self.ev.doc["frames"]:
+            raise EvaluationError(f"2.7: the view {vid!r} displays {frame!r}, which is not a frame")
+        out["panel"], out["frame"] = target, frame
+        if self.driver is None:
+            return out
+        # every edge is affine for a fixed context, and so is the blend of two, hence the map is given by the images of the origin and the
+        # unit points
+        image = self.in_driver_context(np.vstack([np.zeros(3), np.eye(3)]), frame, self.driver_point())
+        out["origin"] = [float(x) for x in image[0]]
+        out["axes"] = [[float(x) for x in image[j] - image[0]] for j in (1, 2, 3)]
+        return out
 
     def driver_point(self) -> tuple[Track, np.ndarray, float, int, int, float]:
         """The driver's track, its sample readings, its loop reading, and the lap, segment, and weight of the point at the reading.

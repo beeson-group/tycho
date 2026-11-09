@@ -29,11 +29,12 @@ export function scalarValue(s: Scalar | ConstantScalar, ctx: Context): number {
   return ctx.set.channelAt(s.channel, ctx.track, ctx.sample, ctx.shifted, ctx.lap ?? 0);
 }
 
-/** Checks that `p` is a list of three constant scalars, and returns it (rules F2 and 2.4). */
-function point(p: unknown, what: string): ConstantScalar[] {
+/** Checks that `p` is a list of three scalars, which are constant unless `channels`, as in an origin, and returns it (rules F2 and 2.4). */
+function point(p: unknown, what: string, channels = false): Scalar[] {
   if (!Array.isArray(p) || p.length !== 3) fail('F2', `${what} is three scalars, not ${JSON.stringify(p)}`);
-  for (const s of p) if (s !== null && typeof s === 'object' && 'channel' in s) fail('F2', `${what} takes a number or an attribute, not a channel`);
-  return p as ConstantScalar[];
+  if (!channels)
+    for (const s of p) if (s !== null && typeof s === 'object' && 'channel' in s) fail('F2', `${what} takes a number or an attribute, not a channel`);
+  return p as Scalar[];
 }
 
 /** Right-handed rotation by `angle` about `axis` (rule F1), or its transpose. */
@@ -140,7 +141,7 @@ const scalarNeeds = (s: Scalar | ConstantScalar | undefined, req: Requirements):
 /** An edge as rule F1 applies it, with its origin checked once. */
 interface Edge {
   parent: string;
-  origin: ConstantScalar[] | { body: string } | undefined;
+  origin: Scalar[] | { body: string } | undefined;
   rotation: Frame['rotation'];
   scale: Scalar | undefined;
 }
@@ -175,7 +176,7 @@ export class Frames {
     let e = this.edges.get(child);
     if (e === undefined) {
       const f = this.tree.frame(child);
-      const origin = Array.isArray(f.origin) ? point(f.origin, `the origin of frame ${child}`) : f.origin;
+      const origin = Array.isArray(f.origin) ? point(f.origin, `the origin of frame ${child}`, true) : f.origin;
       e = { parent: f.parent!, origin, rotation: f.rotation, scale: f.scale };
       this.edges.set(child, e);
     }
@@ -242,7 +243,7 @@ export class Frames {
       this.active.add(child);
       try {
         const f = this.tree.frame(child);
-        if (Array.isArray(f.origin)) point(f.origin, `the origin of frame ${child}`).forEach((s) => scalarNeeds(s, req));
+        if (Array.isArray(f.origin)) point(f.origin, `the origin of frame ${child}`, true).forEach((s) => scalarNeeds(s, req));
         else if (f.origin !== undefined) this.bodyRequirements(f.origin.body, f.parent!, req);
         scalarNeeds(f.rotation?.angle, req);
         scalarNeeds(f.scale, req);

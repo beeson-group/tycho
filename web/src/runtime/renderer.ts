@@ -23,7 +23,8 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { fail, TychoError } from '../errors.js';
 import { bound, clockLaps, lapOf, type TrackClock } from '../evaluate/clock.js';
-import { arrowLayer, driverContexts, driverPoint, hasHead, point, type Driver, type LayerEnv, type Vertex } from '../evaluate/layers.js';
+import { arrowLayer, driverContexts, driverPoint, hasHead, outlineLayer, point, type Driver, type LayerEnv, type Vertex } from '../evaluate/layers.js';
+import type { OutlineLayerResult, Vec3 } from '../evaluate/types.js';
 import type { Context, Frames } from '../evaluate/frames.js';
 import {
   displayFrame,
@@ -37,7 +38,7 @@ import {
   type PanelScope,
 } from '../evaluate/resolve.js';
 import type { SetData } from '../evaluate/sets.js';
-import type { ArrowLayer, BodyLayer, Camera, ColorSpec, MarkLayer, Scene, State, TrackLayer, View } from '../scene.js';
+import type { ArrowLayer, BodyLayer, Camera, ColorSpec, MarkLayer, OutlineLayer, Scene, State, TrackLayer, View } from '../scene.js';
 import { INDEX_CHANNEL } from '../scene.js';
 import { colorScale, coloring, gradientCss, gradientStops, hexRgb, mixHex, sceneTheme, type Coloring, type Rgb, type Theme } from './colors.js';
 import {
@@ -59,6 +60,7 @@ import {
   type TrackGeometry,
   type TrackReadings,
 } from './geometry.js';
+import { outlineTriangles } from './outline.js';
 import { mergeColorbars, type Colorbar, type PanelLabel } from './overlay.js';
 import { tile, type Rect } from './tiles.js';
 
@@ -69,6 +71,8 @@ const HEAD_SIZE = 9;
 const ARROWHEAD_SIZE = 10;
 const ARROWHEAD_WIDTH = 0.8;
 const BODY_SIZE = 8;
+/** The least width and height of an outline on the screen, in CSS pixels, when its layer does not set min_size. */
+const OUTLINE_MIN_SIZE = 8;
 /** Along a trail, the width and the opacity at the tail, as fractions of those at the head, when the layer does not set a taper. */
 const TAPER_WIDTH = 0.25;
 const TAPER_OPACITY = 0.35;
@@ -259,6 +263,16 @@ void main() {
 }
 `;
 
+/** The vertices of an outline, laid out on the CPU in normalized device coordinates. */
+const OUTLINE_VERTEX = /* glsl */ `
+uniform vec4 uColor;
+varying vec4 vColor;
+void main() {
+  vColor = uColor;
+  gl_Position = vec4(position.xy, 0.0, 1.0);
+}
+`;
+
 const FRAGMENT = /* glsl */ `
 varying vec4 vColor;
 void main() {
@@ -403,7 +417,13 @@ export interface ArrowPlan {
   channel: string;
 }
 
-export type LayerPlan = TrackPlan | ArrowPlan | BodyPlan | MarkPlan;
+export interface OutlinePlan {
+  kind: 'outline';
+  index: number;
+  layer: OutlineLayer;
+}
+
+export type LayerPlan = TrackPlan | ArrowPlan | OutlinePlan | BodyPlan | MarkPlan;
 
 export interface PanelPlan {
   viewId: string;
@@ -462,7 +482,8 @@ export function planPanel(scene: Scene, geometry: GeometryCache, state: State, p
     } else if (layer.kind === 'arrow') {
       const id = oneSet(scope, layer.sets);
       layers.push({ kind: 'arrow', index, layer, set: id === null ? null : geometry.sets.get(id), channel: state.clock.channel });
-    } else if (layer.kind === 'body') layers.push({ kind: 'body', index, layer });
+    } else if (layer.kind === 'outline') layers.push({ kind: 'outline', index, layer });
+    else if (layer.kind === 'body') layers.push({ kind: 'body', index, layer });
     else layers.push({ kind: layer.kind, index, layer });
   });
   return { viewId: panel.view, view, display, scope, driver, layers };
@@ -1462,6 +1483,113 @@ class ArrowDraw implements Draw {
   }
 }
 
+// outlines
+
+/**
+ * The corners, in CSS pixels from the host panel's top left corner, of what a plane camera shows in the target panel, i.e. the rectangle `view` in
+ * the target panel's display frame, mapped by `map` into the host's display frame, stretched as the host camera stretches it, and projected by the
+ * host camera onto a panel of `w` by `h` pixels. Null when a corner is behind a perspective camera.
+ */
+export function outlineCorners(
+  map: OutlineLayerResult & { origin: Vec3; axes: [Vec3, Vec3, Vec3] },
+  view: PlaneView,
+  target: Camera & { kind: 'plane' },
+  camera: THREE.OrthographicCamera | THREE.PerspectiveCamera,
+  host: Camera,
+  w: number,
+  h: number,
+): [[number, number], [number, number], [number, number], [number, number]] | null {
+  const { right, up } = cameraBasis(target);
+  const k = stretchOf(host);
+  camera.updateMatrixWorld();
+  const [ax, ay, az] = map.axes.map((a) => new THREE.Vector3(...a));
+  const out: [number, number][] = [];
+  for (const [x, y] of [
+    [view.x0, view.y0],
+    [view.x1, view.y0],
+    [view.x1, view.y1],
+    [view.x0, view.y1],
+  ] as const) {
+    const p = right.clone().multiplyScalar(x).addScaledVector(up, y);
+    const q = new THREE.Vector3(...map.origin).addScaledVector(ax!, p.x).addScaledVector(ay!, p.y).addScaledVector(az!, p.z);
+    q.multiply(k).applyMatrix4(camera.matrixWorldInverse);
+    if (camera instanceof THREE.PerspectiveCamera && q.z >= -camera.near) return null;
+    q.applyMatrix4(camera.projectionMatrix);
+    out.push([((q.x + 1) / 2) * w, ((1 - q.y) / 2) * h]);
+  }
+  return out as [[number, number], [number, number], [number, number], [number, number]];
+}
+
+/**
+ * The outline of what another panel shows (rule L8). Its map from the target frame is evaluated at the clock in `update`, and the ring is laid out
+ * in `place` from the target camera's visible rectangle at the same frame, after every camera of the stage has moved.
+ */
+class OutlineDraw implements Draw {
+  readonly key: string;
+  readonly group = new THREE.Group();
+  private readonly layer: OutlineLayer;
+  private readonly mesh: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
+  private positions = new Float32Array(0);
+  private map: OutlineLayerResult | null = null;
+
+  constructor(ctx: DrawContext, layer: OutlineLayer, key: string) {
+    this.key = key;
+    this.layer = layer;
+    const color = new THREE.Vector4(...hexRgb(layer.color ?? ctx.theme.foreground), layer.opacity ?? 1);
+    this.mesh = new THREE.Mesh(new THREE.BufferGeometry(), material(OUTLINE_VERTEX, { uColor: { value: color } }));
+    this.mesh.frustumCulled = false;
+    this.mesh.visible = false;
+    this.group.add(this.mesh);
+  }
+
+  update(env: LayerEnv, driver: Driver): void {
+    this.map = outlineLayer(env, this.layer, driver);
+  }
+
+  /** The panel the outline shows the view of, or null when the layout does not show the view or the driver does not resolve to a track. */
+  get target(): string | null {
+    return this.map?.origin == null ? null : this.map.panel;
+  }
+
+  /** Lays the ring out on panel `host` from what the target panel `target` shows, or hides it when `target` is not a plane camera's panel. */
+  place(host: PanelRender, target: PanelRender | undefined): void {
+    const map = this.map;
+    let tri: number[] = [];
+    const { w, h } = host.rect;
+    if (map?.origin != null && map.axes !== null && target?.view != null && target.error === null && target.cameraSpec.kind === 'plane') {
+      const corners = outlineCorners({ ...map, origin: map.origin, axes: map.axes }, target.view, target.cameraSpec, host.camera, host.cameraSpec, w, h);
+      const look = { width: this.layer.width ?? 1, minSize: this.layer.min_size ?? OUTLINE_MIN_SIZE, dash: this.layer.dash };
+      if (corners !== null) tri = outlineTriangles(corners, w, h, look);
+    }
+    const n = tri.length / 2;
+    if (3 * n > this.positions.length) {
+      this.positions = new Float32Array(3 * Math.max(2 * n, 96));
+      this.mesh.geometry.dispose();
+      this.mesh.geometry = new THREE.BufferGeometry();
+      this.mesh.geometry.setAttribute('position', new THREE.BufferAttribute(this.positions, 3).setUsage(THREE.DynamicDrawUsage));
+    }
+    for (let i = 0; i < n; i++) {
+      this.positions[3 * i] = (2 * tri[2 * i]!) / w - 1;
+      this.positions[3 * i + 1] = 1 - (2 * tri[2 * i + 1]!) / h;
+    }
+    if (n > 0) {
+      const attr = this.mesh.geometry.getAttribute('position') as THREE.BufferAttribute;
+      attr.clearUpdateRanges();
+      attr.addUpdateRange(0, 3 * n);
+      attr.needsUpdate = true;
+    }
+    this.mesh.geometry.setDrawRange(0, n);
+    this.mesh.visible = n > 0;
+  }
+
+  extend(): void {}
+
+  dispose(): void {
+    this.mesh.geometry.dispose();
+    this.mesh.material.dispose();
+  }
+}
+
 // axes and grid
 
 /**
@@ -1992,6 +2120,8 @@ export class StageRenderer {
           if (lp.set === null) continue;
           const look = JSON.stringify([lp.layer.color ?? theme, lp.layer.opacity, lp.layer.width, lp.layer.head]);
           key = `arrow\0${plan.viewId}\0${lp.index}\0${lp.set.id}\0${plan.display}\0${lp.channel}\0${look}`;
+        } else if (lp.kind === 'outline') {
+          key = `outline\0${plan.viewId}\0${lp.index}\0${JSON.stringify([lp.layer, lp.layer.color === undefined ? theme : ''])}`;
         } else key = `${lp.kind}\0${plan.viewId}\0${lp.index}\0${plan.display}\0${theme}`;
         keep.add(lp.index);
         const old = p.draws.get(lp.index);
@@ -2009,9 +2139,11 @@ export class StageRenderer {
             ? new TrackDraw(this.ctx, lp as TrackPlan & { set: SetData }, plan.display, key)
             : lp.kind === 'arrow'
               ? new ArrowDraw(this.ctx, lp as ArrowPlan & { set: SetData }, key)
-              : lp.kind === 'body'
-                ? new BodyDraw(this.ctx, lp.layer, key)
-                : new MarkDraw(this.ctx, lp.layer, p.cameraSpec, key);
+              : lp.kind === 'outline'
+                ? new OutlineDraw(this.ctx, lp.layer, key)
+                : lp.kind === 'body'
+                  ? new BodyDraw(this.ctx, lp.layer, key)
+                  : new MarkDraw(this.ctx, lp.layer, p.cameraSpec, key);
         // layers stack in their order, and within a layer its objects in the order they were added
         draw.group.renderOrder = lp.index;
         let k = 0;
@@ -2063,6 +2195,7 @@ export class StageRenderer {
           if (d.update(lp, scene, q) && d.isStatic) p.underlayDirty = true;
           if (d.driverContext) d.place(env, plan.driver);
         } else if (d instanceof ArrowDraw && lp.kind === 'arrow') d.update(env, lp as ArrowPlan & { set: SetData });
+        else if (d instanceof OutlineDraw && lp.kind === 'outline') d.update(env, plan.driver);
         else if (d instanceof BodyDraw && lp.kind === 'body') d.update(env, lp.layer, plan.driver);
       }
     } catch (e) {
@@ -2182,6 +2315,7 @@ export class StageRenderer {
     this.gl.setClearColor(this.background, 1);
     this.gl.clear();
     this.gl.setScissorTest(true);
+    // every camera is moved before any panel is drawn, since an outline on one panel shows what another panel's camera shows at this frame
     for (const [pid, rect] of tiles.panels) {
       const p = this.panel(pid);
       const replanned = replan || p.plan === null;
@@ -2193,12 +2327,16 @@ export class StageRenderer {
       else if (resized) this.aspect(p);
       this.turn(p, q);
       this.follow(p);
+    }
+    for (const [pid, rect] of tiles.panels) {
+      const p = this.panel(pid);
       if (p.error !== null) {
         errors.set(pid, p.error);
         continue;
       }
       if (rect.w < 1 || rect.h < 1) continue;
       for (const d of p.draws.values()) d.resize?.(rect.w, rect.h);
+      for (const d of p.draws.values()) if (d instanceof OutlineDraw) d.place(p, d.target === null ? undefined : this.panels.get(d.target));
       const y = h - rect.y - rect.h;
       this.gl.setViewport(rect.x, y, rect.w, rect.h);
       this.gl.setScissor(rect.x, y, rect.w, rect.h);

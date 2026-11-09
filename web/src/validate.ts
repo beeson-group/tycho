@@ -7,8 +7,8 @@ import type { DataStore } from './container.js';
 import { fail } from './errors.js';
 import { clockLaps } from './evaluate/clock.js';
 import { Frames } from './evaluate/frames.js';
-import { arrowParts, hasHead } from './evaluate/layers.js';
-import { checkState, displayFrame, layerVisible, layoutIds, oneSet, querySets, variableDef, type PanelScope } from './evaluate/resolve.js';
+import { arrowParts, checkOutlineView, hasHead } from './evaluate/layers.js';
+import { checkState, displayFrame, layerVisible, layoutIds, oneSet, outlineTarget, querySets, variableDef, type PanelScope } from './evaluate/resolve.js';
 import { SetCache } from './evaluate/sets.js';
 import {
   ID_PATTERN,
@@ -27,9 +27,10 @@ import {
   type Trail,
   type TrackLayer,
   type ArrowLayer,
+  type OutlineLayer,
 } from './scene.js';
 
-const LAYER_KINDS = ['track', 'arrow', 'body', 'axes', 'grid'];
+const LAYER_KINDS = ['track', 'arrow', 'outline', 'body', 'axes', 'grid'];
 const CONTROL_KINDS = ['slider', 'tabs', 'toggle', 'transport'];
 const COLORMAPS = ['viridis', 'plasma', 'cividis', 'blues', 'reds'];
 
@@ -55,6 +56,7 @@ const ORBIT_CAMERA_KEYS = ['kind', 'projection', 'up', 'stretch', 'turn'];
 const LAYER_KEYS: Record<string, readonly string[]> = {
   track: ['kind', 'sets', 'members', 'reveal', 'trail', 'head', 'before', 'after', 'context', 'color', 'opacity', 'width', 'highlight', 'visible'],
   arrow: ['kind', 'sets', 'members', 'vector', 'scale', 'before', 'after', 'color', 'opacity', 'width', 'head', 'visible'],
+  outline: ['kind', 'view', 'color', 'opacity', 'width', 'dash', 'min_size', 'visible'],
   body: ['kind', 'body', 'trail', 'size', 'visible'],
   axes: ['kind', 'span', 'visible'],
   grid: ['kind', 'labels', 'visible'],
@@ -132,6 +134,19 @@ function checkArrowLayer(scene: Scene, id: string, layer: ArrowLayer): void {
   if (layer.head?.size !== undefined && !(layer.head.size > 0)) fail('L7', `view ${id}: an arrowhead size is ${layer.head.size}, not positive`);
   if (layer.opacity !== undefined && !unit(layer.opacity)) fail('2.7', `view ${id}: an arrow layer's opacity is ${layer.opacity}, not in [0, 1]`);
   if (layer.width !== undefined && !(layer.width > 0)) fail('2.7', `view ${id}: an arrow layer's width is ${layer.width}, not positive`);
+}
+
+function checkOutlineLayer(scene: Scene, id: string, layer: OutlineLayer): void {
+  checkOutlineView(scene, id, layer);
+  if (layer.color !== undefined && !COLOR.test(layer.color))
+    fail('L8', `view ${id}: an outline layer's color is ${JSON.stringify(layer.color)}, not a #rrggbb color`);
+  if (layer.opacity !== undefined && !unit(layer.opacity)) fail('2.7', `view ${id}: an outline layer's opacity is ${layer.opacity}, not in [0, 1]`);
+  if (layer.width !== undefined && !(layer.width > 0)) fail('2.7', `view ${id}: an outline layer's width is ${layer.width}, not positive`);
+  const dash = layer.dash as unknown;
+  if (dash !== undefined && !(Array.isArray(dash) && dash.length === 2 && dash.every((d) => finite(d) && d > 0)))
+    fail('L8', `view ${id}: an outline layer's dash is ${JSON.stringify(dash)}, not two positive lengths`);
+  if (layer.min_size !== undefined && !(finite(layer.min_size) && layer.min_size >= 0))
+    fail('L8', `view ${id}: an outline layer's min_size is ${layer.min_size}, not a nonnegative length`);
 }
 
 function checkTrackLayer(scene: Scene, id: string, layer: TrackLayer): void {
@@ -223,7 +238,7 @@ export function validate(scene: Scene, data?: DataStore, state?: State): string[
   const frames = new Frames(scene);
   const isFrame = (id: string) => frames.tree.has(id);
   for (const [id, f] of Object.entries(scene.frames)) {
-    if (Array.isArray(f!.origin)) f!.origin.forEach((s) => checkScalar(s, `the origin of frame ${id}`, true));
+    if (Array.isArray(f!.origin)) f!.origin.forEach((s) => checkScalar(s, `the origin of frame ${id}`, false));
     checkScalar(f!.rotation?.angle, `the rotation of frame ${id}`, false);
     checkScalar(f!.scale, `the scale of frame ${id}`, false);
     if (f!.axes !== undefined && f!.axes.length !== 3) fail('2.3', `frame ${id} has ${f!.axes.length} axis labels, not three`);
@@ -292,6 +307,7 @@ export function validate(scene: Scene, data?: DataStore, state?: State): string[
       if (layer.visible !== undefined) checkVariableRef(scene, layer.visible.var, 'toggle', 'L5');
       if (layer.kind === 'track') checkTrackLayer(scene, id, layer);
       else if (layer.kind === 'arrow') checkArrowLayer(scene, id, layer);
+      else if (layer.kind === 'outline') checkOutlineLayer(scene, id, layer);
       else if (layer.kind === 'body') {
         if (!Object.hasOwn(scene.bodies ?? {}, layer.body)) fail('L4', `view ${id} draws ${layer.body}, which is not a body`);
         if (layer.trail !== undefined) checkTrail(id, layer.trail);
@@ -472,6 +488,9 @@ function validateState(scene: Scene, frames: Frames, state: State, warnings: str
         if (typeof scale === 'object' && 'attr' in scale && !Object.hasOwn(set.attrs ?? {}, scale.attr))
           fail('F5', `panel ${pid}: track set ${id} lacks attribute ${scale.attr} for an arrow layer's scale`);
         clocked(id, 'on which a reading is taken');
+      } else if (layer.kind === 'outline' && driver !== null) {
+        const target = outlineTarget(scope, layer.view);
+        if (target !== null) need(driver, target.frame, `the outline of view ${layer.view}`);
       } else if (layer.kind === 'body' && driver !== null) {
         need(driver, scene.track_sets[driver]!.frame, `body ${layer.body}`, frames.bodyRequirements(layer.body, display));
       }

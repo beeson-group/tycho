@@ -65,6 +65,20 @@ describe('fitBox', () => {
       expect(box).toEqual(want);
     }
   });
+  it('leaves out a track layer with fit false, and is null when every track layer has fit false', () => {
+    const c = broucke();
+    const view = c.scene.views.main!;
+    const box = () => fitBox(planPanel(c.scene, c.geometry, c.scene.initial, 'p1'), c.geometry);
+    const alone = box();
+    // the whole of family 8 is larger than the drawn members of the family the initial state shows
+    const whole: TrackLayer = { kind: 'track', sets: { set: 'family-8-periapsis' }, members: 'all' };
+    view.layers = [...view.layers, whole];
+    expect(box()).not.toEqual(alone);
+    view.layers = [...view.layers.slice(0, -1), { ...whole, fit: false }];
+    expect(box()).toEqual(alone);
+    view.layers = view.layers.map((l) => (l.kind === 'track' ? { ...l, fit: false } : l));
+    expect(box()).toBeNull();
+  });
   it('is null when the track layers do not draw anything', () => {
     const c = broucke();
     c.scene.views.main!.layers = c.scene.views.main!.layers.filter((l) => l.kind !== 'track');

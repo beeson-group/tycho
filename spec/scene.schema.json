@@ -872,6 +872,9 @@
                 "driver"
               ]
             },
+            "fit": {
+              "type": "boolean"
+            },
             "color": {
               "$ref": "#/$defs/colorSpec"
             },

@@ -393,7 +393,21 @@ def _check_layer(layer: Any) -> dict[str, Any]:
         v = layer["visible"]
         out["visible"] = v if isinstance(v, Mapping) and set(v) == {"var"} else _var(v, "L5: a layer's visible", "toggle")
     if kind == "track":
-        allowed |= {"sets", "members", "reveal", "trail", "head", "before", "after", "context", "color", "opacity", "width", "highlight"}
+        allowed |= {
+            "sets",
+            "members",
+            "reveal",
+            "trail",
+            "head",
+            "before",
+            "after",
+            "context",
+            "fit",
+            "color",
+            "opacity",
+            "width",
+            "highlight",
+        }
         out["sets"] = _query(layer.get("sets"))
         out["members"] = _member(layer.get("members", "all"), "a track layer's members")
         out["reveal"] = _enum(layer.get("reveal", "none"), ("none", "grow", "trail"), "2.7: a track layer's reveal")
@@ -408,6 +422,10 @@ def _check_layer(layer: Any) -> dict[str, Any]:
                 out[key] = _enum(layer[key], ("clamp", "hidden"), f"C3: a track layer's {key}")
         if "context" in layer:
             out["context"] = _enum(layer["context"], ("own", "driver"), "L6: a track layer's context")
+        if "fit" in layer:
+            if not isinstance(layer["fit"], bool):
+                raise SceneError(f"2.7: a track layer's fit is {layer['fit']!r}, not a boolean")
+            out["fit"] = layer["fit"]
         if "color" in layer:
             out["color"] = _color_spec(layer["color"], "a track layer's color")
         if "opacity" in layer:
@@ -535,6 +553,7 @@ def track(
     before: str | None = None,
     after: str | None = None,
     context: str | None = None,
+    fit: bool | None = None,
     color: Any = None,
     opacity: float | None = None,
     width: float | None = None,
@@ -547,7 +566,8 @@ def track(
     ``(width, opacity)`` or as a dict. ``head`` is True or a dict of ``color`` and ``size``.
     ``context="driver"`` transforms every sample in the context of the driver's reading rather than in
     its own (rule L6), so that a static polyline of one frame, e.g. a grid line, follows this frame
-    in the display frame. Its set then does not need the channels of the frame edges.
+    in the display frame. Its set then does not need the channels of the frame edges. ``fit=False`` leaves the layer out of the camera
+    fit, e.g. for a whole curve drawn on a close-up whose camera is fitted to a window given by another layer.
     """
     if taper is not None:
         if trail is None:
@@ -569,6 +589,7 @@ def track(
         ("before", before),
         ("after", after),
         ("context", context),
+        ("fit", fit),
         ("color", color),
         ("opacity", opacity),
         ("width", width),

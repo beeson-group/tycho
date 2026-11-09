@@ -54,7 +54,7 @@ const VIEW_KEYS = ['label', 'frame', 'camera', 'driver', 'layers'];
 const PLANE_CAMERA_KEYS = ['kind', 'plane', 'aspect'];
 const ORBIT_CAMERA_KEYS = ['kind', 'projection', 'up', 'stretch', 'turn'];
 const LAYER_KEYS: Record<string, readonly string[]> = {
-  track: ['kind', 'sets', 'members', 'reveal', 'trail', 'head', 'before', 'after', 'context', 'color', 'opacity', 'width', 'highlight', 'visible'],
+  track: ['kind', 'sets', 'members', 'reveal', 'trail', 'head', 'before', 'after', 'context', 'fit', 'color', 'opacity', 'width', 'highlight', 'visible'],
   arrow: ['kind', 'sets', 'members', 'vector', 'scale', 'before', 'after', 'color', 'opacity', 'width', 'head', 'visible'],
   outline: ['kind', 'view', 'color', 'opacity', 'width', 'dash', 'min_size', 'visible'],
   body: ['kind', 'body', 'trail', 'size', 'visible'],
@@ -151,6 +151,7 @@ function checkOutlineLayer(scene: Scene, id: string, layer: OutlineLayer): void 
 
 function checkTrackLayer(scene: Scene, id: string, layer: TrackLayer): void {
   checkMembers(scene, id, layer);
+  if (layer.fit !== undefined && typeof layer.fit !== 'boolean') fail('2.7', `view ${id}: a track layer's fit is ${JSON.stringify(layer.fit)}, not a boolean`);
   const hl = layer.highlight;
   if (hl !== undefined) {
     checkVariableRef(scene, hl.var, 'selector', '2.7');

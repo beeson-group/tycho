@@ -840,6 +840,17 @@ def test_outlines_through_the_api_give_the_corpus_answers():
     assert compared == 10
 
 
+def test_a_track_layer_left_out_of_the_fit():
+    assert ty.track("s", fit=False)["fit"] is False
+    assert "fit" not in ty.track("s")
+    with pytest.raises(ty.SceneError, match=r"2\.7: a track layer's fit is 'no', not a boolean"):
+        ty.track("s", fit="no")  # pyright: ignore[reportArgumentType]
+    scene = outlines_scene()
+    scene._views["closeup"]["layers"].append(ty.track("drv", fit=False))
+    jsonschema = pytest.importorskip("jsonschema")
+    jsonschema.Draft202012Validator(json.loads((CORPUS.parent / "scene.schema.json").read_text())).validate(scene.to_document())
+
+
 def test_an_outline_layer_fails_at_the_call_and_at_the_write():
     calls: tuple[tuple[dict[str, Any], str], ...] = (
         ({"dash": (4,)}, "L8: an outline layer's dash"),

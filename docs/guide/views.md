@@ -131,7 +131,7 @@ rp = scene.frame("rp")
 zoom = scene.frame("zoom", parent=rp, origin=[ty.channel("tx"), ty.channel("ty"), 0.0], scale=ty.channel("inv_w"))
 ```
 
-The driver's set must then carry the channels of every edge between the two frames (rule F5). The `width` and the dash `(on, off)` are in CSS pixels, and the `color` and the `opacity` default to the foreground of the theme and to 1. An outline narrower or shorter on the screen than `min_size` CSS pixels, 8 by default, is stretched about its center to this size, hence the window of a deep close-up stays visible. The camera is not fitted to the outline, since the outline moves with another panel's camera.
+The driver's set must then carry the channels of every edge between the two frames (rule F5). The `width` and the dash `(on, off)` are in CSS pixels, and the `color` and the `opacity` default to the foreground of the theme and to 1. An outline narrower or shorter on the screen than `min_size` CSS pixels, 8 by default, is stretched about its center to this size, hence the window of a deep close-up stays visible. The camera is not fitted to the outline, since the outline moves with another panel's camera. A track layer can be left out of the fit as well, with `fit=False` in `ty.track`. A close-up can thus draw a whole curve, which the person viewing the page sees when zooming out, while its camera is fitted to a window given by a second track layer, e.g. the curve clipped to the window or a box drawn at opacity 0.
 
 ## Body, axes, and grid layers
 

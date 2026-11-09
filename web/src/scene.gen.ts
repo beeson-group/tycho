@@ -122,6 +122,7 @@ export type Layer =
       before?: 'clamp' | 'hidden';
       after?: 'clamp' | 'hidden';
       context?: 'own' | 'driver';
+      fit?: boolean;
       color?: ColorSpec;
       opacity?: number;
       width?: number;

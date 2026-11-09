@@ -566,7 +566,7 @@ function driverFitBox(l: TrackPlan & { set: SetData }, driver: NonNullable<Drive
 }
 
 /**
- * The box a panel's camera fits, which holds every member of every track layer, whole, in every lap
+ * The box a panel's camera fits, which holds every member of every track layer without `fit: false`, whole, in every lap
  * from 0 to the top, in the display frame. A layer in the driver's context is held at every sample of
  * the driver's track. The box is given as minimum then maximum x, y, z, and is null when the track
  * layers do not draw anything. A test passes a small `budget` in place of DRIVER_FIT_BUDGET, to force the fit by the corners.
@@ -574,7 +574,7 @@ function driverFitBox(l: TrackPlan & { set: SetData }, driver: NonNullable<Drive
 export function fitBox(plan: PanelPlan, geometry: GeometryCache, budget = DRIVER_FIT_BUDGET): Box6 | null {
   let box: Box6 | null = null;
   for (const l of plan.layers) {
-    if (l.kind !== 'track' || l.set === null || l.members.length === 0) continue;
+    if (l.kind !== 'track' || l.set === null || l.members.length === 0 || l.layer.fit === false) continue;
     if (l.context === 'driver' && plan.driver === null) continue;
     let parts: Box6[];
     if (l.context === 'driver') parts = [driverFitBox(l as TrackPlan & { set: SetData }, plan.driver!, plan.display, geometry, budget)];

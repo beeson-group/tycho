@@ -243,9 +243,10 @@ export function boxTicks(lo: number, hi: number, bins: number): { values: number
   const raw = range / Math.max(1, bins);
   const mag = Math.pow(10, Math.floor(Math.log10(raw)));
   // the steps from the smallest round one of at least raw downward, since matplotlib keeps at least two ticks in view
-  const steps = [...TICK_MANTISSAS.map((m) => m * mag), ...TICK_MANTISSAS.map((m) => (m * mag) / 10)].filter((x) => x >= raw * (1 - 1e-9));
-  const down = [...TICK_MANTISSAS.map((m) => (m * mag) / 10), ...TICK_MANTISSAS.map((m) => (m * mag) / 100)].filter((x) => x < raw * (1 - 1e-9));
-  const ordered = [...steps.sort((x, y) => x - y), ...down.sort((x, y) => y - x)];
+  const all = [10, 1, 0.1, 0.01].flatMap((k) => TICK_MANTISSAS.map((m) => m * mag * k));
+  const up = all.filter((x) => x >= raw * (1 - 1e-9)).sort((x, y) => x - y);
+  const down = all.filter((x) => x < raw * (1 - 1e-9)).sort((x, y) => y - x);
+  const ordered = [...up, ...down];
   let values: number[] = [];
   let step = ordered[0]!;
   for (const st of ordered) {

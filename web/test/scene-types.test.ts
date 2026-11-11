@@ -41,8 +41,8 @@ describe('validate', () => {
       ])
       .add('time', [0, 1]);
   it('the S1 error names an unknown major version and an unimplemented feature together', () => {
-    const scene = baseScene({ version: '1.0', requires: ['layers.points'] });
-    expect(() => validate(scene)).toThrow(/major version 1.*layers\.points/);
+    const scene = baseScene({ version: '1.0', requires: ['panels.plot'] });
+    expect(() => validate(scene)).toThrow(/major version 1.*panels\.plot/);
   });
   it('a drawn track set that lacks a channel on the path is rejected (F5)', () => {
     const scene = baseScene({ frames: { a: {}, b: { parent: 'a', rotation: { axis: 'z', angle: { channel: 'f' } } } } });
@@ -104,9 +104,10 @@ describe('validate', () => {
     scene.views.main!.layers = [{ ...layer, reveal: 'sweep', context: 'sample' } as unknown as Layer];
     expect(rule(() => evaluate(scene, data(), state(), 0))).toBe('2.7');
   });
-  it('a reader implements the four features of version 0.3 and rejects any other (S1)', () => {
+  it('a reader implements the four features of version 0.3 and the five of version 0.4, and rejects any other (S1)', () => {
     validate(baseScene({ version: '0.3', requires: ['frames.origin_channel', 'layers.arrows', 'layers.driver_context', 'layers.outline'] }));
-    expect(rule(() => validate(baseScene({ version: '0.3', requires: ['layers.points'] })))).toBe('S1');
+    validate(baseScene({ version: '0.4', requires: ['clock.keys', 'layers.clock', 'camera.keys', 'layers.label', 'layers.points'] }));
+    expect(rule(() => validate(baseScene({ version: '0.4', requires: ['panels.plot'] })))).toBe('S1');
   });
   it('a literal index past the last track and a selector whose parameter the track set lacks are rejected (V3)', () => {
     const scene = second();
@@ -200,7 +201,7 @@ describe('validate', () => {
     }
     scene.views.main!.camera = { kind: 'plane', aspect: 'stretch' as 'free' };
     expect(rule(() => validate(scene))).toBe('2.7');
-    expect(rule(() => validate(baseScene({ version: '0.4' })))).toBe('S1');
+    expect(rule(() => validate(baseScene({ version: '0.5' })))).toBe('S1');
   });
   it('an orbit camera takes a stretch of three positive factors and a finite turn, in a scene of version 0.3 (2.7)', () => {
     const scene = baseScene({ version: '0.3' });
@@ -230,7 +231,7 @@ describe('validate', () => {
   it('a newer minor version and an unknown layer kind break S1, and wrong kinds and ranges break L5 and 2.7', () => {
     expect(rule(() => validate(baseScene({ version: '0.9' })))).toBe('S1');
     const scene = baseScene();
-    scene.views.main!.layers = [{ kind: 'points' } as unknown as Layer];
+    scene.views.main!.layers = [{ kind: 'surface' } as unknown as Layer];
     expect(rule(() => validate(scene))).toBe('S1');
     expect(rule(() => evaluate(scene, data(), state(), 0))).toBe('S1');
     const choice = baseScene({ variables: { c: { kind: 'choice', values: ['x'], default: 'x' } } });

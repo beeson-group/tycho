@@ -458,6 +458,77 @@ def resolve_vertices(vertices: Iterable[Vertex], table: Callable[[int], np.ndarr
     return [[float(x) for x in p] for p in out]
 
 
+# the timeline (section 2.11)
+
+EASES = ("linear", "smooth", "in", "out", "in-out", "hold")
+
+
+def ease(name: Any, x: float) -> float:
+    """The ease ``E(x)`` of rule K2, with every product computed from the left."""
+    if name == "linear":
+        return x
+    if name == "smooth":
+        return x * x * (3.0 - 2.0 * x)
+    if name == "in":
+        return x * x * x
+    if name == "out":
+        y = 1.0 - x
+        return 1.0 - y * y * y
+    if name == "in-out":
+        if x < 0.5:
+            return 4.0 * x * x * x
+        y = 2.0 - 2.0 * x
+        return 1.0 - y * y * y / 2.0
+    if name == "hold":
+        return 0.0
+    raise EvaluationError(f"K2: the ease {name!r} is not one of {', '.join(EASES)}")
+
+
+def tween_keys(keys: Any, what: str) -> list[tuple[float, float, str]]:
+    """The keys of a tween as ``(t, v, ease)``, checked against rules K1 and K2."""
+    if isinstance(keys, Mapping) and "keys" in keys:
+        keys = keys["keys"]
+    if not isinstance(keys, list) or not keys:
+        raise EvaluationError(f"K1: {what} has keys {keys!r}, not a nonempty list")
+    out: list[tuple[float, float, str]] = []
+    for key in keys:
+        if not isinstance(key, list) or len(key) not in (2, 3):
+            raise EvaluationError(f"K1: a key of {what} is {key!r}, not [t, v] or [t, v, ease]")
+        t = _number(key[0], f"K1: the time of a key of {what}")
+        v = _number(key[1], f"K1: the value of a key of {what}")
+        name = key[2] if len(key) == 3 else "linear"
+        if name not in EASES:
+            raise EvaluationError(f"K2: a key of {what} has the ease {name!r}, not one of {', '.join(EASES)}")
+        if out and t < out[-1][0]:
+            raise EvaluationError(f"K1: the key times of {what} decrease from {out[-1][0]} to {t}")
+        out.append((t, v, name))
+    return out
+
+
+def tween_value(keys: list[tuple[float, float, str]], s: float) -> float:
+    """The value of a tween at time ``s`` of the timeline (rule K1)."""
+    i = -1
+    for j, key in enumerate(keys):
+        if key[0] <= s:
+            i = j
+    if i < 0:
+        return keys[0][1]
+    if i == len(keys) - 1:
+        return keys[i][1]
+    t0, v0, _ = keys[i]
+    t1, v1, name = keys[i + 1]
+    x = (s - t0) / (t1 - t0)
+    return v0 + ease(name, x) * (v1 - v0)
+
+
+def loop_seconds(clock: Mapping[str, Any]) -> float:
+    """The length ``L`` of one loop in seconds: the clock's seconds, or 8 seconds per lap (sections 2.6 and 2.11)."""
+    if "seconds" in clock:
+        return _number(clock["seconds"], "the clock seconds")
+    laps = clock.get("laps", 1)
+    return 8.0 * (laps if isinstance(laps, int) and not isinstance(laps, bool) else 1)
+
+
 # the evaluator
 
 
@@ -473,7 +544,7 @@ def evaluate(document: Mapping[str, Any], container: Container | bytes, state: M
     return _Evaluator(document, container).run(state, frame_index)
 
 
-KINDS = ("track", "arrow", "outline", "body", "axes", "grid")
+KINDS = ("track", "arrow", "outline", "body", "axes", "grid", "label", "points")
 
 
 class _Evaluator:
@@ -571,7 +642,7 @@ def _leaves(node: Any) -> list[str]:
 
 
 class _Reading:
-    """The clock at one frame index (rules C1 to C3, and the laps of rule C6)."""
+    """The clock at one frame index (rules C1 to C3, the laps of rule C6, and the keys of rule K3)."""
 
     def __init__(self, clock: Mapping[str, Any], channel: str, q: float) -> None:
         self.mode = clock["mode"]
@@ -584,12 +655,40 @@ class _Reading:
             raise EvaluationError("C6: the clock is in value mode but has laps")
         if isinstance(self.laps, bool) or not isinstance(self.laps, int) or self.laps < 1:
             raise EvaluationError(f"C6: the clock has laps {self.laps!r}, not an integer of at least one")
+        # the time of the timeline, s = q * L (section 2.11)
+        self.s = q * loop_seconds(clock)
         if self.mode == "value":
-            rng = clock.get("range")
+            if "range" in clock and "keys" in clock:
+                raise EvaluationError("K3: the clock is in value mode and has both a range and keys, not one")
+            if "keys" in clock:
+                self.v = tween_value(tween_keys(clock["keys"], "the clock"), self.s)
+            else:
+                rng = clock.get("range")
+                if not isinstance(rng, list) or len(rng) != 2:
+                    raise EvaluationError("C2: the clock is in value mode but does not have a range of two numbers")
+                a, b = (_number(x, "a clock range value") for x in rng)
+                self.v = a + q * (b - a)
+        elif "keys" in clock:
+            raise EvaluationError("K3: the clock is in fraction mode and has keys, which only a value clock takes")
+
+    @classmethod
+    def of_layer(cls, spec: Any, scene: _Reading) -> _Reading:
+        """The clock of a layer (rule K4), in value mode with its own channel, in one lap, at the progress of the scene's clock."""
+        if not isinstance(spec, Mapping) or not isinstance(spec.get("channel"), str):
+            raise EvaluationError(f"K4: a layer's clock is a dict with a channel, not {spec!r}")
+        if ("range" in spec) == ("keys" in spec):
+            raise EvaluationError(f"K4: a layer's clock gives {'both' if 'range' in spec else 'neither'} of a range and keys, not one")
+        out = cls.__new__(cls)
+        out.mode, out.channel, out.q, out.laps, out.s = "value", spec["channel"], scene.q, 1, scene.s
+        if "keys" in spec:
+            out.v = tween_value(tween_keys(spec["keys"], "a layer's clock"), scene.s)
+        else:
+            rng = spec["range"]
             if not isinstance(rng, list) or len(rng) != 2:
-                raise EvaluationError("C2: the clock is in value mode but does not have a range of two numbers")
-            a, b = (_number(x, "a clock range value") for x in rng)
-            self.v = a + q * (b - a)
+                raise EvaluationError(f"K4: a layer's clock range is {rng!r}, not two numbers")
+            a, b = (_number(x, "a layer's clock range value") for x in rng)
+            out.v = a + scene.q * (b - a)
+        return out
 
     def of(self, track: Track) -> float:
         """The track's reading ``u``, before any clamp."""
@@ -727,13 +826,25 @@ class _Panel:
                 layers.append(self.outline_layer(layer))
             elif kind == "body":
                 layers.append(self.body_layer(layer))
+            elif kind == "label":
+                layers.append(self.label_layer(layer))
+            elif kind == "points":
+                layers.append(self.points_layer(layer))
             else:
                 layers.append({"kind": kind})
-        return {"frame": frame, "layers": layers}
+        out: dict[str, Any] = {"frame": frame, "layers": layers}
+        camera = self.view.get("camera") or {"kind": "plane"}
+        if isinstance(camera, Mapping) and camera.get("kind", "plane") == "plane" and "keys" in camera:
+            out["camera"] = self.camera(camera)
+        return out
 
-    def clamped(self, track: Track, layer: Mapping[str, Any]) -> float | None:
+    def reading_of(self, layer: Mapping[str, Any]) -> _Reading:
+        """The clock a layer takes its readings on: its own (rule K4), or the scene's."""
+        return _Reading.of_layer(layer["clock"], self.reading) if "clock" in layer else self.reading
+
+    def clamped(self, track: Track, layer: Mapping[str, Any], reading: _Reading | None = None) -> float | None:
         """The reading on ``track``, clamped, or None when the track is hidden under rule C3."""
-        u = self.reading.of(track)
+        u = (reading or self.reading).of(track)
         if u < 0.0:
             if layer.get("before", "clamp") == "hidden":
                 return None
@@ -764,9 +875,10 @@ class _Panel:
         if context not in ("own", "driver"):
             raise EvaluationError(f"L6: a track layer's context is {context!r}, not own or driver")
         # under rule C5, a reading is not taken on a track drawn whole and never hidden, whose track set need not carry the clock channels
-        hides = self.reading.mode == "value" and "hidden" in (layer.get("before"), layer.get("after"))
+        rd = self.reading_of(layer)
+        hides = rd.mode == "value" and "hidden" in (layer.get("before"), layer.get("after"))
         reads = reveal != "none" or head or hides
-        laps = self.reading.laps
+        laps = rd.laps
         if reads and laps > 1 and not data.periodic:
             raise EvaluationError(f"C6: a reading is taken on track set {data.id!r}, which is not periodic, and the clock has {laps} laps")
         at = self.driver_point() if context == "driver" and self.driver is not None else None
@@ -774,7 +886,7 @@ class _Panel:
         for i in self.members(layer["members"], data):
             track = data.track(i)
             entry: dict[str, Any] = {"index": i}
-            u = self.clamped(track, layer) if reads else 0.0
+            u = self.clamped(track, layer, rd) if reads else 0.0
             if u is None or (context == "driver" and at is None):
                 entry["line"] = []
                 if head:
@@ -782,7 +894,7 @@ class _Panel:
                 members.append(entry)
                 continue
             loop_reading = laps * u
-            u_samples = track.sample_readings(self.reading.channel) if reads else np.empty(0)
+            u_samples = track.sample_readings(rd.channel) if reads else np.empty(0)
             if reveal == "none":
                 vertices = whole(track.m, laps, track.periodic)
             elif reveal == "grow":
@@ -824,13 +936,14 @@ class _Panel:
         for name in vector:
             if name not in data.channels:
                 raise EvaluationError(f"L7: track set {data.id!r} lacks channel {name!r} of an arrow layer's vector")
-        laps = self.reading.laps
+        rd = self.reading_of(layer)
+        laps = rd.laps
         if laps > 1 and not data.periodic:
             raise EvaluationError(f"C6: a reading is taken on track set {data.id!r}, which is not periodic, and the clock has {laps} laps")
         members = []
         for i in self.members(layer["members"], data):
             track = data.track(i)
-            u = self.clamped(track, layer)
+            u = self.clamped(track, layer, rd)
             if u is None:
                 members.append({"index": i, "base": None, "tip": None})
                 continue
@@ -844,7 +957,7 @@ class _Panel:
                 return _by_lap(lambda lap: self.ev.tree.transform(points, data.frame, self.frame, t.context(lap)))
 
             j, within = lap_of(laps * u, laps)
-            at = [("blend", *segment(track.sample_readings(self.reading.channel), within), j)]
+            at = [("blend", *segment(track.sample_readings(rd.channel), within), j)]
             base = resolve_vertices(at, table(track.positions))[0]
             members.append({"index": i, "base": base, "tip": resolve_vertices(at, table(tips))[0]})
         return {"kind": "arrow", "set": data.id, "members": members}
@@ -918,6 +1031,187 @@ class _Panel:
         out["position"] = resolve_vertices([("blend", k, w, j)], table)[0]
         if fraction is not None:
             out["trail"] = resolve_vertices(trail(u_samples, loop_reading, laps, fraction, track.periodic), table)
+        return out
+
+    def point_at_reading(self, layer: Mapping[str, Any], data: SetData, k: int, *, context: str = "own") -> list[float] | None:
+        """The point at the reading of track ``k`` of ``data`` under the layer's clock, with the reading clamped to [0, 1] as in rule L4.
+
+        It is taken in the context of its sample in its lap of rule C6, or in the driver's context (rule L6), where it is None
+        without a driver.
+        """
+        rd = self.reading_of(layer)
+        if rd.laps > 1 and not data.periodic:
+            raise EvaluationError(
+                f"C6: a reading is taken on track set {data.id!r}, which is not periodic, and the clock has {rd.laps} laps"
+            )
+        track = data.track(k)
+        u = min(max(rd.of(track), 0.0), 1.0)
+        j, within = lap_of(rd.laps * u, rd.laps)
+        kk, w = segment(track.sample_readings(rd.channel), within)
+        if context == "driver":
+            if self.driver is None:
+                return None
+            table = _every_lap(self.in_driver_context(track.positions, data.frame, self.driver_point()))
+        else:
+            table = _by_lap(lambda lap: self.ev.tree.transform(track.positions, data.frame, self.frame, track.context(lap)))
+        return resolve_vertices([("blend", kk, w, j)], table)[0]
+
+    def label_layer(self, layer: Mapping[str, Any]) -> dict[str, Any]:
+        """The position of a label's anchor in the display frame (rule K6), or None on the screen and without a set or a driver."""
+        at = layer.get("at")
+        out: dict[str, Any] = {"kind": "label", "position": None}
+        if not isinstance(at, Mapping):
+            raise EvaluationError(f"K6: a label's anchor is {at!r}, not an object")
+        if "screen" in at:
+            return out
+        if "point" in at:
+            point = at["point"]
+            if not isinstance(point, list) or len(point) != 3:
+                raise EvaluationError(f"K6: a label's point is {point!r}, not three numbers")
+            p = np.array([[_number(x, "K6: a label's point") for x in point]])
+            if "frame" not in at:
+                out["position"] = [float(x) for x in p[0]]
+                return out
+            if at["frame"] not in self.ev.doc["frames"]:
+                raise EvaluationError(f"K6: a label's point is in {at['frame']!r}, which is not a frame")
+            if self.driver is None:
+                return out
+            out["position"] = [float(x) for x in self.in_driver_context(p, at["frame"], self.driver_point())[0]]
+            return out
+        if "sets" in at:
+            k = at.get("member")
+            if isinstance(k, bool) or not isinstance(k, int) or k < 0:
+                raise EvaluationError(f"K6: a label's member is {k!r}, not a track index")
+            data = self.one(at["sets"])
+            if data is None:
+                return out
+            if k >= data.tracks:
+                raise EvaluationError(f"K6: a label's member {k} is not below the track count {data.tracks} of track set {data.id!r}")
+            out["position"] = self.point_at_reading(layer, data, k)
+            return out
+        raise EvaluationError(f"K6: a label's anchor is a point, a member, or a screen place, not {dict(at)!r}")
+
+    def points_layer(self, layer: Mapping[str, Any]) -> dict[str, Any]:
+        """The drawn samples of every member of a points layer (rule K8)."""
+        reveal = layer.get("reveal", "none")
+        if reveal not in ("none", "grow"):
+            raise EvaluationError(f"K8: a points layer's reveal is {reveal!r}, not none or grow")
+        for key in ("before", "after"):
+            if layer.get(key, "clamp") not in ("clamp", "hidden"):
+                raise EvaluationError(f"C3: a points layer's {key} is {layer[key]!r}, not clamp or hidden")
+        data = self.one(layer["sets"])
+        if data is None:
+            return {"kind": "points", "set": None, "members": []}
+        rd = self.reading_of(layer)
+        hides = rd.mode == "value" and "hidden" in (layer.get("before"), layer.get("after"))
+        members = []
+        for i in self.members(layer["members"], data):
+            track = data.track(i)
+            # each sample in its own context, in lap 0
+            p = self.ev.tree.transform(track.positions, data.frame, self.frame, track.context(0))
+            shown = np.ones(track.m, dtype=bool)
+            if reveal == "grow" or hides:
+                u = rd.of(track)
+                if (u < 0.0 and layer.get("before") == "hidden") or (u > 1.0 and layer.get("after") == "hidden"):
+                    shown[:] = False
+                elif reveal == "grow":
+                    shown = np.zeros(track.m, dtype=bool) if u < 0.0 else track.sample_readings(rd.channel) <= u
+            members.append({"index": i, "points": [[float(x) for x in row] for row in p[shown]]})
+        return {"kind": "points", "set": data.id, "members": members}
+
+    def camera(self, camera: Mapping[str, Any]) -> dict[str, Any] | None:
+        """The window of a plane camera with keys at the time of the timeline (rule K5), or None when a key it needs lacks a center."""
+        keys = camera["keys"]
+        layers = self.view["layers"]
+        if not isinstance(keys, list) or not keys:
+            raise EvaluationError(f"K5: the keys of a camera are {keys!r}, not a nonempty list")
+        axes = {"xy": (0, 1), "xz": (0, 2), "yz": (1, 2)}.get(camera.get("plane", "xy"))
+        if axes is None:
+            raise EvaluationError(f"2.7: a camera plane is {camera.get('plane')!r}, not xy, xz, or yz")
+        checked = []
+        for key in keys:
+            if not isinstance(key, Mapping):
+                raise EvaluationError(f"K5: a camera key is {key!r}, not an object")
+            at = _number(key.get("at"), "K5: the time of a camera key")
+            width = _number(key.get("width"), "K5: the width of a camera key")
+            if width <= 0.0:
+                raise EvaluationError(f"K5: the width of a camera key is {width}, not positive")
+            height = None
+            if "height" in key:
+                height = _number(key["height"], "K5: the height of a camera key")
+                if height <= 0.0:
+                    raise EvaluationError(f"K5: the height of a camera key is {height}, not positive")
+            name = key.get("ease", "linear")
+            if name not in EASES:
+                raise EvaluationError(f"K2: a camera key has the ease {name!r}, not one of {', '.join(EASES)}")
+            for target in key.get("follow", []):
+                i = target.get("layer") if isinstance(target, Mapping) else None
+                k = target.get("member") if isinstance(target, Mapping) else None
+                if not isinstance(i, int) or not isinstance(k, int) or isinstance(i, bool) or isinstance(k, bool) or i < 0 or k < 0:
+                    raise EvaluationError(f"K5: a camera target is {target!r}, not a layer index and a member index")
+                if i >= len(layers) or not isinstance(layers[i], Mapping) or layers[i].get("kind") != "track":
+                    raise EvaluationError(f"K5: a camera key follows layer {i}, which is not a track layer of the view")
+                data = self.one(layers[i]["sets"])
+                if data is not None and k >= data.tracks:
+                    raise EvaluationError(
+                        f"K5: a camera key follows member {k}, which is not below the track count {data.tracks} of {data.id!r}"
+                    )
+            if checked and at < checked[-1][0]:
+                raise EvaluationError(f"K5: the times of the camera keys decrease from {checked[-1][0]} to {at}")
+            checked.append((at, width, height, name))
+        heights = [c[2] is not None for c in checked]
+        if any(heights) and not all(heights):
+            raise EvaluationError("K5: some keys of a camera give a height and others do not")
+        if any(heights) and camera.get("aspect", "equal") != "free":
+            raise EvaluationError('K5: a camera key gives a height, which only a camera with "aspect": "free" takes')
+
+        def center(key: Mapping[str, Any]) -> list[float] | None:
+            points = []
+            for target in key.get("follow", []):
+                layer = layers[target["layer"]]
+                data = self.one(layer["sets"])
+                if data is None:
+                    continue
+                p = self.point_at_reading(layer, data, target["member"], context=layer.get("context", "own"))
+                if p is not None:
+                    points.append(p)
+            if points:
+                offset = key.get("offset", [0.0, 0.0])
+                a = sum(p[axes[0]] for p in points) / len(points)
+                b = sum(p[axes[1]] for p in points) / len(points)
+                return [a + _number(offset[0], "K5: an offset"), b + _number(offset[1], "K5: an offset")]
+            if "center" in key:
+                c = key["center"]
+                if not isinstance(c, list) or len(c) != 2:
+                    raise EvaluationError(f"K5: the center of a camera key is {c!r}, not two numbers")
+                return [_number(c[0], "K5: a center"), _number(c[1], "K5: a center")]
+            return None
+
+        s = self.reading.s
+        i = -1
+        for j, c in enumerate(checked):
+            if c[0] <= s:
+                i = j
+        if i < 0 or i == len(keys) - 1:
+            n = max(i, 0)
+            c0 = center(keys[n])
+            if c0 is None:
+                return None
+            return {"center": c0, "width": checked[n][1], "height": checked[n][2]}
+        c0, c1 = center(keys[i]), center(keys[i + 1])
+        if c0 is None or c1 is None:
+            return None
+        x = (s - checked[i][0]) / (checked[i + 1][0] - checked[i][0])
+        e = ease(checked[i + 1][3], x)
+        w0, w1 = checked[i][1], checked[i + 1][1]
+        out: dict[str, Any] = {
+            "center": [(1.0 - e) * c0[0] + e * c1[0], (1.0 - e) * c0[1] + e * c1[1]],
+            "width": math.exp((1.0 - e) * math.log(w0) + e * math.log(w1)),
+            "height": None,
+        }
+        h0, h1 = checked[i][2], checked[i + 1][2]
+        if h0 is not None and h1 is not None:
+            out["height"] = math.exp((1.0 - e) * math.log(h0) + e * math.log(h1))
         return out
 
 

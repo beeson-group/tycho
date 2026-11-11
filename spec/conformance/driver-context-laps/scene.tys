@@ -1,6 +1,6 @@
 {
  "format": "tycho-scene",
- "version": "0.3",
+ "version": "0.4",
  "requires": [
   "layers.driver_context"
  ],

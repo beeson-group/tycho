@@ -13,6 +13,10 @@ export interface Theme {
   background: string;
   foreground: string;
   grid: string;
+  /** A CSS font family for every text of the page and of a video (section 2.11). */
+  font?: string;
+  /** The color of the gutters between panels in a video, by default a blend of the foreground and the background. */
+  gutter?: string;
 }
 
 export const DEFAULT_THEME: Theme = { background: '#000000', foreground: '#d8d8d8', grid: '#262626' };
@@ -55,12 +59,18 @@ export function cssColorHex(value: string): string | null {
  * the custom properties `--tycho-background`, `--tycho-foreground`, and `--tycho-grid` takes precedence over both.
  */
 export function hostTheme(base: Theme, name: string | null, read: (property: string) => string): Theme {
-  const theme = name === 'dark' || name === 'light' ? PALETTES[name] : base;
-  return {
+  const palette = name === 'dark' || name === 'light';
+  const theme: Theme = palette ? PALETTES[name] : base;
+  const out: Theme = {
     background: cssColorHex(read('--tycho-background')) ?? theme.background,
     foreground: cssColorHex(read('--tycho-foreground')) ?? theme.foreground,
     grid: cssColorHex(read('--tycho-grid')) ?? theme.grid,
   };
+  const font = read('--tycho-font') || base.font;
+  if (font) out.font = font;
+  // a gutter in the scene's background follows the background of a palette
+  if (base.gutter !== undefined) out.gutter = palette && base.gutter.toLowerCase() === base.background.toLowerCase() ? out.background : base.gutter;
+  return out;
 }
 
 /** The brand colors of the viewer's controls (its chrome). Orange marks what is current, and violet what the pointer or the keyboard touches. */
@@ -84,7 +94,7 @@ export function chromeTokens(theme: Theme): Record<string, string> {
     '--line': mixHex(fg, bg, 0.8),
     '--dim': mixHex(fg, bg, 0.287),
     '--track': mixHex(fg, bg, 0.574),
-    '--gutter': mixHex(fg, bg, 0.9),
+    '--gutter': theme.gutter ?? mixHex(fg, bg, 0.9),
     '--head': `${surface}cc`,
     '--accent': ACCENT.accent,
     '--accent-hover': ACCENT.hover,
@@ -161,7 +171,19 @@ export function colormapName(colormap: ColormapName | ColormapByChoice, value?: 
   return (named ?? Object.values(colormap.map).find((c) => c !== undefined) ?? 'viridis') as ColormapId;
 }
 
-export function colorScale(spec: Exclude<ColorSpec, string>, set: SetData, value?: ChoiceValue): ColorScale {
+/** A color given in steps of a channel (section 2.11), which is not a colormap and does not have a colorbar. */
+export type SteppedColor = Extract<ColorSpec, { steps: unknown }>;
+
+export const isStepped = (spec: ColorSpec | undefined): spec is SteppedColor => typeof spec === 'object' && spec !== null && 'steps' in spec;
+
+/** The index of the color of a stepped color at value `x`, i.e. the count of steps below `x`. */
+export function stepIndex(steps: readonly number[], x: number): number {
+  let j = 0;
+  while (j < steps.length && steps[j]! < x) j++;
+  return j;
+}
+
+export function colorScale(spec: Exclude<ColorSpec, string | SteppedColor>, set: SetData, value?: ChoiceValue): ColorScale {
   const perTrack = 'parameter' in spec;
   const name = 'parameter' in spec ? spec.parameter : spec.channel;
   const values = 'parameter' in spec ? set.parameter(spec.parameter, '2.7') : set.channel(spec.channel, '2.7');
@@ -174,6 +196,13 @@ export type Coloring = { kind: 'constant'; rgb: Rgb } | { kind: 'sample'; rgb: F
 export function coloring(spec: ColorSpec | undefined, set: SetData, fallback: Rgb, value?: ChoiceValue): Coloring {
   if (spec === undefined) return { kind: 'constant', rgb: fallback };
   if (typeof spec === 'string') return { kind: 'constant', rgb: hexRgb(spec) };
+  if (isStepped(spec)) {
+    const values = set.channel(spec.channel, '2.7');
+    const colors = spec.colors.map(hexRgb);
+    const out = new Float32Array(3 * set.samples);
+    for (let i = 0; i < set.samples; i++) out.set(colors[stepIndex(spec.steps, values[i]!)]!, 3 * i);
+    return { kind: 'sample', rgb: out };
+  }
   const scale = colorScale(spec, set, value);
   const out = new Float32Array(3 * set.samples);
   const rgb = [0, 0, 0];

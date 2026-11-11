@@ -7,7 +7,8 @@
 import { fail } from '../errors.js';
 import { driverMember, oneSet, querySets, variableDef, variableValue, type PanelScope } from '../evaluate/resolve.js';
 import type { SetCache } from '../evaluate/sets.js';
-import type { Clock, Control, Readout, Scene, SetQuery, State, View } from '../scene.js';
+import type { Control, Scene, SetQuery, State, TextPart, View } from '../scene.js';
+import { clockValue, timeAt, tweenValue, type Key } from '../evaluate/timeline.js';
 import { channelAtReading, type GeometryCache } from './geometry.js';
 
 const MINUS = '−';
@@ -17,11 +18,15 @@ const MINUS = '−';
  * zeros kept. Otherwise an integer is written as it is, and any other number to six significant
  * digits with trailing zeros dropped. An exponent is written as `e` and the exponent, and a minus sign as U+2212.
  */
-export function formatNumber(x: number, digits?: number): string {
+export function formatNumber(x: number, digits?: number, decimals?: number, grouping = false): string {
   if (!Number.isFinite(x)) return Number.isNaN(x) ? 'NaN' : x > 0 ? '∞' : `${MINUS}∞`;
   if (x === 0) x = 0; // turns negative zero into zero
   let s: string;
-  if (digits !== undefined) s = x.toPrecision(digits);
+  if (decimals !== undefined) {
+    s = x.toFixed(decimals);
+    // a value that rounds to zero is written without a sign
+    if (/^-0(\.0*)?$/.test(s)) s = s.slice(1);
+  } else if (digits !== undefined) s = x.toPrecision(digits);
   else if (Number.isInteger(x) && Math.abs(x) < 1e21) s = String(x);
   else {
     s = x.toPrecision(6);
@@ -29,7 +34,22 @@ export function formatNumber(x: number, digits?: number): string {
     const trimmed = mantissa.includes('.') ? mantissa.replace(/0+$/, '').replace(/\.$/, '') : mantissa;
     s = exponent === undefined ? trimmed : `${trimmed}e${exponent}`;
   }
+  if (grouping && !s.includes('e')) s = s.replace(/^(-?)(\d+)/, (_, sign: string, whole: string) => sign + whole.replace(/\B(?=(\d{3})+(?!\d))/g, ','));
   return s.replace('e+', 'e').replace(/-/g, MINUS);
+}
+
+/** The options of a part that gives a number (rule K7). */
+interface NumberFormat {
+  digits?: number;
+  decimals?: number;
+  grouping?: boolean;
+  factor?: number;
+  offset?: number;
+}
+
+/** A number of a part, scaled by its factor and offset and written by its format (rule K7). */
+function formatPart(x: number, p: NumberFormat): string {
+  return formatNumber((p.factor ?? 1) * x + (p.offset ?? 0), p.digits, p.decimals, p.grouping ?? false);
 }
 
 /** The slider's stops, which are the distinct parameter values of the matched track sets in increasing order (section 2.9). */
@@ -54,13 +74,7 @@ export function nearestStop(stops: readonly number[], value: number): number {
   return best;
 }
 
-/** Seconds one lap of the clock lasts at speed 1, whatever its steps. */
-export const LAP_SECONDS = 8;
-
-/** The seconds that one loop of the clock lasts at speed 1: its `seconds` when given, else LAP_SECONDS for each of its laps (rule C6). */
-export function loopSeconds(clock: Clock): number {
-  return clock.seconds ?? LAP_SECONDS * (clock.laps ?? 1);
-}
+export { LAP_SECONDS, loopSeconds } from '../evaluate/timeline.js';
 
 /**
  * The loop position, in frame indices and unwrapped, `time` after a playback showed frame index
@@ -96,7 +110,7 @@ export interface ReadoutContext {
   progress?: number;
 }
 
-type Part = Readout['parts'][number];
+type Part = TextPart;
 
 /** The text of a readout. A part that the driver cannot give, because its query does not match any set, reads as a dash. */
 export function readoutText(ctx: ReadoutContext, parts: readonly Part[]): string {
@@ -122,13 +136,24 @@ export function readoutPieces(ctx: ReadoutContext, parts: readonly Part[]): stri
     return driver;
   };
   const out: string[] = [];
+  const s = timeAt(scene.clock, q);
   for (const p of parts) {
     if (typeof p === 'string') out.push(p);
-    else if ('clock' in p) out.push(String(p.clock === 'index' ? i : steps));
-    else if ('var' in p) {
+    else if ('steps' in p) {
+      let text = '';
+      for (const [t, v] of p.steps) if ((t as number) <= s) text = String(v);
+      out.push(text);
+    } else if ('keys' in p) out.push(formatPart(tweenValue(p.keys as Key[], s), p));
+    else if ('clock' in p) {
+      if (p.clock === 'index' || p.clock === 'steps') {
+        const n = p.clock === 'index' ? i : steps;
+        out.push(p.factor !== undefined || p.offset !== undefined || p.decimals !== undefined || p.grouping ? formatPart(n, p) : String(n));
+      } else if (p.clock === 'time') out.push(formatPart(s, p));
+      else out.push(formatPart(scene.clock.mode === 'fraction' ? q : clockValue(scene.clock, q), p));
+    } else if ('var' in p) {
       const v = variableValue(scope, p.var);
       const def = variableDef(scene, p.var);
-      if (typeof v === 'number') out.push(formatNumber(v, p.digits));
+      if (typeof v === 'number') out.push(formatPart(v, p));
       else if (typeof v === 'boolean') out.push(v ? 'on' : 'off');
       else if (def?.kind === 'choice' && def.labels !== undefined) out.push(def.labels[def.values.indexOf(v)] ?? v);
       else out.push(v);
@@ -139,12 +164,13 @@ export function readoutPieces(ctx: ReadoutContext, parts: readonly Part[]): stri
         continue;
       }
       const set = geometry.sets.get(d.setId);
-      if ('member' in p) out.push(formatNumber(set.parameter(p.member, '2.9')[d.track]!, p.digits));
-      else if ('attr' in p) out.push(formatNumber((p.factor ?? 1) * set.attr(p.attr) + (p.offset ?? 0), p.digits));
-      else {
+      if ('member' in p) out.push(formatPart(set.parameter(p.member, '2.9')[d.track]!, p));
+      else if ('attr' in p) out.push(formatPart(set.attr(p.attr), p));
+      else if ('channel' in p) {
         const tc = geometry.readings(d.setId, state.clock.channel).clocks[d.track]!;
         if (!set.hasChannel(p.channel)) fail('2.9', `track set ${d.setId} lacks channel ${JSON.stringify(p.channel)}`);
-        out.push(formatNumber(channelAtReading(set, tc, d.track, p.channel, scene.clock, q), p.digits));
+        const hold = set.def.channels?.[p.channel]?.interp === 'hold';
+        out.push(formatPart(channelAtReading(set, tc, d.track, p.channel, scene.clock, q, hold), p));
       }
     }
   }
@@ -191,7 +217,7 @@ export function readoutTiles(parts: readonly Part[]): ReadoutTile[] | null {
     const label = before[before.length - 1]!.replace(/\s*[=:]\s*$/, '').trim();
     if (label === '') return null;
     const p = parts[values[k]!] as Exclude<Part, string>;
-    const width = 'clock' in p ? 5 : 'channel' in p ? (p.digits ?? 6) + 5 : null;
+    const width = 'clock' in p || 'keys' in p ? 5 : 'channel' in p ? (p.digits ?? 6) + 5 : null;
     tiles.push({ label, part: values[k]!, unit: after[0]!.trim(), width });
   }
   const constant = (t: ReadoutTile) => 'attr' in (parts[t.part] as object);

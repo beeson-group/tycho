@@ -1,7 +1,8 @@
 /** The clock, rules C1 to C4 and the laps of rule C6. */
 import { fail } from '../errors.js';
-import { INDEX_CHANNEL, type Clock } from '../scene.js';
+import { INDEX_CHANNEL, type Clock, type LayerClock } from '../scene.js';
 import type { SetData } from './sets.js';
+import { checkKeys, clockValue, loopSeconds } from './timeline.js';
 
 /** Progress q in [0, 1) for a frame index, taken modulo `steps` (section 2.6). */
 export function progress(steps: number, frameIndex: number): number {
@@ -51,9 +52,7 @@ export class TrackClock {
   /** The track's reading at progress q (rule C2), possibly outside [0, 1] in value mode. */
   reading(clock: Clock, q: number): number {
     if (clock.mode === 'fraction') return q;
-    if (clock.range === undefined) fail('C2', 'the clock is in value mode but does not have a range of two numbers');
-    const [a, b] = clock.range;
-    const v = a + q * (b - a);
+    const v = clockValue(clock, q);
     return (v - this.c0) / (this.c1 - this.c0);
   }
 
@@ -91,4 +90,23 @@ export function bound(u: number, before: 'clamp' | 'hidden' = 'clamp', after: 'c
   if (u < 0) return before === 'hidden' ? null : 0;
   if (u > 1) return after === 'hidden' ? null : 1;
   return u;
+}
+
+/**
+ * The clock of a layer with a clock of its own (rule K4), as a clock in value mode on the layer's channel, whose loop lasts as
+ * long as the scene's, so that its keys read the same timeline. It does not have laps.
+ */
+export function layerClock(scene: Clock, own: LayerClock): Clock {
+  if (own === null || typeof own !== 'object' || typeof own.channel !== 'string')
+    fail('K4', `a layer's clock is ${JSON.stringify(own)}, not {channel, range} or {channel, keys}`);
+  const hasRange = own.range !== undefined;
+  const hasKeys = own.keys !== undefined;
+  if (hasRange === hasKeys) fail('K4', `the clock of a layer on channel ${own.channel} has ${hasRange ? 'both a range and keys' : 'neither a range nor keys'}`);
+  if (hasRange && !(Array.isArray(own.range) && own.range.length === 2 && own.range.every((x) => typeof x === 'number' && Number.isFinite(x))))
+    fail('K4', `the clock of a layer on channel ${own.channel} has range ${JSON.stringify(own.range)}, not two finite numbers`);
+  if (hasKeys) checkKeys(own.keys, `the clock of a layer on channel ${own.channel}`);
+  const clock: Clock = { mode: 'value', channels: [own.channel], steps: scene.steps, seconds: loopSeconds(scene) };
+  if (hasRange) clock.range = [own.range![0], own.range![1]];
+  else clock.keys = own.keys;
+  return clock;
 }

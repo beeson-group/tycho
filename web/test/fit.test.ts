@@ -346,8 +346,22 @@ describe('a panel plan of the grammar of 0.2', () => {
     const c = laps();
     const inertial = tracks(c, c.scene.initial);
     const rot = tracks(c, withVariable(c.scene, c.scene.initial, 'frame', 'rot', 'p1'));
-    expect(inertial.map((l) => (typeof l.color === 'object' ? l.color.colormap : (l.color ?? null)))).toEqual([null, null, null, null, 'plasma', 'plasma']);
-    expect(rot.map((l) => (typeof l.color === 'object' ? l.color.colormap : (l.color ?? null)))).toEqual([null, null, null, null, 'viridis', 'viridis']);
+    expect(inertial.map((l) => (typeof l.color === 'object' && 'colormap' in l.color ? l.color.colormap : (l.color ?? null)))).toEqual([
+      null,
+      null,
+      null,
+      null,
+      'plasma',
+      'plasma',
+    ]);
+    expect(rot.map((l) => (typeof l.color === 'object' && 'colormap' in l.color ? l.color.colormap : (l.color ?? null)))).toEqual([
+      null,
+      null,
+      null,
+      null,
+      'viridis',
+      'viridis',
+    ]);
     expect(inertial[4]!.color).toEqual({ parameter: 'e', colormap: 'plasma' });
   });
 

@@ -839,7 +839,7 @@ def edge_fraction():
                 "views": {"open": {"layers": [{"kind": "grid", "visible": {"var": "c"}}]}},
             },
         },
-        {"name": "S1: a layer kind that is not implemented", "rule": "S1", "scene": {"views": {"open": {"layers": [{"kind": "points"}]}}}},
+        {"name": "S1: a layer kind that is not implemented", "rule": "S1", "scene": {"views": {"open": {"layers": [{"kind": "mesh"}]}}}},
         {
             "name": "2.7: a trail fraction above 1",
             "rule": "2.7",
@@ -2026,6 +2026,294 @@ def outlines():
     print(f"outlines: {len(cases)} cases, {len(rejections)} rejections")
 
 
+def timeline():
+    """Clock keys with every ease, a jump and a hold, a layer clock on another channel, points revealed by two clocks, labels at a point,
+    at a point of a turning frame, at members and on the screen, and two cameras with keys, one following the midpoint of two members
+    and a member under a layer clock, and one of a free aspect with heights (section 2.11)."""
+    import pytycho as ty
+
+    scene = ty.Scene(title="the timeline")
+    root = scene.frame("root")
+    scene.frame("spin", parent=root, rotation=ty.rotation("z", ty.channel("t")))
+    a = scene.track_set("a", frame=root, dtype="float64")
+    t = np.arange(9.0)
+    for y in (0.0, 2.0):
+        a.add(np.column_stack([t, np.full(9, y)]), channels={"t": t, "tau": 10.0 - t})
+    pts = scene.track_set("pts", frame=root, dtype="float64")
+    pts.add(np.column_stack([np.arange(5.0), np.full(5, -1.0)]), channels={"t": np.arange(1.0, 6.0)})
+    # one loop of 10 s in 20 steps, hence frame index i is at s = i / 2
+    clock_keys = [(1, 0), (3, 2, "smooth"), (5, 2), (5, 3), (7, 4, "in-out"), (8, 6, "hold"), (9, 8, "out")]
+    scene.clock("value", channels=["t"], steps=20, seconds=10.0, keys=clock_keys)
+    tau = ty.layer_clock("tau", keys=[(0, 10), (10, 0, "in")])
+    layers = [
+        ty.track(a, reveal="grow", head=True),
+        ty.track(a, reveal="grow", head=True, clock=tau),
+        ty.points(pts, reveal="grow", before="hidden"),
+        ty.points(pts, reveal="grow", clock=ty.layer_clock("@index", range=[0.0, 4.0])),
+        ty.label("fixed", ty.at_point(1.0, 2.0)),
+        ty.label("turning", ty.at_point(1.0, 0.0, frame="spin")),
+        ty.label("member 1", ty.at_member(a, 1)),
+        ty.label("screen", ty.at_screen(0.5, 0.1)),
+        ty.label("member 0 by tau", ty.at_member(a, 0), clock=tau),
+    ]
+    camera = {
+        "kind": "plane",
+        "keys": [
+            ty.shot(1.0, center=(0.0, 0.0), width=2.0),
+            ty.shot(3.0, follow=[ty.follow(0, 0), ty.follow(0, 1)], offset=(0.5, 0.0), width=4.0, ease="smooth"),
+            ty.shot(6.0, follow=ty.follow(1, 0), width=4.0, ease="in-out"),
+            ty.shot(8.0, center=(4.0, 1.0), width=8.0, ease="linear"),
+        ],
+    }
+    scene.view("main", frame=root, driver=ty.driver(a, 0), layers=layers, camera=camera)
+    plot = {
+        "kind": "plane",
+        "aspect": "free",
+        "keys": [ty.shot(0.0, center=(0.0, 0.0), width=2.0, height=1.0), ty.shot(10.0, center=(4.0, 2.0), width=8.0, height=4.0)],
+    }
+    scene.view("plot", frame=root, driver=ty.driver(a, 0), layers=[ty.track(a, 0)], camera=plot)
+    scene.panel("p1", "main")
+    scene.panel("p2", "plot")
+    doc, data = scene.to_document(), scene.to_container()
+    state = doc["initial"]
+
+    def P(*xyz):
+        return [float(x) for x in xyz]
+
+    def smooth(x):
+        return x * x * (3.0 - 2.0 * x)
+
+    cases = []
+    # s = 2: the clock is halfway along a smooth segment from 0 to 2, hence t = 1. tau runs 10 - 10 x^3 with x = 0.2, i.e. 9.92,
+    # and t = 0.08 on the tau clock. the driver reads t = 1 exactly, where the frame spin is turned by 1 rad
+    e = smooth(0.5)
+    mid = (1.5, 1.0)
+    cases.append(
+        {
+            "name": "K1 to K8: at s = 2, a smooth clock key, a layer clock, points, labels, and a blend into a follow key",
+            "source": "analytic",
+            "state": state,
+            "frame_index": 4,
+            "tolerance": TOL,
+            "expected": {
+                "panels": {
+                    "p1": {
+                        "frame": "root",
+                        "layers": [
+                            {
+                                "kind": "track",
+                                "set": "a",
+                                "members": [
+                                    {"index": 0, "line": [P(0, 0, 0), P(1, 0, 0)], "head": P(1, 0, 0)},
+                                    {"index": 1, "line": [P(0, 2, 0), P(1, 2, 0)], "head": P(1, 2, 0)},
+                                ],
+                            },
+                            {
+                                "kind": "track",
+                                "set": "a",
+                                "members": [
+                                    {"index": 0, "line": [P(0, 0, 0), P(0.08, 0, 0)], "head": P(0.08, 0, 0)},
+                                    {"index": 1, "line": [P(0, 2, 0), P(0.08, 2, 0)], "head": P(0.08, 2, 0)},
+                                ],
+                            },
+                            {"kind": "points", "set": "pts", "members": [{"index": 0, "points": [P(0, -1, 0)]}]},
+                            {"kind": "points", "set": "pts", "members": [{"index": 0, "points": [P(0, -1, 0)]}]},
+                            {"kind": "label", "position": P(1, 2, 0)},
+                            {"kind": "label", "position": P(np.cos(1.0), -np.sin(1.0), 0)},
+                            {"kind": "label", "position": P(1, 2, 0)},
+                            {"kind": "label", "position": None},
+                            {"kind": "label", "position": P(0.08, 0, 0)},
+                        ],
+                        "camera": {
+                            "center": [(1 - e) * 0.0 + e * mid[0], (1 - e) * 0.0 + e * mid[1]],
+                            "width": np.sqrt(8.0),
+                            "height": None,
+                        },
+                    },
+                    # the free camera eases smoothly from a window of 2 by 1 to one of 8 by 4 over the loop, at x = 0.2,
+                    # and the zoom is geometric
+                    "p2": {
+                        "frame": "root",
+                        "camera": {
+                            "center": [4.0 * smooth(0.2), 2.0 * smooth(0.2)],
+                            "width": 2.0 * 4.0 ** smooth(0.2),
+                            "height": 1.0 * 4.0 ** smooth(0.2),
+                        },
+                    },
+                }
+            },
+        }
+    )
+    # s = 5: the clock jumps from 2 to 3. the camera blends the follow key at 3 s, the midpoint of the heads at t = 3 plus the offset,
+    # into the follow key at 6 s, the head of member 0 under the tau clock at tau = 10 - 10 / 8 = 8.75, i.e. t = 1.25, by in-out at x = 2/3
+    y = 2.0 - 2.0 * (2.0 / 3.0)
+    e = 1.0 - y * y * y / 2.0
+    c1, c2 = (3.5, 1.0), (1.25, 0.0)
+    cases.append(
+        {
+            "name": "K1, K2, K5: at s = 5, a jump of the clock, and an in-out blend between two follow keys",
+            "source": "analytic",
+            "state": state,
+            "frame_index": 10,
+            "tolerance": TOL,
+            "expected": {
+                "panels": {
+                    "p1": {
+                        "frame": "root",
+                        "layers": [
+                            {
+                                "kind": "track",
+                                "set": "a",
+                                "members": [
+                                    {"index": 0, "line": [P(i, 0, 0) for i in range(4)], "head": P(3, 0, 0)},
+                                    {"index": 1, "line": [P(i, 2, 0) for i in range(4)], "head": P(3, 2, 0)},
+                                ],
+                            },
+                            None,
+                            {"kind": "points", "set": "pts", "members": [{"index": 0, "points": [P(0, -1, 0), P(1, -1, 0), P(2, -1, 0)]}]},
+                            {"kind": "points", "set": "pts", "members": [{"index": 0, "points": [P(0, -1, 0), P(1, -1, 0), P(2, -1, 0)]}]},
+                            None,
+                            {"kind": "label", "position": P(np.cos(3.0), -np.sin(3.0), 0)},
+                            {"kind": "label", "position": P(3, 2, 0)},
+                            None,
+                            {"kind": "label", "position": P(1.25, 0, 0)},
+                        ],
+                        "camera": {"center": [(1 - e) * c1[0] + e * c2[0], (1 - e) * c1[1] + e * c2[1]], "width": 4.0, "height": None},
+                    }
+                }
+            },
+        }
+    )
+    # s = 0: before the first clock key t = 0, before the first points sample, which is hidden, and before the first camera key
+    cases.append(
+        {
+            "name": "K1, K5, K8: at s = 0, before the first keys, and a points member hidden before its range",
+            "source": "analytic",
+            "state": state,
+            "frame_index": 0,
+            "tolerance": TOL,
+            "expected": {
+                "panels": {
+                    "p1": {
+                        "frame": "root",
+                        "layers": [
+                            None,
+                            None,
+                            {"kind": "points", "set": "pts", "members": [{"index": 0, "points": []}]},
+                            {"kind": "points", "set": "pts", "members": [{"index": 0, "points": [P(0, -1, 0)]}]},
+                            None,
+                            {"kind": "label", "position": P(1, 0, 0)},
+                            {"kind": "label", "position": P(0, 2, 0)},
+                            None,
+                            {"kind": "label", "position": P(0, 0, 0)},
+                        ],
+                        "camera": {"center": [0.0, 0.0], "width": 2.0, "height": None},
+                    },
+                    "p2": {"frame": "root", "camera": {"center": [0.0, 0.0], "width": 2.0, "height": 1.0}},
+                }
+            },
+        }
+    )
+    # s = 9.5: after the last clock key t = 8, every points sample, and the window of the last camera key
+    cases.append(
+        {
+            "name": "K1, K5, K8: at s = 9.5, after the last keys",
+            "source": "analytic",
+            "state": state,
+            "frame_index": 19,
+            "tolerance": TOL,
+            "expected": {
+                "panels": {
+                    "p1": {
+                        "frame": "root",
+                        "layers": [
+                            None,
+                            None,
+                            {"kind": "points", "set": "pts", "members": [{"index": 0, "points": [P(i, -1, 0) for i in range(5)]}]},
+                            None,
+                            None,
+                            None,
+                            {"kind": "label", "position": P(8, 2, 0)},
+                            None,
+                            None,
+                        ],
+                        "camera": {"center": [4.0, 1.0], "width": 8.0, "height": None},
+                    }
+                }
+            },
+        }
+    )
+    for i in range(-1, 21):
+        cases.append(
+            {
+                "name": f"frame {i}",
+                "source": "reference",
+                "state": state,
+                "frame_index": i,
+                "tolerance": TOL,
+                "expected": evaluate(doc, data, state, i),
+            }
+        )
+
+    def with_layers(**changes):
+        main = copy.deepcopy(doc["views"]["main"]["layers"])
+        for index, layer in changes.items():
+            main[int(index[1:])] = layer
+        return {"views": {"main": {"layers": main}}}
+
+    def with_keys(i, **changes):
+        keys = copy.deepcopy(doc["views"]["main"]["camera"]["keys"])
+        keys[i].update(changes)
+        return {"views": {"main": {"camera": {"keys": keys}}}}
+
+    tau_layer = doc["views"]["main"]["layers"][1]
+    rejections = [
+        {"name": "K1: clock keys whose times decrease", "rule": "K1", "scene": {"clock": {"keys": [[2.0, 0.0], [1.0, 1.0]]}}},
+        {
+            "name": "K2: a clock key with an ease that is not defined",
+            "rule": "K2",
+            "scene": {"clock": {"keys": [[0.0, 0.0], [1.0, 1.0, "bounce"]]}},
+        },
+        {"name": "K3: a value clock with both a range and keys", "rule": "K3", "scene": {"clock": {"range": [0.0, 8.0]}}},
+        {"name": "K3: a fraction clock with keys", "rule": "K3", "scene": {"clock": {"mode": "fraction"}}},
+        {
+            "name": "K4: a layer clock with both a range and keys",
+            "rule": "K4",
+            "scene": with_layers(l1={**tau_layer, "clock": {**tau_layer["clock"], "range": [10.0, 0.0]}}),
+        },
+        {
+            "name": "C5: a layer clock on a channel that the layer's set lacks",
+            "rule": "C5",
+            "scene": with_layers(l1={**tau_layer, "clock": {"channel": "nope", "range": [0.0, 1.0]}}),
+        },
+        {"name": "K5: camera keys whose times decrease", "rule": "K5", "scene": with_keys(3, at=0.5)},
+        {"name": "K5: a camera key follows a points layer", "rule": "K5", "scene": with_keys(2, follow=[{"layer": 2, "member": 0}])},
+        {
+            "name": "K5: a camera key follows a member past the track count",
+            "rule": "K5",
+            "scene": with_keys(2, follow=[{"layer": 1, "member": 5}]),
+        },
+        {"name": "K2: a camera key with an ease that is not defined", "rule": "K2", "scene": with_keys(1, ease="bounce")},
+        {
+            "name": "K6: a label at a member past the track count",
+            "rule": "K6",
+            "scene": with_layers(l6={"kind": "label", "text": "member 7", "at": {"sets": {"set": "a"}, "member": 7}}),
+        },
+        {
+            "name": "K8: a points layer whose reveal is trail",
+            "rule": "K8",
+            "scene": with_layers(l2={"kind": "points", "sets": {"set": "pts"}, "members": "all", "reveal": "trail"}),
+        },
+    ]
+    out = HERE / "timeline"
+    out.mkdir(exist_ok=True)
+    (out / "scene.tys").write_text(json.dumps(doc, indent=1) + "\n")
+    (out / "data.tyd").write_bytes(data)
+    (out / "cases.json").write_text(json.dumps(cases, indent=1) + "\n")
+    (out / "rejections.json").write_text(json.dumps(rejections, indent=1) + "\n")
+    print(f"timeline: {len(cases)} cases with the reference ones, {len(rejections)} rejections")
+
+
 def containers():
     """The same views written twice, with the encodings the writer picks and all raw, for a reader to decode bit for bit."""
     rng = np.random.default_rng(78)
@@ -2078,4 +2366,5 @@ if __name__ == "__main__":
     arrows()
     arrows_laps()
     outlines()
+    timeline()
     containers()

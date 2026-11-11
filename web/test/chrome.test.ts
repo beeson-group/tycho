@@ -809,7 +809,7 @@ describe('a viewer embedded on a page, under a DOM stand-in', () => {
       v.playProgress = 0.25;
       v.intersecting = false;
       v.syncShown();
-      v.seek(5);
+      v.seekFrame(5);
       v.intersecting = true;
       v.syncShown();
       expect(v.anchor.index).toBe(5);

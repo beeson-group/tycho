@@ -1,9 +1,9 @@
 // Tests the runtime's static buffers and reveal logic against the evaluator, over the conformance corpus.
 import { describe, expect, it } from 'vitest';
 import { TychoError } from '../src/errors';
-import { bound, clockLaps, lapOf, progress } from '../src/evaluate/clock';
+import { bound, clockLaps, lapOf, layerClock, progress } from '../src/evaluate/clock';
 import { evaluate } from '../src/evaluate/index';
-import { arrowLayer, bodyLayer, hasHead, point, type LayerEnv } from '../src/evaluate/layers';
+import { arrowLayer, bodyLayer, hasHead, layerEnv, point, type LayerEnv } from '../src/evaluate/layers';
 import { driverMember, layerVisible, oneSet, type PanelScope } from '../src/evaluate/resolve';
 import type { ArrowLayerResult, BodyLayerResult, TrackLayerResult, Vec3 } from '../src/evaluate/types';
 import {
@@ -193,8 +193,9 @@ describe('reveal, pieces, and the GPU comparison give the evaluator line (C3, L1
                   if (def.kind === 'arrow') {
                     const r = res.layers[li] as ArrowLayerResult;
                     if (r.set === null) return;
-                    const clocks = geo.readings(r.set, state.clock.channel).clocks;
-                    expect(arrowLayer(env, def, geo.sets.get(r.set), (t) => clocks[t]!)).toEqual(r);
+                    const lenv = layerEnv(env, def);
+                    const clocks = geo.readings(r.set, lenv.channel).clocks;
+                    expect(arrowLayer(lenv, def, geo.sets.get(r.set), (t) => clocks[t]!)).toEqual(r);
                     compared += r.members.length;
                     return;
                   }
@@ -208,11 +209,14 @@ describe('reveal, pieces, and the GPU comparison give the evaluator line (C3, L1
                   }
                   const model = own === null ? null : driverMatrix(env, own, plan.driver!);
                   const g = geo.geometry(r.set, own ?? res.frame);
-                  const reads = needsReading(def, scene.clock) ? geo.readings(r.set, state.clock.channel) : null;
+                  // a layer with a clock of its own reads its channel on its clock (rule K4)
+                  const lclock = def.clock === undefined ? scene.clock : layerClock(scene.clock, def.clock);
+                  const lchannel = def.clock === undefined ? state.clock.channel : lclock.channels[0]!;
+                  const reads = needsReading(def, lclock) ? geo.readings(r.set, lchannel) : null;
                   const u = reads ?? geo.readings(r.set, '@index');
                   const gpuU = rounding === 'float32' ? float32Readings(g, u.u) : u.u;
                   for (const m of r.members) {
-                    const rev = revealTrack(reads?.clocks[m.index] ?? null, scene.clock, q, revealSpec(def, g.set.periodic, clockLaps(scene.clock)), round);
+                    const rev = revealTrack(reads?.clocks[m.index] ?? null, lclock, q, revealSpec(def, g.set.periodic, clockLaps(lclock)), round);
                     if (rev.laps !== null && rev.laps[0] < 0) seen.wraps++;
                     if (rev.laps !== null && rev.laps[0] < rev.laps[1] && g.laps > 1) seen.laps++;
                     if (rev.laps !== null && rev.laps[0] < -1) seen.deep++;

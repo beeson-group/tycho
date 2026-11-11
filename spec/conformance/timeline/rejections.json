@@ -1,0 +1,844 @@
+[
+ {
+  "name": "K1: clock keys whose times decrease",
+  "rule": "K1",
+  "scene": {
+   "clock": {
+    "keys": [
+     [
+      2.0,
+      0.0
+     ],
+     [
+      1.0,
+      1.0
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "name": "K2: a clock key with an ease that is not defined",
+  "rule": "K2",
+  "scene": {
+   "clock": {
+    "keys": [
+     [
+      0.0,
+      0.0
+     ],
+     [
+      1.0,
+      1.0,
+      "bounce"
+     ]
+    ]
+   }
+  }
+ },
+ {
+  "name": "K3: a value clock with both a range and keys",
+  "rule": "K3",
+  "scene": {
+   "clock": {
+    "range": [
+     0.0,
+     8.0
+    ]
+   }
+  }
+ },
+ {
+  "name": "K3: a fraction clock with keys",
+  "rule": "K3",
+  "scene": {
+   "clock": {
+    "mode": "fraction"
+   }
+  }
+ },
+ {
+  "name": "K4: a layer clock with both a range and keys",
+  "rule": "K4",
+  "scene": {
+   "views": {
+    "main": {
+     "layers": [
+      {
+       "kind": "track",
+       "sets": {
+        "set": "a"
+       },
+       "members": "all",
+       "reveal": "grow",
+       "head": true
+      },
+      {
+       "kind": "track",
+       "sets": {
+        "set": "a"
+       },
+       "members": "all",
+       "reveal": "grow",
+       "head": true,
+       "clock": {
+        "channel": "tau",
+        "keys": [
+         [
+          0.0,
+          10.0
+         ],
+         [
+          10.0,
+          0.0,
+          "in"
+         ]
+        ],
+        "range": [
+         10.0,
+         0.0
+        ]
+       }
+      },
+      {
+       "kind": "points",
+       "sets": {
+        "set": "pts"
+       },
+       "members": "all",
+       "reveal": "grow",
+       "before": "hidden"
+      },
+      {
+       "kind": "points",
+       "sets": {
+        "set": "pts"
+       },
+       "members": "all",
+       "reveal": "grow",
+       "clock": {
+        "channel": "@index",
+        "range": [
+         0.0,
+         4.0
+        ]
+       }
+      },
+      {
+       "kind": "label",
+       "text": "fixed",
+       "at": {
+        "point": [
+         1.0,
+         2.0,
+         0.0
+        ]
+       }
+      },
+      {
+       "kind": "label",
+       "text": "turning",
+       "at": {
+        "point": [
+         1.0,
+         0.0,
+         0.0
+        ],
+        "frame": "spin"
+       }
+      },
+      {
+       "kind": "label",
+       "text": "member 1",
+       "at": {
+        "sets": {
+         "set": "a"
+        },
+        "member": 1
+       }
+      },
+      {
+       "kind": "label",
+       "text": "screen",
+       "at": {
+        "screen": [
+         0.5,
+         0.1
+        ]
+       }
+      },
+      {
+       "kind": "label",
+       "text": "member 0 by tau",
+       "at": {
+        "sets": {
+         "set": "a"
+        },
+        "member": 0
+       },
+       "clock": {
+        "channel": "tau",
+        "keys": [
+         [
+          0.0,
+          10.0
+         ],
+         [
+          10.0,
+          0.0,
+          "in"
+         ]
+        ]
+       }
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "C5: a layer clock on a channel that the layer's set lacks",
+  "rule": "C5",
+  "scene": {
+   "views": {
+    "main": {
+     "layers": [
+      {
+       "kind": "track",
+       "sets": {
+        "set": "a"
+       },
+       "members": "all",
+       "reveal": "grow",
+       "head": true
+      },
+      {
+       "kind": "track",
+       "sets": {
+        "set": "a"
+       },
+       "members": "all",
+       "reveal": "grow",
+       "head": true,
+       "clock": {
+        "channel": "nope",
+        "range": [
+         0.0,
+         1.0
+        ]
+       }
+      },
+      {
+       "kind": "points",
+       "sets": {
+        "set": "pts"
+       },
+       "members": "all",
+       "reveal": "grow",
+       "before": "hidden"
+      },
+      {
+       "kind": "points",
+       "sets": {
+        "set": "pts"
+       },
+       "members": "all",
+       "reveal": "grow",
+       "clock": {
+        "channel": "@index",
+        "range": [
+         0.0,
+         4.0
+        ]
+       }
+      },
+      {
+       "kind": "label",
+       "text": "fixed",
+       "at": {
+        "point": [
+         1.0,
+         2.0,
+         0.0
+        ]
+       }
+      },
+      {
+       "kind": "label",
+       "text": "turning",
+       "at": {
+        "point": [
+         1.0,
+         0.0,
+         0.0
+        ],
+        "frame": "spin"
+       }
+      },
+      {
+       "kind": "label",
+       "text": "member 1",
+       "at": {
+        "sets": {
+         "set": "a"
+        },
+        "member": 1
+       }
+      },
+      {
+       "kind": "label",
+       "text": "screen",
+       "at": {
+        "screen": [
+         0.5,
+         0.1
+        ]
+       }
+      },
+      {
+       "kind": "label",
+       "text": "member 0 by tau",
+       "at": {
+        "sets": {
+         "set": "a"
+        },
+        "member": 0
+       },
+       "clock": {
+        "channel": "tau",
+        "keys": [
+         [
+          0.0,
+          10.0
+         ],
+         [
+          10.0,
+          0.0,
+          "in"
+         ]
+        ]
+       }
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "K5: camera keys whose times decrease",
+  "rule": "K5",
+  "scene": {
+   "views": {
+    "main": {
+     "camera": {
+      "keys": [
+       {
+        "at": 1.0,
+        "width": 2.0,
+        "center": [
+         0.0,
+         0.0
+        ],
+        "ease": "smooth"
+       },
+       {
+        "at": 3.0,
+        "width": 4.0,
+        "follow": [
+         {
+          "layer": 0,
+          "member": 0
+         },
+         {
+          "layer": 0,
+          "member": 1
+         }
+        ],
+        "offset": [
+         0.5,
+         0.0
+        ],
+        "ease": "smooth"
+       },
+       {
+        "at": 6.0,
+        "width": 4.0,
+        "follow": [
+         {
+          "layer": 1,
+          "member": 0
+         }
+        ],
+        "ease": "in-out"
+       },
+       {
+        "at": 0.5,
+        "width": 8.0,
+        "center": [
+         4.0,
+         1.0
+        ],
+        "ease": "linear"
+       }
+      ]
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "K5: a camera key follows a points layer",
+  "rule": "K5",
+  "scene": {
+   "views": {
+    "main": {
+     "camera": {
+      "keys": [
+       {
+        "at": 1.0,
+        "width": 2.0,
+        "center": [
+         0.0,
+         0.0
+        ],
+        "ease": "smooth"
+       },
+       {
+        "at": 3.0,
+        "width": 4.0,
+        "follow": [
+         {
+          "layer": 0,
+          "member": 0
+         },
+         {
+          "layer": 0,
+          "member": 1
+         }
+        ],
+        "offset": [
+         0.5,
+         0.0
+        ],
+        "ease": "smooth"
+       },
+       {
+        "at": 6.0,
+        "width": 4.0,
+        "follow": [
+         {
+          "layer": 2,
+          "member": 0
+         }
+        ],
+        "ease": "in-out"
+       },
+       {
+        "at": 8.0,
+        "width": 8.0,
+        "center": [
+         4.0,
+         1.0
+        ],
+        "ease": "linear"
+       }
+      ]
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "K5: a camera key follows a member past the track count",
+  "rule": "K5",
+  "scene": {
+   "views": {
+    "main": {
+     "camera": {
+      "keys": [
+       {
+        "at": 1.0,
+        "width": 2.0,
+        "center": [
+         0.0,
+         0.0
+        ],
+        "ease": "smooth"
+       },
+       {
+        "at": 3.0,
+        "width": 4.0,
+        "follow": [
+         {
+          "layer": 0,
+          "member": 0
+         },
+         {
+          "layer": 0,
+          "member": 1
+         }
+        ],
+        "offset": [
+         0.5,
+         0.0
+        ],
+        "ease": "smooth"
+       },
+       {
+        "at": 6.0,
+        "width": 4.0,
+        "follow": [
+         {
+          "layer": 1,
+          "member": 5
+         }
+        ],
+        "ease": "in-out"
+       },
+       {
+        "at": 8.0,
+        "width": 8.0,
+        "center": [
+         4.0,
+         1.0
+        ],
+        "ease": "linear"
+       }
+      ]
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "K2: a camera key with an ease that is not defined",
+  "rule": "K2",
+  "scene": {
+   "views": {
+    "main": {
+     "camera": {
+      "keys": [
+       {
+        "at": 1.0,
+        "width": 2.0,
+        "center": [
+         0.0,
+         0.0
+        ],
+        "ease": "smooth"
+       },
+       {
+        "at": 3.0,
+        "width": 4.0,
+        "follow": [
+         {
+          "layer": 0,
+          "member": 0
+         },
+         {
+          "layer": 0,
+          "member": 1
+         }
+        ],
+        "offset": [
+         0.5,
+         0.0
+        ],
+        "ease": "bounce"
+       },
+       {
+        "at": 6.0,
+        "width": 4.0,
+        "follow": [
+         {
+          "layer": 1,
+          "member": 0
+         }
+        ],
+        "ease": "in-out"
+       },
+       {
+        "at": 8.0,
+        "width": 8.0,
+        "center": [
+         4.0,
+         1.0
+        ],
+        "ease": "linear"
+       }
+      ]
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "K6: a label at a member past the track count",
+  "rule": "K6",
+  "scene": {
+   "views": {
+    "main": {
+     "layers": [
+      {
+       "kind": "track",
+       "sets": {
+        "set": "a"
+       },
+       "members": "all",
+       "reveal": "grow",
+       "head": true
+      },
+      {
+       "kind": "track",
+       "sets": {
+        "set": "a"
+       },
+       "members": "all",
+       "reveal": "grow",
+       "head": true,
+       "clock": {
+        "channel": "tau",
+        "keys": [
+         [
+          0.0,
+          10.0
+         ],
+         [
+          10.0,
+          0.0,
+          "in"
+         ]
+        ]
+       }
+      },
+      {
+       "kind": "points",
+       "sets": {
+        "set": "pts"
+       },
+       "members": "all",
+       "reveal": "grow",
+       "before": "hidden"
+      },
+      {
+       "kind": "points",
+       "sets": {
+        "set": "pts"
+       },
+       "members": "all",
+       "reveal": "grow",
+       "clock": {
+        "channel": "@index",
+        "range": [
+         0.0,
+         4.0
+        ]
+       }
+      },
+      {
+       "kind": "label",
+       "text": "fixed",
+       "at": {
+        "point": [
+         1.0,
+         2.0,
+         0.0
+        ]
+       }
+      },
+      {
+       "kind": "label",
+       "text": "turning",
+       "at": {
+        "point": [
+         1.0,
+         0.0,
+         0.0
+        ],
+        "frame": "spin"
+       }
+      },
+      {
+       "kind": "label",
+       "text": "member 7",
+       "at": {
+        "sets": {
+         "set": "a"
+        },
+        "member": 7
+       }
+      },
+      {
+       "kind": "label",
+       "text": "screen",
+       "at": {
+        "screen": [
+         0.5,
+         0.1
+        ]
+       }
+      },
+      {
+       "kind": "label",
+       "text": "member 0 by tau",
+       "at": {
+        "sets": {
+         "set": "a"
+        },
+        "member": 0
+       },
+       "clock": {
+        "channel": "tau",
+        "keys": [
+         [
+          0.0,
+          10.0
+         ],
+         [
+          10.0,
+          0.0,
+          "in"
+         ]
+        ]
+       }
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "K8: a points layer whose reveal is trail",
+  "rule": "K8",
+  "scene": {
+   "views": {
+    "main": {
+     "layers": [
+      {
+       "kind": "track",
+       "sets": {
+        "set": "a"
+       },
+       "members": "all",
+       "reveal": "grow",
+       "head": true
+      },
+      {
+       "kind": "track",
+       "sets": {
+        "set": "a"
+       },
+       "members": "all",
+       "reveal": "grow",
+       "head": true,
+       "clock": {
+        "channel": "tau",
+        "keys": [
+         [
+          0.0,
+          10.0
+         ],
+         [
+          10.0,
+          0.0,
+          "in"
+         ]
+        ]
+       }
+      },
+      {
+       "kind": "points",
+       "sets": {
+        "set": "pts"
+       },
+       "members": "all",
+       "reveal": "trail"
+      },
+      {
+       "kind": "points",
+       "sets": {
+        "set": "pts"
+       },
+       "members": "all",
+       "reveal": "grow",
+       "clock": {
+        "channel": "@index",
+        "range": [
+         0.0,
+         4.0
+        ]
+       }
+      },
+      {
+       "kind": "label",
+       "text": "fixed",
+       "at": {
+        "point": [
+         1.0,
+         2.0,
+         0.0
+        ]
+       }
+      },
+      {
+       "kind": "label",
+       "text": "turning",
+       "at": {
+        "point": [
+         1.0,
+         0.0,
+         0.0
+        ],
+        "frame": "spin"
+       }
+      },
+      {
+       "kind": "label",
+       "text": "member 1",
+       "at": {
+        "sets": {
+         "set": "a"
+        },
+        "member": 1
+       }
+      },
+      {
+       "kind": "label",
+       "text": "screen",
+       "at": {
+        "screen": [
+         0.5,
+         0.1
+        ]
+       }
+      },
+      {
+       "kind": "label",
+       "text": "member 0 by tau",
+       "at": {
+        "sets": {
+         "set": "a"
+        },
+        "member": 0
+       },
+       "clock": {
+        "channel": "tau",
+        "keys": [
+         [
+          0.0,
+          10.0
+         ],
+         [
+          10.0,
+          0.0,
+          "in"
+         ]
+        ]
+       }
+      }
+     ]
+    }
+   }
+  }
+ }
+]

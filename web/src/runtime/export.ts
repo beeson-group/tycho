@@ -15,7 +15,8 @@ import { hexRgb, mixHex, sceneTheme, type Theme } from './colors.js';
 import type { GeometryCache } from './geometry.js';
 import type { Colorbar, PanelLabel } from './overlay.js';
 import { formatNumber, LAP_SECONDS, loopPosition, loopSeconds, positionIndex, positionProgress, readoutText } from './readouts.js';
-import { GUTTER, StageRenderer } from './renderer.js';
+import { GUTTER, layoutAt, StageRenderer } from './renderer.js';
+import { gutterColor, paintStage } from './paint.js';
 import { tile } from './tiles.js';
 
 /** The longest export allowed, in frames and in seconds. A longer export is refused. */
@@ -350,13 +351,13 @@ export async function exportVideo(source: ExportSource, options: ExportOptions =
   encoder.configure(config);
 
   // each frame holds the stage above a strip of caption lines, laid out in CSS pixels
-  const theme = source.theme ?? sceneTheme(scene);
-  const font = source.font ?? FONT;
+  const font = source.font ?? source.theme?.font ?? sceneTheme(scene).font ?? FONT;
+  const theme = { ...(source.theme ?? sceneTheme(scene)), font };
   const bg = mixHex(theme.background, theme.background, 0);
   const fg = mixHex(theme.foreground, theme.foreground, 0);
   const dim = mixHex(theme.foreground, theme.background, 0.4);
   const line = mixHex(theme.foreground, theme.background, 0.8);
-  const gutterColor = mixHex(theme.foreground, theme.background, 0.9);
+  const gutter = gutterColor(theme);
   const captions = (scene.readouts ?? []).filter((r) => r.place === 'caption');
   const panelReadouts = (scene.readouts ?? []).filter((r) => r.place === 'panel');
   const logicalW = width / ratio;
@@ -371,8 +372,8 @@ export async function exportVideo(source: ExportSource, options: ExportOptions =
   frame.width = width;
   frame.height = height;
   const g = frame.getContext('2d', { alpha: false })!;
-  const tiles = tile(state.layout, { x: 0, y: 0, w: stageW, h: stageH }, GUTTER);
   const first = firstLeaf(state.layout);
+  const seconds = loopSeconds(scene.clock);
   const read = (pid: string, parts: Readout['parts'], index: number, q: number) => {
     try {
       return readoutText({ scene, geometry, state, panel: pid, frameIndex: index, progress: q }, parts);
@@ -382,19 +383,26 @@ export async function exportVideo(source: ExportSource, options: ExportOptions =
   };
 
   try {
+    // a first frame builds the panels' draws, whose body images are decoded before the video starts
+    renderer.renderAt(state, schedule.progress(0), stageW, stageH, ratio);
+    await renderer.ready();
     for (let k = 0; k < schedule.count; k++) {
       if (signal?.aborted) throw aborted();
       if (failure !== null) throw failure;
       const index = schedule.index(k);
       const q = schedule.progress(k);
       const errors = renderer.renderAt(state, q, stageW, stageH, ratio);
+      const tiles = tile(layoutAt(state.layout, q * seconds), { x: 0, y: 0, w: stageW, h: stageH }, GUTTER);
       g.setTransform(1, 0, 0, 1, 0, 0);
       g.fillStyle = bg;
       g.fillRect(0, 0, width, height);
       g.drawImage(glCanvas, 0, 0);
       g.setTransform(ratio, 0, 0, ratio, 0, 0);
-      g.fillStyle = gutterColor;
+      g.fillStyle = gutter;
       for (const gt of tiles.gutters) g.fillRect(gt.rect.x, gt.rect.y, gt.rect.w, gt.rect.h);
+      g.save();
+      paintStage(g, renderer, scene, state, theme, q, stageW, stageH, (pid, parts) => read(pid, parts, index, q));
+      g.restore();
       for (const [pid, r] of tiles.panels) {
         g.save();
         g.beginPath();

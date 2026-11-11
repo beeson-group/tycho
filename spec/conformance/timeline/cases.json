@@ -1,0 +1,8037 @@
+[
+ {
+  "name": "K1 to K8: at s = 2, a smooth clock key, a layer clock, points, labels, and a blend into a follow key",
+  "source": "analytic",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "t"
+   },
+   "panels": {
+    "p1": {
+     "view": "main"
+    },
+    "p2": {
+     "view": "plot"
+    }
+   },
+   "layout": {
+    "kind": "split",
+    "dir": "row",
+    "ratio": 0.5,
+    "a": {
+     "kind": "panel",
+     "id": "p1"
+    },
+    "b": {
+     "kind": "panel",
+     "id": "p2"
+    }
+   }
+  },
+  "frame_index": 4,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          1.0,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           1.0,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          1.0,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.08,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          0.08,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           0.08,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          0.08,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        1.0,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        0.5403023058681398,
+        -0.8414709848078965,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        1.0,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": null
+      },
+      {
+       "kind": "label",
+       "position": [
+        0.08,
+        0.0,
+        0.0
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       0.75,
+       0.5
+      ],
+      "width": 2.8284271247461903,
+      "height": null
+     }
+    },
+    "p2": {
+     "frame": "root",
+     "camera": {
+      "center": [
+       0.4160000000000001,
+       0.20800000000000005
+      ],
+      "width": 2.3101715691071685,
+      "height": 1.1550857845535842
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "K1, K2, K5: at s = 5, a jump of the clock, and an in-out blend between two follow keys",
+  "source": "analytic",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "t"
+   },
+   "panels": {
+    "p1": {
+     "view": "main"
+    },
+    "p2": {
+     "view": "plot"
+    }
+   },
+   "layout": {
+    "kind": "split",
+    "dir": "row",
+    "ratio": 0.5,
+    "a": {
+     "kind": "panel",
+     "id": "p1"
+    },
+    "b": {
+     "kind": "panel",
+     "id": "p2"
+    }
+   }
+  },
+  "frame_index": 10,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          3.0,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           1.0,
+           2.0,
+           0.0
+          ],
+          [
+           2.0,
+           2.0,
+           0.0
+          ],
+          [
+           3.0,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          3.0,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      null,
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           -1.0,
+           0.0
+          ],
+          [
+           2.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           -1.0,
+           0.0
+          ],
+          [
+           2.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      null,
+      {
+       "kind": "label",
+       "position": [
+        -0.9899924966004454,
+        -0.1411200080598672,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        3.0,
+        2.0,
+        0.0
+       ]
+      },
+      null,
+      {
+       "kind": "label",
+       "position": [
+        1.25,
+        0.0,
+        0.0
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       1.5833333333333335,
+       0.14814814814814814
+      ],
+      "width": 4.0,
+      "height": null
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "K1, K5, K8: at s = 0, before the first keys, and a points member hidden before its range",
+  "source": "analytic",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "t"
+   },
+   "panels": {
+    "p1": {
+     "view": "main"
+    },
+    "p2": {
+     "view": "plot"
+    }
+   },
+   "layout": {
+    "kind": "split",
+    "dir": "row",
+    "ratio": 0.5,
+    "a": {
+     "kind": "panel",
+     "id": "p1"
+    },
+    "b": {
+     "kind": "panel",
+     "id": "p2"
+    }
+   }
+  },
+  "frame_index": 0,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "root",
+     "layers": [
+      null,
+      null,
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": []
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      null,
+      {
+       "kind": "label",
+       "position": [
+        1.0,
+        0.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        0.0,
+        2.0,
+        0.0
+       ]
+      },
+      null,
+      {
+       "kind": "label",
+       "position": [
+        0.0,
+        0.0,
+        0.0
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       0.0,
+       0.0
+      ],
+      "width": 2.0,
+      "height": null
+     }
+    },
+    "p2": {
+     "frame": "root",
+     "camera": {
+      "center": [
+       0.0,
+       0.0
+      ],
+      "width": 2.0,
+      "height": 1.0
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "K1, K5, K8: at s = 9.5, after the last keys",
+  "source": "analytic",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "t"
+   },
+   "panels": {
+    "p1": {
+     "view": "main"
+    },
+    "p2": {
+     "view": "plot"
+    }
+   },
+   "layout": {
+    "kind": "split",
+    "dir": "row",
+    "ratio": 0.5,
+    "a": {
+     "kind": "panel",
+     "id": "p1"
+    },
+    "b": {
+     "kind": "panel",
+     "id": "p2"
+    }
+   }
+  },
+  "frame_index": 19,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "root",
+     "layers": [
+      null,
+      null,
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           -1.0,
+           0.0
+          ],
+          [
+           2.0,
+           -1.0,
+           0.0
+          ],
+          [
+           3.0,
+           -1.0,
+           0.0
+          ],
+          [
+           4.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      null,
+      null,
+      null,
+      {
+       "kind": "label",
+       "position": [
+        8.0,
+        2.0,
+        0.0
+       ]
+      },
+      null,
+      null
+     ],
+     "camera": {
+      "center": [
+       4.0,
+       1.0
+      ],
+      "width": 8.0,
+      "height": null
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "frame -1",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "t"
+   },
+   "panels": {
+    "p1": {
+     "view": "main"
+    },
+    "p2": {
+     "view": "plot"
+    }
+   },
+   "layout": {
+    "kind": "split",
+    "dir": "row",
+    "ratio": 0.5,
+    "a": {
+     "kind": "panel",
+     "id": "p1"
+    },
+    "b": {
+     "kind": "panel",
+     "id": "p2"
+    }
+   }
+  },
+  "frame_index": -1,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ],
+          [
+           4.0,
+           0.0,
+           0.0
+          ],
+          [
+           5.0,
+           0.0,
+           0.0
+          ],
+          [
+           6.0,
+           0.0,
+           0.0
+          ],
+          [
+           7.0,
+           0.0,
+           0.0
+          ],
+          [
+           8.0,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          8.0,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           1.0,
+           2.0,
+           0.0
+          ],
+          [
+           2.0,
+           2.0,
+           0.0
+          ],
+          [
+           3.0,
+           2.0,
+           0.0
+          ],
+          [
+           4.0,
+           2.0,
+           0.0
+          ],
+          [
+           5.0,
+           2.0,
+           0.0
+          ],
+          [
+           6.0,
+           2.0,
+           0.0
+          ],
+          [
+           7.0,
+           2.0,
+           0.0
+          ],
+          [
+           8.0,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          8.0,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ],
+          [
+           4.0,
+           0.0,
+           0.0
+          ],
+          [
+           5.0,
+           0.0,
+           0.0
+          ],
+          [
+           6.0,
+           0.0,
+           0.0
+          ],
+          [
+           7.0,
+           0.0,
+           0.0
+          ],
+          [
+           8.0,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          8.0,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           1.0,
+           2.0,
+           0.0
+          ],
+          [
+           2.0,
+           2.0,
+           0.0
+          ],
+          [
+           3.0,
+           2.0,
+           0.0
+          ],
+          [
+           4.0,
+           2.0,
+           0.0
+          ],
+          [
+           5.0,
+           2.0,
+           0.0
+          ],
+          [
+           6.0,
+           2.0,
+           0.0
+          ],
+          [
+           7.0,
+           2.0,
+           0.0
+          ],
+          [
+           8.0,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          8.0,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           -1.0,
+           0.0
+          ],
+          [
+           2.0,
+           -1.0,
+           0.0
+          ],
+          [
+           3.0,
+           -1.0,
+           0.0
+          ],
+          [
+           4.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           -1.0,
+           0.0
+          ],
+          [
+           2.0,
+           -1.0,
+           0.0
+          ],
+          [
+           3.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        1.0,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        -0.14550003380861354,
+        -0.9893582466233818,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        8.0,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": null
+      },
+      {
+       "kind": "label",
+       "position": [
+        8.0,
+        0.0,
+        0.0
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       4.0,
+       1.0
+      ],
+      "width": 8.0,
+      "height": null
+     }
+    },
+    "p2": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ],
+          [
+           4.0,
+           0.0,
+           0.0
+          ],
+          [
+           5.0,
+           0.0,
+           0.0
+          ],
+          [
+           6.0,
+           0.0,
+           0.0
+          ],
+          [
+           7.0,
+           0.0,
+           0.0
+          ],
+          [
+           8.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       3.971,
+       1.9855
+      ],
+      "width": 7.919997637744579,
+      "height": 3.9599988188722897
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "frame 0",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "t"
+   },
+   "panels": {
+    "p1": {
+     "view": "main"
+    },
+    "p2": {
+     "view": "plot"
+    }
+   },
+   "layout": {
+    "kind": "split",
+    "dir": "row",
+    "ratio": 0.5,
+    "a": {
+     "kind": "panel",
+     "id": "p1"
+    },
+    "b": {
+     "kind": "panel",
+     "id": "p2"
+    }
+   }
+  },
+  "frame_index": 0,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          0.0,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          0.0,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          0.0,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          0.0,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": []
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        1.0,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        1.0,
+        0.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        0.0,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": null
+      },
+      {
+       "kind": "label",
+       "position": [
+        0.0,
+        0.0,
+        0.0
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       0.0,
+       0.0
+      ],
+      "width": 2.0,
+      "height": null
+     }
+    },
+    "p2": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ],
+          [
+           4.0,
+           0.0,
+           0.0
+          ],
+          [
+           5.0,
+           0.0,
+           0.0
+          ],
+          [
+           6.0,
+           0.0,
+           0.0
+          ],
+          [
+           7.0,
+           0.0,
+           0.0
+          ],
+          [
+           8.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       0.0,
+       0.0
+      ],
+      "width": 2.0,
+      "height": 1.0
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "frame 1",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "t"
+   },
+   "panels": {
+    "p1": {
+     "view": "main"
+    },
+    "p2": {
+     "view": "plot"
+    }
+   },
+   "layout": {
+    "kind": "split",
+    "dir": "row",
+    "ratio": 0.5,
+    "a": {
+     "kind": "panel",
+     "id": "p1"
+    },
+    "b": {
+     "kind": "panel",
+     "id": "p2"
+    }
+   }
+  },
+  "frame_index": 1,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          0.0,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          0.0,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0012500000000006395,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          0.0012500000000006395,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           0.0012500000000006395,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          0.0012500000000006395,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": []
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        1.0,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        1.0,
+        0.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        0.0,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": null
+      },
+      {
+       "kind": "label",
+       "position": [
+        0.0012500000000006395,
+        0.0,
+        0.0
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       0.0,
+       0.0
+      ],
+      "width": 2.0,
+      "height": null
+     }
+    },
+    "p2": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ],
+          [
+           4.0,
+           0.0,
+           0.0
+          ],
+          [
+           5.0,
+           0.0,
+           0.0
+          ],
+          [
+           6.0,
+           0.0,
+           0.0
+          ],
+          [
+           7.0,
+           0.0,
+           0.0
+          ],
+          [
+           8.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       0.029000000000000005,
+       0.014500000000000002
+      ],
+      "width": 2.0202026227568934,
+      "height": 1.0101013113784467
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "frame 2",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "t"
+   },
+   "panels": {
+    "p1": {
+     "view": "main"
+    },
+    "p2": {
+     "view": "plot"
+    }
+   },
+   "layout": {
+    "kind": "split",
+    "dir": "row",
+    "ratio": 0.5,
+    "a": {
+     "kind": "panel",
+     "id": "p1"
+    },
+    "b": {
+     "kind": "panel",
+     "id": "p2"
+    }
+   }
+  },
+  "frame_index": 2,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          0.0,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          0.0,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.009999999999999787,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          0.009999999999999787,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           0.009999999999999787,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          0.009999999999999787,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": []
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        1.0,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        1.0,
+        0.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        0.0,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": null
+      },
+      {
+       "kind": "label",
+       "position": [
+        0.009999999999999787,
+        0.0,
+        0.0
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       0.0,
+       0.0
+      ],
+      "width": 2.0,
+      "height": null
+     }
+    },
+    "p2": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ],
+          [
+           4.0,
+           0.0,
+           0.0
+          ],
+          [
+           5.0,
+           0.0,
+           0.0
+          ],
+          [
+           6.0,
+           0.0,
+           0.0
+          ],
+          [
+           7.0,
+           0.0,
+           0.0
+          ],
+          [
+           8.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       0.11200000000000002,
+       0.05600000000000001
+      ],
+      "width": 2.0791588703505575,
+      "height": 1.0395794351752787
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "frame 3",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "t"
+   },
+   "panels": {
+    "p1": {
+     "view": "main"
+    },
+    "p2": {
+     "view": "plot"
+    }
+   },
+   "layout": {
+    "kind": "split",
+    "dir": "row",
+    "ratio": 0.5,
+    "a": {
+     "kind": "panel",
+     "id": "p1"
+    },
+    "b": {
+     "kind": "panel",
+     "id": "p2"
+    }
+   }
+  },
+  "frame_index": 3,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.3125,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          0.3125,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           0.3125,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          0.3125,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.0337499999999995,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          0.0337499999999995,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           0.0337499999999995,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          0.0337499999999995,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": []
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        1.0,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        0.8563444705837937,
+        -0.26295968275246767,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        0.3125,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": null
+      },
+      {
+       "kind": "label",
+       "position": [
+        0.0337499999999995,
+        0.0,
+        0.0
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       0.126953125,
+       0.15625
+      ],
+      "width": 2.2287734851917853,
+      "height": null
+     }
+    },
+    "p2": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ],
+          [
+           4.0,
+           0.0,
+           0.0
+          ],
+          [
+           5.0,
+           0.0,
+           0.0
+          ],
+          [
+           6.0,
+           0.0,
+           0.0
+          ],
+          [
+           7.0,
+           0.0,
+           0.0
+          ],
+          [
+           8.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       0.243,
+       0.1215
+      ],
+      "width": 2.1757307018586385,
+      "height": 1.0878653509293195
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "frame 4",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "t"
+   },
+   "panels": {
+    "p1": {
+     "view": "main"
+    },
+    "p2": {
+     "view": "plot"
+    }
+   },
+   "layout": {
+    "kind": "split",
+    "dir": "row",
+    "ratio": 0.5,
+    "a": {
+     "kind": "panel",
+     "id": "p1"
+    },
+    "b": {
+     "kind": "panel",
+     "id": "p2"
+    }
+   }
+  },
+  "frame_index": 4,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          1.0,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           1.0,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          1.0,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.08000000000000007,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          0.08000000000000007,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           0.08000000000000007,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          0.08000000000000007,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        1.0,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        0.5403023058681398,
+        -0.8414709848078965,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        1.0,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": null
+      },
+      {
+       "kind": "label",
+       "position": [
+        0.08000000000000007,
+        0.0,
+        0.0
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       0.75,
+       0.5
+      ],
+      "width": 2.82842712474619,
+      "height": null
+     }
+    },
+    "p2": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ],
+          [
+           4.0,
+           0.0,
+           0.0
+          ],
+          [
+           5.0,
+           0.0,
+           0.0
+          ],
+          [
+           6.0,
+           0.0,
+           0.0
+          ],
+          [
+           7.0,
+           0.0,
+           0.0
+          ],
+          [
+           8.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       0.4160000000000001,
+       0.20800000000000005
+      ],
+      "width": 2.3101715691071685,
+      "height": 1.1550857845535842
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "frame 5",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "t"
+   },
+   "panels": {
+    "p1": {
+     "view": "main"
+    },
+    "p2": {
+     "view": "plot"
+    }
+   },
+   "layout": {
+    "kind": "split",
+    "dir": "row",
+    "ratio": 0.5,
+    "a": {
+     "kind": "panel",
+     "id": "p1"
+    },
+    "b": {
+     "kind": "panel",
+     "id": "p2"
+    }
+   }
+  },
+  "frame_index": 5,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.6875,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          1.6875,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           1.0,
+           2.0,
+           0.0
+          ],
+          [
+           1.6875,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          1.6875,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.15625,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          0.15625,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           0.15625,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          0.15625,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        1.0,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        -0.1172564795423667,
+        -0.8881016636951238,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        1.6875,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": null
+      },
+      {
+       "kind": "label",
+       "position": [
+        0.15625,
+        0.0,
+        0.0
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       1.845703125,
+       0.84375
+      ],
+      "width": 3.589418150006215,
+      "height": null
+     }
+    },
+    "p2": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ],
+          [
+           4.0,
+           0.0,
+           0.0
+          ],
+          [
+           5.0,
+           0.0,
+           0.0
+          ],
+          [
+           6.0,
+           0.0,
+           0.0
+          ],
+          [
+           7.0,
+           0.0,
+           0.0
+          ],
+          [
+           8.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       0.625,
+       0.3125
+      ],
+      "width": 2.483715624146968,
+      "height": 1.241857812073484
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "frame 6",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "t"
+   },
+   "panels": {
+    "p1": {
+     "view": "main"
+    },
+    "p2": {
+     "view": "plot"
+    }
+   },
+   "layout": {
+    "kind": "split",
+    "dir": "row",
+    "ratio": 0.5,
+    "a": {
+     "kind": "panel",
+     "id": "p1"
+    },
+    "b": {
+     "kind": "panel",
+     "id": "p2"
+    }
+   }
+  },
+  "frame_index": 6,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          2.0,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           1.0,
+           2.0,
+           0.0
+          ],
+          [
+           2.0,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          2.0,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.2699999999999996,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          0.2699999999999996,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           0.2699999999999996,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          0.2699999999999996,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        1.0,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        -0.4161468365471424,
+        -0.9092974268256817,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        2.0,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": null
+      },
+      {
+       "kind": "label",
+       "position": [
+        0.2699999999999996,
+        0.0,
+        0.0
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       2.5,
+       1.0
+      ],
+      "width": 4.0,
+      "height": null
+     }
+    },
+    "p2": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ],
+          [
+           4.0,
+           0.0,
+           0.0
+          ],
+          [
+           5.0,
+           0.0,
+           0.0
+          ],
+          [
+           6.0,
+           0.0,
+           0.0
+          ],
+          [
+           7.0,
+           0.0,
+           0.0
+          ],
+          [
+           8.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       0.864,
+       0.432
+      ],
+      "width": 2.6982050686793975,
+      "height": 1.3491025343396987
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "frame 7",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "t"
+   },
+   "panels": {
+    "p1": {
+     "view": "main"
+    },
+    "p2": {
+     "view": "plot"
+    }
+   },
+   "layout": {
+    "kind": "split",
+    "dir": "row",
+    "ratio": 0.5,
+    "a": {
+     "kind": "panel",
+     "id": "p1"
+    },
+    "b": {
+     "kind": "panel",
+     "id": "p2"
+    }
+   }
+  },
+  "frame_index": 7,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          2.0,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           1.0,
+           2.0,
+           0.0
+          ],
+          [
+           2.0,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          2.0,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.4287499999999991,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          0.4287499999999991,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           0.4287499999999991,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          0.4287499999999991,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        1.0,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        -0.4161468365471424,
+        -0.9092974268256817,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        2.0,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": null
+      },
+      {
+       "kind": "label",
+       "position": [
+        0.4287499999999991,
+        0.0,
+        0.0
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       2.4616435185185184,
+       0.9814814814814815
+      ],
+      "width": 4.0,
+      "height": null
+     }
+    },
+    "p2": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ],
+          [
+           4.0,
+           0.0,
+           0.0
+          ],
+          [
+           5.0,
+           0.0,
+           0.0
+          ],
+          [
+           6.0,
+           0.0,
+           0.0
+          ],
+          [
+           7.0,
+           0.0,
+           0.0
+          ],
+          [
+           8.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       1.1269999999999998,
+       0.5634999999999999
+      ],
+      "width": 2.9557003173470098,
+      "height": 1.4778501586735049
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "frame 8",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "t"
+   },
+   "panels": {
+    "p1": {
+     "view": "main"
+    },
+    "p2": {
+     "view": "plot"
+    }
+   },
+   "layout": {
+    "kind": "split",
+    "dir": "row",
+    "ratio": 0.5,
+    "a": {
+     "kind": "panel",
+     "id": "p1"
+    },
+    "b": {
+     "kind": "panel",
+     "id": "p2"
+    }
+   }
+  },
+  "frame_index": 8,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          2.0,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           1.0,
+           2.0,
+           0.0
+          ],
+          [
+           2.0,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          2.0,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.6400000000000006,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          0.6400000000000006,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           0.6400000000000006,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          0.6400000000000006,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        1.0,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        -0.4161468365471424,
+        -0.9092974268256817,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        2.0,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": null
+      },
+      {
+       "kind": "label",
+       "position": [
+        0.6400000000000006,
+        0.0,
+        0.0
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       2.2244444444444444,
+       0.8518518518518519
+      ],
+      "width": 4.0,
+      "height": null
+     }
+    },
+    "p2": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ],
+          [
+           4.0,
+           0.0,
+           0.0
+          ],
+          [
+           5.0,
+           0.0,
+           0.0
+          ],
+          [
+           6.0,
+           0.0,
+           0.0
+          ],
+          [
+           7.0,
+           0.0,
+           0.0
+          ],
+          [
+           8.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       1.4080000000000004,
+       0.7040000000000002
+      ],
+      "width": 3.2580302522808613,
+      "height": 1.6290151261404309
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "frame 9",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "t"
+   },
+   "panels": {
+    "p1": {
+     "view": "main"
+    },
+    "p2": {
+     "view": "plot"
+    }
+   },
+   "layout": {
+    "kind": "split",
+    "dir": "row",
+    "ratio": 0.5,
+    "a": {
+     "kind": "panel",
+     "id": "p1"
+    },
+    "b": {
+     "kind": "panel",
+     "id": "p2"
+    }
+   }
+  },
+  "frame_index": 9,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          2.0,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           1.0,
+           2.0,
+           0.0
+          ],
+          [
+           2.0,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          2.0,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           0.9112500000000008,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          0.9112500000000008,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           0.9112500000000008,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          0.9112500000000008,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        1.0,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        -0.4161468365471424,
+        -0.9092974268256817,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        2.0,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": null
+      },
+      {
+       "kind": "label",
+       "position": [
+        0.9112500000000008,
+        0.0,
+        0.0
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       1.7056250000000004,
+       0.5
+      ],
+      "width": 4.0,
+      "height": null
+     }
+    },
+    "p2": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ],
+          [
+           4.0,
+           0.0,
+           0.0
+          ],
+          [
+           5.0,
+           0.0,
+           0.0
+          ],
+          [
+           6.0,
+           0.0,
+           0.0
+          ],
+          [
+           7.0,
+           0.0,
+           0.0
+          ],
+          [
+           8.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       1.7010000000000003,
+       0.8505000000000001
+      ],
+      "width": 3.6062514654068596,
+      "height": 1.8031257327034298
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "frame 10",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "t"
+   },
+   "panels": {
+    "p1": {
+     "view": "main"
+    },
+    "p2": {
+     "view": "plot"
+    }
+   },
+   "layout": {
+    "kind": "split",
+    "dir": "row",
+    "ratio": 0.5,
+    "a": {
+     "kind": "panel",
+     "id": "p1"
+    },
+    "b": {
+     "kind": "panel",
+     "id": "p2"
+    }
+   }
+  },
+  "frame_index": 10,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          3.0,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           1.0,
+           2.0,
+           0.0
+          ],
+          [
+           2.0,
+           2.0,
+           0.0
+          ],
+          [
+           3.0,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          3.0,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.25,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          1.25,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           1.0,
+           2.0,
+           0.0
+          ],
+          [
+           1.25,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          1.25,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           -1.0,
+           0.0
+          ],
+          [
+           2.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           -1.0,
+           0.0
+          ],
+          [
+           2.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        1.0,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        -0.9899924966004454,
+        -0.1411200080598672,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        3.0,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": null
+      },
+      {
+       "kind": "label",
+       "position": [
+        1.25,
+        0.0,
+        0.0
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       1.5833333333333335,
+       0.14814814814814814
+      ],
+      "width": 4.0,
+      "height": null
+     }
+    },
+    "p2": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ],
+          [
+           4.0,
+           0.0,
+           0.0
+          ],
+          [
+           5.0,
+           0.0,
+           0.0
+          ],
+          [
+           6.0,
+           0.0,
+           0.0
+          ],
+          [
+           7.0,
+           0.0,
+           0.0
+          ],
+          [
+           8.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       2.0,
+       1.0
+      ],
+      "width": 4.0,
+      "height": 2.0
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "frame 11",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "t"
+   },
+   "panels": {
+    "p1": {
+     "view": "main"
+    },
+    "p2": {
+     "view": "plot"
+    }
+   },
+   "layout": {
+    "kind": "split",
+    "dir": "row",
+    "ratio": 0.5,
+    "a": {
+     "kind": "panel",
+     "id": "p1"
+    },
+    "b": {
+     "kind": "panel",
+     "id": "p2"
+    }
+   }
+  },
+  "frame_index": 11,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0625,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          3.0625,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           1.0,
+           2.0,
+           0.0
+          ],
+          [
+           2.0,
+           2.0,
+           0.0
+          ],
+          [
+           3.0,
+           2.0,
+           0.0
+          ],
+          [
+           3.0625,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          3.0625,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.6637500000000003,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          1.6637500000000003,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           1.0,
+           2.0,
+           0.0
+          ],
+          [
+           1.6637500000000003,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          1.6637500000000003,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           -1.0,
+           0.0
+          ],
+          [
+           2.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           -1.0,
+           0.0
+          ],
+          [
+           2.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        1.0,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        -0.9689706918668933,
+        -0.08499985159937998,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        3.0625,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": null
+      },
+      {
+       "kind": "label",
+       "position": [
+        1.6637500000000003,
+        0.0,
+        0.0
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       1.6989120370370372,
+       0.01851851851851849
+      ],
+      "width": 4.0,
+      "height": null
+     }
+    },
+    "p2": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ],
+          [
+           4.0,
+           0.0,
+           0.0
+          ],
+          [
+           5.0,
+           0.0,
+           0.0
+          ],
+          [
+           6.0,
+           0.0,
+           0.0
+          ],
+          [
+           7.0,
+           0.0,
+           0.0
+          ],
+          [
+           8.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       2.2990000000000004,
+       1.1495000000000002
+      ],
+      "width": 4.43673996488619,
+      "height": 2.218369982443095
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "frame 12",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "t"
+   },
+   "panels": {
+    "p1": {
+     "view": "main"
+    },
+    "p2": {
+     "view": "plot"
+    }
+   },
+   "layout": {
+    "kind": "split",
+    "dir": "row",
+    "ratio": 0.5,
+    "a": {
+     "kind": "panel",
+     "id": "p1"
+    },
+    "b": {
+     "kind": "panel",
+     "id": "p2"
+    }
+   }
+  },
+  "frame_index": 12,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.5,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          3.5,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           1.0,
+           2.0,
+           0.0
+          ],
+          [
+           2.0,
+           2.0,
+           0.0
+          ],
+          [
+           3.0,
+           2.0,
+           0.0
+          ],
+          [
+           3.5,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          3.5,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.16,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          2.16,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           1.0,
+           2.0,
+           0.0
+          ],
+          [
+           2.0,
+           2.0,
+           0.0
+          ],
+          [
+           2.16,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          2.16,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           -1.0,
+           0.0
+          ],
+          [
+           2.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           -1.0,
+           0.0
+          ],
+          [
+           2.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        1.0,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        -0.8218180587320287,
+        0.30784124362403054,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        3.5,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": null
+      },
+      {
+       "kind": "label",
+       "position": [
+        2.16,
+        0.0,
+        0.0
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       2.16,
+       0.0
+      ],
+      "width": 4.0,
+      "height": null
+     }
+    },
+    "p2": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ],
+          [
+           4.0,
+           0.0,
+           0.0
+          ],
+          [
+           5.0,
+           0.0,
+           0.0
+          ],
+          [
+           6.0,
+           0.0,
+           0.0
+          ],
+          [
+           7.0,
+           0.0,
+           0.0
+          ],
+          [
+           8.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       2.592,
+       1.296
+      ],
+      "width": 4.910942735660241,
+      "height": 2.4554713678301208
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "frame 13",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "t"
+   },
+   "panels": {
+    "p1": {
+     "view": "main"
+    },
+    "p2": {
+     "view": "plot"
+    }
+   },
+   "layout": {
+    "kind": "split",
+    "dir": "row",
+    "ratio": 0.5,
+    "a": {
+     "kind": "panel",
+     "id": "p1"
+    },
+    "b": {
+     "kind": "panel",
+     "id": "p2"
+    }
+   }
+  },
+  "frame_index": 13,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.9375,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          3.9375,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           1.0,
+           2.0,
+           0.0
+          ],
+          [
+           2.0,
+           2.0,
+           0.0
+          ],
+          [
+           3.0,
+           2.0,
+           0.0
+          ],
+          [
+           3.9375,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          3.9375,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.7462500000000007,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          2.7462500000000007,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           1.0,
+           2.0,
+           0.0
+          ],
+          [
+           2.0,
+           2.0,
+           0.0
+          ],
+          [
+           2.7462500000000007,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          2.7462500000000007,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           -1.0,
+           0.0
+          ],
+          [
+           2.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           -1.0,
+           0.0
+          ],
+          [
+           2.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        1.0,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        -0.674665425597164,
+        0.7006823388474411,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        3.9375,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": null
+      },
+      {
+       "kind": "label",
+       "position": [
+        2.7462500000000007,
+        0.0,
+        0.0
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       3.059687500000001,
+       0.25
+      ],
+      "width": 4.756828460010883,
+      "height": null
+     }
+    },
+    "p2": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ],
+          [
+           4.0,
+           0.0,
+           0.0
+          ],
+          [
+           5.0,
+           0.0,
+           0.0
+          ],
+          [
+           6.0,
+           0.0,
+           0.0
+          ],
+          [
+           7.0,
+           0.0,
+           0.0
+          ],
+          [
+           8.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       2.873,
+       1.4365
+      ],
+      "width": 5.413268695102807,
+      "height": 2.7066343475514034
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "frame 14",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "t"
+   },
+   "panels": {
+    "p1": {
+     "view": "main"
+    },
+    "p2": {
+     "view": "plot"
+    }
+   },
+   "layout": {
+    "kind": "split",
+    "dir": "row",
+    "ratio": 0.5,
+    "a": {
+     "kind": "panel",
+     "id": "p1"
+    },
+    "b": {
+     "kind": "panel",
+     "id": "p2"
+    }
+   }
+  },
+  "frame_index": 14,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ],
+          [
+           4.0,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          4.0,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           1.0,
+           2.0,
+           0.0
+          ],
+          [
+           2.0,
+           2.0,
+           0.0
+          ],
+          [
+           3.0,
+           2.0,
+           0.0
+          ],
+          [
+           4.0,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          4.0,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.4299999999999997,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          3.4299999999999997,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           1.0,
+           2.0,
+           0.0
+          ],
+          [
+           2.0,
+           2.0,
+           0.0
+          ],
+          [
+           3.0,
+           2.0,
+           0.0
+          ],
+          [
+           3.4299999999999997,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          3.4299999999999997,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           -1.0,
+           0.0
+          ],
+          [
+           2.0,
+           -1.0,
+           0.0
+          ],
+          [
+           3.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           -1.0,
+           0.0
+          ],
+          [
+           2.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        1.0,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        -0.6536436208636119,
+        0.7568024953079283,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        4.0,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": null
+      },
+      {
+       "kind": "label",
+       "position": [
+        3.4299999999999997,
+        0.0,
+        0.0
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       3.715,
+       0.5
+      ],
+      "width": 5.656854249492379,
+      "height": null
+     }
+    },
+    "p2": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ],
+          [
+           4.0,
+           0.0,
+           0.0
+          ],
+          [
+           5.0,
+           0.0,
+           0.0
+          ],
+          [
+           6.0,
+           0.0,
+           0.0
+          ],
+          [
+           7.0,
+           0.0,
+           0.0
+          ],
+          [
+           8.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       3.1359999999999997,
+       1.5679999999999998
+      ],
+      "width": 5.929868039211339,
+      "height": 2.96493401960567
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "frame 15",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "t"
+   },
+   "panels": {
+    "p1": {
+     "view": "main"
+    },
+    "p2": {
+     "view": "plot"
+    }
+   },
+   "layout": {
+    "kind": "split",
+    "dir": "row",
+    "ratio": 0.5,
+    "a": {
+     "kind": "panel",
+     "id": "p1"
+    },
+    "b": {
+     "kind": "panel",
+     "id": "p2"
+    }
+   }
+  },
+  "frame_index": 15,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ],
+          [
+           4.0,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          4.0,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           1.0,
+           2.0,
+           0.0
+          ],
+          [
+           2.0,
+           2.0,
+           0.0
+          ],
+          [
+           3.0,
+           2.0,
+           0.0
+          ],
+          [
+           4.0,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          4.0,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ],
+          [
+           4.0,
+           0.0,
+           0.0
+          ],
+          [
+           4.21875,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          4.21875,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           1.0,
+           2.0,
+           0.0
+          ],
+          [
+           2.0,
+           2.0,
+           0.0
+          ],
+          [
+           3.0,
+           2.0,
+           0.0
+          ],
+          [
+           4.0,
+           2.0,
+           0.0
+          ],
+          [
+           4.21875,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          4.21875,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           -1.0,
+           0.0
+          ],
+          [
+           2.0,
+           -1.0,
+           0.0
+          ],
+          [
+           3.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           -1.0,
+           0.0
+          ],
+          [
+           2.0,
+           -1.0,
+           0.0
+          ],
+          [
+           3.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        1.0,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        -0.6536436208636119,
+        0.7568024953079283,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        4.0,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": null
+      },
+      {
+       "kind": "label",
+       "position": [
+        4.21875,
+        0.0,
+        0.0
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       4.0546875,
+       0.75
+      ],
+      "width": 6.727171322029715,
+      "height": null
+     }
+    },
+    "p2": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ],
+          [
+           4.0,
+           0.0,
+           0.0
+          ],
+          [
+           5.0,
+           0.0,
+           0.0
+          ],
+          [
+           6.0,
+           0.0,
+           0.0
+          ],
+          [
+           7.0,
+           0.0,
+           0.0
+          ],
+          [
+           8.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       3.375,
+       1.6875
+      ],
+      "width": 6.441961327797016,
+      "height": 3.2209806638985086
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "frame 16",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "t"
+   },
+   "panels": {
+    "p1": {
+     "view": "main"
+    },
+    "p2": {
+     "view": "plot"
+    }
+   },
+   "layout": {
+    "kind": "split",
+    "dir": "row",
+    "ratio": 0.5,
+    "a": {
+     "kind": "panel",
+     "id": "p1"
+    },
+    "b": {
+     "kind": "panel",
+     "id": "p2"
+    }
+   }
+  },
+  "frame_index": 16,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ],
+          [
+           4.0,
+           0.0,
+           0.0
+          ],
+          [
+           5.0,
+           0.0,
+           0.0
+          ],
+          [
+           6.0,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          6.0,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           1.0,
+           2.0,
+           0.0
+          ],
+          [
+           2.0,
+           2.0,
+           0.0
+          ],
+          [
+           3.0,
+           2.0,
+           0.0
+          ],
+          [
+           4.0,
+           2.0,
+           0.0
+          ],
+          [
+           5.0,
+           2.0,
+           0.0
+          ],
+          [
+           6.0,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          6.0,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ],
+          [
+           4.0,
+           0.0,
+           0.0
+          ],
+          [
+           5.0,
+           0.0,
+           0.0
+          ],
+          [
+           5.120000000000001,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          5.120000000000001,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           1.0,
+           2.0,
+           0.0
+          ],
+          [
+           2.0,
+           2.0,
+           0.0
+          ],
+          [
+           3.0,
+           2.0,
+           0.0
+          ],
+          [
+           4.0,
+           2.0,
+           0.0
+          ],
+          [
+           5.0,
+           2.0,
+           0.0
+          ],
+          [
+           5.120000000000001,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          5.120000000000001,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           -1.0,
+           0.0
+          ],
+          [
+           2.0,
+           -1.0,
+           0.0
+          ],
+          [
+           3.0,
+           -1.0,
+           0.0
+          ],
+          [
+           4.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           -1.0,
+           0.0
+          ],
+          [
+           2.0,
+           -1.0,
+           0.0
+          ],
+          [
+           3.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        1.0,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        0.960170286650366,
+        0.27941549819892586,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        6.0,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": null
+      },
+      {
+       "kind": "label",
+       "position": [
+        5.120000000000001,
+        0.0,
+        0.0
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       4.0,
+       1.0
+      ],
+      "width": 8.0,
+      "height": null
+     }
+    },
+    "p2": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ],
+          [
+           4.0,
+           0.0,
+           0.0
+          ],
+          [
+           5.0,
+           0.0,
+           0.0
+          ],
+          [
+           6.0,
+           0.0,
+           0.0
+          ],
+          [
+           7.0,
+           0.0,
+           0.0
+          ],
+          [
+           8.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       3.5840000000000005,
+       1.7920000000000003
+      ],
+      "width": 6.925892524157266,
+      "height": 3.4629462620786335
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "frame 17",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "t"
+   },
+   "panels": {
+    "p1": {
+     "view": "main"
+    },
+    "p2": {
+     "view": "plot"
+    }
+   },
+   "layout": {
+    "kind": "split",
+    "dir": "row",
+    "ratio": 0.5,
+    "a": {
+     "kind": "panel",
+     "id": "p1"
+    },
+    "b": {
+     "kind": "panel",
+     "id": "p2"
+    }
+   }
+  },
+  "frame_index": 17,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ],
+          [
+           4.0,
+           0.0,
+           0.0
+          ],
+          [
+           5.0,
+           0.0,
+           0.0
+          ],
+          [
+           6.0,
+           0.0,
+           0.0
+          ],
+          [
+           7.0,
+           0.0,
+           0.0
+          ],
+          [
+           7.75,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          7.75,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           1.0,
+           2.0,
+           0.0
+          ],
+          [
+           2.0,
+           2.0,
+           0.0
+          ],
+          [
+           3.0,
+           2.0,
+           0.0
+          ],
+          [
+           4.0,
+           2.0,
+           0.0
+          ],
+          [
+           5.0,
+           2.0,
+           0.0
+          ],
+          [
+           6.0,
+           2.0,
+           0.0
+          ],
+          [
+           7.0,
+           2.0,
+           0.0
+          ],
+          [
+           7.75,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          7.75,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ],
+          [
+           4.0,
+           0.0,
+           0.0
+          ],
+          [
+           5.0,
+           0.0,
+           0.0
+          ],
+          [
+           6.0,
+           0.0,
+           0.0
+          ],
+          [
+           6.141249999999999,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          6.141249999999999,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           1.0,
+           2.0,
+           0.0
+          ],
+          [
+           2.0,
+           2.0,
+           0.0
+          ],
+          [
+           3.0,
+           2.0,
+           0.0
+          ],
+          [
+           4.0,
+           2.0,
+           0.0
+          ],
+          [
+           5.0,
+           2.0,
+           0.0
+          ],
+          [
+           6.0,
+           2.0,
+           0.0
+          ],
+          [
+           6.141249999999999,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          6.141249999999999,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           -1.0,
+           0.0
+          ],
+          [
+           2.0,
+           -1.0,
+           0.0
+          ],
+          [
+           3.0,
+           -1.0,
+           0.0
+          ],
+          [
+           4.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           -1.0,
+           0.0
+          ],
+          [
+           2.0,
+           -1.0,
+           0.0
+          ],
+          [
+           3.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        1.0,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        0.079350538229366,
+        -0.9062653346472336,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        7.75,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": null
+      },
+      {
+       "kind": "label",
+       "position": [
+        6.141249999999999,
+        0.0,
+        0.0
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       4.0,
+       1.0
+      ],
+      "width": 8.0,
+      "height": null
+     }
+    },
+    "p2": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ],
+          [
+           4.0,
+           0.0,
+           0.0
+          ],
+          [
+           5.0,
+           0.0,
+           0.0
+          ],
+          [
+           6.0,
+           0.0,
+           0.0
+          ],
+          [
+           7.0,
+           0.0,
+           0.0
+          ],
+          [
+           8.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       3.7569999999999997,
+       1.8784999999999998
+      ],
+      "width": 7.353851276875324,
+      "height": 3.6769256384376625
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "frame 18",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "t"
+   },
+   "panels": {
+    "p1": {
+     "view": "main"
+    },
+    "p2": {
+     "view": "plot"
+    }
+   },
+   "layout": {
+    "kind": "split",
+    "dir": "row",
+    "ratio": 0.5,
+    "a": {
+     "kind": "panel",
+     "id": "p1"
+    },
+    "b": {
+     "kind": "panel",
+     "id": "p2"
+    }
+   }
+  },
+  "frame_index": 18,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ],
+          [
+           4.0,
+           0.0,
+           0.0
+          ],
+          [
+           5.0,
+           0.0,
+           0.0
+          ],
+          [
+           6.0,
+           0.0,
+           0.0
+          ],
+          [
+           7.0,
+           0.0,
+           0.0
+          ],
+          [
+           8.0,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          8.0,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           1.0,
+           2.0,
+           0.0
+          ],
+          [
+           2.0,
+           2.0,
+           0.0
+          ],
+          [
+           3.0,
+           2.0,
+           0.0
+          ],
+          [
+           4.0,
+           2.0,
+           0.0
+          ],
+          [
+           5.0,
+           2.0,
+           0.0
+          ],
+          [
+           6.0,
+           2.0,
+           0.0
+          ],
+          [
+           7.0,
+           2.0,
+           0.0
+          ],
+          [
+           8.0,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          8.0,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ],
+          [
+           4.0,
+           0.0,
+           0.0
+          ],
+          [
+           5.0,
+           0.0,
+           0.0
+          ],
+          [
+           6.0,
+           0.0,
+           0.0
+          ],
+          [
+           7.0,
+           0.0,
+           0.0
+          ],
+          [
+           7.290000000000001,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          7.290000000000001,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           1.0,
+           2.0,
+           0.0
+          ],
+          [
+           2.0,
+           2.0,
+           0.0
+          ],
+          [
+           3.0,
+           2.0,
+           0.0
+          ],
+          [
+           4.0,
+           2.0,
+           0.0
+          ],
+          [
+           5.0,
+           2.0,
+           0.0
+          ],
+          [
+           6.0,
+           2.0,
+           0.0
+          ],
+          [
+           7.0,
+           2.0,
+           0.0
+          ],
+          [
+           7.290000000000001,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          7.290000000000001,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           -1.0,
+           0.0
+          ],
+          [
+           2.0,
+           -1.0,
+           0.0
+          ],
+          [
+           3.0,
+           -1.0,
+           0.0
+          ],
+          [
+           4.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           -1.0,
+           0.0
+          ],
+          [
+           2.0,
+           -1.0,
+           0.0
+          ],
+          [
+           3.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        1.0,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        -0.14550003380861354,
+        -0.9893582466233818,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        8.0,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": null
+      },
+      {
+       "kind": "label",
+       "position": [
+        7.290000000000001,
+        0.0,
+        0.0
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       4.0,
+       1.0
+      ],
+      "width": 8.0,
+      "height": null
+     }
+    },
+    "p2": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ],
+          [
+           4.0,
+           0.0,
+           0.0
+          ],
+          [
+           5.0,
+           0.0,
+           0.0
+          ],
+          [
+           6.0,
+           0.0,
+           0.0
+          ],
+          [
+           7.0,
+           0.0,
+           0.0
+          ],
+          [
+           8.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       3.888,
+       1.944
+      ],
+      "width": 7.695419637318197,
+      "height": 3.847709818659099
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "frame 19",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "t"
+   },
+   "panels": {
+    "p1": {
+     "view": "main"
+    },
+    "p2": {
+     "view": "plot"
+    }
+   },
+   "layout": {
+    "kind": "split",
+    "dir": "row",
+    "ratio": 0.5,
+    "a": {
+     "kind": "panel",
+     "id": "p1"
+    },
+    "b": {
+     "kind": "panel",
+     "id": "p2"
+    }
+   }
+  },
+  "frame_index": 19,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ],
+          [
+           4.0,
+           0.0,
+           0.0
+          ],
+          [
+           5.0,
+           0.0,
+           0.0
+          ],
+          [
+           6.0,
+           0.0,
+           0.0
+          ],
+          [
+           7.0,
+           0.0,
+           0.0
+          ],
+          [
+           8.0,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          8.0,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           1.0,
+           2.0,
+           0.0
+          ],
+          [
+           2.0,
+           2.0,
+           0.0
+          ],
+          [
+           3.0,
+           2.0,
+           0.0
+          ],
+          [
+           4.0,
+           2.0,
+           0.0
+          ],
+          [
+           5.0,
+           2.0,
+           0.0
+          ],
+          [
+           6.0,
+           2.0,
+           0.0
+          ],
+          [
+           7.0,
+           2.0,
+           0.0
+          ],
+          [
+           8.0,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          8.0,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ],
+          [
+           4.0,
+           0.0,
+           0.0
+          ],
+          [
+           5.0,
+           0.0,
+           0.0
+          ],
+          [
+           6.0,
+           0.0,
+           0.0
+          ],
+          [
+           7.0,
+           0.0,
+           0.0
+          ],
+          [
+           8.0,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          8.0,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ],
+          [
+           1.0,
+           2.0,
+           0.0
+          ],
+          [
+           2.0,
+           2.0,
+           0.0
+          ],
+          [
+           3.0,
+           2.0,
+           0.0
+          ],
+          [
+           4.0,
+           2.0,
+           0.0
+          ],
+          [
+           5.0,
+           2.0,
+           0.0
+          ],
+          [
+           6.0,
+           2.0,
+           0.0
+          ],
+          [
+           7.0,
+           2.0,
+           0.0
+          ],
+          [
+           8.0,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          8.0,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           -1.0,
+           0.0
+          ],
+          [
+           2.0,
+           -1.0,
+           0.0
+          ],
+          [
+           3.0,
+           -1.0,
+           0.0
+          ],
+          [
+           4.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ],
+          [
+           1.0,
+           -1.0,
+           0.0
+          ],
+          [
+           2.0,
+           -1.0,
+           0.0
+          ],
+          [
+           3.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        1.0,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        -0.14550003380861354,
+        -0.9893582466233818,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        8.0,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": null
+      },
+      {
+       "kind": "label",
+       "position": [
+        8.0,
+        0.0,
+        0.0
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       4.0,
+       1.0
+      ],
+      "width": 8.0,
+      "height": null
+     }
+    },
+    "p2": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ],
+          [
+           4.0,
+           0.0,
+           0.0
+          ],
+          [
+           5.0,
+           0.0,
+           0.0
+          ],
+          [
+           6.0,
+           0.0,
+           0.0
+          ],
+          [
+           7.0,
+           0.0,
+           0.0
+          ],
+          [
+           8.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       3.971,
+       1.9855
+      ],
+      "width": 7.919997637744579,
+      "height": 3.9599988188722897
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "frame 20",
+  "source": "reference",
+  "state": {
+   "variables": {},
+   "clock": {
+    "channel": "t"
+   },
+   "panels": {
+    "p1": {
+     "view": "main"
+    },
+    "p2": {
+     "view": "plot"
+    }
+   },
+   "layout": {
+    "kind": "split",
+    "dir": "row",
+    "ratio": 0.5,
+    "a": {
+     "kind": "panel",
+     "id": "p1"
+    },
+    "b": {
+     "kind": "panel",
+     "id": "p2"
+    }
+   }
+  },
+  "frame_index": 20,
+  "tolerance": 1e-12,
+  "expected": {
+   "panels": {
+    "p1": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          0.0,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          0.0,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ]
+         ],
+         "head": [
+          0.0,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "index": 1,
+         "line": [
+          [
+           0.0,
+           2.0,
+           0.0
+          ]
+         ],
+         "head": [
+          0.0,
+          2.0,
+          0.0
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": []
+        }
+       ]
+      },
+      {
+       "kind": "points",
+       "set": "pts",
+       "members": [
+        {
+         "index": 0,
+         "points": [
+          [
+           0.0,
+           -1.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        1.0,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        1.0,
+        0.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": [
+        0.0,
+        2.0,
+        0.0
+       ]
+      },
+      {
+       "kind": "label",
+       "position": null
+      },
+      {
+       "kind": "label",
+       "position": [
+        0.0,
+        0.0,
+        0.0
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       0.0,
+       0.0
+      ],
+      "width": 2.0,
+      "height": null
+     }
+    },
+    "p2": {
+     "frame": "root",
+     "layers": [
+      {
+       "kind": "track",
+       "set": "a",
+       "members": [
+        {
+         "index": 0,
+         "line": [
+          [
+           0.0,
+           0.0,
+           0.0
+          ],
+          [
+           1.0,
+           0.0,
+           0.0
+          ],
+          [
+           2.0,
+           0.0,
+           0.0
+          ],
+          [
+           3.0,
+           0.0,
+           0.0
+          ],
+          [
+           4.0,
+           0.0,
+           0.0
+          ],
+          [
+           5.0,
+           0.0,
+           0.0
+          ],
+          [
+           6.0,
+           0.0,
+           0.0
+          ],
+          [
+           7.0,
+           0.0,
+           0.0
+          ],
+          [
+           8.0,
+           0.0,
+           0.0
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "camera": {
+      "center": [
+       0.0,
+       0.0
+      ],
+      "width": 2.0,
+      "height": 1.0
+     }
+    }
+   }
+  }
+ }
+]

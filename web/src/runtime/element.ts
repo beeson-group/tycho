@@ -1275,7 +1275,7 @@ export class TychoViewerElement extends Base {
     return true;
   }
 
-  /** Fits every panel's camera to what it draws. */
+  /** Returns every panel with camera keys to its keys, and fits every other panel's camera to what it draws. */
   fitAll(): void {
     this.renderer?.refitAll();
     this.invalidate();

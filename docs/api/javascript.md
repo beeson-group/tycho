@@ -74,7 +74,7 @@ The element is a `TychoViewerElement`, with the methods and properties below.
 | `play()`, `pause()` | starts and stops the clock, and does not do anything before a scene loads |
 | `playing` | whether the clock is set to run, which stays true while the clock waits for the element to be shown |
 | `reset()` | returns to the initial state of the scene and discards the stored state |
-| `fitAll()` | fits the camera of every panel to what the panel draws, panning and zooming each panel until its content fills it |
+| `fitAll()` | returns every panel with camera keys to its keys (rule K5), and fits the camera of every other panel to what the panel draws, panning and zooming it until its content fills it |
 | `exportVideo(options)` | records a video of the current state, as described below |
 | `seek(t)` | shows time `t` of the timeline, in seconds, paused (section 2.11 of the spec) |
 | `stages` | the stages of the scene, `{id, at, label}` in order of time, i.e. its named times for a presentation (rule K9) |

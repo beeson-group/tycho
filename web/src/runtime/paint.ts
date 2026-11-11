@@ -439,7 +439,16 @@ export function drawLegend(g: G, legend: Extract<Overlay, { kind: 'legend' }>, w
   // matplotlib fills a legend's columns from top to bottom, and so does this one
   const cells = legend.entries.map((e, i) => ({ e, col: Math.floor(i / rows), row: i % rows }));
   const colWidth: number[] = Array.from({ length: columns }, () => 0);
-  for (const c of cells) colWidth[c.col] = Math.max(colWidth[c.col]!, handleWidth(c.e) + gap + g.measureText(c.e.label).width);
+  const labelStyle: TextStyle = {
+    size,
+    color: themed(legend.color ?? theme.foreground, theme),
+    weight: 'normal',
+    font,
+    align: 'start',
+    baseline: 'middle',
+    opacity: 1,
+  };
+  for (const c of cells) colWidth[c.col] = Math.max(colWidth[c.col]!, handleWidth(c.e) + gap + textRect(g, labelRuns(c.e.label), 0, 0, labelStyle)[2]);
   const total = colWidth.reduce((a, b) => a + b, 0) + columnGap * (columns - 1);
   // matplotlib's legend: rows of a text's height and half a size apart, inside a border of 0.4 sizes, which keeps half a size from its anchor
   const lh = (TEXT_HEIGHT + 0.5) * size;
@@ -502,10 +511,7 @@ export function drawLegend(g: G, legend: Extract<Overlay, { kind: 'legend' }>, w
       );
       g.restore();
     }
-    g.fillStyle = themed(legend.color ?? theme.foreground, theme);
-    g.textAlign = 'left';
-    g.textBaseline = 'alphabetic';
-    g.fillText(e.label, cx + hw + gap, ty + (TEXT_ASCENT - TEXT_HEIGHT / 2) * size);
+    drawText(g, labelRuns(e.label), cx + hw + gap, ty, labelStyle);
   }
   g.restore();
 }
@@ -588,4 +594,12 @@ export function runsOf(parts: Readout['parts'], pieces: string[]): TextRun[] {
     if (typeof p === 'object' && p !== null && 'sup' in p) return { text, shift: 'sup' as const };
     return { text };
   });
+}
+
+/** The runs of a legend entry's label, a string or a list of strings and `sub` and `sup` parts. */
+function labelRuns(label: string | readonly (string | { sub?: string; sup?: string })[]): TextRun[] {
+  if (typeof label === 'string') return [{ text: label }];
+  return label.map((p) =>
+    typeof p === 'string' ? { text: p } : p.sub !== undefined ? { text: p.sub, shift: 'sub' as const } : { text: p.sup ?? '', shift: 'sup' as const },
+  );
 }

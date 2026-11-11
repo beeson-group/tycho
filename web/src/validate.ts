@@ -476,7 +476,15 @@ export function validate(scene: Scene, data?: DataStore, state?: State): string[
     } else if (o.kind === 'legend') {
       checkTweened(o.opacity, `${where}: the opacity`, isOpacity, '2.11');
       for (const e of o.entries) {
-        if (typeof e.label !== 'string') fail('2.11', `${where} has an entry without a label`);
+        const label = e.label as unknown;
+        const staticPart = (x: unknown) =>
+          typeof x === 'string' ||
+          (x !== null &&
+            typeof x === 'object' &&
+            Object.keys(x).length === 1 &&
+            (typeof (x as { sub?: unknown }).sub === 'string' || typeof (x as { sup?: unknown }).sup === 'string'));
+        if (!(typeof label === 'string' || (Array.isArray(label) && label.every(staticPart))))
+          fail('2.11', `${where} has an entry whose label is not a string or a list of strings and sub and sup parts`);
         if (e.marker !== undefined) checkMarker(where, e.marker, '2.11');
         if (e.line?.color !== undefined && !COLOR.test(e.line.color)) fail('2.11', `${where} has a line color that is not #rrggbb`);
         for (const c of e.colors ?? []) if (!COLOR.test(c)) fail('2.11', `${where} has a color ${JSON.stringify(c)} that is not #rrggbb`);

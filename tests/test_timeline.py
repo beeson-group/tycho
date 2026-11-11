@@ -340,3 +340,9 @@ def test_axes_titles_take_parts():
     assert layer["titles"] == ["Time [days]", ["\u03bb", {"sub": "r"}]]
     with pytest.raises(ty.SceneError, match=r"^2\.11:"):
         ty.axes(span="box", titles=("only one",))
+
+
+def test_a_legend_label_takes_sub_and_sup_parts():
+    assert ty.entry(["\u03bb", ty.sub("r1")], line={"color": "#1b9e77"})["label"] == ["\u03bb", {"sub": "r1"}]
+    with pytest.raises(ty.SceneError, match=r"^2\.11:"):
+        ty.entry(["t = ", ty.clock_value()])

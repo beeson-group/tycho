@@ -1471,7 +1471,17 @@ def _entry(value: Any) -> dict[str, Any]:
         raise SceneError(f"2.11: a legend entry is a dict with a label, not {value!r}")
     if extra := set(value) - {"label", "line", "marker", "colors"}:
         raise SceneError(f"2.11: a legend entry has unknown keys {sorted(extra)}")
-    out: dict[str, Any] = {"label": _text(value["label"], "the label of a legend entry")}
+    label = value["label"]
+    if isinstance(label, str):
+        out: dict[str, Any] = {"label": label}
+    else:
+        # a label may hold subscripts and superscripts, e.g. ["λ", ty.sub("r1")]
+        if isinstance(label, (bytes, Mapping)) or not isinstance(label, Sequence):
+            raise SceneError(f"2.11: the label of a legend entry is text or a list of text, sub, and sup parts, not {label!r}")
+        parts = [_text_part(p) for p in label]
+        if any(not isinstance(p, str) and set(p) - {"sub", "sup"} for p in parts):
+            raise SceneError(f"2.11: the label of a legend entry takes text, sub, and sup parts only, not {label!r}")
+        out = {"label": parts}
     if "line" in value:
         line = value["line"]
         if not isinstance(line, Mapping) or set(line) - {"color", "width", "dash", "opacity"}:
@@ -1499,7 +1509,7 @@ def _entry(value: Any) -> dict[str, Any]:
 
 
 def entry(
-    label: str, *, line: Mapping[str, Any] | None = None, marker: Mapping[str, Any] | None = None, colors: Sequence[str] | None = None
+    label: Any, *, line: Mapping[str, Any] | None = None, marker: Mapping[str, Any] | None = None, colors: Sequence[str] | None = None
 ) -> dict[str, Any]:
     """A legend entry: ``label`` with a ``line`` (``{"color", "width", "dash", "opacity"}``), a :func:`marker`, or ``colors``, a list of
     colors drawn as short lines side by side (section 2.11)."""

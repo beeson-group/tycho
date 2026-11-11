@@ -573,7 +573,17 @@ export type Overlay =
        */
       at: [number, number];
       entries: {
-        label: string;
+        label:
+          | string
+          | (
+              | string
+              | {
+                  sub: string;
+                }
+              | {
+                  sup: string;
+                }
+            )[];
         line?: {
           color?: Color;
           width?: number;

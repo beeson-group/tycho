@@ -579,6 +579,9 @@ export type Overlay =
       align?: 'start' | 'center' | 'end';
       baseline?: 'top' | 'middle' | 'bottom';
       opacity?: Opacity;
+      handle_length?: number;
+      handle_pad?: number;
+      column_spacing?: number;
     };
 
 /**

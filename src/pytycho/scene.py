@@ -1035,7 +1035,7 @@ def track(
     context: str | None = None,
     fit: bool | None = None,
     color: Any = None,
-    opacity: float | None = None,
+    opacity: Any = None,
     width: float | None = None,
     highlight: Any = None,
     visible: Any = None,
@@ -1103,7 +1103,7 @@ def arrow(
     before: str | None = None,
     after: str | None = None,
     color: str | None = None,
-    opacity: float | None = None,
+    opacity: Any = None,
     width: float | None = None,
     head: float | None = None,
     visible: Any = None,
@@ -1136,7 +1136,7 @@ def outline(
     view: Any,
     *,
     color: str | None = None,
-    opacity: float | None = None,
+    opacity: Any = None,
     width: float | None = None,
     dash: Sequence[float] | None = None,
     min_size: float | None = None,
@@ -2037,14 +2037,23 @@ class Scene:
         align: str | None = None,
         baseline: str | None = None,
         opacity: Any = None,
+        handle_length: float | None = None,
+        handle_pad: float | None = None,
+        column_spacing: float | None = None,
     ) -> None:
         """A legend overlay of :func:`entry` items at the fractions ``at = (fx, fy)`` of the stage, ``columns`` entries a row
-        (section 2.11)."""
+        (section 2.11). ``handle_length``, ``handle_pad``, and ``column_spacing`` are matplotlib's ``handlelength``,
+        ``handletextpad``, and ``columnspacing``, in units of the text size, by default 2, 0.8, and 2."""
         out: dict[str, Any] = {"kind": "legend", "at": _pair(at, "the place of a legend"), "entries": [_entry(e) for e in entries]}
         if columns is not None:
             out["columns"] = _integer(columns, "2.11: the columns of a legend")
             if out["columns"] < 1:
                 raise SceneError(f"2.11: a legend has {out['columns']} columns, fewer than one")
+        for key, value in (("handle_length", handle_length), ("handle_pad", handle_pad), ("column_spacing", column_spacing)):
+            if value is not None:
+                out[key] = _finite(value, f"2.11: the {key} of a legend")
+                if out[key] < 0:
+                    raise SceneError(f"2.11: the {key} of a legend is {out[key]}, not a nonnegative length")
         _text_style(
             {k: v for k, v in (("size", size), ("color", color), ("align", align), ("baseline", baseline)) if v is not None},
             "a legend",

@@ -247,6 +247,8 @@ describe('drawing helpers (section 2.11)', () => {
     expect(boxTicks(0, 22.06, 9)).toEqual({ values: [0, 2.5, 5, 7.5, 10, 12.5, 15, 17.5, 20], step: 2.5 });
     expect(boxTicks(-0.595, 1.255, 9).step).toBe(0.25);
     expect(boxTicks(-1.15, 1.15, 4)).toEqual({ values: [-1, 0, 1], step: 1 });
+    // matplotlib keeps two ticks at least, and steps down when the round step leaves one
+    expect(boxTicks(-1.06, -0.94, 2).values.map((v) => Number(v.toFixed(2)))).toEqual([-1.05, -1, -0.95]);
     expect(tickLabel(2.5, 2.5)).toBe('2.5');
     expect(tickLabel(-0.5, 0.25)).toBe('−0.50');
     expect(tickLabel(1e-17, 0.2)).toBe('0.0');

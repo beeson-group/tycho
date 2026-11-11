@@ -2499,6 +2499,18 @@
             },
             "opacity": {
               "$ref": "#/$defs/opacity"
+            },
+            "handle_length": {
+              "type": "number",
+              "minimum": 0
+            },
+            "handle_pad": {
+              "type": "number",
+              "minimum": 0
+            },
+            "column_spacing": {
+              "type": "number",
+              "minimum": 0
             }
           }
         }

@@ -76,6 +76,20 @@ The element is a `TychoViewerElement`, with the methods and properties below.
 | `reset()` | returns to the initial state of the scene and discards the stored state |
 | `fitAll()` | fits the camera of every panel to what the panel draws, panning and zooming each panel until its content fills it |
 | `exportVideo(options)` | records a video of the current state, as described below |
+| `seek(t)` | shows time `t` of the timeline, in seconds, paused (section 2.11 of the spec) |
+| `stages` | the stages of the scene, `{id, at, label}` in order of time, i.e. its named times for a presentation (rule K9) |
+| `goto(stage)` | shows a stage, given by its id or its index, paused, and throws for a stage the scene does not have |
+| `playTo(stage)` | plays from the time shown and pauses at the time of a stage. A stage behind the time shown is reached in the next loop |
+| `next()`, `previous()` | plays to the next stage, or shows the stage before the time shown, and returns its id, or `null` when there is none |
+| `time`, `currentStage` | the time shown in seconds, and the id of the last stage at or before it |
+
+The viewer fires the event `tycho-stage` when playback reaches a stage, with `detail: {id, index, at}`, and the event bubbles out of a shadow root. A slide deck that advances a scene one stage per click, e.g. on the fragments of a reveal.js slide, calls `next()` on each click, and `goto()` when the deck jumps to a slide.
+
+```js
+const viewer = document.querySelector('tycho-viewer');
+viewer.addEventListener('tycho-stage', (ev) => console.log(`reached ${ev.detail.id} at ${ev.detail.at} s`));
+document.querySelector('#next').addEventListener('click', () => viewer.next());
+```
 
 A scene can also be fetched over the network rather than embedded in the page, and then passed to `load`, as below.
 

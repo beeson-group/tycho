@@ -242,9 +242,18 @@ export function boxTicks(lo: number, hi: number, bins: number): { values: number
   if (!(range > 0) || !Number.isFinite(range)) return { values: [], step: 1 };
   const raw = range / Math.max(1, bins);
   const mag = Math.pow(10, Math.floor(Math.log10(raw)));
-  const step = (TICK_MANTISSAS.find((m) => m * mag >= raw * (1 - 1e-9)) ?? 10) * mag;
-  const values: number[] = [];
-  for (let k = Math.ceil(lo / step - 1e-9); k <= Math.floor(hi / step + 1e-9) && values.length < 200; k++) values.push(k * step + 0);
+  // the steps from the smallest round one of at least raw downward, since matplotlib keeps at least two ticks in view
+  const steps = [...TICK_MANTISSAS.map((m) => m * mag), ...TICK_MANTISSAS.map((m) => (m * mag) / 10)].filter((x) => x >= raw * (1 - 1e-9));
+  const down = [...TICK_MANTISSAS.map((m) => (m * mag) / 10), ...TICK_MANTISSAS.map((m) => (m * mag) / 100)].filter((x) => x < raw * (1 - 1e-9));
+  const ordered = [...steps.sort((x, y) => x - y), ...down.sort((x, y) => y - x)];
+  let values: number[] = [];
+  let step = ordered[0]!;
+  for (const st of ordered) {
+    step = st;
+    values = [];
+    for (let k = Math.ceil(lo / st - 1e-9); k <= Math.floor(hi / st + 1e-9) && values.length < 200; k++) values.push(k * st + 0);
+    if (values.length >= 2) break;
+  }
   return { values, step };
 }
 
@@ -347,9 +356,9 @@ export function drawLegend(g: G, legend: Extract<Overlay, { kind: 'legend' }>, w
   g.save();
   g.globalAlpha *= opacity;
   g.font = `${size}px ${font}`;
-  const handle = 1.8 * size;
-  const gap = 0.6 * size;
-  const columnGap = 1.4 * size;
+  const handle = (legend.handle_length ?? 2) * size;
+  const gap = (legend.handle_pad ?? 0.8) * size;
+  const columnGap = (legend.column_spacing ?? 2) * size;
   const columns = Math.max(1, Math.min(legend.columns ?? legend.entries.length, legend.entries.length));
   const rows = Math.ceil(legend.entries.length / columns);
   const handleWidth = (e: (typeof legend.entries)[number]) => (e.colors !== undefined ? Math.max(handle, 0.55 * size * e.colors.length) : handle);

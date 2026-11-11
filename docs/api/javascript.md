@@ -53,7 +53,7 @@ The page can also load the runtime as a classic script, which is a `<script>` el
 | `data` | a URL of `data.tyd`, or a CSS selector of such a block |
 | `theme` | `dark` or `light`, a built-in palette that replaces the theme of the scene. The viewer follows a later change of this attribute |
 | `autoplay` | present or absent, whatever its value. When present, the viewer plays once the scene is loaded and the element is visible |
-| `kiosk` | present or absent, whatever its value. When present, the viewer hides every control and plays as with `autoplay`, which suits a slide, and it neither restores nor stores the state |
+| `kiosk` | present or absent, whatever its value. When present, the viewer hides every control and plays as with `autoplay`, which suits a slide, and it neither restores nor stores the state. A time bar, with play and a scrubber through the loop, shows over the bottom of the stage while the pointer moves over the viewer, and hides after a short idle |
 
 The viewer takes each file from its child block marked `data-tycho="scene"` or `data-tycho="data"`, else from the attribute, else from the block with the id `tycho-scene` or `tycho-data`. A page can thus hold several viewers, each with its child blocks. Under `prefers-reduced-motion: reduce`, neither `autoplay` nor `kiosk` starts the clock, and the controls still work.
 

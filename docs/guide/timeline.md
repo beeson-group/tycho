@@ -52,7 +52,7 @@ camera = {
 }
 ```
 
-The camera shows the full transfer, zooms onto the midpoint of the spacecraft and the ghost that keeps flying the nominal, closes in as the two separate, and pulls back out. A camera whose window comes from a computation of the caller, e.g. a percentile box of a cloud smoothed over time, is written as keys sampled every few frames. The evaluator returns the window of a camera with keys for each panel, under the key `camera`, so that a test can check it. When the viewer pans or zooms a panel, the camera stays where it was left until it is fitted again, e.g. with the key `f`, which returns it to its keys.
+The camera shows the full transfer, zooms onto the midpoint of the spacecraft and the ghost that keeps flying the nominal, closes in as the two separate, and pulls back out. A camera whose window comes from a computation of the caller, e.g. a percentile box of a cloud smoothed over time, is written as keys sampled every few frames. The evaluator returns the window of a camera with keys for each panel, under the key `camera`, so that a test can check it. When the viewer pans or zooms a panel, the camera stays where it was left while the scene plays on, and the panel shows a button, Timeline view, which returns it to its keys, as the key `f` does for every panel. Neither playing nor a stage of a presentation returns it by itself.
 
 ## Labels, points, and overlays
 

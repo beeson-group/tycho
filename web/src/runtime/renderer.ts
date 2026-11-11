@@ -2553,6 +2553,15 @@ export class StageRenderer {
     for (const pid of this.panels.keys()) this.refit(pid);
   }
 
+  /**
+   * Whether the viewer has panned or zoomed a panel whose camera has keys (rule K5), so that the panel no longer follows them. A
+   * refit hands the camera back to its keys.
+   */
+  offKeys(pid: string): boolean {
+    const p = this.panels.get(pid);
+    return p !== undefined && p.userMoved && p.cameraSpec.kind === 'plane' && p.cameraSpec.keys !== undefined;
+  }
+
   private makeControls(p: PanelRender): void {
     p.controls?.dispose();
     p.controls = null;

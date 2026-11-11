@@ -3,7 +3,7 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { chromeTokens, colormapName, cssColorHex, DEFAULT_THEME, hostTheme, PALETTES, themed } from '../src/runtime/colors';
-import { buildChip, buildReadout, dropText, fillReadout, TychoViewerElement } from '../src/runtime/element';
+import { buildChip, buildReadout, dropText, fillReadout, timeText, TychoViewerElement } from '../src/runtime/element';
 import { GeometryCache } from '../src/runtime/geometry';
 import { GLYPHS, icon } from '../src/runtime/icons';
 import {
@@ -931,6 +931,94 @@ describe('a viewer embedded on a page, under a DOM stand-in', () => {
       expect(v.playing).toBe(false);
       expect(v.store.frame).toBe(steps - 1);
       expect(v.time).toBeCloseTo(L, 6);
+    });
+  });
+
+  describe('the time bar and the camera keys (section 2.11)', () => {
+    /** A live viewer of the dressed Broucke scene with a loop of 12 seconds, and a stand-in for the renderer that draws. */
+    async function timed(attributes: Record<string, string>, offKeys: () => boolean = () => false) {
+      const { scene, bytes } = dressedBroucke();
+      scene.clock.seconds = 12;
+      const { v, host } = viewer(attributes);
+      await v.load(JSON.stringify(scene), bytes);
+      v.unsubscribe = v.store.subscribe((c: string) => v.onChange(c));
+      v.onChange('state');
+      const renderer = { setTheme: vi.fn(), renderAt: () => new Map(), colorbars: () => [], offKeys, refit: vi.fn(), refitAll: vi.fn() };
+      v.renderer = renderer;
+      v.stageSize = { w: 400, h: 300 };
+      v.syncShown();
+      return { v, host, renderer };
+    }
+
+    it('a kiosk viewer scrubs through the loop in seconds, paused, and shows the time', async () => {
+      const { v } = await timed({ kiosk: '' });
+      const bar = v.timebar;
+      expect(bar).not.toBeNull();
+      expect([Number(bar.range.min), Number(bar.range.max)]).toEqual([0, 12]);
+      // one step of the range is one frame
+      expect(Number(bar.range.step) * v.scene.clock.steps).toBeCloseTo(12, 9);
+      v.play();
+      bar.range.value = '7.5';
+      bar.range.dispatchEvent({ type: 'input' });
+      expect(v.playing).toBe(false);
+      expect(v.time).toBeCloseTo(7.5, 9);
+      v.draw();
+      expect(bar.readout.textContent).toBe('7.5 / 12.0 s');
+      expect(Number(bar.range.value)).toBeCloseTo(7.5, 9);
+      expect(bar.play.title).toBe('Play (k)');
+      bar.range.value = '2';
+      bar.range.dispatchEvent({ type: 'input' });
+      expect(v.time).toBeCloseTo(2, 9);
+      bar.play.click();
+      expect(v.playing).toBe(true);
+      expect(bar.play.title).toBe('Pause (k)');
+    });
+
+    it('shows the frame index beside the scrubber when the clock does not give the length of a loop', () => {
+      expect(timeText({ mode: 'fraction', channels: ['@index'], steps: 300 }, 1.5, 56)).toBe('56 / 300');
+      expect(timeText({ mode: 'fraction', channels: ['@index'], steps: 300, seconds: 19 }, 1.25, 20)).toBe('1.3 / 19.0 s');
+    });
+
+    it('the time bar wakes with the pointer and sleeps after an idle, and a viewer that is not a kiosk does not have one', async () => {
+      vi.useFakeTimers();
+      try {
+        const { v } = await timed({ kiosk: '' });
+        expect(v.root.classList.contains('awake')).toBe(false);
+        v.stage.dispatchEvent({ type: 'pointermove' });
+        expect(v.root.classList.contains('awake')).toBe(true);
+        vi.advanceTimersByTime(1900);
+        v.stage.dispatchEvent({ type: 'pointermove' });
+        vi.advanceTimersByTime(1900);
+        expect(v.root.classList.contains('awake')).toBe(true);
+        vi.advanceTimersByTime(200);
+        expect(v.root.classList.contains('awake')).toBe(false);
+        const plain = await timed({});
+        expect(plain.v.timebar).toBeNull();
+        plain.v.stage.dispatchEvent({ type: 'pointermove' });
+        expect(plain.v.root.classList.contains('awake')).toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('a panel moved off its camera keys offers to follow them again, and F returns every panel to them', async () => {
+      let off = true;
+      const { v, host, renderer } = await timed({ kiosk: '' }, () => off);
+      const [pid, dom] = [...v.panelDom.entries()][0];
+      v.draw();
+      expect(dom.follow.hidden).toBe(false);
+      renderer.refit.mockImplementation(() => (off = false));
+      dom.follow.click();
+      expect(renderer.refit).toHaveBeenCalledWith(pid);
+      v.draw();
+      expect(dom.follow.hidden).toBe(true);
+      off = true;
+      v.draw();
+      renderer.refitAll.mockImplementation(() => (off = false));
+      host.dispatchEvent({ type: 'keydown', key: 'f', stopPropagation() {}, preventDefault() {}, composedPath: () => [host] });
+      expect(renderer.refitAll).toHaveBeenCalledTimes(1);
+      v.draw();
+      expect(dom.follow.hidden).toBe(true);
     });
   });
 

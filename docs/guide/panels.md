@@ -106,8 +106,10 @@ The keys below act while the viewer element, `<tycho-viewer>`, has the keyboard 
 - Space or `k` plays and pauses.
 - The right and left arrows, or `.` and `,`, step one frame and pause, or ten frames with Shift.
 - Home or `0` goes to frame 0, and `1` to `9` go to as many tenths of the loop.
-- `F` resets every panel's view, as the house icon in the View group does.
+- `F` resets every panel's view, as the house icon in the View group does: a panel whose camera has keys (see [the timeline](timeline.md)) follows its keys again, and any other panel is fitted to what it draws. A double click on a panel resets its own view.
 - The up and down arrows move the first scene-scoped slider by one stop, or ten stops with Shift.
 - Escape closes an open menu or the export options.
 
 The keys that play, step, and seek require a transport, except on a kiosk page, which plays without one.
+
+A panel whose camera has keys stops following them once it is panned or zoomed, so that it stays where it was moved while the scene plays on. It then shows a button, Timeline view, in its lower right corner, which hands the camera back to the keys, as `F` does for every panel.

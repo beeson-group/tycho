@@ -81,6 +81,7 @@ const LAYER_KEYS: Record<string, readonly string[]> = {
     'visible',
     'clock',
     'line',
+    'flat',
     'dash',
     'fill',
   ],
@@ -335,6 +336,8 @@ function checkTrackLayer(scene: Scene, id: string, layer: TrackLayer): void {
   }
   if (layer.line !== undefined && typeof layer.line !== 'boolean')
     fail('2.7', `view ${id}: a track layer's line is ${JSON.stringify(layer.line)}, not a boolean`);
+  if (layer.flat !== undefined && typeof layer.flat !== 'boolean')
+    fail('2.7', `view ${id}: a track layer's flat is ${JSON.stringify(layer.flat)}, not a boolean`);
   const dash = layer.dash as unknown;
   if (dash !== undefined && !(Array.isArray(dash) && dash.length === 2 && dash.every((d) => finite(d) && d > 0)))
     fail('2.7', `view ${id}: a track layer's dash is ${JSON.stringify(dash)}, not two positive lengths`);

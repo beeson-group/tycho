@@ -242,7 +242,13 @@ def test_drawing_keys_are_written_as_given():
     head = {"shape": "ring", "size": ty.tween((0, 9), (1, 12)), "edge": "#000000", "edge_width": 1.5, "opacity": 1.0, "glow": glow}
     layers = [
         ty.track(
-            "a", reveal="grow", head=head, color=ty.steps_color("S", [0.0], ["#000000", "#d62728"]), dash=(4, 2), opacity=ty.fade(0.5)
+            "a",
+            reveal="grow",
+            head=head,
+            color=ty.steps_color("S", [0.0], ["#000000", "#d62728"]),
+            dash=(4, 2),
+            opacity=ty.fade(0.5),
+            flat=True,
         ),
         ty.track("a", 0, line=False, head=True, fill={"base": 0.0, "color": "#d62728", "opacity": 0.25}),
         ty.axes("box", ticks=["y"], size=11),
@@ -273,6 +279,7 @@ def test_drawing_keys_are_written_as_given():
     assert [o["kind"] for o in doc["overlays"]] == ["text", "legend"]
     assert doc["initial"]["layout"]["keys"] == [[0.0, 1.0], [1.0, 0.5, "smooth"]]
     assert doc["theme"]["font"] == "serif"
+    assert doc["views"]["v"]["layers"][0]["flat"] is True
     jsonschema = pytest.importorskip("jsonschema")
     schema = json.loads((CORPUS.parent / "scene.schema.json").read_text())
     jsonschema.Draft202012Validator(schema).validate(doc)
@@ -287,6 +294,8 @@ def test_drawing_keys_are_checked():
         ty.steps_color("S", [1.0, 0.0], ["#000000", "#111111", "#222222"])
     with pytest.raises(ty.SceneError, match=r"^2.11:"):
         ty.track("a", dash=(1, 0))
+    with pytest.raises(ty.SceneError, match=r"^2.11: a track layer's flat"):
+        ty.track("a", flat="yes")  # pyright: ignore[reportArgumentType]
     with pytest.raises(ty.SceneError, match=r"^K1:"):
         ty.track("a", opacity=ty.tween((0, 0), (1, 2)))
     scene, _ = base(layers=[ty.track("a", head={"glow": {"channel": "nope"}})])

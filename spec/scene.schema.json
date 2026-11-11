@@ -1087,6 +1087,9 @@
             "line": {
               "type": "boolean"
             },
+            "flat": {
+              "type": "boolean"
+            },
             "dash": {
               "type": "array",
               "items": {

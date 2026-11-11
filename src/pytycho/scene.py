@@ -831,6 +831,7 @@ def _check_layer(layer: Any) -> dict[str, Any]:
             "highlight",
             "clock",
             "line",
+            "flat",
             "dash",
             "fill",
         }
@@ -865,6 +866,8 @@ def _check_layer(layer: Any) -> dict[str, Any]:
             out["clock"] = _layer_clock(layer["clock"], "a track layer")
         if "line" in layer:
             out["line"] = _bool(layer["line"], "a track layer's line")
+        if "flat" in layer:
+            out["flat"] = _bool(layer["flat"], "a track layer's flat")
         if "dash" in layer:
             dash = _pair(layer["dash"], "a track layer's dash")
             if min(dash) <= 0.0:
@@ -1072,6 +1075,7 @@ def track(
     visible: Any = None,
     clock: Any = None,
     line: bool | None = None,
+    flat: bool | None = None,
     dash: Sequence[float] | None = None,
     fill: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -1085,9 +1089,11 @@ def track(
     fit, e.g. for a whole curve drawn on a close-up whose camera is fitted to a window given by another layer.
 
     Section 2.11 adds ``clock``, a :func:`layer_clock` on which the layer takes its readings (rule K4), ``line=False``, which draws the
-    heads alone, ``dash=(on, off)`` in CSS pixels, ``fill={"base": b, "color": c, "opacity": o}``, which shades the area between the
-    line and the value ``b`` of the plane's second axis where the line lies above it, a head with a ``shape``, ``edge``, ``edge_width``,
-    ``opacity``, and ``glow``, an ``opacity`` tween, and a color in steps of a channel (:func:`steps_color`).
+    heads alone, ``flat=True``, which blends each pixel that the layer's lines cover once, as one translucent path of a plot,
+    rather than once per segment over it, ``dash=(on, off)`` in CSS pixels, ``fill={"base": b, "color": c, "opacity": o}``,
+    which shades the area between the line and the value ``b`` of the plane's second axis where the line lies above it, a head
+    with a ``shape``, ``edge``, ``edge_width``, ``opacity``, and ``glow``, an ``opacity`` tween, and a color in steps of a channel
+    (:func:`steps_color`).
     """
     if taper is not None:
         if trail is None:
@@ -1117,6 +1123,7 @@ def track(
         ("visible", visible),
         ("clock", clock),
         ("line", line),
+        ("flat", flat),
         ("dash", None if dash is None else list(dash)),
         ("fill", fill),
     ):

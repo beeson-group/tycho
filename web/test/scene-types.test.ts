@@ -343,6 +343,9 @@ describe('laps, counts, and the options for drawing (C6, V3, L3, 2.7)', () => {
     expect(rule(() => validate(withLayer({ reveal: 'trail', trail: { fraction: 0.3, taper: { width: 1.5 } } })))).toBe('2.7');
     expect(rule(() => validate(withLayer({ head: { size: 0 } })))).toBe('L3');
     expect(rule(() => validate(withLayer({ head: { color: 'yellow' } })))).toBe('L3');
+    // a flat layer blends each pixel of its lines once (section 2.11)
+    expect(validate(withLayer({ flat: true, opacity: 0.2 }), data(), state())).toEqual([]);
+    expect(rule(() => validate(withLayer({ flat: 'yes' as unknown as boolean })))).toBe('2.7');
     const marks = baseScene();
     marks.views.main!.layers = [
       { kind: 'axes', span: 'full' },

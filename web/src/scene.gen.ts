@@ -226,6 +226,7 @@ export type Layer =
       visible?: VarRef;
       clock?: LayerClock;
       line?: boolean;
+      flat?: boolean;
       /**
        * @minItems 2
        * @maxItems 2

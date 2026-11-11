@@ -428,6 +428,20 @@ const material = (vertexShader: string, uniforms: Record<string, THREE.IUniform>
 
 const clamp01 = (x: number): number => Math.min(1, Math.max(0, x));
 
+/**
+ * Makes a material blend each pixel, or each sample of a multisampled pixel, once per layer, as a translucent path of a plot
+ * does (section 2.11): a fragment passes only where the stencil does not hold the layer's mark yet, and leaves the mark. The
+ * stencil is cleared with each frame, and two flat layers of a panel carry different marks.
+ */
+function flatten(mat: THREE.Material, mark: number): void {
+  mat.stencilWrite = true;
+  mat.stencilRef = mark;
+  mat.stencilFunc = THREE.NotEqualStencilFunc;
+  mat.stencilFail = THREE.KeepStencilOp;
+  mat.stencilZFail = THREE.KeepStencilOp;
+  mat.stencilZPass = THREE.ReplaceStencilOp;
+}
+
 // buffers shared by every panel
 
 /** Arrays and GPU buffers built once and shared by every geometry that draws them, kept for the renderer's life. */
@@ -1266,6 +1280,8 @@ export class TrackDraw implements Draw {
   private fillBuffer = new Float32Array(0);
   /** False for a layer that draws its heads alone (section 2.11). */
   private readonly line: boolean;
+  /** The stencil mark of a flat layer, whose lines blend each pixel once (section 2.11), else 0. */
+  private readonly flatMark: number;
   /** True when the layer's opacity or its head's size or opacity moves with the timeline, hence it is drawn every frame. */
   private readonly tweened: boolean;
   private members: number[] = [];
@@ -1296,6 +1312,7 @@ export class TrackDraw implements Draw {
     const color = coloring(themedSpec(plan.color, ctx.theme), set, hexRgb(ctx.theme.foreground));
     this.kernel = kernelOf(ctx, layer, set);
     this.line = layer.line !== false;
+    this.flatMark = layer.flat === true ? (plan.index % 255) + 1 : 0;
     const dashed = layer.dash !== undefined && this.line;
     this.src = {
       ctx,
@@ -1361,6 +1378,7 @@ export class TrackDraw implements Draw {
 
     // the end pieces computed on the CPU, at most two per track
     this.pieces = new Pieces(2 * Math.min(set.tracks, 64), this.resolution, dash);
+    if (this.flatMark > 0) flatten(this.pieces.mesh.material as THREE.Material, this.flatMark);
     this.group.add(this.pieces.mesh);
 
     this.headSize = typeof marker.size === 'number' ? marker.size : HEAD_SIZE;
@@ -1452,6 +1470,8 @@ export class TrackDraw implements Draw {
         { lap, highlight, width: highlight ? this.hiWidth : this.width, opacity: highlight ? this.hiOpacity : this.opacity },
         this.uniforms,
       );
+      // the highlight is drawn over a flat layer as over any other
+      if (this.flatMark > 0 && !highlight) flatten(p.mat, this.flatMark);
       (highlight ? this.hiHolder : this.baseHolder).add(p.holder);
       this.passes.set(key, p);
       this.showPass(p);
@@ -2303,11 +2323,15 @@ const DRAG_MS = 100;
 /** How long after the last coarse rebuild the underlays are drawn again with antialiasing, in milliseconds. */
 const REFINE_MS = 150;
 
-/** A render target of `width` by `height` device pixels for copies pixel for pixel, multisampled when `samples` is above 0. */
+/**
+ * A render target of `width` by `height` device pixels for copies pixel for pixel, multisampled when `samples` is above 0. It
+ * has a stencil, for flat layers, which three attaches together with a depth buffer.
+ */
 function pixelTarget(width: number, height: number, samples: number): THREE.WebGLRenderTarget {
   return new THREE.WebGLRenderTarget(width, height, {
     samples,
-    depthBuffer: false,
+    depthBuffer: true,
+    stencilBuffer: true,
     minFilter: THREE.NearestFilter,
     magFilter: THREE.NearestFilter,
     generateMipmaps: false,
@@ -2444,6 +2468,9 @@ export class StageRenderer {
    */
   private scratch: THREE.WebGLRenderTarget | null = null;
   private readonly viewport = new THREE.Vector4();
+  /** The canvas's viewport and scissor in CSS pixels, as they were set for the panel being drawn. */
+  private readonly cssViewport = new THREE.Vector4();
+  private readonly cssScissor = new THREE.Vector4();
   private readonly buffer = new THREE.Vector2();
   private readonly region = new THREE.Box2();
   private readonly corner = new THREE.Vector2();
@@ -2461,7 +2488,8 @@ export class StageRenderer {
     this.canvas = canvas;
     // colors are sRGB as the page gives them, written unconverted
     THREE.ColorManagement.enabled = false;
-    this.gl = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: options.preserveDrawingBuffer ?? false });
+    // the stencil serves flat layers (section 2.11)
+    this.gl = new THREE.WebGLRenderer({ canvas, antialias: true, stencil: true, preserveDrawingBuffer: options.preserveDrawingBuffer ?? false });
     this.cacheStatic = options.cacheStatic ?? true;
     this.coarseDrags = options.coarseDrags ?? true;
     this.blit = blitPass();
@@ -2591,6 +2619,11 @@ export class StageRenderer {
         this.drawCoarse(p, this.underlay, vp);
         this.scheduleRefine();
       } else this.drawFine(p, this.underlay, vp);
+      // Leaving a render target, three floors the canvas's viewport and scissor in device pixels, where setViewport and setScissor
+      // round them. At a fractional pixel ratio the rest of the panel would then be drawn a pixel shorter, and shifted by half a
+      // pixel, at every frame that draws the underlay again, hence the panel's own viewport and scissor are set once more.
+      this.gl.setViewport(this.gl.getViewport(this.cssViewport));
+      this.gl.setScissor(this.gl.getScissor(this.cssScissor));
     }
     this.blit.material.uniforms.uUnderlay!.value = this.underlay.texture;
     this.gl.render(this.blit.scene, this.blit.camera);
@@ -2602,7 +2635,7 @@ export class StageRenderer {
     target.scissor.copy(r);
     target.scissorTest = true;
     this.gl.setRenderTarget(target);
-    this.gl.clear(true, false, false);
+    this.gl.clear(true, false, true);
     this.gl.render(p.staticScene, p.camera);
     this.gl.setRenderTarget(null);
   }
@@ -2635,7 +2668,7 @@ export class StageRenderer {
     s.scissor.set(0, 0, r.z, r.w);
     s.scissorTest = true;
     this.gl.setRenderTarget(s);
-    this.gl.clear(true, false, false);
+    this.gl.clear(true, false, true);
     this.gl.render(p.staticScene, p.camera);
     this.gl.setRenderTarget(null);
     this.region.min.set(0, 0);
@@ -2928,7 +2961,8 @@ export class StageRenderer {
         errors.set(pid, p.error);
         continue;
       }
-      if (rect.w < 1 || rect.h < 1) continue;
+      // a view faded out entirely is not drawn, rather than drawn under a cover whose edge may fall between two device pixels
+      if (rect.w < 1 || rect.h < 1 || opacityAt(p.plan?.view.opacity, s) <= 0) continue;
       for (const d of p.draws.values()) d.resize?.(rect.w, rect.h);
       for (const d of p.draws.values()) if (d instanceof OutlineDraw) d.place(p, d.target === null ? undefined : this.panels.get(d.target));
       const y = h - rect.y - rect.h;

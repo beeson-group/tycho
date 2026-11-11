@@ -454,16 +454,25 @@ export function drawLegend(g: G, legend: Extract<Overlay, { kind: 'legend' }>, w
   const lh = (TEXT_HEIGHT + 0.5) * size;
   const inner = 0.4 * size;
   const outer = 0.5 * size;
-  const height = rows * lh - 0.5 * size;
+  // A label with a subscript reaches further down, as its mathtext does in matplotlib, whose legend stacks the entries of a column by
+  // the heights of their texts, hence the entries below it in its column move down by as much.
+  const below = (e: (typeof legend.entries)[number]): number =>
+    labelRuns(e.label).some((r) => r.shift === 'sub') ? (SUB_DROP + (SCRIPT_SIZE - 1) * TEXT_DESCENT) * size : 0;
+  const offsets = cells.map(({ col, row }) => {
+    let y = 0;
+    for (let r = 0; r < row; r++) y += lh + below(legend.entries[col * rows + r]!);
+    return y;
+  });
+  const height = Math.max(...cells.map((c, i) => offsets[i]! + lh + below(c.e))) - 0.5 * size;
   const ax = legend.at[0] * w;
   const ay = legend.at[1] * h;
   const align = legend.align ?? 'center';
   const left = align === 'center' ? ax - total / 2 : align === 'end' ? ax - outer - inner - total : ax + outer + inner;
   const base = legend.baseline ?? 'top';
   const top = base === 'middle' ? ay - height / 2 : base === 'bottom' ? ay - outer - inner - height : ay + outer + inner;
-  for (const { e, col, row } of cells) {
+  for (const [i, { e, col }] of cells.entries()) {
     const cx = left + colWidth.slice(0, col).reduce((a, b) => a + b, 0) + columnGap * col;
-    const ty = top + lh * row + (TEXT_HEIGHT / 2) * size;
+    const ty = top + offsets[i]! + (TEXT_HEIGHT / 2) * size;
     // a handle sits at the middle of the letters of its label rather than of its text box, as matplotlib draws it
     const cy = ty - 0.12 * size;
     const hw = handleWidth(e);

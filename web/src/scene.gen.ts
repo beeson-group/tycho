@@ -314,6 +314,7 @@ export type Layer =
       size?: number;
       color?: Color;
       weight?: 'normal' | 'bold';
+      linespacing?: number;
       box?: Box;
       opacity?: Opacity;
       leader?:
@@ -563,6 +564,7 @@ export type Overlay =
       size?: number;
       color?: Color;
       weight?: 'normal' | 'bold';
+      linespacing?: number;
       box?: Box;
       opacity?: Opacity;
     }

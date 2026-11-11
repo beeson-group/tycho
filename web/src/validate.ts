@@ -61,7 +61,7 @@ const SET_KEYS = ['label', 'frame', 'tags', 'attrs', 'tracks', 'offsets', 'posit
 const VIEW_KEYS = ['label', 'frame', 'camera', 'driver', 'layers', 'opacity', 'margin'];
 const PLANE_CAMERA_KEYS = ['kind', 'plane', 'aspect', 'keys'];
 const ORBIT_CAMERA_KEYS = ['kind', 'projection', 'up', 'stretch', 'turn'];
-const TEXT_KEYS = ['align', 'baseline', 'size', 'color', 'weight', 'box', 'opacity'];
+const TEXT_KEYS = ['align', 'baseline', 'size', 'color', 'weight', 'linespacing', 'box', 'opacity'];
 const LAYER_KEYS: Record<string, readonly string[]> = {
   track: [
     'kind',
@@ -207,7 +207,7 @@ function checkParts(scene: Scene, parts: unknown, what: string): void {
 /** Checks the style of a label or a text overlay (rule K6). */
 function checkTextStyle(
   id: string,
-  t: { align?: unknown; baseline?: unknown; size?: unknown; color?: unknown; weight?: unknown; box?: Box; opacity?: unknown },
+  t: { align?: unknown; baseline?: unknown; size?: unknown; color?: unknown; weight?: unknown; linespacing?: unknown; box?: Box; opacity?: unknown },
 ): void {
   if (t.align !== undefined && !['start', 'center', 'end'].includes(t.align as string)) fail('K6', `${id}: an align is ${JSON.stringify(t.align)}`);
   if (t.baseline !== undefined && !['top', 'middle', 'bottom', 'alphabetic'].includes(t.baseline as string))
@@ -215,6 +215,7 @@ function checkTextStyle(
   if (t.size !== undefined && !isPositive(t.size)) fail('K6', `${id}: a text size is ${JSON.stringify(t.size)}, not positive`);
   if (t.color !== undefined && !COLOR.test(t.color as string)) fail('K6', `${id}: a text color is ${JSON.stringify(t.color)}, not #rrggbb`);
   if (t.weight !== undefined && t.weight !== 'normal' && t.weight !== 'bold') fail('K6', `${id}: a weight is ${JSON.stringify(t.weight)}, not normal or bold`);
+  if (t.linespacing !== undefined && !isPositive(t.linespacing)) fail('K6', `${id}: a linespacing is ${JSON.stringify(t.linespacing)}, not positive`);
   checkTweened(t.opacity, `${id}: an opacity`, isOpacity, 'K6');
   const b = t.box;
   if (b !== undefined) {

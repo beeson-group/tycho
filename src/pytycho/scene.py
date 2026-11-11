@@ -567,7 +567,7 @@ def _box(value: Any, what: str) -> dict[str, Any]:
 
 
 def _text_style(value: Mapping[str, Any], what: str, out: dict[str, Any]) -> None:
-    """The keys that a label and a text overlay share: align, baseline, size, color, weight, box, and opacity."""
+    """The keys that a label and a text overlay share: align, baseline, size, color, weight, linespacing, box, and opacity."""
     if "align" in value:
         out["align"] = _enum(value["align"], ("start", "center", "end"), f"2.11: the align of {what}")
     if "baseline" in value:
@@ -578,6 +578,8 @@ def _text_style(value: Mapping[str, Any], what: str, out: dict[str, Any]) -> Non
         out["color"] = _color(value["color"], f"the color of {what}")
     if "weight" in value:
         out["weight"] = _enum(value["weight"], ("normal", "bold"), f"2.11: the weight of {what}")
+    if "linespacing" in value:
+        out["linespacing"] = _positive(value["linespacing"], f"the linespacing of {what}")
     if "box" in value:
         out["box"] = _box(value["box"], what)
     if "opacity" in value:
@@ -1011,7 +1013,21 @@ def _check_layer(layer: Any) -> dict[str, Any]:
         if "opacity" in layer:
             out["opacity"] = _opacity(layer["opacity"], "a grid layer's opacity")
     elif kind == "label":
-        allowed |= {"text", "at", "offset", "align", "baseline", "size", "color", "weight", "box", "opacity", "leader", "clock"}
+        allowed |= {
+            "text",
+            "at",
+            "offset",
+            "align",
+            "baseline",
+            "size",
+            "color",
+            "weight",
+            "linespacing",
+            "box",
+            "opacity",
+            "leader",
+            "clock",
+        }
         if "text" not in layer or "at" not in layer:
             raise SceneError("K6: a label layer lacks a text or an anchor")
         out["text"] = _text_parts(layer["text"], "a label")
@@ -1257,6 +1273,7 @@ def label(
     size: float | None = None,
     color: str | None = None,
     weight: str | None = None,
+    linespacing: float | None = None,
     box: Mapping[str, Any] | None = None,
     leader: Any = None,
     opacity: Any = None,
@@ -1268,7 +1285,8 @@ def label(
     ``text`` is a string or a list of parts, e.g. ``["t = ", clock_value(factor=4.34, decimals=1), " days"]``. It is drawn ``offset``
     CSS pixels from the anchor, ``(dx, dy)`` with ``dy`` down the screen, aligned by ``align`` (start, center, end) and ``baseline``
     (top, middle, bottom), ``size`` CSS pixels high, with a ``leader`` line from the anchor and a ``box`` behind it when given.
-    ``opacity`` may be a tween, e.g. :func:`fade`, and ``clock`` is the clock of a member anchor (rule K4).
+    ``opacity`` may be a tween, e.g. :func:`fade`, and ``clock`` is the clock of a member anchor (rule K4). ``linespacing`` spaces
+    the lines of a text as matplotlib's does, 1.2 by default.
     """
     layer: dict[str, Any] = {"kind": "label", "text": text, "at": at}
     for key, value in (
@@ -1278,6 +1296,7 @@ def label(
         ("size", size),
         ("color", color),
         ("weight", weight),
+        ("linespacing", linespacing),
         ("box", box),
         ("leader", leader),
         ("opacity", opacity),
@@ -2074,9 +2093,10 @@ class Scene:
     def text(self, text: Any, at: Sequence[float], **style: Any) -> None:
         """A text overlay over the whole stage at the fractions ``at = (fx, fy)`` of its width and height (section 2.11).
 
-        ``style`` takes the ``align``, ``baseline``, ``size``, ``color``, ``weight``, ``box``, and ``opacity`` of a label.
+        ``style`` takes the ``align``, ``baseline``, ``size``, ``color``, ``weight``, ``linespacing``, ``box``, and ``opacity`` of a
+        label.
         """
-        if extra := set(style) - {"align", "baseline", "size", "color", "weight", "box", "opacity"}:
+        if extra := set(style) - {"align", "baseline", "size", "color", "weight", "linespacing", "box", "opacity"}:
             raise SceneError(f"2.11: a text overlay has unknown keys {sorted(extra)}")
         out: dict[str, Any] = {"kind": "text", "text": _text_parts(text, "a text overlay"), "at": _pair(at, "the place of a text overlay")}
         _text_style(style, "a text overlay", out)

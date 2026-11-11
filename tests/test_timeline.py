@@ -294,6 +294,9 @@ def test_drawing_keys_are_checked():
         ty.steps_color("S", [1.0, 0.0], ["#000000", "#111111", "#222222"])
     with pytest.raises(ty.SceneError, match=r"^2.11:"):
         ty.track("a", dash=(1, 0))
+    assert ty.label("a\nb", ty.at_screen(0.5, 0.5), linespacing=1.5)["linespacing"] == 1.5
+    with pytest.raises(ty.SceneError, match=r"linespacing"):
+        ty.label("a\nb", ty.at_screen(0.5, 0.5), linespacing=0)
     with pytest.raises(ty.SceneError, match=r"^2.11: a track layer's flat"):
         ty.track("a", flat="yes")  # pyright: ignore[reportArgumentType]
     with pytest.raises(ty.SceneError, match=r"^K1:"):

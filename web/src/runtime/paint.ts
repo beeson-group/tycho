@@ -137,6 +137,16 @@ export interface TextStyle {
   baseline: 'top' | 'middle' | 'bottom' | 'alphabetic';
   opacity: number;
   box?: Box;
+  /** The spacing of the lines, as matplotlib's `linespacing`, 1.2 by default. */
+  linespacing?: number;
+}
+
+/**
+ * The distance between the baselines of two lines of a text, in units of its size. Matplotlib puts each line's baseline its
+ * ascent times `linespacing` below the descent of the line before, hence the default pitch grows by the ascent per unit.
+ */
+export function linePitch(linespacing = 1.2): number {
+  return LINE_PITCH + TEXT_ASCENT * (linespacing - 1.2);
 }
 
 /** A run of a text, set lowered and smaller as a subscript, raised and smaller as a superscript, or on the baseline (rule K7). */
@@ -184,7 +194,7 @@ export function textRect(g: G, text: string | TextRun[], x: number, y: number, s
   const lines = runLines(text);
   const w = Math.max(0, ...lines.map((l) => lineWidth(g, l, style)));
   g.font = fontOf(style);
-  const h = (TEXT_HEIGHT + LINE_PITCH * (lines.length - 1)) * style.size;
+  const h = (TEXT_HEIGHT + linePitch(style.linespacing) * (lines.length - 1)) * style.size;
   const left = style.align === 'center' ? x - w / 2 : style.align === 'end' ? x - w : x;
   const b = style.baseline;
   const top = b === 'middle' ? y - h / 2 : b === 'bottom' ? y - h : b === 'alphabetic' ? y - h + TEXT_DESCENT * style.size : y;
@@ -219,7 +229,7 @@ export function drawText(g: G, text: string | TextRun[], x: number, y: number, s
   runLines(text).forEach((line, i) => {
     const lw = lineWidth(g, line, style);
     let lx = style.align === 'center' ? left + (w - lw) / 2 : style.align === 'end' ? left + w - lw : left;
-    const base = top + (TEXT_ASCENT + LINE_PITCH * i) * style.size;
+    const base = top + (TEXT_ASCENT + linePitch(style.linespacing) * i) * style.size;
     for (const r of line) {
       g.font = fontOf(style, r);
       const dy = r.shift === 'sub' ? SUB_DROP * style.size : r.shift === 'sup' ? -SUP_RISE * style.size : 0;
@@ -245,7 +255,11 @@ function roundRect(g: G, x: number, y: number, w: number, h: number, r: number):
 }
 
 /** The style of a label or a text overlay at time `s` of the timeline. */
-export function styleOf(spec: Pick<LabelLayer, 'size' | 'color' | 'weight' | 'align' | 'baseline' | 'opacity' | 'box'>, theme: Theme, s: number): TextStyle {
+export function styleOf(
+  spec: Pick<LabelLayer, 'size' | 'color' | 'weight' | 'align' | 'baseline' | 'opacity' | 'box' | 'linespacing'>,
+  theme: Theme,
+  s: number,
+): TextStyle {
   const box =
     spec.box === undefined
       ? undefined
@@ -259,6 +273,7 @@ export function styleOf(spec: Pick<LabelLayer, 'size' | 'color' | 'weight' | 'al
     baseline: spec.baseline ?? 'middle',
     opacity: opacityAt(spec.opacity, s),
     box,
+    ...(spec.linespacing === undefined ? {} : { linespacing: spec.linespacing }),
   };
 }
 

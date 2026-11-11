@@ -1396,6 +1396,10 @@
                 "bold"
               ]
             },
+            "linespacing": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
             "box": {
               "$ref": "#/$defs/box"
             },
@@ -2472,6 +2476,10 @@
                 "normal",
                 "bold"
               ]
+            },
+            "linespacing": {
+              "type": "number",
+              "exclusiveMinimum": 0
             },
             "box": {
               "$ref": "#/$defs/box"

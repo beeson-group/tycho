@@ -17,7 +17,7 @@ import {
 } from '../src/evaluate/timeline';
 import { formatNumber } from '../src/runtime/readouts';
 import { dashStart, inset, layoutAt, fillSegment } from '../src/runtime/renderer';
-import { boxTicks, markerStroke, tickLabel } from '../src/runtime/paint';
+import { boxTicks, linePitch, markerStroke, tickLabel } from '../src/runtime/paint';
 import { stepIndex } from '../src/runtime/colors';
 import { tile } from '../src/runtime/tiles';
 import type { Clock, Layout } from '../src/scene';
@@ -229,6 +229,11 @@ describe('formats of a number part (rule K7)', () => {
 });
 
 describe('drawing helpers (section 2.11)', () => {
+  it('spaces the lines of a text as matplotlib does, by its linespacing', () => {
+    expect(linePitch()).toBeCloseTo(1.15, 12);
+    // matplotlib's linespacing=1.5 puts each baseline 0.3 ascents further below the line before
+    expect(linePitch(1.5)).toBeCloseTo(1.15 + 0.3 * 0.757, 12);
+  });
   it('starts a dash pattern where its track enters the stage, as matplotlib clips a line to its figure', () => {
     // four samples along y = 5, from x = -10 to 15, and a stage of 10 by 10
     const xy = [-10, 5, -5, 5, 5, 5, 15, 5];

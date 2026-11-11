@@ -287,6 +287,11 @@ export type Layer =
       ticks?: ('x' | 'y')[];
       size?: number;
       opacity?: Opacity;
+      /**
+       * @minItems 2
+       * @maxItems 2
+       */
+      titles?: [Text, Text];
     }
   | {
       kind: 'grid';

@@ -3114,6 +3114,7 @@ export class StageRenderer {
     };
     const labels: PanelPaint['labels'] = [];
     let box: PanelPaint['box'] = null;
+    let boxTitles: PanelPaint['boxTitles'];
     for (const lp of p.plan.layers) {
       const d = p.draws.get(lp.index);
       if (d instanceof LabelDraw) {
@@ -3140,9 +3141,10 @@ export class StageRenderer {
           titles: [title(ix), title(iy)],
           opacity: 1,
         };
+        boxTitles = (d.box as { titles?: PanelPaint['boxTitles'] }).titles;
       }
     }
-    return { outer: p.outer, rect: p.rect, opacity: p.plan.view.opacity, labels, box };
+    return { outer: p.outer, rect: p.rect, opacity: p.plan.view.opacity, labels, box, ...(boxTitles !== undefined ? { boxTitles } : {}) };
   }
 
   dispose(): void {
@@ -3163,6 +3165,8 @@ export interface PanelPaint {
   outer: Rect;
   rect: Rect;
   opacity: View['opacity'];
+  /** The titles of the box's axes layer, when it gives its own (section 2.11). */
+  boxTitles?: MarkLayer extends never ? never : Extract<MarkLayer, { kind: 'axes' }>['titles'];
   /** The labels at their anchors, `clip` for an anchor at a point, which is hidden outside the plot. */
   labels: { layer: LabelLayer; x: number; y: number; clip: boolean }[];
   box: BoxPaint | null;

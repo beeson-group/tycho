@@ -351,7 +351,8 @@ export interface BoxPaint {
   /** The axes that carry tick numbers. */
   ticks: { x: boolean; y: boolean };
   size: number;
-  titles: [string, string];
+  /** The axis titles, the frame's or the axes layer's own, as text or as runs with subscripts. */
+  titles: [string | TextRun[], string | TextRun[]];
   opacity: number;
 }
 
@@ -405,18 +406,16 @@ export function drawBox(g: G, b: BoxPaint, theme: Theme): void {
     }
   }
   const title = (16 / 14) * b.size;
-  g.font = `${title}px ${font}`;
-  if (b.titles[0] !== '') {
-    g.textAlign = 'center';
-    g.fillText(b.titles[0], x + w / 2, y + h + tick + pad + (b.ticks.x ? TEXT_HEIGHT * b.size : 0) + titlePad + TEXT_ASCENT * title);
+  const style: TextStyle = { size: title, color: fg, weight: 'normal', font, align: 'center', baseline: 'alphabetic', opacity: 1 };
+  if (plainText(b.titles[0]) !== '') {
+    drawText(g, b.titles[0], x + w / 2, y + h + tick + pad + (b.ticks.x ? TEXT_HEIGHT * b.size : 0) + titlePad + TEXT_ASCENT * title, style);
   }
-  if (b.titles[1] !== '') {
+  if (plainText(b.titles[1]) !== '') {
     // turned to read upward, the title's descent faces the box, and its box ends the title pad from the tick numbers
     g.save();
     g.translate(x - tick - pad - (b.ticks.y ? yLabelWidth : 0) - titlePad, y + h / 2);
     g.rotate(-Math.PI / 2);
-    g.textAlign = 'center';
-    g.fillText(b.titles[1], 0, -TEXT_DESCENT * title);
+    drawText(g, b.titles[1], 0, -TEXT_DESCENT * title, style);
     g.restore();
   }
   g.restore();
@@ -550,7 +549,19 @@ export function paintStage(
     if (opacity <= 0) continue;
     g.save();
     g.globalAlpha = opacity;
-    if (info.box !== null) drawBox(g, info.box, theme);
+    if (info.box !== null) {
+      const own = info.boxTitles;
+      const titles: BoxPaint['titles'] =
+        own === undefined
+          ? info.box.titles
+          : ([0, 1].map((i) => {
+              const t = own[i];
+              if (t === undefined) return info.box!.titles[i]!;
+              const parts = typeof t === 'string' ? [t] : t;
+              return runsOf(parts, text(pid, parts));
+            }) as BoxPaint['titles']);
+      drawBox(g, { ...info.box, titles }, theme);
+    }
     for (const l of info.labels) {
       // a label at a point is hidden while its anchor is outside the plot, as matplotlib clips an annotation
       const r = info.rect;

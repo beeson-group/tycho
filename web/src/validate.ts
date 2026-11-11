@@ -87,7 +87,7 @@ const LAYER_KEYS: Record<string, readonly string[]> = {
   arrow: ['kind', 'sets', 'members', 'vector', 'scale', 'before', 'after', 'color', 'opacity', 'width', 'head', 'visible', 'clock'],
   outline: ['kind', 'view', 'color', 'opacity', 'width', 'dash', 'min_size', 'visible'],
   body: ['kind', 'body', 'trail', 'size', 'visible', 'opacity'],
-  axes: ['kind', 'span', 'visible', 'ticks', 'size', 'opacity'],
+  axes: ['kind', 'span', 'visible', 'ticks', 'size', 'opacity', 'titles'],
   grid: ['kind', 'labels', 'visible', 'opacity'],
   label: ['kind', 'text', 'at', 'offset', 'leader', 'clock', 'visible', ...TEXT_KEYS],
   points: ['kind', 'sets', 'members', 'marker', 'reveal', 'before', 'after', 'clock', 'fit', 'opacity', 'visible'],
@@ -546,6 +546,11 @@ export function validate(scene: Scene, data?: DataStore, state?: State): string[
         if (layer.ticks !== undefined && !(Array.isArray(layer.ticks) && layer.ticks.every((t) => t === 'x' || t === 'y')))
           fail('2.11', `view ${id}: an axes layer's ticks are ${JSON.stringify(layer.ticks)}, not a list of x and y`);
         if (layer.size !== undefined && !isPositive(layer.size)) fail('2.11', `view ${id}: an axes layer's size is not positive`);
+        const titles = layer.titles as unknown;
+        if (titles !== undefined) {
+          if (!Array.isArray(titles) || titles.length !== 2) fail('2.11', `view ${id}: an axes layer's titles are ${JSON.stringify(titles)}, not two texts`);
+          for (const tt of titles) checkParts(scene, tt, `view ${id}: an axes title`);
+        }
         checkTweened(layer.opacity, `view ${id}: an axes layer's opacity`, isOpacity);
       } else if (layer.kind === 'grid') {
         if (layer.labels !== undefined && typeof layer.labels !== 'boolean')

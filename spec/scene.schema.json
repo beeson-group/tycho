@@ -1307,6 +1307,14 @@
             },
             "opacity": {
               "$ref": "#/$defs/opacity"
+            },
+            "titles": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/text"
+              },
+              "minItems": 2,
+              "maxItems": 2
             }
           }
         },

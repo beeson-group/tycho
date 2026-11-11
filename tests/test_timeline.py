@@ -333,3 +333,10 @@ def test_a_marker_edge_width_may_be_a_tween():
     assert m["edge_width"] == {"keys": [[0.0, 3.5], [1.0, 0.5]]}
     with pytest.raises(ty.SceneError):
         ty.marker(edge_width=ty.tween((0, 1), (1, -1)))
+
+
+def test_axes_titles_take_parts():
+    layer = ty.axes(span="box", titles=("Time [days]", ["\u03bb", ty.sub("r")]))
+    assert layer["titles"] == ["Time [days]", ["\u03bb", {"sub": "r"}]]
+    with pytest.raises(ty.SceneError, match=r"^2\.11:"):
+        ty.axes(span="box", titles=("only one",))

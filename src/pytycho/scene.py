@@ -982,7 +982,12 @@ def _check_layer(layer: Any) -> dict[str, Any]:
             if out["size"] <= 0.0:
                 raise SceneError(f"2.7: a body layer's size is {out['size']}, not positive")
     elif kind == "axes":
-        allowed |= {"span", "ticks", "size", "opacity"}
+        allowed |= {"span", "ticks", "size", "opacity", "titles"}
+        if "titles" in layer:
+            titles = layer["titles"]
+            if isinstance(titles, (str, bytes, Mapping)) or not isinstance(titles, Sequence) or len(titles) != 2:
+                raise SceneError(f"2.11: an axes layer's titles are {titles!r}, not two texts")
+            out["titles"] = [_text_parts(t, "an axis title") for t in titles]
         if "span" in layer:
             out["span"] = _enum(layer["span"], ("positive", "full", "box"), "2.7: an axes layer's span")
         if "ticks" in layer:
@@ -1200,10 +1205,17 @@ def body(body: Any, *, trail: float | None = None, size: float | None = None, vi
 
 
 def axes(
-    span: str | None = None, visible: Any = None, *, ticks: Sequence[str] | None = None, size: float | None = None, opacity: Any = None
+    span: str | None = None,
+    visible: Any = None,
+    *,
+    ticks: Sequence[str] | None = None,
+    size: float | None = None,
+    opacity: Any = None,
+    titles: Sequence[Any] | None = None,
 ) -> dict[str, Any]:
     """An axes layer. ``span`` is ``"full"`` or ``"positive"``, by default full under a plane camera, or ``"box"``, a plot box with
     ticks outside and tick numbers on the axes of ``ticks`` (``"x"`` and ``"y"``, by default both), ``size`` CSS pixels high (section 2.11).
+    ``titles``, two texts of parts, replace the titles of the frame's axes, e.g. ``(["Time [days]"], ["λ", ty.sub("r")])``.
     """
     layer: dict[str, Any] = {"kind": "axes"}
     for key, value in (
@@ -1212,6 +1224,7 @@ def axes(
         ("ticks", None if ticks is None else list(ticks)),
         ("size", size),
         ("opacity", opacity),
+        ("titles", None if titles is None else list(titles)),
     ):
         if value is not None:
             layer[key] = value

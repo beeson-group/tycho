@@ -2,7 +2,7 @@
 // stand-in of dom-shim.ts, without a renderer, since WebGL is not available under Node.
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { chromeTokens, colormapName, cssColorHex, DEFAULT_THEME, hostTheme, PALETTES } from '../src/runtime/colors';
+import { chromeTokens, colormapName, cssColorHex, DEFAULT_THEME, hostTheme, PALETTES, themed } from '../src/runtime/colors';
 import { buildChip, buildReadout, dropText, fillReadout, TychoViewerElement } from '../src/runtime/element';
 import { GeometryCache } from '../src/runtime/geometry';
 import { GLYPHS, icon } from '../src/runtime/icons';
@@ -655,13 +655,18 @@ describe('a viewer embedded on a page, under a DOM stand-in', () => {
     it('takes a palette in place of the scene theme, and a custom property of the host over both', () => {
       const none = () => '';
       const scene = { background: '#102030', foreground: '#405060', grid: '#708090' };
-      expect(hostTheme(scene, null, none)).toEqual(scene);
-      expect(hostTheme(scene, 'sepia', none)).toEqual(scene);
-      expect(hostTheme(scene, 'dark', none)).toEqual({ background: '#050505', foreground: '#f2f2ef', grid: '#232320' });
-      expect(hostTheme(scene, 'light', none)).toEqual({ background: '#faf8f3', foreground: '#141413', grid: '#e3e0d8' });
+      // the theme keeps the scene's own foreground and background, which the colors equal to them follow
+      const own = { sceneForeground: '#405060', sceneBackground: '#102030' };
+      expect(hostTheme(scene, null, none)).toEqual({ ...scene, ...own });
+      expect(hostTheme(scene, 'sepia', none)).toEqual({ ...scene, ...own });
+      expect(hostTheme(scene, 'dark', none)).toEqual({ background: '#050505', foreground: '#f2f2ef', grid: '#232320', ...own });
+      expect(hostTheme(scene, 'light', none)).toEqual({ background: '#faf8f3', foreground: '#141413', grid: '#e3e0d8', ...own });
       const set = (p: string) => (p === '--tycho-grid' ? ' #ABC ' : '');
-      expect(hostTheme(scene, 'light', set)).toEqual({ ...PALETTES.light, grid: '#aabbcc' });
-      expect(hostTheme(scene, null, set)).toEqual({ ...scene, grid: '#aabbcc' });
+      expect(hostTheme(scene, 'light', set)).toEqual({ ...PALETTES.light, grid: '#aabbcc', ...own });
+      expect(hostTheme(scene, null, set)).toEqual({ ...scene, grid: '#aabbcc', ...own });
+      expect(themed('#405060', hostTheme(scene, 'dark', none))).toBe('#f2f2ef');
+      expect(themed('#102030', hostTheme(scene, 'dark', none))).toBe('#050505');
+      expect(themed('#123456', hostTheme(scene, 'dark', none))).toBe('#123456');
     });
     it('reads a form of a color it cannot parse only through a canvas, and ignores what is not a color', () => {
       expect(cssColorHex('#AbCdEf')).toBe('#abcdef');
@@ -675,7 +680,7 @@ describe('a viewer embedded on a page, under a DOM stand-in', () => {
       const accent = host.style['--accent'];
       host.setAttribute('theme', 'light');
       v.attributeChangedCallback();
-      expect(v.renderer.setTheme).toHaveBeenLastCalledWith(PALETTES.light);
+      expect(v.renderer.setTheme).toHaveBeenLastCalledWith(expect.objectContaining(PALETTES.light));
       expect(host.style['--bg']).toBe('#faf8f3');
       expect(host.style['--fg']).toBe('#141413');
       expect(host.style['--highlight']).toBe('#000000');

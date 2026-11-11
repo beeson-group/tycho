@@ -6,7 +6,7 @@
 import type { Box, LabelLayer, Layout, Marker, Overlay, Readout, Scene, State } from '../scene.js';
 import type { StageRenderer } from './renderer.js';
 import { loopSeconds, opacityAt, sizeAt } from '../evaluate/timeline.js';
-import { hexRgb, mixHex, type Theme } from './colors.js';
+import { hexRgb, mixHex, themed, themedMarker, type Theme } from './colors.js';
 import type { Rect } from './tiles.js';
 
 export const FONT = '"Helvetica Neue", Arial, sans-serif';
@@ -200,15 +200,19 @@ function roundRect(g: G, x: number, y: number, w: number, h: number, r: number):
 
 /** The style of a label or a text overlay at time `s` of the timeline. */
 export function styleOf(spec: Pick<LabelLayer, 'size' | 'color' | 'weight' | 'align' | 'baseline' | 'opacity' | 'box'>, theme: Theme, s: number): TextStyle {
+  const box =
+    spec.box === undefined
+      ? undefined
+      : { ...spec.box, ...(spec.box.fill ? { fill: themed(spec.box.fill, theme) } : {}), ...(spec.box.edge ? { edge: themed(spec.box.edge, theme) } : {}) };
   return {
     size: spec.size ?? LABEL_SIZE,
-    color: spec.color ?? theme.foreground,
+    color: spec.color !== undefined ? themed(spec.color, theme) : theme.foreground,
     weight: spec.weight ?? 'normal',
     font: theme.font ?? FONT,
     align: spec.align ?? 'start',
     baseline: spec.baseline ?? 'middle',
     opacity: opacityAt(spec.opacity, s),
-    box: spec.box,
+    box,
   };
 }
 
@@ -245,7 +249,7 @@ export function drawLabel(g: G, layer: LabelLayer, text: string, ax: number, ay:
         const leader = layer.leader === true ? {} : layer.leader;
         g.save();
         g.globalAlpha *= style.opacity;
-        g.strokeStyle = leader.color ?? style.color;
+        g.strokeStyle = leader.color !== undefined ? themed(leader.color, theme) : style.color;
         g.lineWidth = leader.width ?? 1;
         g.beginPath();
         g.moveTo(ex + shrink * ux, ey + shrink * uy);
@@ -410,7 +414,7 @@ export function drawLegend(g: G, legend: Extract<Overlay, { kind: 'legend' }>, w
       const n = e.colors.length;
       const part = hw / n;
       e.colors.forEach((c, i) => {
-        g.strokeStyle = c;
+        g.strokeStyle = themed(c, theme);
         g.lineWidth = e.line?.width ?? 2;
         g.globalAlpha = opacity * (e.line?.opacity ?? 1);
         g.lineCap = 'butt';
@@ -423,7 +427,7 @@ export function drawLegend(g: G, legend: Extract<Overlay, { kind: 'legend' }>, w
     } else if (e.line !== undefined) {
       g.save();
       g.globalAlpha = opacity * (e.line.opacity ?? 1);
-      g.strokeStyle = e.line.color ?? theme.foreground;
+      g.strokeStyle = themed(e.line.color ?? theme.foreground, theme);
       g.lineWidth = e.line.width ?? 2;
       if (e.line.dash !== undefined) g.setLineDash(e.line.dash);
       g.beginPath();
@@ -433,7 +437,7 @@ export function drawLegend(g: G, legend: Extract<Overlay, { kind: 'legend' }>, w
       g.restore();
     }
     if (e.marker !== undefined) {
-      const m = e.marker;
+      const m = themedMarker(e.marker, theme);
       g.save();
       g.globalAlpha = opacity * opacityAt(m.opacity, s);
       drawMarker(
@@ -448,7 +452,7 @@ export function drawLegend(g: G, legend: Extract<Overlay, { kind: 'legend' }>, w
       );
       g.restore();
     }
-    g.fillStyle = legend.color ?? theme.foreground;
+    g.fillStyle = themed(legend.color ?? theme.foreground, theme);
     g.textAlign = 'left';
     g.textBaseline = 'alphabetic';
     g.fillText(e.label, cx + hw + gap, cy + (TEXT_ASCENT - TEXT_HEIGHT / 2) * size);

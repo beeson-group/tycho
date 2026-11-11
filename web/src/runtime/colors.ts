@@ -17,6 +17,34 @@ export interface Theme {
   font?: string;
   /** The color of the gutters between panels in a video, by default a blend of the foreground and the background. */
   gutter?: string;
+  /** The foreground and the background of the scene's own theme, which the colors equal to them follow (section 2.11). */
+  sceneForeground?: string;
+  sceneBackground?: string;
+}
+
+/**
+ * A color of the scene as the viewer draws it: a color equal to the foreground or the background of the scene's theme is drawn
+ * in the viewer's foreground or background, so that black lines and white marker fills of a scene written for a white page follow
+ * a palette that replaces its theme, e.g. the dark one of a slide. Any other color is drawn as it is.
+ */
+export function themed(hex: string, theme: Theme): string {
+  const h = hex.toLowerCase();
+  if (theme.sceneForeground !== undefined && h === theme.sceneForeground.toLowerCase()) return theme.foreground;
+  if (theme.sceneBackground !== undefined && h === theme.sceneBackground.toLowerCase()) return theme.background;
+  return hex;
+}
+
+/** A layer's color with its fixed colors themed. */
+export function themedSpec(spec: ColorSpec | undefined, theme: Theme): ColorSpec | undefined {
+  if (spec === undefined) return spec;
+  if (typeof spec === 'string') return themed(spec, theme);
+  if (isStepped(spec)) return { ...spec, colors: spec.colors.map((c) => themed(c, theme)) as typeof spec.colors };
+  return spec;
+}
+
+/** A marker with its fill and its edge themed. */
+export function themedMarker<M extends { color?: string; edge?: string }>(m: M, theme: Theme): M {
+  return { ...m, ...(m.color !== undefined ? { color: themed(m.color, theme) } : {}), ...(m.edge !== undefined ? { edge: themed(m.edge, theme) } : {}) };
 }
 
 export const DEFAULT_THEME: Theme = { background: '#000000', foreground: '#d8d8d8', grid: '#262626' };
@@ -68,6 +96,8 @@ export function hostTheme(base: Theme, name: string | null, read: (property: str
   };
   const font = read('--tycho-font') || base.font;
   if (font) out.font = font;
+  out.sceneForeground = base.foreground;
+  out.sceneBackground = base.background;
   // a gutter in the scene's background follows the background of a palette
   if (base.gutter !== undefined) out.gutter = palette && base.gutter.toLowerCase() === base.background.toLowerCase() ? out.background : base.gutter;
   return out;

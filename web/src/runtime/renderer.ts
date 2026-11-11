@@ -74,7 +74,22 @@ import type {
   View,
 } from '../scene.js';
 import { INDEX_CHANNEL } from '../scene.js';
-import { colorScale, coloring, gradientCss, gradientStops, hexRgb, isStepped, mixHex, sceneTheme, type Coloring, type Rgb, type Theme } from './colors.js';
+import {
+  colorScale,
+  coloring,
+  gradientCss,
+  gradientStops,
+  hexRgb,
+  isStepped,
+  mixHex,
+  sceneTheme,
+  themed,
+  themedMarker,
+  themedSpec,
+  type Coloring,
+  type Rgb,
+  type Theme,
+} from './colors.js';
 import { markerCanvas, markerStroke, TICK_SIZE, type BoxPaint } from './paint.js';
 import {
   EMPTY_RANGE,
@@ -1268,7 +1283,7 @@ export class TrackDraw implements Draw {
     const readings = this.clocks ?? ctx.geometry.readings(set.id, INDEX_CHANNEL);
     this.spec = revealSpec(layer, set.periodic, clockLaps(plan.clock));
     this.color = plan.color;
-    const color = coloring(plan.color, set, hexRgb(ctx.theme.foreground));
+    const color = coloring(themedSpec(plan.color, ctx.theme), set, hexRgb(ctx.theme.foreground));
     this.kernel = kernelOf(ctx, layer, set);
     this.line = layer.line !== false;
     const dashed = layer.dash !== undefined && this.line;
@@ -1290,7 +1305,7 @@ export class TrackDraw implements Draw {
     this.fraction = this.spec.reveal === 'trail' ? this.spec.laps * this.spec.fraction : 0;
     this.taperWidth = layer.trail?.taper?.width ?? TAPER_WIDTH;
     this.taperOpacity = layer.trail?.taper?.opacity ?? TAPER_OPACITY;
-    const marker = headMarker(layer);
+    const marker = themedMarker(headMarker(layer), ctx.theme);
     this.tweened = typeof layer.opacity === 'object' || typeof marker.size === 'object' || typeof marker.opacity === 'object';
 
     this.ranges = trackTexture(set.tracks);
@@ -1311,7 +1326,13 @@ export class TrackDraw implements Draw {
     };
     if (layer.fill !== undefined) {
       const f = layer.fill;
-      const rgb = hexRgb(f.color ?? (color.kind === 'constant' ? `#${new THREE.Color(...color.rgb).getHexString()}` : ctx.theme.foreground));
+      const rgb = hexRgb(
+        f.color !== undefined
+          ? themed(f.color, ctx.theme)
+          : color.kind === 'constant'
+            ? `#${new THREE.Color(...color.rgb).getHexString()}`
+            : ctx.theme.foreground,
+      );
       const mat = new THREE.MeshBasicMaterial({
         color: new THREE.Color(...rgb),
         transparent: true,
@@ -1675,8 +1696,8 @@ class PointsDraw implements Draw {
     this.key = key;
     this.layer = layer;
     const m = layer.marker ?? {};
-    this.rgb = hexRgb(m.color ?? ctx.theme.foreground);
-    this.sprites = new MarkerSprites(m, typeof m.size === 'number' ? m.size : 4, false);
+    this.rgb = hexRgb(m.color !== undefined ? themed(m.color, ctx.theme) : ctx.theme.foreground);
+    this.sprites = new MarkerSprites(themedMarker(m, ctx.theme), typeof m.size === 'number' ? m.size : 4, false);
     this.group.add(this.sprites.points);
     this.isStatic =
       (layer.reveal ?? 'none') === 'none' &&
@@ -1797,7 +1818,7 @@ class BodyDraw implements Draw {
     const body = Object.hasOwn(bodies, layer.body) ? bodies[layer.body] : undefined;
     this.label = body?.label ?? null;
     this.size = layer.size ?? BODY_SIZE;
-    const color = new THREE.Color(...hexRgb(body?.color ?? ctx.theme.foreground));
+    const color = new THREE.Color(...hexRgb(body?.color !== undefined ? themed(body.color, ctx.theme) : ctx.theme.foreground));
     this.ready = Promise.resolve();
     const pg = new THREE.BufferGeometry();
     pg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3), 3).setUsage(THREE.DynamicDrawUsage));
@@ -1935,7 +1956,9 @@ class ArrowDraw implements Draw {
     const { layer } = plan;
     const uniforms = {
       uResolution: this.resolution,
-      uColor: { value: new THREE.Vector4(...hexRgb(layer.color ?? ctx.theme.foreground), typeof layer.opacity === 'number' ? layer.opacity : 1) },
+      uColor: {
+        value: new THREE.Vector4(...hexRgb(themed(layer.color ?? ctx.theme.foreground, ctx.theme)), typeof layer.opacity === 'number' ? layer.opacity : 1),
+      },
       uWidth: { value: layer.width ?? 1 },
       uHead: { value: layer.head?.size ?? ARROWHEAD_SIZE },
       uHeadWidth: { value: ARROWHEAD_WIDTH },
@@ -2055,7 +2078,7 @@ class OutlineDraw implements Draw {
   constructor(ctx: DrawContext, layer: OutlineLayer, key: string) {
     this.key = key;
     this.layer = layer;
-    const color = new THREE.Vector4(...hexRgb(layer.color ?? ctx.theme.foreground), typeof layer.opacity === 'number' ? layer.opacity : 1);
+    const color = new THREE.Vector4(...hexRgb(themed(layer.color ?? ctx.theme.foreground, ctx.theme)), typeof layer.opacity === 'number' ? layer.opacity : 1);
     this.mesh = new THREE.Mesh(new THREE.BufferGeometry(), material(OUTLINE_VERTEX, { uColor: { value: color } }));
     this.mesh.frustumCulled = false;
     this.mesh.visible = false;
@@ -2644,14 +2667,14 @@ export class StageRenderer {
         let key: string;
         if (lp.kind === 'track') {
           if (lp.set === null) continue;
-          const color = lp.color === undefined ? theme : JSON.stringify(lp.color);
+          const color = `${JSON.stringify(lp.color ?? null)}\0${theme}`;
           key = `track\0${plan.viewId}\0${lp.index}\0${lp.set.id}\0${plan.display}\0${lp.channel ?? ''}\0${color}`;
         } else if (lp.kind === 'arrow') {
           if (lp.set === null) continue;
-          const look = JSON.stringify([lp.layer.color ?? theme, lp.layer.opacity, lp.layer.width, lp.layer.head]);
+          const look = JSON.stringify([lp.layer.color ?? null, theme, lp.layer.opacity, lp.layer.width, lp.layer.head]);
           key = `arrow\0${plan.viewId}\0${lp.index}\0${lp.set.id}\0${plan.display}\0${lp.channel}\0${look}`;
         } else if (lp.kind === 'outline') {
-          key = `outline\0${plan.viewId}\0${lp.index}\0${JSON.stringify([lp.layer, lp.layer.color === undefined ? theme : ''])}`;
+          key = `outline\0${plan.viewId}\0${lp.index}\0${JSON.stringify([lp.layer, theme])}`;
         } else if (lp.kind === 'points' || lp.kind === 'label') {
           if (lp.kind === 'points' && lp.set === null) continue;
           key = `${lp.kind}\0${plan.viewId}\0${lp.index}\0${lp.set?.id ?? ''}\0${plan.display}\0${JSON.stringify(lp.layer)}\0${theme}`;

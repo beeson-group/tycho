@@ -1818,9 +1818,11 @@ function imageTexture(geometry: GeometryCache, view: string): Promise<THREE.Text
       const type = bytes[0] === 0xff ? 'image/jpeg' : bytes[0] === 0x52 ? 'image/webp' : 'image/png';
       const bitmap = await createImageBitmap(new Blob([bytes as Uint8Array<ArrayBuffer>], { type }), { imageOrientation: 'flipY' });
       const texture = new THREE.Texture(bitmap as unknown as HTMLImageElement);
-      // sampled from one level, which keeps a photograph as crisp as matplotlib draws it when the image is about the size it is shown at
+      // Sampled pixel by pixel from one level, as matplotlib draws a photograph: an image about the size it is shown at stays as
+      // crisp as its own pixels wherever the body falls between two device pixels, where a linear blend would soften it.
       texture.generateMipmaps = false;
-      texture.minFilter = THREE.LinearFilter;
+      texture.minFilter = THREE.NearestFilter;
+      texture.magFilter = THREE.NearestFilter;
       texture.flipY = false;
       texture.colorSpace = THREE.NoColorSpace;
       texture.needsUpdate = true;

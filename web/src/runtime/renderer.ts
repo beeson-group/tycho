@@ -75,7 +75,7 @@ import type {
 } from '../scene.js';
 import { INDEX_CHANNEL } from '../scene.js';
 import { colorScale, coloring, gradientCss, gradientStops, hexRgb, isStepped, mixHex, sceneTheme, type Coloring, type Rgb, type Theme } from './colors.js';
-import { markerCanvas, TICK_SIZE, type BoxPaint } from './paint.js';
+import { markerCanvas, markerStroke, TICK_SIZE, type BoxPaint } from './paint.js';
 import {
   EMPTY_RANGE,
   GeometryCache,
@@ -916,7 +916,7 @@ class Pass {
         u: ctx.shared.get(`u\0${set.id}\0${readings.channel}`, () => pairReadings(set, readings.u)),
         tr: ctx.shared.get(`t\0${set.id}`, () => pairTracks(set)),
         col: c.kind === 'sample' ? ctx.shared.get(`c\0${set.id}\0${colorKey}`, () => pairs(set, c.rgb, 3)) : null,
-        dist: dist === null ? null : ctx.shared.get(`d\0${set.id}\0${display}`, () => pairs(set, dist, 1)),
+        dist: dist === null ? null : ctx.shared.get(`d\0${set.id}\0${display}\0${keyOf(dist)}`, () => pairs(set, dist, 1)),
       };
     }
     const s = set.start(what);
@@ -1097,9 +1097,14 @@ function trackTexture(tracks: number): { data: Float32Array; texture: THREE.Data
   return { data, texture, width };
 }
 
-/** The arclength of every sample from the first of its track, along the positions `pos` of x, y, z per sample. */
-function arclengths(set: SetData, pos: ArrayLike<number>): Float32Array {
+/**
+ * The arclength of every sample from the first of its track, along the positions `pos` of x, y, z per sample, with the
+ * component along axis `up` scaled by `ratio`, so that a free aspect, which scales the two axes of the plane apart, dashes evenly.
+ */
+function arclengths(set: SetData, pos: ArrayLike<number>, up = 1, ratio = 1): Float32Array {
   const out = new Float32Array(set.samples);
+  const k = [1, 1, 1];
+  k[up] = ratio;
   for (let t = 0; t < set.tracks; t++) {
     const s = set.start(t);
     let d = 0;
@@ -1107,7 +1112,7 @@ function arclengths(set: SetData, pos: ArrayLike<number>): Float32Array {
     for (let i = 1; i < set.count(t); i++) {
       const a = 3 * (s + i - 1);
       const b = 3 * (s + i);
-      d += Math.hypot(pos[b]! - pos[a]!, pos[b + 1]! - pos[a + 1]!, pos[b + 2]! - pos[a + 2]!);
+      d += Math.hypot(k[0]! * (pos[b]! - pos[a]!), k[1]! * (pos[b + 1]! - pos[a + 1]!), k[2]! * (pos[b + 2]! - pos[a + 2]!));
       out[s + i] = d;
     }
   }
@@ -1140,9 +1145,9 @@ export class MarkerSprites {
     this.setSize(size);
   }
 
-  /** Sets the sprites' size in CSS pixels, drawing the texture again when the size grows past it. */
+  /** Sets the size of the sprites' shape in CSS pixels, drawing the texture again when the size grows past it. */
   setSize(size: number): void {
-    this.material.size = size;
+    this.material.size = size + markerStroke(this.marker, size);
     const want = Math.max(8, Math.ceil(size));
     if (want > this.texSize || want < this.texSize / 3) {
       this.texSize = want;
@@ -1343,9 +1348,26 @@ export class TrackDraw implements Draw {
     this.resolution.value.set(Math.max(1, w), Math.max(1, h));
   }
 
-  /** Sets the pixels per unit of the display frame along the screen, which a dash is measured in. */
-  setPixels(pixels: number): void {
-    if (this.uniforms.uPixels !== undefined) this.uniforms.uPixels.value = pixels;
+  /** The ratio of the pixels per unit up the screen to those across it, for which the arclengths of a dash were computed. */
+  private dashRatio = 1;
+
+  /**
+   * Sets the pixels per unit of the display frame across and up the screen, which a dash is measured in. Under a free aspect the two
+   * differ, and the arclengths are computed again, and the passes built again, when their ratio changes.
+   */
+  setPixels(across: number, up: number): void {
+    if (this.uniforms.uPixels === undefined || this.src.dist === null) return;
+    this.uniforms.uPixels.value = across;
+    const ratio = up / Math.max(across, 1e-12);
+    if (!(Math.abs(ratio / this.dashRatio - 1) > 0.01)) return;
+    this.dashRatio = ratio;
+    this.src.dist = arclengths(this.set, this.geo.positions, this.planeAxes[1], ratio);
+    for (const p of this.passes.values()) {
+      p.holder.removeFromParent();
+      p.dispose();
+    }
+    this.passes.clear();
+    this.filled = false;
   }
 
   /** The color of a vertex of track `t`, which is the layer's color or a blend of the colors of two samples. */
@@ -1437,7 +1459,7 @@ export class TrackDraw implements Draw {
     const fade = typeof layer.opacity === 'object' ? opacityAt(layer.opacity, s) : 1;
     this.heads?.setOpacity(fade * opacityAt(marker.opacity, s));
     if (this.heads !== null && typeof marker.size === 'object') this.heads.setSize(sizeAt(marker.size, s, HEAD_SIZE));
-    if (this.glow !== null) this.glow.setOpacity(fade * (marker.glow?.opacity ?? 0.35));
+    if (this.glow !== null) this.glow.setOpacity(fade * opacityAt(marker.opacity, s) * (marker.glow?.opacity ?? 0.35));
     if (this.fill !== null) this.fill.material.opacity = fade * (layer.fill?.opacity ?? 0.25);
     return f;
   }
@@ -2844,8 +2866,10 @@ export class StageRenderer {
       this.keyed(p, state, q);
       this.turn(p, q);
       this.follow(p);
-      const pixels = p.camera instanceof THREE.OrthographicCamera ? p.rect.w / Math.max(1e-12, (p.camera.right - p.camera.left) / p.camera.zoom) : 1;
-      for (const d of p.draws.values()) if (d instanceof TrackDraw) d.setPixels(pixels);
+      const ortho = p.camera instanceof THREE.OrthographicCamera ? p.camera : null;
+      const across = ortho === null ? 1 : p.rect.w / Math.max(1e-12, (ortho.right - ortho.left) / ortho.zoom);
+      const up = ortho === null ? 1 : p.rect.h / Math.max(1e-12, (ortho.top - ortho.bottom) / ortho.zoom);
+      for (const d of p.draws.values()) if (d instanceof TrackDraw) d.setPixels(across, up);
     }
     for (const [pid] of tiles.panels) {
       const p = this.panel(pid);

@@ -52,13 +52,12 @@ export function drawMarker(g: G, shape: string, x: number, y: number, d: number,
       break;
     case 'cross':
     case 'plus': {
-      const k = shape === 'cross' ? Math.SQRT1_2 : 1;
-      const dx = shape === 'cross' ? r * k : r;
+      // a cross spans the square of the marker's size, corner to corner, as matplotlib's x does
       if (shape === 'cross') {
-        g.moveTo(x - dx, y - dx);
-        g.lineTo(x + dx, y + dx);
-        g.moveTo(x - dx, y + dx);
-        g.lineTo(x + dx, y - dx);
+        g.moveTo(x - r, y - r);
+        g.lineTo(x + r, y + r);
+        g.moveTo(x - r, y + r);
+        g.lineTo(x + r, y - r);
       } else {
         g.moveTo(x - r, y);
         g.lineTo(x + r, y);
@@ -92,21 +91,28 @@ export function drawMarker(g: G, shape: string, x: number, y: number, d: number,
   }
 }
 
+/** The width of the stroke of a marker: its outline, or the line of a ring, a cross, or a plus. */
+export function markerStroke(marker: Marker, size: number): number {
+  const shape = marker.shape ?? 'disc';
+  const ew = marker.edge_width ?? (marker.edge !== undefined ? 1 : 0);
+  return shape === 'ring' || shape === 'cross' || shape === 'plus' ? Math.max(1, ew || size / 6) : marker.edge !== undefined ? ew : 0;
+}
+
 /**
- * A square canvas holding a marker for a texture of a sprite `size` CSS pixels across, drawn at `scale` texture pixels per CSS pixel.
+ * A square canvas holding a marker for the texture of a sprite of `size` plus its stroke CSS pixels across, drawn at `scale` texture
+ * pixels per CSS pixel. The shape is `size` across, and its stroke is centered on its outline, as matplotlib draws a marker's edge.
  * Without a fill color, the shape is white, so that a sprite's vertex color tints it.
  */
 export function markerCanvas(marker: Marker, size: number, scale = 4): HTMLCanvasElement {
-  const n = Math.max(8, Math.min(512, Math.ceil(size * scale)));
+  const lw = markerStroke(marker, size);
+  const sprite = size + lw;
+  const n = Math.max(8, Math.min(512, Math.ceil(sprite * scale)));
   const c = document.createElement('canvas');
   c.width = c.height = n;
   const g = c.getContext('2d')!;
-  const k = n / size;
+  const k = n / sprite;
   g.scale(k, k);
-  const ew = marker.edge_width ?? (marker.edge !== undefined ? 1 : 0);
-  // the outline is drawn inside the sprite, half of it within the shape's edge
-  const d = size - ew - 1 / k;
-  drawMarker(g, marker.shape ?? 'disc', size / 2, size / 2, d, marker.color ?? '#ffffff', marker.edge ?? null, ew);
+  drawMarker(g, marker.shape ?? 'disc', sprite / 2, sprite / 2, size, marker.color ?? '#ffffff', marker.edge ?? null, lw);
   return c;
 }
 
@@ -230,25 +236,16 @@ export function drawLabel(g: G, layer: LabelLayer, text: string, ax: number, ay:
 /** The steps of matplotlib's tick locator, i.e. 1, 2, 2.5, and 5 times a power of ten. */
 const TICK_MANTISSAS = [1, 2, 2.5, 5, 10];
 
-/** Ticks across [lo, hi] at the smallest round step that leaves at most `bins` intervals between the first and the last tick. */
+/** Ticks across [lo, hi] at the smallest round step of at least (hi - lo) / bins, as matplotlib's MaxNLocator picks them. */
 export function boxTicks(lo: number, hi: number, bins: number): { values: number[]; step: number } {
   const range = hi - lo;
   if (!(range > 0) || !Number.isFinite(range)) return { values: [], step: 1 };
-  let mag = Math.pow(10, Math.floor(Math.log10(range / Math.max(1, bins))) - 1);
-  for (let guard = 0; guard < 40; guard++) {
-    for (const m of TICK_MANTISSAS) {
-      const step = m * mag;
-      const k0 = Math.ceil(lo / step - 1e-9);
-      const k1 = Math.floor(hi / step + 1e-9);
-      if (k1 - k0 <= bins) {
-        const values: number[] = [];
-        for (let k = k0; k <= k1; k++) values.push(k * step);
-        return { values, step };
-      }
-    }
-    mag *= 10;
-  }
-  return { values: [], step: 1 };
+  const raw = range / Math.max(1, bins);
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const step = (TICK_MANTISSAS.find((m) => m * mag >= raw * (1 - 1e-9)) ?? 10) * mag;
+  const values: number[] = [];
+  for (let k = Math.ceil(lo / step - 1e-9); k <= Math.floor(hi / step + 1e-9) && values.length < 200; k++) values.push(k * step + 0);
+  return { values, step };
 }
 
 /** A tick number with the decimals its step needs, and a true minus. */
@@ -279,8 +276,10 @@ export function drawBox(g: G, b: BoxPaint, theme: Theme): void {
   const { x, y, w, h } = b.rect;
   const font = theme.font ?? FONT;
   const fg = theme.foreground;
-  const tick = 0.4 * b.size;
-  const pad = 0.35 * b.size;
+  // the tick length, the pad of the tick numbers, and the pad of the titles of matplotlib's defaults, relative to its tick numbers of 14 points
+  const tick = 0.25 * b.size;
+  const pad = 0.25 * b.size;
+  const titlePad = 0.29 * b.size;
   g.save();
   g.globalAlpha *= b.opacity;
   g.strokeStyle = fg;
@@ -290,8 +289,9 @@ export function drawBox(g: G, b: BoxPaint, theme: Theme): void {
   g.font = `${b.size}px ${font}`;
   const sx = (v: number) => x + ((v - b.x0) / (b.x1 - b.x0)) * w;
   const sy = (v: number) => y + h - ((v - b.y0) / (b.y1 - b.y0)) * h;
-  const xt = boxTicks(b.x0, b.x1, Math.max(1, Math.floor(w / (3.2 * b.size))));
-  const yt = boxTicks(b.y0, b.y1, Math.max(1, Math.floor(h / (2.4 * b.size))));
+  // matplotlib allows a tick per three heights of a tick number across, and per two up
+  const xt = boxTicks(b.x0, b.x1, Math.max(1, Math.floor(w / (3 * b.size))));
+  const yt = boxTicks(b.y0, b.y1, Math.max(1, Math.floor(h / (2 * b.size))));
   g.beginPath();
   for (const v of xt.values) {
     const px = Math.round(sx(v)) + 0.5;
@@ -319,16 +319,16 @@ export function drawBox(g: G, b: BoxPaint, theme: Theme): void {
       g.fillText(t, x - tick - pad, sy(v));
     }
   }
-  const title = 1.15 * b.size;
+  const title = (16 / 14) * b.size;
   g.font = `${title}px ${font}`;
   if (b.titles[0] !== '') {
     g.textAlign = 'center';
     g.textBaseline = 'top';
-    g.fillText(b.titles[0], x + w / 2, y + h + tick + pad + (b.ticks.x ? b.size + pad : 0));
+    g.fillText(b.titles[0], x + w / 2, y + h + tick + pad + (b.ticks.x ? 1.15 * b.size : 0) + titlePad);
   }
   if (b.titles[1] !== '') {
     g.save();
-    g.translate(x - tick - pad - (b.ticks.y ? yLabelWidth + pad : 0), y + h / 2);
+    g.translate(x - tick - pad - (b.ticks.y ? yLabelWidth : 0) - titlePad, y + h / 2);
     g.rotate(-Math.PI / 2);
     g.textAlign = 'center';
     g.textBaseline = 'bottom';
@@ -458,9 +458,6 @@ export function paintStage(
     if (opacity <= 0) continue;
     g.save();
     g.globalAlpha = opacity;
-    g.beginPath();
-    g.rect(info.outer.x, info.outer.y, info.outer.w, info.outer.h);
-    g.clip();
     if (info.box !== null) drawBox(g, info.box, theme);
     for (const l of info.labels) {
       const parts = typeof l.layer.text === 'string' ? [l.layer.text] : l.layer.text;

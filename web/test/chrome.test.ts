@@ -21,6 +21,7 @@ import {
   stopAt,
 } from '../src/runtime/readouts';
 import { mergeColorbars, type Colorbar } from '../src/runtime/overlay';
+import { loopSeconds } from '../src/evaluate/timeline';
 import { chipMenu, withAdd, withPlacement } from '../src/runtime/state';
 import type { Control, Readout, Scene, State } from '../src/scene';
 import { validate } from '../src/validate';
@@ -852,6 +853,79 @@ describe('a viewer embedded on a page, under a DOM stand-in', () => {
       v.syncBars('pulsating', dom);
       const grad = dom.barDom[0].grad;
       expect([grad.classList.contains('live'), grad.getAttribute('role'), grad.getAttribute('aria-label')]).toEqual([true, 'slider', 'eccentricity']);
+    });
+  });
+
+  describe('stages (rule K9)', () => {
+    /** A live viewer of the dressed Broucke scene with three stages, at 0, a quarter, and a half of its loop. */
+    async function staged(end?: 'stop') {
+      const { scene, bytes } = dressedBroucke();
+      const L = loopSeconds(scene.clock);
+      scene.stages = [
+        { id: 'a', at: 0 },
+        { id: 'b', at: L / 4 },
+        { id: 'c', at: L / 2 },
+      ];
+      if (end !== undefined) scene.clock.end = end;
+      const { v } = viewer();
+      await v.load(JSON.stringify(scene), bytes);
+      v.unsubscribe = v.store.subscribe((c: string) => v.onChange(c));
+      v.onChange('state');
+      v.renderer = { setTheme: vi.fn(), renderAt: () => new Map(), refitAll: () => undefined };
+      v.dispatchEvent = vi.fn();
+      v.syncShown();
+      return { v, L, steps: scene.clock.steps };
+    }
+    it('seeks a time paused, between two frame indices, and names the stage at or before it', async () => {
+      const { v, L, steps } = await staged();
+      expect(v.stages.map((st: { id: string }) => st.id)).toEqual(['a', 'b', 'c']);
+      v.seek(0.3 * L);
+      expect(v.playing).toBe(false);
+      expect(v.time).toBeCloseTo(0.3 * L, 9);
+      expect(v.store.frame).toBe(Math.floor(0.3 * steps));
+      expect(v.currentStage).toBe('b');
+      v.seek(-1);
+      expect(v.currentStage).toBe('a');
+    });
+    it('goes to a stage by id or index, and refuses one it does not have', async () => {
+      const { v, L } = await staged();
+      v.goto('c');
+      expect(v.time).toBeCloseTo(L / 2, 9);
+      v.goto(1);
+      expect(v.currentStage).toBe('b');
+      expect(() => v.goto('nope')).toThrow(/stage/);
+      expect(() => v.goto(7)).toThrow(/stage/);
+    });
+    it('plays to a stage and pauses on it, and fires tycho-stage there', async () => {
+      const { v, L } = await staged();
+      v.goto('a');
+      v.playTo('c');
+      expect(v.playing).toBe(true);
+      v.tick(v.anchor.time + 1000 * L);
+      expect(v.playing).toBe(false);
+      expect(v.time).toBeCloseTo(L / 2, 6);
+      expect(v.dispatchEvent).toHaveBeenCalledTimes(1);
+      expect(v.dispatchEvent.mock.calls[0][0].detail).toEqual({ id: 'c', index: 2, at: L / 2 });
+    });
+    it('steps with next and previous', async () => {
+      const { v, L } = await staged();
+      v.goto('a');
+      expect(v.next()).toBe('b');
+      v.tick(v.anchor.time + 1000 * L);
+      expect(v.currentStage).toBe('b');
+      expect(v.previous()).toBe('a');
+      expect(v.time).toBe(0);
+      v.goto('c');
+      expect(v.next()).toBeNull();
+    });
+    it('holds the end of the loop under "end": "stop", rather than starting the next', async () => {
+      const { v, L, steps } = await staged('stop');
+      v.goto('c');
+      v.play();
+      v.tick(v.anchor.time + 5000 * L);
+      expect(v.playing).toBe(false);
+      expect(v.store.frame).toBe(steps - 1);
+      expect(v.time).toBeCloseTo(L, 6);
     });
   });
 

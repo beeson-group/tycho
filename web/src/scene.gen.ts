@@ -198,7 +198,7 @@ export type Layer =
             size?: Size;
             shape?: 'disc' | 'ring' | 'square' | 'diamond' | 'triangle' | 'star' | 'cross' | 'plus';
             edge?: Color;
-            edge_width?: number;
+            edge_width?: number | Tween;
             opacity?: Opacity;
             glow?: {
               channel: Name;
@@ -472,6 +472,12 @@ export type TextPart =
     }
   | {
       steps: [number | string, number | string][];
+    }
+  | {
+      sub: string;
+    }
+  | {
+      sup: string;
     };
 /**
  * This interface was referenced by `Scene`'s JSON-Schema
@@ -845,7 +851,7 @@ export interface Marker {
   size?: Size;
   color?: Color;
   edge?: Color;
-  edge_width?: number;
+  edge_width?: number | Tween;
   opacity?: Opacity;
 }
 /**

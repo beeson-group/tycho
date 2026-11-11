@@ -524,7 +524,13 @@ def _marker(value: Any, what: str, *, extra: Sequence[str] = ()) -> dict[str, An
     if "edge" in value:
         out["edge"] = _color(value["edge"], f"the edge of {what}")
     if "edge_width" in value:
-        out["edge_width"] = _nonnegative(value["edge_width"], f"the edge width of {what}")
+        w = value["edge_width"]
+        # an edge width may thin as the marker grows, e.g. a pulse
+        out["edge_width"] = (
+            _tween(w, f"the edge width of {what}", low=0.0)
+            if isinstance(w, (Mapping, list, tuple))
+            else _nonnegative(w, f"the edge width of {what}")
+        )
     if "opacity" in value:
         out["opacity"] = _opacity(value["opacity"], f"the opacity of {what}")
     return out
@@ -618,10 +624,16 @@ def _text_part(p: Any) -> Any:
         return p.to_json()
     if not isinstance(p, Mapping):
         raise SceneError(f"2.9: a part is text, a variable, a channel, an attribute, or a dict, not {p!r}")
-    kinds = [k for k in ("var", "member", "attr", "channel", "clock", "keys", "steps") if k in p]
+    kinds = [k for k in ("var", "member", "attr", "channel", "clock", "keys", "steps", "sub", "sup") if k in p]
     if len(kinds) != 1:
-        raise SceneError(f"2.9: the part {dict(p)!r} names {len(kinds)} of var, member, attr, channel, clock, keys, and steps, not one")
+        raise SceneError(
+            f"2.9: the part {dict(p)!r} names {len(kinds)} of var, member, attr, channel, clock, keys, steps, sub, and sup, not one"
+        )
     kind = kinds[0]
+    if kind in ("sub", "sup"):
+        if extra := set(p) - {kind}:
+            raise SceneError(f"K7: a {kind} part has unknown keys {sorted(extra)}")
+        return {kind: _text(p[kind], f"the text of a {kind} part")}
     allowed = {kind} if kind == "steps" else {kind, *FORMAT_KEYS}
     if extra := set(p) - allowed:
         raise SceneError(f"2.9: a {kind} part has unknown keys {sorted(extra)}")
@@ -684,6 +696,16 @@ def clock_time(**fmt: Any) -> dict[str, Any]:
 def keyed(*keys: Any, **fmt: Any) -> dict[str, Any]:
     """The part ``{"keys": [...]}``, the value of a tween at the time of the timeline (rule K7), e.g. a counter."""
     return _text_part({"keys": list(keys), **_fmt(fmt)})
+
+
+def sub(text: str) -> dict[str, Any]:
+    """The part ``{"sub": text}``, a subscript, e.g. the ``f`` of ``t_f`` in ``["Δt = t", ty.sub("f"), " / 100"]`` (rule K7)."""
+    return _text_part({"sub": text})
+
+
+def sup(text: str) -> dict[str, Any]:
+    """The part ``{"sup": text}``, a superscript (rule K7)."""
+    return _text_part({"sup": text})
 
 
 def steps(*pairs: Any) -> dict[str, Any]:

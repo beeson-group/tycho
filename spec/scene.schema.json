@@ -965,8 +965,15 @@
                       "$ref": "#/$defs/color"
                     },
                     "edge_width": {
-                      "type": "number",
-                      "minimum": 0
+                      "anyOf": [
+                        {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        {
+                          "$ref": "#/$defs/tween"
+                        }
+                      ]
                     },
                     "opacity": {
                       "$ref": "#/$defs/opacity"
@@ -2012,8 +2019,15 @@
           "$ref": "#/$defs/color"
         },
         "edge_width": {
-          "type": "number",
-          "minimum": 0
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "$ref": "#/$defs/tween"
+            }
+          ]
         },
         "opacity": {
           "$ref": "#/$defs/opacity"
@@ -2295,6 +2309,30 @@
                   ]
                 }
               }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sub"
+          ],
+          "properties": {
+            "sub": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sup"
+          ],
+          "properties": {
+            "sup": {
+              "type": "string"
             }
           }
         }

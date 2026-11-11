@@ -14,7 +14,7 @@ import type { Layout, Readout, Scene, State } from '../scene.js';
 import { hexRgb, mixHex, sceneTheme, type Theme } from './colors.js';
 import type { GeometryCache } from './geometry.js';
 import type { Colorbar, PanelLabel } from './overlay.js';
-import { formatNumber, LAP_SECONDS, loopPosition, loopSeconds, positionIndex, positionProgress, readoutText } from './readouts.js';
+import { formatNumber, LAP_SECONDS, loopPosition, loopSeconds, positionIndex, positionProgress, readoutPieces, readoutText } from './readouts.js';
 import { GUTTER, layoutAt, StageRenderer } from './renderer.js';
 import { gutterColor, paintStage } from './paint.js';
 import { tile } from './tiles.js';
@@ -401,7 +401,13 @@ export async function exportVideo(source: ExportSource, options: ExportOptions =
       g.fillStyle = gutter;
       for (const gt of tiles.gutters) g.fillRect(gt.rect.x, gt.rect.y, gt.rect.w, gt.rect.h);
       g.save();
-      paintStage(g, renderer, scene, state, theme, q, stageW, stageH, (pid, parts) => read(pid, parts, index, q));
+      paintStage(g, renderer, scene, state, theme, q, stageW, stageH, (pid, parts) => {
+        try {
+          return readoutPieces({ scene, geometry, state, panel: pid, frameIndex: index, progress: q }, parts);
+        } catch {
+          return [];
+        }
+      });
       g.restore();
       for (const [pid, r] of tiles.panels) {
         g.save();

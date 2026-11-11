@@ -422,7 +422,7 @@ def test_readouts_and_sliders_are_checked_against_the_driver():
         "2.9: the slider over 'k' needs a selector by nearest",
     ):
         assert expected in message
-    with pytest.raises(ty.SceneError, match="of var, member, attr, channel, clock, keys, and steps, not one"):
+    with pytest.raises(ty.SceneError, match="of var, member, attr, channel, clock, keys, steps, sub, and sup, not one"):
         scene.readout("panel", {"member": "e", "attr": "mu"})
     with pytest.raises(ty.SceneError, match="digits"):
         scene.readout("panel", {"member": "e", "digits": 0})

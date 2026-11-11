@@ -1141,9 +1141,13 @@ export class MarkerSprites {
   private readonly marker: Marker;
   private readonly tinted: boolean;
   private texSize = 0;
+  /** The width of the stroke the texture was drawn with, which may move with the timeline as the size does. */
+  private texEdge = -1;
+  private edgeWidth: number | undefined;
 
   constructor(marker: Marker, size: number, tinted: boolean) {
     this.marker = marker;
+    this.edgeWidth = typeof marker.edge_width === 'number' ? marker.edge_width : undefined;
     this.tinted = tinted;
     this.material = new THREE.PointsMaterial({
       size,
@@ -1160,15 +1164,21 @@ export class MarkerSprites {
     this.setSize(size);
   }
 
-  /** Sets the size of the sprites' shape in CSS pixels, drawing the texture again when the size grows past it. */
-  setSize(size: number): void {
-    this.material.size = size + markerStroke(this.marker, size);
-    // the stroke of a marker is in CSS pixels and does not scale with it, hence a size that moves draws the texture again
+  /**
+   * Sets the size of the sprites' shape in CSS pixels, and the width of its stroke when given, drawing the texture again when either
+   * moves, since the stroke is in CSS pixels and does not scale with the marker.
+   */
+  setSize(size: number, edgeWidth = this.edgeWidth): void {
+    this.edgeWidth = edgeWidth;
+    const marker: Marker = { ...this.marker, edge_width: edgeWidth };
+    this.material.size = size + markerStroke(marker, size);
     const want = Math.max(1, size);
-    if (Math.abs(want / Math.max(this.texSize, 1e-9) - 1) > 0.05) {
+    const edge = edgeWidth ?? 0;
+    if (Math.abs(want / Math.max(this.texSize, 1e-9) - 1) > 0.05 || Math.abs(edge - this.texEdge) > 0.05 * Math.max(edge, 0.5)) {
       this.texSize = want;
+      this.texEdge = edge;
       this.material.map?.dispose();
-      const t = new THREE.CanvasTexture(markerCanvas(this.tinted ? { ...this.marker, color: undefined, edge: this.marker.edge } : this.marker, want));
+      const t = new THREE.CanvasTexture(markerCanvas(this.tinted ? { ...marker, color: undefined } : marker, want));
       t.needsUpdate = true;
       this.material.map = t;
       this.material.needsUpdate = true;
@@ -1306,7 +1316,8 @@ export class TrackDraw implements Draw {
     this.taperWidth = layer.trail?.taper?.width ?? TAPER_WIDTH;
     this.taperOpacity = layer.trail?.taper?.opacity ?? TAPER_OPACITY;
     const marker = themedMarker(headMarker(layer), ctx.theme);
-    this.tweened = typeof layer.opacity === 'object' || typeof marker.size === 'object' || typeof marker.opacity === 'object';
+    this.tweened =
+      typeof layer.opacity === 'object' || typeof marker.size === 'object' || typeof marker.opacity === 'object' || typeof marker.edge_width === 'object';
 
     this.ranges = trackTexture(set.tracks);
     for (let t = 0; t < set.tracks; t++) this.ranges.data.set(EMPTY_RANGE, 4 * t);
@@ -1480,7 +1491,8 @@ export class TrackDraw implements Draw {
     const marker = headMarker(layer);
     const fade = typeof layer.opacity === 'object' ? opacityAt(layer.opacity, s) : 1;
     this.heads?.setOpacity(fade * opacityAt(marker.opacity, s));
-    if (this.heads !== null && typeof marker.size === 'object') this.heads.setSize(sizeAt(marker.size, s, HEAD_SIZE));
+    if (this.heads !== null && (typeof marker.size === 'object' || typeof marker.edge_width === 'object'))
+      this.heads.setSize(sizeAt(marker.size, s, HEAD_SIZE), marker.edge_width === undefined ? undefined : numberAt(marker.edge_width, s, 0));
     if (this.glow !== null) this.glow.setOpacity(fade * opacityAt(marker.opacity, s) * (marker.glow?.opacity ?? 0.35));
     if (this.fill !== null) this.fill.material.opacity = fade * (layer.fill?.opacity ?? 0.25);
     return f;
@@ -1704,6 +1716,7 @@ class PointsDraw implements Draw {
       layer.before === undefined &&
       layer.after === undefined &&
       typeof m.size !== 'object' &&
+      typeof m.edge_width !== 'object' &&
       typeof m.opacity !== 'object' &&
       typeof layer.opacity !== 'object';
   }
@@ -1712,7 +1725,8 @@ class PointsDraw implements Draw {
     const s = timeAt(env.base?.clock ?? env.clock, env.q);
     const m = this.layer.marker ?? {};
     this.sprites.setOpacity(opacityAt(this.layer.opacity, s) * opacityAt(m.opacity, s));
-    if (typeof m.size === 'object') this.sprites.setSize(sizeAt(m.size, s, 4));
+    if (typeof m.size === 'object' || typeof m.edge_width === 'object')
+      this.sprites.setSize(sizeAt(m.size, s, 4), m.edge_width === undefined ? undefined : numberAt(m.edge_width, s, 0));
     if (this.isStatic && this.done) return;
     const result = pointsLayer(env, this.layer, plan.set);
     let n = 0;
@@ -1784,6 +1798,9 @@ function imageTexture(geometry: GeometryCache, view: string): Promise<THREE.Text
       const type = bytes[0] === 0xff ? 'image/jpeg' : bytes[0] === 0x52 ? 'image/webp' : 'image/png';
       const bitmap = await createImageBitmap(new Blob([bytes as Uint8Array<ArrayBuffer>], { type }), { imageOrientation: 'flipY' });
       const texture = new THREE.Texture(bitmap as unknown as HTMLImageElement);
+      // sampled from one level, which keeps a photograph as crisp as matplotlib draws it when the image is about the size it is shown at
+      texture.generateMipmaps = false;
+      texture.minFilter = THREE.LinearFilter;
       texture.flipY = false;
       texture.colorSpace = THREE.NoColorSpace;
       texture.needsUpdate = true;

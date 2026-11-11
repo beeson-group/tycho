@@ -1029,7 +1029,7 @@ export class TychoViewerElement extends Base {
     g.setTransform(ratio, 0, 0, ratio, 0, 0);
     paintStage(g, renderer, this.scene, this.store!.state, this.theme, q, w, h, (pid, parts) => {
       const r = this.pieces(pid, parts, q);
-      return 'error' in r ? '' : r.join('');
+      return 'error' in r ? [] : r;
     });
   }
 

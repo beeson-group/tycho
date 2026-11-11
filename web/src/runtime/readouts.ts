@@ -140,6 +140,8 @@ export function readoutPieces(ctx: ReadoutContext, parts: readonly Part[]): stri
   const s = timeAt(scene.clock, q);
   for (const p of parts) {
     if (typeof p === 'string') out.push(p);
+    else if ('sub' in p) out.push(p.sub);
+    else if ('sup' in p) out.push(p.sup);
     else if ('steps' in p) {
       let text = '';
       for (const [t, v] of p.steps) if ((t as number) <= s) text = String(v);

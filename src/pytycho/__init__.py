@@ -44,6 +44,8 @@ from .scene import (
     split,
     steps,
     steps_color,
+    sub,
+    sup,
     track,
     tween,
 )
@@ -88,6 +90,8 @@ __all__ = [
     "split",
     "steps",
     "steps_color",
+    "sub",
+    "sup",
     "track",
     "tween",
     "write_html",

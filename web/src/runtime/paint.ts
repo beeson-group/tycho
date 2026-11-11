@@ -94,7 +94,7 @@ export function drawMarker(g: G, shape: string, x: number, y: number, d: number,
 /** The width of the stroke of a marker: its outline, or the line of a ring, a cross, or a plus. */
 export function markerStroke(marker: Marker, size: number): number {
   const shape = marker.shape ?? 'disc';
-  const ew = marker.edge_width ?? (marker.edge !== undefined ? 1 : 0);
+  const ew = typeof marker.edge_width === 'number' ? marker.edge_width : marker.edge !== undefined ? 1 : 0;
   return shape === 'ring' || shape === 'cross' || shape === 'plus' ? Math.max(1, ew || size / 6) : marker.edge !== undefined ? ew : 0;
 }
 
@@ -139,11 +139,51 @@ export interface TextStyle {
   box?: Box;
 }
 
+/** A run of a text, set lowered and smaller as a subscript, raised and smaller as a superscript, or on the baseline (rule K7). */
+export interface TextRun {
+  text: string;
+  shift?: 'sub' | 'sup';
+}
+
+/** A subscript or a superscript is set at this fraction of the size, lowered or raised by the fractions below, as mathtext sets them. */
+const SCRIPT_SIZE = 0.7;
+const SUB_DROP = 0.18;
+const SUP_RISE = 0.42;
+
+/** The runs of a text as its lines, split at its newline characters. */
+function runLines(text: string | TextRun[]): TextRun[][] {
+  const runs = typeof text === 'string' ? [{ text }] : text;
+  const lines: TextRun[][] = [[]];
+  for (const r of runs) {
+    r.text.split('\n').forEach((piece, i) => {
+      if (i > 0) lines.push([]);
+      if (piece !== '') lines[lines.length - 1]!.push({ text: piece, ...(r.shift ? { shift: r.shift } : {}) });
+    });
+  }
+  return lines;
+}
+
+const fontOf = (style: TextStyle, run?: TextRun): string =>
+  `${style.weight === 'bold' ? 'bold ' : ''}${run?.shift ? SCRIPT_SIZE * style.size : style.size}px ${style.font}`;
+
+/** The width of a line of runs in `style`. */
+function lineWidth(g: G, line: TextRun[], style: TextStyle): number {
+  let w = 0;
+  for (const r of line) {
+    g.font = fontOf(style, r);
+    w += g.measureText(r.text).width;
+  }
+  return w;
+}
+
+/** The plain text of a text of runs. */
+export const plainText = (text: string | TextRun[]): string => (typeof text === 'string' ? text : text.map((r) => r.text).join(''));
+
 /** The rectangle a text of possibly several lines covers when drawn at (x, y) in `style`, as [left, top, width, height]. */
-export function textRect(g: G, text: string, x: number, y: number, style: TextStyle): [number, number, number, number] {
-  g.font = `${style.weight === 'bold' ? 'bold ' : ''}${style.size}px ${style.font}`;
-  const lines = text.split('\n');
-  const w = Math.max(0, ...lines.map((l) => g.measureText(l).width));
+export function textRect(g: G, text: string | TextRun[], x: number, y: number, style: TextStyle): [number, number, number, number] {
+  const lines = runLines(text);
+  const w = Math.max(0, ...lines.map((l) => lineWidth(g, l, style)));
+  g.font = fontOf(style);
   const h = (TEXT_HEIGHT + LINE_PITCH * (lines.length - 1)) * style.size;
   const left = style.align === 'center' ? x - w / 2 : style.align === 'end' ? x - w : x;
   const b = style.baseline;
@@ -152,8 +192,8 @@ export function textRect(g: G, text: string, x: number, y: number, style: TextSt
 }
 
 /** Draws a text of possibly several lines at (x, y), aligned by `style`, on its box when it has one. */
-export function drawText(g: G, text: string, x: number, y: number, style: TextStyle): void {
-  if (style.opacity <= 0 || text === '') return;
+export function drawText(g: G, text: string | TextRun[], x: number, y: number, style: TextStyle): void {
+  if (style.opacity <= 0 || plainText(text) === '') return;
   const [left, top, w, h] = textRect(g, text, x, y, style);
   g.save();
   g.globalAlpha *= style.opacity;
@@ -176,10 +216,16 @@ export function drawText(g: G, text: string, x: number, y: number, style: TextSt
   g.fillStyle = style.color;
   g.textBaseline = 'alphabetic';
   g.textAlign = 'left';
-  text.split('\n').forEach((line, i) => {
-    const lw = g.measureText(line).width;
-    const lx = style.align === 'center' ? left + (w - lw) / 2 : style.align === 'end' ? left + w - lw : left;
-    g.fillText(line, lx, top + (TEXT_ASCENT + LINE_PITCH * i) * style.size);
+  runLines(text).forEach((line, i) => {
+    const lw = lineWidth(g, line, style);
+    let lx = style.align === 'center' ? left + (w - lw) / 2 : style.align === 'end' ? left + w - lw : left;
+    const base = top + (TEXT_ASCENT + LINE_PITCH * i) * style.size;
+    for (const r of line) {
+      g.font = fontOf(style, r);
+      const dy = r.shift === 'sub' ? SUB_DROP * style.size : r.shift === 'sup' ? -SUP_RISE * style.size : 0;
+      g.fillText(r.text, lx, base + dy);
+      lx += g.measureText(r.text).width;
+    }
   });
   g.restore();
 }
@@ -220,9 +266,9 @@ export function styleOf(spec: Pick<LabelLayer, 'size' | 'color' | 'weight' | 'al
  * Draws a label (rule K6) whose anchor lies at (ax, ay), with its text `offset` pixels away and the leader between them. The leader
  * runs from the anchor to the nearest point of the text's rectangle, and stops 3 pixels short of it.
  */
-export function drawLabel(g: G, layer: LabelLayer, text: string, ax: number, ay: number, theme: Theme, s: number): void {
+export function drawLabel(g: G, layer: LabelLayer, text: string | TextRun[], ax: number, ay: number, theme: Theme, s: number): void {
   const style = styleOf(layer, theme, s);
-  if (style.opacity <= 0 || text === '') return;
+  if (style.opacity <= 0 || plainText(text) === '') return;
   const [dx, dy] = layer.offset ?? [0, 0];
   const x = ax + dx;
   const y = ay + dy;
@@ -354,7 +400,8 @@ export function drawBox(g: G, b: BoxPaint, theme: Theme): void {
     for (const v of yt.values) {
       const t = tickLabel(v, yt.step);
       yLabelWidth = Math.max(yLabelWidth, g.measureText(t).width);
-      g.fillText(t, x - tick - pad, sy(v) + (TEXT_ASCENT - TEXT_HEIGHT / 2) * b.size);
+      // matplotlib centers a y tick number on the middle of its letters above the baseline (va="center_baseline")
+      g.fillText(t, x - tick - pad, sy(v) + (TEXT_ASCENT / 2) * b.size);
     }
   }
   const title = (16 / 14) * b.size;
@@ -408,7 +455,9 @@ export function drawLegend(g: G, legend: Extract<Overlay, { kind: 'legend' }>, w
   const top = base === 'middle' ? ay - height / 2 : base === 'bottom' ? ay - outer - inner - height : ay + outer + inner;
   for (const { e, col, row } of cells) {
     const cx = left + colWidth.slice(0, col).reduce((a, b) => a + b, 0) + columnGap * col;
-    const cy = top + lh * row + (TEXT_HEIGHT / 2) * size;
+    const ty = top + lh * row + (TEXT_HEIGHT / 2) * size;
+    // a handle sits at the middle of the letters of its label rather than of its text box, as matplotlib draws it
+    const cy = ty - 0.12 * size;
     const hw = handleWidth(e);
     if (e.colors !== undefined) {
       const n = e.colors.length;
@@ -429,6 +478,8 @@ export function drawLegend(g: G, legend: Extract<Overlay, { kind: 'legend' }>, w
       g.globalAlpha = opacity * (e.line.opacity ?? 1);
       g.strokeStyle = themed(e.line.color ?? theme.foreground, theme);
       g.lineWidth = e.line.width ?? 2;
+      // matplotlib's lines end in projecting caps
+      g.lineCap = e.line.dash === undefined ? 'square' : 'butt';
       if (e.line.dash !== undefined) g.setLineDash(e.line.dash);
       g.beginPath();
       g.moveTo(cx, cy);
@@ -448,14 +499,14 @@ export function drawLegend(g: G, legend: Extract<Overlay, { kind: 'legend' }>, w
         sizeAt(m.size, s, 0.6 * size),
         m.color ?? theme.foreground,
         m.edge ?? null,
-        m.edge_width ?? (m.edge ? 1 : 0),
+        typeof m.edge_width === 'number' ? m.edge_width : m.edge ? 1 : 0,
       );
       g.restore();
     }
     g.fillStyle = themed(legend.color ?? theme.foreground, theme);
     g.textAlign = 'left';
     g.textBaseline = 'alphabetic';
-    g.fillText(e.label, cx + hw + gap, cy + (TEXT_ASCENT - TEXT_HEIGHT / 2) * size);
+    g.fillText(e.label, cx + hw + gap, ty + (TEXT_ASCENT - TEXT_HEIGHT / 2) * size);
   }
   g.restore();
 }
@@ -485,7 +536,7 @@ export function paintStage(
   q: number,
   w: number,
   h: number,
-  text: (pid: string, parts: Readout['parts']) => string,
+  text: (pid: string, parts: Readout['parts']) => string[],
 ): void {
   const s = q * loopSeconds(scene.clock);
   let first: string | null = null;
@@ -505,7 +556,7 @@ export function paintStage(
       const r = info.rect;
       if (l.clip && !(l.x >= r.x - 0.5 && l.x <= r.x + r.w + 0.5 && l.y >= r.y - 0.5 && l.y <= r.y + r.h + 0.5)) continue;
       const parts = typeof l.layer.text === 'string' ? [l.layer.text] : l.layer.text;
-      drawLabel(g, l.layer, text(pid, parts), l.x, l.y, theme, s);
+      drawLabel(g, l.layer, runsOf(parts, text(pid, parts)), l.x, l.y, theme, s);
     }
     g.restore();
   }
@@ -513,7 +564,17 @@ export function paintStage(
     if (o.kind === 'legend') drawLegend(g, o, w, h, theme, s);
     else if (o.kind === 'text') {
       const parts = typeof o.text === 'string' ? [o.text] : o.text;
-      drawText(g, first === null ? '' : text(first, parts), o.at[0] * w, o.at[1] * h, styleOf(o, theme, s));
+      drawText(g, first === null ? '' : runsOf(parts, text(first, parts)), o.at[0] * w, o.at[1] * h, styleOf(o, theme, s));
     }
   }
+}
+
+/** The runs of a text from its parts and the text of each part, a `sub` or a `sup` part set as a script (rule K7). */
+export function runsOf(parts: Readout['parts'], pieces: string[]): TextRun[] {
+  return pieces.map((text, i) => {
+    const p = parts[i] as object | string | undefined;
+    if (typeof p === 'object' && p !== null && 'sub' in p) return { text, shift: 'sub' as const };
+    if (typeof p === 'object' && p !== null && 'sup' in p) return { text, shift: 'sup' as const };
+    return { text };
+  });
 }

@@ -316,3 +316,20 @@ def test_legend_spacing_is_written_in_units_of_the_text_size():
     assert scene._overlays[0]["column_spacing"] == 1.2
     with pytest.raises(ty.SceneError, match=r"^2\.11:"):
         scene.legend([ty.entry("a")], at=(0.5, 0.0), handle_pad=-1)
+
+
+def test_sub_and_sup_parts_are_written_as_parts():
+    assert ty.sub("f") == {"sub": "f"}
+    assert ty.sup("2") == {"sup": "2"}
+    scene = ty.Scene()
+    scene.text(["\u0394t = t", ty.sub("f"), " / 100"], at=(0.5, 0.5))
+    assert scene._overlays[0]["text"][1] == {"sub": "f"}
+    with pytest.raises(ty.SceneError, match=r"^K7:"):
+        scene.text([{"sub": "f", "decimals": 1}], at=(0.5, 0.5))
+
+
+def test_a_marker_edge_width_may_be_a_tween():
+    m = ty.marker(shape="ring", size=ty.tween((0, 12), (1, 62)), edge_width=ty.tween((0, 3.5), (1, 0.5)))
+    assert m["edge_width"] == {"keys": [[0.0, 3.5], [1.0, 0.5]]}
+    with pytest.raises(ty.SceneError):
+        ty.marker(edge_width=ty.tween((0, 1), (1, -1)))

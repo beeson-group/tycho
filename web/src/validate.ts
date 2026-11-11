@@ -153,8 +153,7 @@ function checkMarker(id: string, m: Marker & { glow?: unknown }, rule: string): 
     if (m[key] !== undefined && !COLOR.test(m[key])) fail(rule, `view ${id}: a marker's ${key} is ${JSON.stringify(m[key])}, not a #rrggbb color`);
   checkTweened(m.size, `view ${id}: a marker's size`, isPositive, rule);
   checkTweened(m.opacity, `view ${id}: a marker's opacity`, isOpacity, rule);
-  if (m.edge_width !== undefined && !(finite(m.edge_width) && m.edge_width >= 0))
-    fail(rule, `view ${id}: a marker's edge_width is ${m.edge_width}, not a nonnegative length`);
+  checkTweened(m.edge_width, `view ${id}: a marker's edge_width`, (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0, rule);
 }
 
 /** Checks a layer's own clock (rule K4). */

@@ -6,8 +6,7 @@
  *   data      URL of data.tyd, or a CSS selector of a block that holds it
  *   theme     `dark` or `light`, a built-in palette that replaces the scene's theme, followed when it changes
  *   autoplay  plays as soon as the scene is loaded and the element is visible
- *   kiosk     hides every control and plays as `autoplay` does, for a slide. A time bar, play and a scrubber through the loop,
- *             shows over the bottom of the stage while the pointer moves over it, and hides after a short idle
+ *   kiosk     hides every control and plays as `autoplay` does, for a slide
  *   lean      hides the Add panel group, the icons of the panel heads, the frame and rate readouts, the View group, and Export,
  *             for a slide on which the controls of the scene are still worked by hand. With the value `panels`, the Add panel
  *             group and the icons of the panel heads stay, for a slide on which panels are added by hand
@@ -235,12 +234,6 @@ input[type=range]:disabled { opacity: 0.4; cursor: default; }
 .drop { position: absolute; inset: 0; z-index: 3; display: grid; place-items: center; background: var(--accent-2-tint); border: 2px solid var(--accent-2); }
 .pbody .follow { position: absolute; right: 8px; bottom: 8px; z-index: 2; padding: 3px 10px 3px 8px; font: inherit; font-size: 12px; cursor: pointer; }
 .pbody .follow[hidden] { display: none; }
-.timebar { position: absolute; left: 10px; right: 10px; bottom: 10px; z-index: 4; display: flex; align-items: center; gap: 6px;
-  padding: 2px 10px 2px 2px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
-  opacity: 0; pointer-events: none; transition: opacity 0.2s; }
-.root.awake .timebar, .timebar:focus-within { opacity: 1; pointer-events: auto; }
-.timebar .scrub { flex: 1 1 auto; width: auto; min-width: 80px; }
-.timebar .time { font-size: 12px; font-variant-numeric: lining-nums tabular-nums; white-space: nowrap; color: var(--fg); }
 .drop span { font-size: 11px; color: var(--fg); background: var(--raised); border-radius: 4px; padding: 1px 6px; }
 .gutter { position: absolute; z-index: 2; touch-action: none; background: var(--gutter); }
 .gutter.row { cursor: col-resize; }
@@ -365,12 +358,6 @@ function setText(e: HTMLElement, text: string): void {
 }
 
 const stop = (ev: Event) => ev.stopPropagation();
-
-/** The time beside a scrubber: the seconds of the loop when the clock gives its length (section 2.6), else the frame index. */
-export function timeText(clock: Scene['clock'], t: number, frame: number): string {
-  if (clock.seconds === undefined) return `${frame} / ${clock.steps}`;
-  return `${t.toFixed(1)} / ${timelineSeconds(clock).toFixed(1)} s`;
-}
 
 /** A button that shows only an icon, named for assistive technology and in a tooltip. */
 function iconButton(name: IconName, label: string, tip: string, cls = 'icon'): HTMLButtonElement {
@@ -578,9 +565,6 @@ export class TychoViewerElement extends Base {
     fps: HTMLSpanElement;
     channel: { set(id: string): void } | null;
   } | null = null;
-  /** The time bar of a kiosk viewer, over the bottom of the stage, shown while the pointer moves over the viewer. */
-  private timebar: { root: HTMLDivElement; play: HTMLButtonElement; range: HTMLInputElement; readout: HTMLSpanElement } | null = null;
-  private sleepTimer: ReturnType<typeof setTimeout> | null = null;
   private menu: { anchor: HTMLElement; close(focus: boolean): void } | null = null;
   /** Closes the export row when it is open, and returns whether it was open. */
   private closeExport: (() => boolean) | null = null;
@@ -653,9 +637,6 @@ export class TychoViewerElement extends Base {
     this.panelsEl = el('div', 'panels');
     this.statusEl = el('div', 'status', 'loading…');
     this.stage.append(this.panelsEl, this.statusEl);
-    // the time bar of a kiosk viewer wakes with the pointer and sleeps after a short idle
-    this.stage.addEventListener('pointermove', () => this.wake());
-    this.stage.addEventListener('pointerleave', () => this.sleep(400));
     this.statsEl = el('div', 'stats');
     this.footer = el('footer');
     this.root.append(this.header, this.stage, this.statsEl, this.footer);
@@ -799,8 +780,6 @@ export class TychoViewerElement extends Base {
   private stop(): void {
     cancelAnimationFrame(this.raf);
     this.raf = 0;
-    if (this.sleepTimer !== null) clearTimeout(this.sleepTimer);
-    this.sleepTimer = null;
     this.shown = false;
     document.removeEventListener('visibilitychange', this.onVisibility);
     this.viewObserver?.disconnect();
@@ -894,13 +873,12 @@ export class TychoViewerElement extends Base {
       this.save();
     } else if (change === 'playing') {
       const t = this.transport;
-      for (const play of [t?.play, this.timebar?.play]) {
-        if (play === undefined) continue;
+      if (t !== null) {
         const label = store.playing ? 'Pause (k)' : 'Play (k)';
-        play.replaceChildren(icon(store.playing ? 'pause' : 'play'));
-        play.setAttribute('aria-label', label);
-        play.title = label;
-        play.classList.toggle('on', store.playing);
+        t.play.replaceChildren(icon(store.playing ? 'pause' : 'play'));
+        t.play.setAttribute('aria-label', label);
+        t.play.title = label;
+        t.play.classList.toggle('on', store.playing);
       }
       this.meter.reset();
       if (store.playing) {
@@ -1030,27 +1008,8 @@ export class TychoViewerElement extends Base {
     for (const r of this.captions) fillReadout(r, first === null ? [] : this.pieces(first, r.parts, q));
     if (this.transport) {
       setRange(this.transport.scrub, store.frame);
-      setText(this.transport.frame, timeText(scene.clock, this.time, store.frame));
+      setText(this.transport.frame, `${store.frame} / ${scene.clock.steps}`);
     }
-    if (this.timebar) {
-      setRange(this.timebar.range, this.time);
-      setText(this.timebar.readout, timeText(scene.clock, this.time, store.frame));
-    }
-  }
-
-  /** Shows the time bar of a kiosk viewer, and hides it again after a short idle of the pointer. */
-  private wake(): void {
-    if (this.timebar === null) return;
-    this.root.classList.add('awake');
-    this.sleep(2000);
-  }
-
-  private sleep(ms: number): void {
-    if (this.sleepTimer !== null) clearTimeout(this.sleepTimer);
-    this.sleepTimer = setTimeout(() => {
-      this.sleepTimer = null;
-      this.root.classList.remove('awake');
-    }, ms);
   }
 
   /** Whether a split of the layout moves with the timeline, so that the panels' elements follow it at every frame. */
@@ -1323,11 +1282,8 @@ export class TychoViewerElement extends Base {
         this.store!.setFrame(Number(scrub.value));
       });
       const frame = el('span', 'frame');
-      frame.style.minWidth = `${timeText(scene.clock, timelineSeconds(scene.clock), scene.clock.steps).length}ch`;
-      frame.title =
-        scene.clock.seconds === undefined
-          ? 'Frame index of the loop. Left and right step, Home goes to 0'
-          : 'Time of the loop in seconds. Left and right step a frame, Home goes to 0';
+      frame.style.minWidth = `${2 * String(scene.clock.steps).length + 3}ch`;
+      frame.title = 'Frame index of the loop. Left and right step, Home goes to 0';
       const speed = el('select', 'speed');
       speed.setAttribute('aria-label', 'Playback speed');
       speed.title = 'Playback speed';
@@ -1367,40 +1323,6 @@ export class TychoViewerElement extends Base {
     view.append(fit, reset);
     this.footer.append(view);
     this.buildExport();
-    this.buildTimebar();
-  }
-
-  /**
-   * The time bar of a kiosk viewer, which hides the footer: play, a scrubber through the whole loop in seconds, and the time
-   * shown, over the bottom of the stage. It shows while the pointer moves over the stage or one of its controls has the focus,
-   * and it hides after a short idle, so that a slide shows the scene alone while it is presented. Dragging it pauses the clock
-   * and shows the time dragged to, with the camera keys, captions, and stages of that time.
-   */
-  private buildTimebar(): void {
-    this.timebar?.root.remove();
-    this.timebar = null;
-    const scene = this.scene!;
-    if (!this.kiosk || scene.clock.steps < 2) return;
-    const seconds = timelineSeconds(scene.clock);
-    const root = el('div', 'timebar');
-    root.setAttribute('role', 'group');
-    root.setAttribute('aria-label', 'Time');
-    root.addEventListener('pointerdown', stop);
-    const play = iconButton('play', 'Play (k)', 'Play (k)', 'icon play');
-    play.addEventListener('click', () => this.store!.setPlaying(!this.store!.playing));
-    const range = el('input', 'scrub');
-    range.type = 'range';
-    range.min = '0';
-    range.max = String(seconds);
-    // one step of the range is one frame, as the arrow keys step
-    range.step = String(seconds / scene.clock.steps);
-    range.setAttribute('aria-label', 'Time');
-    range.title = 'Drag to go forward or backward in time';
-    range.addEventListener('input', () => this.seek(Number(range.value)));
-    const readout = el('span', 'time');
-    root.append(play, range, readout);
-    this.stage.appendChild(root);
-    this.timebar = { root, play, range, readout };
   }
 
   // video export

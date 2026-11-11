@@ -8,17 +8,17 @@ each under its own license, reproduced in full below.
 
 | Package | Version | License | Source |
 |---|---|---|---|
-| three.js | 0.180.0 | MIT | https://github.com/mrdoob/three.js |
+| three.js | 0.187.0 | MIT | https://github.com/mrdoob/three.js |
 | mp4-muxer | 5.2.2 | MIT | https://github.com/Vanilagy/mp4-muxer |
 
-## three.js 0.180.0
+## three.js 0.187.0
 
-Source: https://github.com/mrdoob/three.js/tree/r180
+Source: https://github.com/mrdoob/three.js/tree/r187
 
 ```text
 The MIT License
 
-Copyright © 2010-2025 three.js authors
+Copyright © 2010-2026 three.js authors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

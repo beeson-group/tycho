@@ -8,7 +8,7 @@ The browser runtime bundle (tycho.js and tycho.esm.js in the npm package @beeson
 and pytycho/_static/tycho.js in the Python package, which pytycho inlines into every page it
 writes) contains these third-party works, whose full license texts are in THIRD_PARTY_NOTICES.md:
 
-- three.js 0.180.0, Copyright 2010-2025 three.js authors, MIT License,
+- three.js 0.187.0, Copyright 2010-2026 three.js authors, MIT License,
   https://github.com/mrdoob/three.js
 - mp4-muxer 5.2.2, Copyright 2023 Vanilagy, MIT License,
   https://github.com/Vanilagy/mp4-muxer

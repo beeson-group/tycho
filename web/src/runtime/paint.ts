@@ -473,8 +473,8 @@ export function drawLegend(g: G, legend: Extract<Overlay, { kind: 'legend' }>, w
   for (const [i, { e, col }] of cells.entries()) {
     const cx = left + colWidth.slice(0, col).reduce((a, b) => a + b, 0) + columnGap * col;
     const ty = top + offsets[i]! + (TEXT_HEIGHT / 2) * size;
-    // a handle sits at the middle of the letters of its label rather than of its text box, as matplotlib draws it
-    const cy = ty - 0.12 * size;
+    // matplotlib's handle box is 0.7 sizes tall and stands on the label's baseline, and its line runs through the middle of it
+    const cy = ty + (TEXT_ASCENT - TEXT_HEIGHT / 2 - 0.35) * size;
     const hw = handleWidth(e);
     if (e.colors !== undefined) {
       const n = e.colors.length;

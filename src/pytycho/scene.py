@@ -541,7 +541,7 @@ def marker(
     size: Any = None,
     color: str | None = None,
     edge: str | None = None,
-    edge_width: float | None = None,
+    edge_width: Any = None,
     opacity: Any = None,
 ) -> dict[str, Any]:
     """A marker for a points layer, a head, or a legend entry. ``size`` and ``opacity`` may be tweens (section 2.11)."""

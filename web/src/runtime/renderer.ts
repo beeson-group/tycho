@@ -207,6 +207,7 @@ attribute vec3 tcolor;
 #endif
 #ifdef DASH
 attribute float dist;
+uniform highp sampler2D uDashFrom;
 varying float vDist;
 #endif
 uniform vec3 uColor;
@@ -225,7 +226,8 @@ void main() {
   vec3 rgb = uColor;
 #endif
 #ifdef DASH
-  vDist = dist;
+  // the pattern starts where the track enters the stage
+  vDist = dist - texelFetch(uDashFrom, texelOf(track), 0).x;
 #endif
   vColor = vec4(rgb, uFade * alphaOf(track) * mix(uTaperOpacity, 1.0, s));
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
@@ -245,6 +247,7 @@ attribute vec3 colorEnd;
 #ifdef DASH
 attribute float distStart;
 attribute float distEnd;
+uniform highp sampler2D uDashFrom;
 varying float vDist;
 #endif
 uniform vec3 uColor;
@@ -266,7 +269,7 @@ void main() {
   vec3 rgb = uColor;
 #endif
 #ifdef DASH
-  vDist = atEnd ? distEnd : distStart;
+  vDist = (atEnd ? distEnd : distStart) - texelFetch(uDashFrom, texelOf(track), 0).x;
 #endif
   vColor = vec4(rgb, uFade * alphaOf(track) * mix(uTaperOpacity, 1.0, s));
   gl_Position = corner(instanceStart, instanceEnd, uWidth * mix(uTaperWidth, 1.0, s));
@@ -1114,6 +1117,44 @@ function kernelOf(ctx: DrawContext, layer: TrackLayer, set: SetData): Kernel | n
   return { parameter: sel.parameter, width: k.width, opacity: k.opacity, values, extent: hi >= lo ? hi - lo : 0 };
 }
 
+/**
+ * Where the dash pattern of a track starts (section 2.11), as an arclength along it: at its first sample when that lies in the
+ * rectangle `[x0, x1] x [y0, y1]`, else where the track first crosses into it, as matplotlib clips a line to its figure before it
+ * dashes it. `xy` holds the screen position of each of the `count` samples from `from`, two numbers per sample, and `dist` the
+ * arclength of each. A track that never enters the rectangle starts at its first sample.
+ */
+export function dashStart(xy: ArrayLike<number>, dist: ArrayLike<number>, from: number, count: number, x0: number, y0: number, x1: number, y1: number): number {
+  for (let i = 0; i + 1 < count; i++) {
+    const ax = xy[2 * (from + i)]!;
+    const ay = xy[2 * (from + i) + 1]!;
+    const dx = xy[2 * (from + i + 1)]! - ax;
+    const dy = xy[2 * (from + i + 1) + 1]! - ay;
+    // Liang-Barsky: the part of the segment inside the rectangle runs from t0 to t1
+    let t0 = 0;
+    let t1 = 1;
+    let inside = true;
+    for (const [q, r] of [
+      [-dx, ax - x0],
+      [dx, x1 - ax],
+      [-dy, ay - y0],
+      [dy, y1 - ay],
+    ] as const) {
+      if (q === 0) {
+        if (r < 0) inside = false;
+      } else {
+        const t = r / q;
+        if (q < 0) t0 = Math.max(t0, t);
+        else t1 = Math.min(t1, t);
+      }
+    }
+    if (inside && t0 <= t1) {
+      const d0 = dist[from + i]!;
+      return t0 === 0 ? d0 : d0 + t0 * (dist[from + i + 1]! - d0);
+    }
+  }
+  return count > 0 ? dist[from]! : 0;
+}
+
 /** A float texture with one RGBA texel per track, in rows of at most 2048. */
 function trackTexture(tracks: number): { data: Float32Array; texture: THREE.DataTexture; width: number } {
   const width = Math.min(Math.max(tracks, 1), 2048);
@@ -1265,6 +1306,9 @@ export class TrackDraw implements Draw {
   private readonly kernel: Kernel | null;
   private readonly ranges: ReturnType<typeof trackTexture>;
   private readonly alphas: ReturnType<typeof trackTexture> | null;
+  /** For a dashed layer, the arclength at which each track's dash pattern starts on the stage (section 2.11), else null. */
+  private readonly dashFrom: ReturnType<typeof trackTexture> | null;
+  private dashScreen = new Float64Array(0);
   private readonly resolution: THREE.IUniform<THREE.Vector2> = { value: new THREE.Vector2(1, 1) };
   private readonly uniforms: Record<string, THREE.IUniform>;
   private readonly baseHolder = new THREE.Object3D();
@@ -1340,6 +1384,7 @@ export class TrackDraw implements Draw {
     for (let t = 0; t < set.tracks; t++) this.ranges.data.set(EMPTY_RANGE, 4 * t);
     this.alphas = this.kernel === null ? null : trackTexture(set.tracks);
     const dash = dashed ? { uPixels: { value: 1 }, uDash: { value: new THREE.Vector2(layer.dash![0], layer.dash![1]) } } : null;
+    this.dashFrom = dashed ? trackTexture(set.tracks) : null;
     this.uniforms = {
       uRanges: { value: this.ranges.texture },
       uAlphas: { value: (this.alphas ?? this.ranges).texture },
@@ -1351,6 +1396,7 @@ export class TrackDraw implements Draw {
       uTaperOpacity: { value: this.fraction > 0 ? this.taperOpacity : 1 },
       uFade: { value: 1 },
       ...(dash ?? {}),
+      ...(this.dashFrom === null ? {} : { uDashFrom: { value: this.dashFrom.texture } }),
     };
     if (layer.fill !== undefined) {
       const f = layer.fill;
@@ -1436,13 +1482,53 @@ export class TrackDraw implements Draw {
     for (let k = 0; k < 3; k++) out[o + k] = (1 - v.w) * c.rgb[3 * (s + v.k) + k]! + v.w * c.rgb[3 * (s + v.k + 1) + k]!;
   }
 
-  /** The arclength of a vertex of track `t` for a dash. */
+  /** The arclength of a vertex of track `t` for a dash, from where the track's pattern starts. */
   private distAt(t: number, v: Vertex): number {
     const d = this.src.dist;
     if (d === null) return 0;
     const s = this.set.start(t);
-    if ('sample' in v) return d[s + v.sample]!;
-    return (1 - v.w) * d[s + v.k]! + v.w * d[s + v.k + 1]!;
+    const from = this.dashFrom?.data[4 * t] ?? 0;
+    if ('sample' in v) return d[s + v.sample]! - from;
+    return (1 - v.w) * d[s + v.k]! + v.w * d[s + v.k + 1]! - from;
+  }
+
+  /**
+   * Starts the dash pattern of each track where it enters the stage, of `width` by `height` CSS pixels widened by `margin`, as
+   * matplotlib clips a line to its figure before it dashes it (section 2.11). The panel draws with `camera` in `rect` of the stage.
+   * The dashes of a line that the camera follows then stay where they are on the screen rather than crawl along it.
+   */
+  placeDash(camera: THREE.Camera, rect: { x: number; y: number; w: number; h: number }, width: number, height: number, margin: number): void {
+    const from = this.dashFrom;
+    const dist = this.src.dist;
+    if (from === null || dist === null) return;
+    camera.updateMatrixWorld();
+    this.group.updateWorldMatrix(true, false);
+    const m = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).multiply(this.group.matrixWorld);
+    const e = m.elements;
+    const pos = this.geo.positions;
+    if (this.dashScreen.length < 2 * this.set.samples) this.dashScreen = new Float64Array(2 * this.set.samples);
+    const xy = this.dashScreen;
+    let changed = false;
+    for (const t of this.members) {
+      const s = this.set.start(t);
+      const n = this.set.count(t);
+      for (let i = s; i < s + n; i++) {
+        const x = pos[3 * i]!;
+        const y = pos[3 * i + 1]!;
+        const z = pos[3 * i + 2]!;
+        const w = e[3]! * x + e[7]! * y + e[11]! * z + e[15]!;
+        const nx = (e[0]! * x + e[4]! * y + e[8]! * z + e[12]!) / w;
+        const ny = (e[1]! * x + e[5]! * y + e[9]! * z + e[13]!) / w;
+        xy[2 * i] = rect.x + ((nx + 1) / 2) * rect.w;
+        xy[2 * i + 1] = rect.y + ((1 - ny) / 2) * rect.h;
+      }
+      const start = dashStart(xy, dist, s, n, -margin, -margin, width + margin, height + margin);
+      if (from.data[4 * t] !== start) {
+        from.data[4 * t] = start;
+        changed = true;
+      }
+    }
+    if (changed) from.texture.needsUpdate = true;
   }
 
   /** Each track's opacity under the highlight's kernel, around the selected track's parameter value. */
@@ -2964,6 +3050,8 @@ export class StageRenderer {
       const across = ortho === null ? 1 : p.rect.w / Math.max(1e-12, (ortho.right - ortho.left) / ortho.zoom);
       const up = ortho === null ? 1 : p.rect.h / Math.max(1e-12, (ortho.top - ortho.bottom) / ortho.zoom);
       for (const d of p.draws.values()) if (d instanceof TrackDraw) d.setPixels(across, up);
+      // a dash pattern starts where its track enters the stage, widened by one device pixel, as matplotlib clips a line to its figure
+      for (const d of p.draws.values()) if (d instanceof TrackDraw) d.placeDash(p.camera, p.rect, w, h, 1 / pixelRatio);
     }
     for (const [pid] of tiles.panels) {
       const p = this.panel(pid);

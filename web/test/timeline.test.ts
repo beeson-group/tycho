@@ -16,7 +16,7 @@ import {
   tweenValue,
 } from '../src/evaluate/timeline';
 import { formatNumber } from '../src/runtime/readouts';
-import { inset, layoutAt, fillSegment } from '../src/runtime/renderer';
+import { dashStart, inset, layoutAt, fillSegment } from '../src/runtime/renderer';
 import { boxTicks, markerStroke, tickLabel } from '../src/runtime/paint';
 import { stepIndex } from '../src/runtime/colors';
 import { tile } from '../src/runtime/tiles';
@@ -229,6 +229,18 @@ describe('formats of a number part (rule K7)', () => {
 });
 
 describe('drawing helpers (section 2.11)', () => {
+  it('starts a dash pattern where its track enters the stage, as matplotlib clips a line to its figure', () => {
+    // four samples along y = 5, from x = -10 to 15, and a stage of 10 by 10
+    const xy = [-10, 5, -5, 5, 5, 5, 15, 5];
+    const dist = [0, 5, 15, 25];
+    expect(dashStart(xy, dist, 0, 4, 0, 0, 10, 10)).toBeCloseTo(10, 12);
+    // a track that starts on the stage starts its pattern at its first sample
+    expect(dashStart(xy, dist, 2, 2, 0, 0, 10, 10)).toBe(15);
+    // a track that never enters the stage starts at its first sample, and a segment parallel to an edge outside it is skipped
+    expect(dashStart([-10, 20, -5, 20, 5, 20], [0, 5, 15], 0, 3, 0, 0, 10, 10)).toBe(0);
+    // a track that crosses a corner region enters where it meets the first edge inside the stage
+    expect(dashStart([-5, -5, 5, 5], [0, Math.SQRT2 * 10], 0, 2, 0, 0, 10, 10)).toBeCloseTo((Math.SQRT2 * 10) / 2, 12);
+  });
   it('step a color by the steps below a value', () => {
     expect([-1, 0, 0.5, 2].map((x) => stepIndex([0, 1], x))).toEqual([0, 0, 1, 2]);
   });

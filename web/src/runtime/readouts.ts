@@ -40,6 +40,7 @@ export function formatNumber(x: number, digits?: number, decimals?: number, grou
 
 /** The options of a part that gives a number (rule K7). */
 interface NumberFormat {
+  width?: number;
   digits?: number;
   decimals?: number;
   grouping?: boolean;
@@ -49,7 +50,7 @@ interface NumberFormat {
 
 /** A number of a part, scaled by its factor and offset and written by its format (rule K7). */
 function formatPart(x: number, p: NumberFormat): string {
-  return formatNumber((p.factor ?? 1) * x + (p.offset ?? 0), p.digits, p.decimals, p.grouping ?? false);
+  return formatNumber((p.factor ?? 1) * x + (p.offset ?? 0), p.digits, p.decimals, p.grouping ?? false).padStart(p.width ?? 0, ' ');
 }
 
 /** The slider's stops, which are the distinct parameter values of the matched track sets in increasing order (section 2.9). */

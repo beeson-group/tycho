@@ -16,7 +16,7 @@ const args = process.argv.slice(2);
 const [page, out] = args.filter((a, i) => !a.startsWith('--') && !args[i - 1]?.startsWith('--'));
 if (page === undefined || out === undefined) {
   console.error(
-    'usage: node web/scripts/video.mjs <page.html> <video.mp4> [--size WxH] [--dpr D] [--fps N] [--loops N] [--theme dark|light] [--font file.woff2] [--font-bold file.woff2] [--poster file.png] [--poster-at S]',
+    'usage: node web/scripts/video.mjs <page.html> <video.mp4> [--size WxH] [--dpr D] [--fps N] [--loops N] [--theme dark|light] [--font file.woff2] [--font-bold file.woff2] [--font-fallback family] [--poster file.png] [--poster-at S]',
   );
   process.exit(2);
 }
@@ -32,6 +32,8 @@ const theme = option('--theme', null);
 const fontFile = option('--font', null);
 // --font-bold gives the bold face of the same family, for a bold label
 const boldFile = option('--font-bold', null);
+// --font-fallback names installed fonts for the characters the font lacks, e.g. "STIX Two Math" for mathematical italics
+const fallback = option('--font-fallback', null);
 const poster = option('--poster', out.replace(/\.mp4$/i, '') + '.png');
 const posterAt = option('--poster-at', null);
 
@@ -113,7 +115,7 @@ try {
       document.fonts.add(await face.load());
       const bold = ${JSON.stringify(bold)};
       if (bold !== null) document.fonts.add(await new FontFace('tycho-video-font', Uint8Array.from(atob(bold), (c) => c.charCodeAt(0)), { weight: 'bold' }).load());
-      v.style.setProperty('--tycho-font', 'tycho-video-font');
+      v.style.setProperty('--tycho-font', ${JSON.stringify(fallback === null ? 'tycho-video-font' : `tycho-video-font, ${fallback}`)});
     }
     const blob = await v.exportVideo({ size: { width: ${width}, height: ${height}, pixelRatio: ${pixelRatio} }, fps: ${fps}, loops: ${loops}, speed: 1 });
     const bytes = new Uint8Array(await blob.arrayBuffer());

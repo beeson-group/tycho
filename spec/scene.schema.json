@@ -1361,7 +1361,8 @@
               "enum": [
                 "top",
                 "middle",
-                "bottom"
+                "bottom",
+                "alphabetic"
               ]
             },
             "size": {
@@ -2081,6 +2082,11 @@
             },
             "offset": {
               "type": "number"
+            },
+            "width": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 40
             }
           }
         },
@@ -2112,6 +2118,11 @@
             },
             "offset": {
               "type": "number"
+            },
+            "width": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 40
             }
           }
         },
@@ -2143,6 +2154,11 @@
             },
             "offset": {
               "type": "number"
+            },
+            "width": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 40
             }
           }
         },
@@ -2174,6 +2190,11 @@
             },
             "offset": {
               "type": "number"
+            },
+            "width": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 40
             }
           }
         },
@@ -2210,6 +2231,11 @@
             },
             "offset": {
               "type": "number"
+            },
+            "width": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 40
             }
           }
         },
@@ -2241,6 +2267,11 @@
             },
             "offset": {
               "type": "number"
+            },
+            "width": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 40
             }
           }
         },
@@ -2376,7 +2407,8 @@
               "enum": [
                 "top",
                 "middle",
-                "bottom"
+                "bottom",
+                "alphabetic"
               ]
             },
             "size": {
@@ -2494,7 +2526,8 @@
               "enum": [
                 "top",
                 "middle",
-                "bottom"
+                "bottom",
+                "alphabetic"
               ]
             },
             "opacity": {

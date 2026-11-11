@@ -1148,8 +1148,9 @@ export class MarkerSprites {
   /** Sets the size of the sprites' shape in CSS pixels, drawing the texture again when the size grows past it. */
   setSize(size: number): void {
     this.material.size = size + markerStroke(this.marker, size);
-    const want = Math.max(8, Math.ceil(size));
-    if (want > this.texSize || want < this.texSize / 3) {
+    // the stroke of a marker is in CSS pixels and does not scale with it, hence a size that moves draws the texture again
+    const want = Math.max(1, size);
+    if (Math.abs(want / Math.max(this.texSize, 1e-9) - 1) > 0.05) {
       this.texSize = want;
       this.material.map?.dispose();
       const t = new THREE.CanvasTexture(markerCanvas(this.tinted ? { ...this.marker, color: undefined, edge: this.marker.edge } : this.marker, want));
@@ -1308,8 +1309,6 @@ export class TrackDraw implements Draw {
       uFade: { value: 1 },
       ...(dash ?? {}),
     };
-    this.group.add(this.baseHolder, this.hiHolder);
-
     if (layer.fill !== undefined) {
       const f = layer.fill;
       const rgb = hexRgb(f.color ?? (color.kind === 'constant' ? `#${new THREE.Color(...color.rgb).getHexString()}` : ctx.theme.foreground));
@@ -1325,6 +1324,8 @@ export class TrackDraw implements Draw {
       this.fill.frustumCulled = false;
       this.group.add(this.fill);
     }
+    // the fill lies under the line, as it does in matplotlib
+    this.group.add(this.baseHolder, this.hiHolder);
 
     // the end pieces computed on the CPU, at most two per track
     this.pieces = new Pieces(2 * Math.min(set.tracks, 64), this.resolution, dash);
@@ -1536,7 +1537,8 @@ export class TrackDraw implements Draw {
         heads++;
         if (gp !== undefined && glowValues !== null) {
           const v = rev.head;
-          const k = 'sample' in v ? v.sample : v.k;
+          // the head sits on sample k, or on k + 1 at the end of its segment, e.g. at the end of the track
+          const k = 'sample' in v ? v.sample : v.w >= 1 ? v.k + 1 : v.k;
           if (glowValues[this.set.start(t) + k]! > 0) this.geo.vertex(t, v, gp.array as Float32Array, 3 * glows++);
         }
       }
@@ -1892,6 +1894,13 @@ class BodyDraw implements Draw {
 
   extend(box: THREE.Box3): void {
     if (this.at !== null) box.expandByPoint(this.at);
+  }
+
+  /** Hides a body drawn as an image while its position is outside the view, as matplotlib clips an annotation box (section 2.11). */
+  clip(camera: THREE.Camera): void {
+    if (!this.hasImage || this.at === null) return;
+    const v = this.at.clone().project(camera);
+    if (Math.abs(v.x) > 1 || Math.abs(v.y) > 1) this.point.visible = false;
   }
 
   private get hasImage(): boolean {
@@ -2866,6 +2875,7 @@ export class StageRenderer {
       this.keyed(p, state, q);
       this.turn(p, q);
       this.follow(p);
+      for (const d of p.draws.values()) if (d instanceof BodyDraw) d.clip(p.camera);
       const ortho = p.camera instanceof THREE.OrthographicCamera ? p.camera : null;
       const across = ortho === null ? 1 : p.rect.w / Math.max(1e-12, (ortho.right - ortho.left) / ortho.zoom);
       const up = ortho === null ? 1 : p.rect.h / Math.max(1e-12, (ortho.top - ortho.bottom) / ortho.zoom);
@@ -3069,10 +3079,10 @@ export class StageRenderer {
       if (d instanceof LabelDraw) {
         const at = d.layer.at as { screen?: [number, number] };
         let xy: [number, number] | null;
-        if (at !== null && typeof at === 'object' && 'screen' in at && at.screen !== undefined)
-          xy = [p.rect.x + at.screen[0] * p.rect.w, p.rect.y + at.screen[1] * p.rect.h];
+        const screen = at !== null && typeof at === 'object' && 'screen' in at && at.screen !== undefined;
+        if (screen) xy = [p.rect.x + at.screen![0] * p.rect.w, p.rect.y + at.screen![1] * p.rect.h];
         else xy = d.at === null ? null : project(d.at);
-        if (xy !== null) labels.push({ layer: d.layer, x: xy[0], y: xy[1] });
+        if (xy !== null) labels.push({ layer: d.layer, x: xy[0], y: xy[1], clip: !screen });
       } else if (d instanceof MarkDraw && d.box !== null && p.view !== null && p.cameraSpec.kind === 'plane') {
         const frame = scene.frames[p.plan.display];
         const names = frame?.axes ?? ['', '', ''];
@@ -3113,7 +3123,8 @@ export interface PanelPaint {
   outer: Rect;
   rect: Rect;
   opacity: View['opacity'];
-  labels: { layer: LabelLayer; x: number; y: number }[];
+  /** The labels at their anchors, `clip` for an anchor at a point, which is hidden outside the plot. */
+  labels: { layer: LabelLayer; x: number; y: number; clip: boolean }[];
   box: BoxPaint | null;
 }
 

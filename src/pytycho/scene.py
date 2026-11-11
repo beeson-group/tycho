@@ -565,7 +565,7 @@ def _text_style(value: Mapping[str, Any], what: str, out: dict[str, Any]) -> Non
     if "align" in value:
         out["align"] = _enum(value["align"], ("start", "center", "end"), f"2.11: the align of {what}")
     if "baseline" in value:
-        out["baseline"] = _enum(value["baseline"], ("top", "middle", "bottom"), f"2.11: the baseline of {what}")
+        out["baseline"] = _enum(value["baseline"], ("top", "middle", "bottom", "alphabetic"), f"2.11: the baseline of {what}")
     if "size" in value:
         out["size"] = _positive(value["size"], f"the size of {what}")
     if "color" in value:
@@ -578,7 +578,7 @@ def _text_style(value: Mapping[str, Any], what: str, out: dict[str, Any]) -> Non
         out["opacity"] = _opacity(value["opacity"], f"the opacity of {what}")
 
 
-FORMAT_KEYS = ("digits", "decimals", "grouping", "factor", "offset")
+FORMAT_KEYS = ("width", "digits", "decimals", "grouping", "factor", "offset")
 
 
 def _format(p: Mapping[str, Any], out: dict[str, Any]) -> None:
@@ -595,6 +595,10 @@ def _format(p: Mapping[str, Any], out: dict[str, Any]) -> None:
             raise SceneError(f"K7: the decimals of a part is {out['decimals']}, not in 0 to 17")
     if "grouping" in p:
         out["grouping"] = _bool(p["grouping"], "the grouping of a part", "K7")
+    if "width" in p:
+        out["width"] = _integer(p["width"], "K7: the width of a part")
+        if not 0 <= out["width"] <= 40:
+            raise SceneError(f"K7: the width of a part is {out['width']}, not in 0 to 40")
     for k in ("factor", "offset"):
         if k in p:
             out[k] = _finite(p[k], f"the {k} of a part")

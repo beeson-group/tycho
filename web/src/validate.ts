@@ -198,6 +198,9 @@ function checkParts(scene: Scene, parts: unknown, what: string): void {
     if (f.decimals !== undefined && !(Number.isInteger(f.decimals) && (f.decimals as number) >= 0 && (f.decimals as number) <= 17))
       fail('K7', `${what} has decimals ${String(f.decimals)}, not in 0 to 17`);
     if (f.digits !== undefined && f.decimals !== undefined) fail('K7', `${what} has a part with both digits and decimals`);
+    const width = (p as { width?: unknown }).width;
+    if (width !== undefined && !(Number.isInteger(width) && (width as number) >= 0 && (width as number) <= 40))
+      fail('K7', `${what} has width ${String(width)}, not in 0 to 40`);
   }
 }
 
@@ -207,7 +210,8 @@ function checkTextStyle(
   t: { align?: unknown; baseline?: unknown; size?: unknown; color?: unknown; weight?: unknown; box?: Box; opacity?: unknown },
 ): void {
   if (t.align !== undefined && !['start', 'center', 'end'].includes(t.align as string)) fail('K6', `${id}: an align is ${JSON.stringify(t.align)}`);
-  if (t.baseline !== undefined && !['top', 'middle', 'bottom'].includes(t.baseline as string)) fail('K6', `${id}: a baseline is ${JSON.stringify(t.baseline)}`);
+  if (t.baseline !== undefined && !['top', 'middle', 'bottom', 'alphabetic'].includes(t.baseline as string))
+    fail('K6', `${id}: a baseline is ${JSON.stringify(t.baseline)}`);
   if (t.size !== undefined && !isPositive(t.size)) fail('K6', `${id}: a text size is ${JSON.stringify(t.size)}, not positive`);
   if (t.color !== undefined && !COLOR.test(t.color as string)) fail('K6', `${id}: a text color is ${JSON.stringify(t.color)}, not #rrggbb`);
   if (t.weight !== undefined && t.weight !== 'normal' && t.weight !== 'bold') fail('K6', `${id}: a weight is ${JSON.stringify(t.weight)}, not normal or bold`);

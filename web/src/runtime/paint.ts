@@ -116,13 +116,25 @@ export function markerCanvas(marker: Marker, size: number, scale = 4): HTMLCanva
   return c;
 }
 
+/**
+ * The text metrics of matplotlib's layout, in units of the font size, which the labels, the overlays, the legends, and the boxes
+ * follow: a line's box is 0.984 tall with its baseline 0.227 above its bottom, and the lines of a text are 1.15 apart.
+ */
+export const TEXT_HEIGHT = 0.984;
+export const TEXT_DESCENT = 0.227;
+export const TEXT_ASCENT = TEXT_HEIGHT - TEXT_DESCENT;
+export const LINE_PITCH = 1.15;
+/** The gap matplotlib leaves at either end of an annotation's line, 2 points at a text of 14 points, in units of the text size. */
+const LEADER_SHRINK = 2 / 14;
+
 export interface TextStyle {
   size: number;
   color: string;
   weight: 'normal' | 'bold';
   font: string;
   align: 'start' | 'center' | 'end';
-  baseline: 'top' | 'middle' | 'bottom';
+  /** `alphabetic` puts the baseline of the last line at the anchor, as matplotlib's `va="baseline"` does. */
+  baseline: 'top' | 'middle' | 'bottom' | 'alphabetic';
   opacity: number;
   box?: Box;
 }
@@ -131,11 +143,11 @@ export interface TextStyle {
 export function textRect(g: G, text: string, x: number, y: number, style: TextStyle): [number, number, number, number] {
   g.font = `${style.weight === 'bold' ? 'bold ' : ''}${style.size}px ${style.font}`;
   const lines = text.split('\n');
-  const lh = 1.25 * style.size;
   const w = Math.max(0, ...lines.map((l) => g.measureText(l).width));
-  const h = lh * lines.length;
+  const h = (TEXT_HEIGHT + LINE_PITCH * (lines.length - 1)) * style.size;
   const left = style.align === 'center' ? x - w / 2 : style.align === 'end' ? x - w : x;
-  const top = style.baseline === 'middle' ? y - h / 2 : style.baseline === 'bottom' ? y - h : y;
+  const b = style.baseline;
+  const top = b === 'middle' ? y - h / 2 : b === 'bottom' ? y - h : b === 'alphabetic' ? y - h + TEXT_DESCENT * style.size : y;
   return [left, top, w, h];
 }
 
@@ -162,13 +174,12 @@ export function drawText(g: G, text: string, x: number, y: number, style: TextSt
     }
   }
   g.fillStyle = style.color;
-  g.textBaseline = 'middle';
+  g.textBaseline = 'alphabetic';
   g.textAlign = 'left';
-  const lh = 1.25 * style.size;
   text.split('\n').forEach((line, i) => {
     const lw = g.measureText(line).width;
     const lx = style.align === 'center' ? left + (w - lw) / 2 : style.align === 'end' ? left + w - lw : left;
-    g.fillText(line, lx, top + lh * (i + 0.5));
+    g.fillText(line, lx, top + (TEXT_ASCENT + LINE_PITCH * i) * style.size);
   });
   g.restore();
 }
@@ -212,22 +223,36 @@ export function drawLabel(g: G, layer: LabelLayer, text: string, ax: number, ay:
   const x = ax + dx;
   const y = ay + dy;
   if (layer.leader !== undefined && layer.leader !== false && (dx !== 0 || dy !== 0)) {
+    // as matplotlib's annotation, the line aims from the anchor at the center of the text's box, starts where it leaves the box, and
+    // stops short of both ends
     const [left, top, w, h] = textRect(g, text, x, y, style);
     const pad = layer.box !== undefined ? (layer.box.pad ?? 4) : 0;
-    const cx = Math.min(Math.max(ax, left - pad), left + w + pad);
-    const cy = Math.min(Math.max(ay, top - pad), top + h + pad);
-    const len = Math.hypot(cx - ax, cy - ay);
-    if (len > 3) {
-      const leader = layer.leader === true ? {} : layer.leader;
-      g.save();
-      g.globalAlpha *= style.opacity;
-      g.strokeStyle = leader.color ?? style.color;
-      g.lineWidth = leader.width ?? 1;
-      g.beginPath();
-      g.moveTo(ax, ay);
-      g.lineTo(cx - (3 * (cx - ax)) / len, cy - (3 * (cy - ay)) / len);
-      g.stroke();
-      g.restore();
+    const cx = left + w / 2;
+    const cy = top + h / 2;
+    const vx = ax - cx;
+    const vy = ay - cy;
+    const hw = w / 2 + pad;
+    const hh = h / 2 + pad;
+    const t = Math.min(Math.abs(vx) > 1e-9 ? hw / Math.abs(vx) : Infinity, Math.abs(vy) > 1e-9 ? hh / Math.abs(vy) : Infinity);
+    const shrink = LEADER_SHRINK * style.size;
+    if (t < 1) {
+      const ex = cx + t * vx;
+      const ey = cy + t * vy;
+      const len = Math.hypot(ax - ex, ay - ey);
+      if (len > 2 * shrink) {
+        const ux = (ax - ex) / len;
+        const uy = (ay - ey) / len;
+        const leader = layer.leader === true ? {} : layer.leader;
+        g.save();
+        g.globalAlpha *= style.opacity;
+        g.strokeStyle = leader.color ?? style.color;
+        g.lineWidth = leader.width ?? 1;
+        g.beginPath();
+        g.moveTo(ex + shrink * ux, ey + shrink * uy);
+        g.lineTo(ax - shrink * ux, ay - shrink * uy);
+        g.stroke();
+        g.restore();
+      }
     }
   }
   drawText(g, text, x, y, style);
@@ -286,16 +311,18 @@ export function drawBox(g: G, b: BoxPaint, theme: Theme): void {
   const { x, y, w, h } = b.rect;
   const font = theme.font ?? FONT;
   const fg = theme.foreground;
-  // the tick length, the pad of the tick numbers, and the pad of the titles of matplotlib's defaults, relative to its tick numbers of 14 points
-  const tick = 0.25 * b.size;
-  const pad = 0.25 * b.size;
-  const titlePad = 0.29 * b.size;
+  // the tick length, the pad of the tick numbers, the pad of the titles, and the width of the lines of matplotlib's defaults,
+  // relative to its tick numbers of 14 points
+  const tick = (3.5 / 14) * b.size;
+  const pad = (3.5 / 14) * b.size;
+  const titlePad = (4 / 14) * b.size;
+  const lineWidth = (0.8 / 14) * b.size;
   g.save();
   g.globalAlpha *= b.opacity;
   g.strokeStyle = fg;
   g.fillStyle = fg;
-  g.lineWidth = 1;
-  g.strokeRect(Math.round(x) + 0.5, Math.round(y) + 0.5, Math.round(w) - 1, Math.round(h) - 1);
+  g.lineWidth = lineWidth;
+  g.strokeRect(x, y, w, h);
   g.font = `${b.size}px ${font}`;
   const sx = (v: number) => x + ((v - b.x0) / (b.x1 - b.x0)) * w;
   const sy = (v: number) => y + h - ((v - b.y0) / (b.y1 - b.y0)) * h;
@@ -304,45 +331,41 @@ export function drawBox(g: G, b: BoxPaint, theme: Theme): void {
   const yt = boxTicks(b.y0, b.y1, Math.max(1, Math.floor(h / (2 * b.size))));
   g.beginPath();
   for (const v of xt.values) {
-    const px = Math.round(sx(v)) + 0.5;
-    g.moveTo(px, y + h);
-    g.lineTo(px, y + h + tick);
+    g.moveTo(sx(v), y + h);
+    g.lineTo(sx(v), y + h + tick);
   }
   for (const v of yt.values) {
-    const py = Math.round(sy(v)) + 0.5;
-    g.moveTo(x, py);
-    g.lineTo(x - tick, py);
+    g.moveTo(x, sy(v));
+    g.lineTo(x - tick, sy(v));
   }
   g.stroke();
   let yLabelWidth = 0;
+  g.textBaseline = 'alphabetic';
   if (b.ticks.x) {
     g.textAlign = 'center';
-    g.textBaseline = 'top';
-    for (const v of xt.values) g.fillText(tickLabel(v, xt.step), sx(v), y + h + tick + pad);
+    for (const v of xt.values) g.fillText(tickLabel(v, xt.step), sx(v), y + h + tick + pad + TEXT_ASCENT * b.size);
   }
   if (b.ticks.y) {
     g.textAlign = 'right';
-    g.textBaseline = 'middle';
     for (const v of yt.values) {
       const t = tickLabel(v, yt.step);
       yLabelWidth = Math.max(yLabelWidth, g.measureText(t).width);
-      g.fillText(t, x - tick - pad, sy(v));
+      g.fillText(t, x - tick - pad, sy(v) + (TEXT_ASCENT - TEXT_HEIGHT / 2) * b.size);
     }
   }
   const title = (16 / 14) * b.size;
   g.font = `${title}px ${font}`;
   if (b.titles[0] !== '') {
     g.textAlign = 'center';
-    g.textBaseline = 'top';
-    g.fillText(b.titles[0], x + w / 2, y + h + tick + pad + (b.ticks.x ? 1.15 * b.size : 0) + titlePad);
+    g.fillText(b.titles[0], x + w / 2, y + h + tick + pad + (b.ticks.x ? TEXT_HEIGHT * b.size : 0) + titlePad + TEXT_ASCENT * title);
   }
   if (b.titles[1] !== '') {
+    // turned to read upward, the title's descent faces the box, and its box ends the title pad from the tick numbers
     g.save();
     g.translate(x - tick - pad - (b.ticks.y ? yLabelWidth : 0) - titlePad, y + h / 2);
     g.rotate(-Math.PI / 2);
     g.textAlign = 'center';
-    g.textBaseline = 'bottom';
-    g.fillText(b.titles[1], 0, 0);
+    g.fillText(b.titles[1], 0, -TEXT_DESCENT * title);
     g.restore();
   }
   g.restore();
@@ -362,23 +385,26 @@ export function drawLegend(g: G, legend: Extract<Overlay, { kind: 'legend' }>, w
   const columnGap = (legend.column_spacing ?? 2) * size;
   const columns = Math.max(1, Math.min(legend.columns ?? legend.entries.length, legend.entries.length));
   const rows = Math.ceil(legend.entries.length / columns);
-  const handleWidth = (e: (typeof legend.entries)[number]) => (e.colors !== undefined ? Math.max(handle, 0.55 * size * e.colors.length) : handle);
+  const handleWidth = (_: (typeof legend.entries)[number]) => handle;
   // matplotlib fills a legend's columns from top to bottom, and so does this one
   const cells = legend.entries.map((e, i) => ({ e, col: Math.floor(i / rows), row: i % rows }));
   const colWidth: number[] = Array.from({ length: columns }, () => 0);
   for (const c of cells) colWidth[c.col] = Math.max(colWidth[c.col]!, handleWidth(c.e) + gap + g.measureText(c.e.label).width);
   const total = colWidth.reduce((a, b) => a + b, 0) + columnGap * (columns - 1);
-  const lh = 1.45 * size;
-  const height = rows * lh;
+  // matplotlib's legend: rows of a text's height and half a size apart, inside a border of 0.4 sizes, which keeps half a size from its anchor
+  const lh = (TEXT_HEIGHT + 0.5) * size;
+  const inner = 0.4 * size;
+  const outer = 0.5 * size;
+  const height = rows * lh - 0.5 * size;
   const ax = legend.at[0] * w;
   const ay = legend.at[1] * h;
   const align = legend.align ?? 'center';
-  const left = align === 'center' ? ax - total / 2 : align === 'end' ? ax - total : ax;
+  const left = align === 'center' ? ax - total / 2 : align === 'end' ? ax - outer - inner - total : ax + outer + inner;
   const base = legend.baseline ?? 'top';
-  const top = base === 'middle' ? ay - height / 2 : base === 'bottom' ? ay - height : ay;
+  const top = base === 'middle' ? ay - height / 2 : base === 'bottom' ? ay - outer - inner - height : ay + outer + inner;
   for (const { e, col, row } of cells) {
     const cx = left + colWidth.slice(0, col).reduce((a, b) => a + b, 0) + columnGap * col;
-    const cy = top + lh * (row + 0.5);
+    const cy = top + lh * row + (TEXT_HEIGHT / 2) * size;
     const hw = handleWidth(e);
     if (e.colors !== undefined) {
       const n = e.colors.length;
@@ -387,9 +413,10 @@ export function drawLegend(g: G, legend: Extract<Overlay, { kind: 'legend' }>, w
         g.strokeStyle = c;
         g.lineWidth = e.line?.width ?? 2;
         g.globalAlpha = opacity * (e.line?.opacity ?? 1);
+        g.lineCap = 'butt';
         g.beginPath();
-        g.moveTo(cx + i * part + 1, cy);
-        g.lineTo(cx + (i + 1) * part - 1, cy);
+        g.moveTo(cx + i * part, cy);
+        g.lineTo(cx + (i + 1) * part, cy);
         g.stroke();
       });
       g.globalAlpha = opacity;
@@ -423,8 +450,8 @@ export function drawLegend(g: G, legend: Extract<Overlay, { kind: 'legend' }>, w
     }
     g.fillStyle = legend.color ?? theme.foreground;
     g.textAlign = 'left';
-    g.textBaseline = 'middle';
-    g.fillText(e.label, cx + hw + gap, cy);
+    g.textBaseline = 'alphabetic';
+    g.fillText(e.label, cx + hw + gap, cy + (TEXT_ASCENT - TEXT_HEIGHT / 2) * size);
   }
   g.restore();
 }
@@ -470,6 +497,9 @@ export function paintStage(
     g.globalAlpha = opacity;
     if (info.box !== null) drawBox(g, info.box, theme);
     for (const l of info.labels) {
+      // a label at a point is hidden while its anchor is outside the plot, as matplotlib clips an annotation
+      const r = info.rect;
+      if (l.clip && !(l.x >= r.x - 0.5 && l.x <= r.x + r.w + 0.5 && l.y >= r.y - 0.5 && l.y <= r.y + r.h + 0.5)) continue;
       const parts = typeof l.layer.text === 'string' ? [l.layer.text] : l.layer.text;
       drawLabel(g, l.layer, text(pid, parts), l.x, l.y, theme, s);
     }

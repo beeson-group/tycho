@@ -304,7 +304,7 @@ export type Layer =
        */
       offset?: [number, number];
       align?: 'start' | 'center' | 'end';
-      baseline?: 'top' | 'middle' | 'bottom';
+      baseline?: 'top' | 'middle' | 'bottom' | 'alphabetic';
       size?: number;
       color?: Color;
       weight?: 'normal' | 'bold';
@@ -423,6 +423,7 @@ export type TextPart =
       grouping?: boolean;
       factor?: number;
       offset?: number;
+      width?: number;
     }
   | {
       member: Name;
@@ -431,6 +432,7 @@ export type TextPart =
       grouping?: boolean;
       factor?: number;
       offset?: number;
+      width?: number;
     }
   | {
       attr: Name;
@@ -439,6 +441,7 @@ export type TextPart =
       grouping?: boolean;
       factor?: number;
       offset?: number;
+      width?: number;
     }
   | {
       channel: Name;
@@ -447,6 +450,7 @@ export type TextPart =
       grouping?: boolean;
       factor?: number;
       offset?: number;
+      width?: number;
     }
   | {
       clock: 'index' | 'steps' | 'value' | 'time';
@@ -455,6 +459,7 @@ export type TextPart =
       grouping?: boolean;
       factor?: number;
       offset?: number;
+      width?: number;
     }
   | {
       keys: Keys;
@@ -463,6 +468,7 @@ export type TextPart =
       grouping?: boolean;
       factor?: number;
       offset?: number;
+      width?: number;
     }
   | {
       steps: [number | string, number | string][];
@@ -541,7 +547,7 @@ export type Overlay =
        */
       at: [number, number];
       align?: 'start' | 'center' | 'end';
-      baseline?: 'top' | 'middle' | 'bottom';
+      baseline?: 'top' | 'middle' | 'bottom' | 'alphabetic';
       size?: number;
       color?: Color;
       weight?: 'normal' | 'bold';
@@ -577,7 +583,7 @@ export type Overlay =
       size?: number;
       color?: Color;
       align?: 'start' | 'center' | 'end';
-      baseline?: 'top' | 'middle' | 'bottom';
+      baseline?: 'top' | 'middle' | 'bottom' | 'alphabetic';
       opacity?: Opacity;
       handle_length?: number;
       handle_pad?: number;

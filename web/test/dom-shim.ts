@@ -243,12 +243,24 @@ export function installDom(): { doc: FakeDocument; uninstall: () => void } {
     },
   });
   const listeners = new FakeElement(doc, 'window');
+  // the timers set through `window`, e.g. the one that saves the state of a viewer, are cancelled on uninstall, since they would fire without a `window`
+  const timers = new Set<ReturnType<typeof setTimeout>>();
   g.document = doc;
   g.window = {
     addEventListener: listeners.addEventListener.bind(listeners),
     removeEventListener: listeners.removeEventListener.bind(listeners),
-    setTimeout: (f: () => void, ms: number) => setTimeout(f, ms),
-    clearTimeout: (t: ReturnType<typeof setTimeout>) => clearTimeout(t),
+    setTimeout: (f: () => void, ms: number) => {
+      const t = setTimeout(() => {
+        timers.delete(t);
+        f();
+      }, ms);
+      timers.add(t);
+      return t;
+    },
+    clearTimeout: (t: ReturnType<typeof setTimeout>) => {
+      timers.delete(t);
+      clearTimeout(t);
+    },
     innerWidth: 1280,
     innerHeight: 800,
     devicePixelRatio: 1,
@@ -258,6 +270,8 @@ export function installDom(): { doc: FakeDocument; uninstall: () => void } {
   return {
     doc,
     uninstall: () => {
+      for (const t of timers) clearTimeout(t);
+      timers.clear();
       for (const [k, desc] of saved) {
         if (desc === undefined) delete g[k];
         else Object.defineProperty(g, k, desc);

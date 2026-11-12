@@ -932,6 +932,24 @@ describe('a viewer embedded on a page, under a DOM stand-in', () => {
       expect(v.store.frame).toBe(steps - 1);
       expect(v.time).toBeCloseTo(L, 6);
     });
+    it('plays to a stage from a later loop of playback, without jumping to it', async () => {
+      const { v, L } = await staged();
+      const now = vi.spyOn(performance, 'now').mockReturnValue(1000);
+      v.goto('a');
+      v.play();
+      // playback is in its third loop, at a tenth of it
+      now.mockReturnValue(1000 + 2100 * L);
+      v.tick(1000 + 2100 * L);
+      v.playTo('c');
+      v.tick(1000 + 2200 * L);
+      expect(v.playing).toBe(true);
+      expect(v.time).toBeCloseTo(0.2 * L, 6);
+      v.tick(1000 + 2600 * L);
+      expect(v.playing).toBe(false);
+      expect(v.time).toBeCloseTo(L / 2, 6);
+      expect(v.dispatchEvent.mock.calls.at(-1)[0].detail).toEqual({ id: 'c', index: 2, at: L / 2 });
+      now.mockRestore();
+    });
   });
 
   describe('the camera keys of the timeline (rule K5)', () => {

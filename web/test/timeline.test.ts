@@ -2,6 +2,7 @@
 // with keys (rule K5), the layout at a time, the formats of rule K7, and the drawing helpers of the stepped colors, the fills, the boxes, and the markers.
 import { describe, expect, it } from 'vitest';
 import { TychoError } from '../src/errors';
+import { layerClock } from '../src/evaluate/clock';
 import { evaluate } from '../src/evaluate/index';
 import {
   cameraWindow,
@@ -188,6 +189,38 @@ describe('camera windows (rule K5)', () => {
     ).toBe('K5');
     expect(rule(() => checkCameraKeys([{ at: 0, width: 1, center: [0, 0], ease: 'zoom' }], false, 'cam'))).toBe('K2');
     expect(() => checkCameraKeys([{ at: 0, width: 1, height: 2, center: [0, 0] }], true, 'cam')).not.toThrow();
+  });
+});
+
+describe('what a frame does not compute again', () => {
+  it('checks the keys of a camera once, and reads only their window afterward', () => {
+    const { scene, data } = loadCorpus('timeline');
+    const keys = (scene.views.plot!.camera as { keys: { width: number }[] }).keys;
+    let reads = 0;
+    Object.defineProperty(keys[0], 'width', {
+      get: () => {
+        reads++;
+        return 2;
+      },
+    });
+    evaluate(scene, data, scene.initial, 3);
+    const first = reads;
+    evaluate(scene, data, scene.initial, 3);
+    expect(reads - first).toBeLessThan(first);
+  });
+  it('builds the clock of a layer once per scene clock', () => {
+    const clock: Clock = { mode: 'fraction', channels: ['t'], steps: 20, seconds: 10 };
+    const own = {
+      channel: 't',
+      keys: [
+        [0, 0],
+        [10, 4, 'linear'],
+      ],
+    } as NonNullable<TrackLayer['clock']>;
+    expect(layerClock(clock, own)).toBe(layerClock(clock, own));
+    // another scene clock gives another loop length, hence another clock of the layer
+    expect(layerClock({ ...clock, seconds: 20 }, own).seconds).toBe(20);
+    expect(layerClock(clock, own).seconds).toBe(10);
   });
 });
 

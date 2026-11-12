@@ -92,11 +92,17 @@ export function bound(u: number, before: 'clamp' | 'hidden' = 'clamp', after: 'c
   return u;
 }
 
+/** The clock built last by `layerClock` for each clock of a layer. */
+const layerClocks = new WeakMap<object, Clock>();
+
 /**
  * The clock of a layer with a clock of its own (rule K4), as a clock in value mode on the layer's channel, whose loop lasts as
- * long as the scene's, so that its keys read the same timeline. It does not have laps.
+ * long as the scene's, so that its keys read the same timeline. It does not have laps. The clock is checked and built once
+ * and returned again while the scene's clock keeps its steps and its loop length, hence a caller must not change it.
  */
 export function layerClock(scene: Clock, own: LayerClock): Clock {
+  const built = own !== null && typeof own === 'object' ? layerClocks.get(own) : undefined;
+  if (built !== undefined && built.steps === scene.steps && built.seconds === loopSeconds(scene)) return built;
   if (own === null || typeof own !== 'object' || typeof own.channel !== 'string')
     fail('K4', `a layer's clock is ${JSON.stringify(own)}, not {channel, range} or {channel, keys}`);
   const hasRange = own.range !== undefined;
@@ -108,5 +114,6 @@ export function layerClock(scene: Clock, own: LayerClock): Clock {
   const clock: Clock = { mode: 'value', channels: [own.channel], steps: scene.steps, seconds: loopSeconds(scene) };
   if (hasRange) clock.range = [own.range![0], own.range![1]];
   else clock.keys = own.keys;
+  layerClocks.set(own, clock);
   return clock;
 }

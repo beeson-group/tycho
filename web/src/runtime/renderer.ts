@@ -1627,26 +1627,24 @@ export class TrackDraw implements Draw {
     this.group.matrixWorldNeedsUpdate = true;
   }
 
-  /** Fades the layer as a whole by its opacity at time `s`, a tween or a number (section 2.11). */
+  /** Fades the layer as a whole by the tween of its opacity at time `s` (section 2.11), and returns the factor, 1 for an opacity that is a number. */
   private fade(s: number): number {
     const layer = this.layer;
-    const f = typeof layer.opacity === 'object' ? opacityAt(layer.opacity, s) / Math.max(this.opacity, 1e-9) : 1;
-    this.uniforms.uFade!.value = typeof layer.opacity === 'object' ? opacityAt(layer.opacity, s) : 1;
-    const marker = headMarker(layer);
     const fade = typeof layer.opacity === 'object' ? opacityAt(layer.opacity, s) : 1;
+    this.uniforms.uFade!.value = fade;
+    const marker = headMarker(layer);
     this.heads?.setOpacity(fade * opacityAt(marker.opacity, s));
     if (this.heads !== null && (typeof marker.size === 'object' || typeof marker.edge_width === 'object'))
       this.heads.setSize(sizeAt(marker.size, s, HEAD_SIZE), marker.edge_width === undefined ? undefined : numberAt(marker.edge_width, s, 0));
     if (this.glow !== null) this.glow.setOpacity(fade * opacityAt(marker.opacity, s) * (marker.glow?.opacity ?? 0.35));
     if (this.fill !== null) this.fill.material.opacity = fade * (layer.fill?.opacity ?? 0.25);
-    return f;
+    return fade;
   }
 
   /** Returns whether the picture changed through new members, a new highlight or selection, or a first fill. */
   update(plan: TrackPlan, scene: Scene, q: number): boolean {
     const s = timeAt(scene.clock, q);
-    this.fade(s);
-    const fadeNow = this.uniforms.uFade!.value as number;
+    const fadeNow = this.fade(s);
     const h = plan.highlight;
     const changed =
       plan.members.length !== this.members.length ||
@@ -1970,8 +1968,10 @@ class BodyDraw implements Draw {
   private readonly scratch = new Float64Array(3);
   private capacity = 0;
   private readonly layer: BodyLayer;
-  /** Resolves when the body's image is ready to draw, or at once for a body without an image. */
+  /** Resolves when the body's image is ready to draw or could not be read, or at once for a body without an image. */
   readonly ready: Promise<void>;
+  /** Why the body's image could not be read, which `update` throws at every frame, or null. */
+  private imageError: TychoError | null = null;
 
   constructor(ctx: DrawContext, layer: BodyLayer, key: string, onImage: () => void = () => undefined) {
     this.key = key;
@@ -2013,7 +2013,11 @@ class BodyDraw implements Draw {
           m.needsUpdate = true;
           onImage();
         },
-        () => undefined,
+        (e: unknown) => {
+          const decoded = `body ${layer.body} has image ${image}, which cannot be decoded as a PNG, JPEG, or WebP file`;
+          this.imageError = e instanceof TychoError ? e : new TychoError('2.11', decoded);
+          onImage();
+        },
       );
     }
     this.trail = new THREE.Line(
@@ -2030,6 +2034,7 @@ class BodyDraw implements Draw {
    * and uploads only the vertices it draws.
    */
   update(env: LayerEnv, layer: BodyLayer, driver: PanelPlan['driver']): void {
+    if (this.imageError !== null) throw this.imageError;
     const opacity = opacityAt(this.layer.opacity, timeAt(env.clock, env.q));
     (this.point.material as THREE.PointsMaterial).opacity = opacity;
     (this.trail.material as THREE.LineBasicMaterial).opacity = 0.6 * opacity;
@@ -2534,6 +2539,8 @@ class PanelRender {
   outer: Rect = { x: 0, y: 0, w: 1, h: 1 };
   /** The window of a camera with keys at the last frame, or null. */
   window: CameraWindow | null = null;
+  /** The camera was moved to a window of its keys and has not been fitted since. */
+  atWindow = false;
   /** What the panel draws, as far as the fit depends on it. A change refits the camera. */
   content = '';
   needsFit = true;
@@ -3000,6 +3007,7 @@ export class StageRenderer {
     p.box = box;
     p.fitting = false;
     p.needsFit = false;
+    p.atWindow = false;
   }
 
   /**
@@ -3210,8 +3218,9 @@ export class StageRenderer {
   }
 
   /**
-   * Moves a plane camera with keys to its window at progress `q` (rule K5), unless the viewer has moved the camera since its
-   * last fit. The window's height is its own under a free aspect, and the width over the panel's aspect ratio otherwise.
+   * Moves a plane camera with keys to its window at progress `q` (rule K5), or back to its fit when the keys do not give a window
+   * then, unless the viewer has moved the camera since its last fit. The window's height is its own under a free aspect, and
+   * the width over the panel's aspect ratio otherwise.
    */
   private keyed(p: PanelRender, state: State, q: number): void {
     const spec = p.cameraSpec;
@@ -3234,8 +3243,13 @@ export class StageRenderer {
       p.error = e.message;
       return;
     }
-    if (win === null) return;
+    if (win === null) {
+      // a camera without a window at this time shows its fit (section 2.11)
+      if (p.atWindow) this.fit(p);
+      return;
+    }
     p.window = win;
+    p.atWindow = true;
     const cam = p.camera;
     const { right, up, normal } = cameraBasis(spec);
     const aspect = p.rect.w / Math.max(1, p.rect.h);

@@ -78,13 +78,21 @@ export function evaluate(scene: Scene, data: DataStore, state: State, frameIndex
 
 const LAYER_KINDS = ['track', 'arrow', 'outline', 'body', 'axes', 'grid', 'label', 'points'];
 
+/** The lists of camera keys that passed `checkCameraKeys`, each with whether it was checked for a camera of free aspect. */
+const checkedKeys = new WeakMap<object, boolean>();
+
 /**
  * The window of a plane camera with keys at the environment's progress (rule K5). A follow key's center is the mean of its targets'
  * points, projected onto the plane, plus its offset, and its `center` when every target's set query fails to match.
  */
 export function cameraAt(env: LayerEnv, view: View, sets: SetCache, driver: Driver): CameraResult | null {
   const cam = view.camera as Extract<View['camera'], { kind: 'plane' }> & {};
-  checkCameraKeys(cam.keys, cam.aspect === 'free', 'the camera');
+  // a renderer asks for the window at every frame, hence a list of keys is checked once
+  const free = cam.aspect === 'free';
+  if (typeof cam.keys !== 'object' || cam.keys === null || checkedKeys.get(cam.keys) !== free) {
+    checkCameraKeys(cam.keys, free, 'the camera');
+    checkedKeys.set(cam.keys!, free);
+  }
   const keys = cam.keys as unknown as CameraKey[];
   const [ix, iy] = planeAxes(cam);
   const s = timeAt(env.clock, env.q);

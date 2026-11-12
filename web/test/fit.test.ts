@@ -704,3 +704,60 @@ describe('a track layer in the driver context (L6)', () => {
     draw.dispose();
   });
 });
+
+describe('a plane camera with keys (rule K5)', () => {
+  it('shows its fit again once its keys do not give a window', () => {
+    // the key at 5 s follows layer 1, whose set query does not match any set, hence the camera lacks a window from 2 s on
+    const camera: Camera = {
+      kind: 'plane',
+      keys: [
+        { at: 2, center: [5, 0.5], width: 4 },
+        { at: 5, follow: [{ layer: 1, member: 0 }], width: 4 },
+      ],
+    };
+    const { stage, p } = widePanel(camera, [{ kind: 'track', sets: { tags: { family: 'none' } }, members: 'all' }]);
+    const state: State = stage.ctx.scene.initial;
+    const across = () => {
+      stage.follow(p);
+      return [p.view.x0, p.view.x1];
+    };
+    const fitted = across();
+    // one loop lasts 8 s, hence the progress 0.125 is the time 1 s, before the first key
+    stage.keyed(p, state, 0.125);
+    expect(across()).toEqual([3, 7].map((x) => expect.closeTo(x, 9)));
+    stage.keyed(p, state, 0.5);
+    expect(across()).toEqual(fitted.map((x: number) => expect.closeTo(x, 9)));
+  });
+});
+
+describe('a body with an image (section 2.11)', () => {
+  it('shows an error in its panel when the image cannot be decoded', async () => {
+    vi.stubGlobal('createImageBitmap', () => Promise.reject(new Error('The source image could not be decoded.')));
+    try {
+      const scene = baseScene({ version: '0.4', bodies: { moon: { frame: 'a', position: [0, 0, 0], image: 'bodies/moon/image' } } });
+      scene.views.main!.layers.push({ kind: 'body', body: 'moon' });
+      const data = new MemoryStore()
+        .add('off', [0, 2], 'uint32')
+        .add('pos', [
+          [0, 0, 0],
+          [10, 1, 1],
+        ])
+        .add('time', [0, 1])
+        .add('bodies/moon/image', [0x89, 0x50, 0x4e, 0x47], 'uint8');
+      const geometry = new GeometryCache(scene, data);
+      const ctx = { scene, geometry, shared: new Shared(), theme: sceneTheme(scene), disc: new THREE.Texture() };
+      const onChange = vi.fn();
+      const stage = Object.assign(Object.create(StageRenderer.prototype), { ctx, panels: new Map(), lastState: null, onChange });
+      const p = stage.panel('p1');
+      p.rect = { x: 0, y: 0, w: 400, h: 400 };
+      stage.replan(p, scene.initial);
+      await stage.ready();
+      stage.advance(p, scene.initial, 0);
+      expect(p.error).toMatch(/\[2\.11\] body moon has image bodies\/moon\/image, which cannot be decoded/);
+      // the page draws again once the decoding failed, so that the error is shown without a further frame
+      expect(onChange).toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});

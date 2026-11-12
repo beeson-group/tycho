@@ -76,6 +76,11 @@ describe('readout tiles', () => {
     expect(pieces.join('')).toBe(readoutText(ctx, parts));
     expect(readoutPieces({ ...ctx, panel: 'nope' }, parts)).toEqual([]);
   });
+  it('pad the frame index and the step count to the width of the part (rule K7)', () => {
+    const c = loadCorpus('two-panels');
+    const ctx = { scene: c.scene, geometry: new GeometryCache(c.scene, c.data), state: c.scene.initial, panel: 'p1', frameIndex: 3 };
+    expect(readoutText(ctx, [{ clock: 'index', width: 4 }, '/', { clock: 'steps', width: 6 }])).toBe(`   3/${String(c.scene.clock.steps).padStart(6)}`);
+  });
 });
 
 describe('frame rate', () => {

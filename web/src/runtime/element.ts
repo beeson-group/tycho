@@ -882,8 +882,11 @@ export class TychoViewerElement extends Base {
       }
       this.meter.reset();
       if (store.playing) {
-        // playback resumes from the time that was held, between two frame indices
-        this.anchor = { index: this.heldProgress === null ? store.frame : this.heldProgress * this.scene!.clock.steps, time: performance.now() };
+        // playback resumes from the time that was held, between two frame indices, and from the start once a clock that
+        // ends with a stop holds the end of its loop, as a video plays again (rule K9)
+        const clock = this.scene!.clock;
+        const ended = clock.end === 'stop' && this.heldProgress !== null && this.heldProgress >= 1 - 2e-9;
+        this.anchor = { index: ended ? 0 : this.heldProgress === null ? store.frame : this.heldProgress * clock.steps, time: performance.now() };
         this.heldProgress = null;
       } else if (this.playProgress !== null) this.heldProgress = this.playProgress;
       this.playProgress = null;

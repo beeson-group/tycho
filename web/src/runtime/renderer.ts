@@ -3310,7 +3310,7 @@ export class StageRenderer {
           ticks: { x: ticks.includes('x'), y: ticks.includes('y') },
           size: (d.box as { size?: number }).size ?? TICK_SIZE,
           titles: [title(ix), title(iy)],
-          opacity: 1,
+          opacity: d.box.opacity,
         };
         boxTitles = (d.box as { titles?: PanelPaint['boxTitles'] }).titles;
       }
@@ -3340,7 +3340,8 @@ export interface PanelPaint {
   boxTitles?: MarkLayer extends never ? never : Extract<MarkLayer, { kind: 'axes' }>['titles'];
   /** The labels at their anchors, `clip` for an anchor at a point, which is hidden outside the plot. */
   labels: { layer: LabelLayer; x: number; y: number; clip: boolean }[];
-  box: BoxPaint | null;
+  /** The box of an axes layer, with the opacity of the layer, which the stage reads at the time of the timeline. */
+  box: (Omit<BoxPaint, 'opacity'> & { opacity: MarkLayer['opacity'] }) | null;
 }
 
 /** A rectangle less a view's margin, given as fractions of its height and width (section 2.11). */

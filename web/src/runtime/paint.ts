@@ -590,7 +590,7 @@ export function paintStage(
               const parts = typeof t === 'string' ? [t] : t;
               return runsOf(parts, text(pid, parts));
             }) as BoxPaint['titles']);
-      drawBox(g, { ...info.box, titles }, theme);
+      drawBox(g, { ...info.box, titles, opacity: opacityAt(info.box.opacity, s) }, theme);
     }
     for (const l of info.labels) {
       // a label at a point is hidden while its anchor is outside the plot, as matplotlib clips an annotation

@@ -1970,8 +1970,10 @@ class BodyDraw implements Draw {
   private readonly scratch = new Float64Array(3);
   private capacity = 0;
   private readonly layer: BodyLayer;
-  /** Resolves when the body's image is ready to draw, or at once for a body without an image. */
+  /** Resolves when the body's image is ready to draw or could not be read, or at once for a body without an image. */
   readonly ready: Promise<void>;
+  /** Why the body's image could not be read, which `update` throws at every frame, or null. */
+  private imageError: TychoError | null = null;
 
   constructor(ctx: DrawContext, layer: BodyLayer, key: string, onImage: () => void = () => undefined) {
     this.key = key;
@@ -2013,7 +2015,11 @@ class BodyDraw implements Draw {
           m.needsUpdate = true;
           onImage();
         },
-        () => undefined,
+        (e: unknown) => {
+          const decoded = `body ${layer.body} has image ${image}, which cannot be decoded as a PNG, JPEG, or WebP file`;
+          this.imageError = e instanceof TychoError ? e : new TychoError('2.11', decoded);
+          onImage();
+        },
       );
     }
     this.trail = new THREE.Line(
@@ -2030,6 +2036,7 @@ class BodyDraw implements Draw {
    * and uploads only the vertices it draws.
    */
   update(env: LayerEnv, layer: BodyLayer, driver: PanelPlan['driver']): void {
+    if (this.imageError !== null) throw this.imageError;
     const opacity = opacityAt(this.layer.opacity, timeAt(env.clock, env.q));
     (this.point.material as THREE.PointsMaterial).opacity = opacity;
     (this.trail.material as THREE.LineBasicMaterial).opacity = 0.6 * opacity;

@@ -1104,6 +1104,10 @@ class _Panel:
             return {"kind": "points", "set": None, "members": []}
         rd = self.reading_of(layer)
         hides = rd.mode == "value" and "hidden" in (layer.get("before"), layer.get("after"))
+        if (reveal == "grow" or hides) and rd.laps > 1 and not data.periodic:
+            raise EvaluationError(
+                f"C6: a reading is taken on track set {data.id!r}, which is not periodic, and the clock has {rd.laps} laps"
+            )
         members = []
         for i in self.members(layer["members"], data):
             track = data.track(i)

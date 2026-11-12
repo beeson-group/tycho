@@ -377,6 +377,8 @@ export function pointsLayer(env: LayerEnv, layer: PointsLayer, set: SetData | nu
   const lenv = layerEnv(env, layer);
   const hides = lenv.clock.mode === 'value' && (layer.before === 'hidden' || layer.after === 'hidden');
   const reads = reveal === 'grow' || hides;
+  const laps = clockLaps(lenv.clock);
+  if (reads && laps > 1 && !set.periodic) fail('C6', `a reading is taken on track set ${set.id}, which is not periodic, and the clock has ${laps} laps`);
   const from = set.def.frame;
   const out: PointsLayerResult['members'] = [];
   for (const t of members(env.scope, layer.members, set)) {

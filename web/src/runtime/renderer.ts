@@ -2502,6 +2502,11 @@ export function cameraMoved(camera: THREE.Camera, seen: Float64Array): boolean {
   return moved;
 }
 
+/** Whether two regions (x, y, width, height) of the underlay share a pixel. A region that was never set, at -1, shares none. */
+export function overlaps(a: THREE.Vector4, b: THREE.Vector4): boolean {
+  return a.x < b.x + b.z && b.x < a.x + a.z && a.y < b.y + b.w && b.y < a.y + a.w;
+}
+
 type AnyCamera = THREE.OrthographicCamera | THREE.PerspectiveCamera;
 
 class PanelRender {
@@ -2510,7 +2515,8 @@ class PanelRender {
   readonly scene = new THREE.Scene();
   /**
    * The bottom run of layers that do not take a reading, drawn once into `underlay` and copied back
-   * every frame until the camera, the panel's size, or the layers' members, highlight, or selection change.
+   * every frame until the camera, the panel's size, or the layers' members, highlight, or selection change, or another panel draws
+   * its own static layers over the panel's region of the underlay.
    */
   readonly staticScene = new THREE.Scene();
   /** The panel's region of the stage's underlay, in device pixels, when its static layers were last copied there. */
@@ -2761,6 +2767,10 @@ export class StageRenderer {
         this.drawCoarse(p, this.underlay, vp);
         this.scheduleRefine();
       } else this.drawFine(p, this.underlay, vp);
+      // The draw covers the regions of the panels that lay here before, e.g. those that a split with keys hid or moved (section 2.11),
+      // which draw their static layers again before they next copy them back, rather than copy this panel's. A panel drawn earlier in
+      // this frame copied its region back before, and the tiles of one frame do not overlap, hence a further frame is not needed.
+      for (const q of this.panels.values()) if (q !== p && overlaps(q.underlay, vp)) q.underlayDirty = true;
       // Leaving a render target, three floors the canvas's viewport and scissor in device pixels, where setViewport and setScissor
       // round them. At a fractional pixel ratio the rest of the panel would then be drawn a pixel shorter, and shifted by half a
       // pixel, at every frame that draws the underlay again, hence the panel's own viewport and scissor are set once more.

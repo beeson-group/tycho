@@ -2534,6 +2534,8 @@ class PanelRender {
   outer: Rect = { x: 0, y: 0, w: 1, h: 1 };
   /** The window of a camera with keys at the last frame, or null. */
   window: CameraWindow | null = null;
+  /** The camera was moved to a window of its keys and has not been fitted since. */
+  atWindow = false;
   /** What the panel draws, as far as the fit depends on it. A change refits the camera. */
   content = '';
   needsFit = true;
@@ -3000,6 +3002,7 @@ export class StageRenderer {
     p.box = box;
     p.fitting = false;
     p.needsFit = false;
+    p.atWindow = false;
   }
 
   /**
@@ -3210,8 +3213,9 @@ export class StageRenderer {
   }
 
   /**
-   * Moves a plane camera with keys to its window at progress `q` (rule K5), unless the viewer has moved the camera since its
-   * last fit. The window's height is its own under a free aspect, and the width over the panel's aspect ratio otherwise.
+   * Moves a plane camera with keys to its window at progress `q` (rule K5), or back to its fit when the keys do not give a window
+   * then, unless the viewer has moved the camera since its last fit. The window's height is its own under a free aspect, and
+   * the width over the panel's aspect ratio otherwise.
    */
   private keyed(p: PanelRender, state: State, q: number): void {
     const spec = p.cameraSpec;
@@ -3234,8 +3238,13 @@ export class StageRenderer {
       p.error = e.message;
       return;
     }
-    if (win === null) return;
+    if (win === null) {
+      // a camera without a window at this time shows its fit (section 2.11)
+      if (p.atWindow) this.fit(p);
+      return;
+    }
     p.window = win;
+    p.atWindow = true;
     const cam = p.camera;
     const { right, up, normal } = cameraBasis(spec);
     const aspect = p.rect.w / Math.max(1, p.rect.h);

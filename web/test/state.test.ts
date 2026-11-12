@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Scene, State } from '../src/scene';
+import type { Layout, Scene, State } from '../src/scene';
 import { fnv1a, newPanelId, repair, storageKey, Store, swapLeaves, withChannel, withDrop, withoutPanel, withVariable } from '../src/runtime/state';
 import { loadCorpus } from './corpus';
 
@@ -87,6 +87,63 @@ describe('repair (section 2.8)', () => {
     const r = repair(scene(), s);
     expect(Object.keys(r.panels).sort()).toEqual(['p1', 'p2']);
     expect(r.layout).toEqual({ kind: 'split', dir: 'row', ratio: 0.5, a: { kind: 'panel', id: 'p1' }, b: { kind: 'panel', id: 'p2' } });
+  });
+
+  it('keeps the keys of a split, so that a restored layout still moves with the timeline (section 2.11)', () => {
+    // the first panel takes the whole row, then gives 0.4 of it to the others, which split their column with a hold
+    const outer = [
+      [0, 1],
+      [2, 1],
+      [3.5, 0.6, 'smooth'],
+    ];
+    const inner = [
+      [0, 0.5],
+      [5, 0.2, 'hold'],
+    ];
+    const s = stored();
+    s.layout = { ...s.layout, keys: outer, b: { ...(s.layout as Extract<Layout, { kind: 'split' }>).b, keys: inner } } as Layout;
+    const copy = structuredClone(s);
+    const r = repair(scene(), s);
+    expect(r.layout).toEqual(copy.layout);
+    expect(s).toEqual(copy);
+    // the keys are copied, hence a change of the restored layout cannot reach the stored one
+    const keys = (r.layout as Extract<Layout, { kind: 'split' }>).keys!;
+    expect(keys).not.toBe(outer);
+    expect(keys[0]).not.toBe(outer[0]);
+    // a split that loses a side goes with its keys, and the split left in its place keeps its own
+    s.panels.p1 = { view: 'gone' };
+    expect(repair(scene(), s).layout).toEqual({
+      kind: 'split',
+      dir: 'col',
+      ratio: 0.7,
+      a: { kind: 'panel', id: 'p2' },
+      b: { kind: 'panel', id: 'p3' },
+      keys: inner,
+    });
+  });
+
+  it('drops the keys of a split that the scene reader would refuse, and keeps the split at its ratio', () => {
+    const bad: unknown[] = [
+      [],
+      'keys',
+      [[0, 1.5]],
+      [[0, -0.1]],
+      [
+        [1, 0.2],
+        [0, 0.4],
+      ],
+      [[0, 0.2, 'bounce']],
+      [[0, 0.2, 'smooth', 1]],
+      [['start', 0.2]],
+      [[0, '0.2']],
+    ];
+    for (const keys of bad) {
+      const s = stored();
+      (s.layout as Record<string, unknown>).keys = keys;
+      const r = repair(scene(), s);
+      expect(r.layout).toEqual(stored().layout);
+      expect(Object.hasOwn(r.layout, 'keys')).toBe(false);
+    }
   });
 
   it('drops a panel whose id is not an identifier, and keeps "__proto__" as an own key', () => {

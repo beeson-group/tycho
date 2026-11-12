@@ -5,7 +5,8 @@
  * snapshot is immutable and is replaced on every change, thus the code that reads it compares references.
  */
 import { checkState, fits, variableDef } from '../evaluate/resolve.js';
-import { ID_PATTERN, type Layout, type PanelState, type Scene, type State, type VariableValue } from '../scene.js';
+import { checkKeys, isShare } from '../evaluate/timeline.js';
+import { ID_PATTERN, type Keys, type Layout, type PanelState, type Scene, type State, type VariableValue } from '../scene.js';
 import { panelAreas, panelIds, removePanel, splitAt, type DropZone } from './layout.js';
 
 /** Which of the snapshot, the frame index, and the playing flag changed. */
@@ -268,10 +269,21 @@ function keepValues(scene: Scene, stored: unknown, scope: 'scene' | 'panel'): Va
   return out;
 }
 
+/** A copy of the keys of a split (section 2.11) when the scene reader would take them, and undefined otherwise. */
+function splitKeys(keys: unknown): Keys | undefined {
+  if (keys === undefined) return undefined;
+  try {
+    return checkKeys(keys, 'a split', isShare).map((k) => [...k]) as Keys;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * The layout without the leaves for which `keep` returns false or that repeat an earlier leaf, with
- * splits collapsed as closing a panel collapses them. It is undefined when the tree is malformed,
- * and null when every leaf is dropped.
+ * splits collapsed as closing a panel collapses them. A split keeps its keys when they are valid, and
+ * loses them otherwise, to stay at its ratio. It is undefined when the tree is malformed, and null when
+ * every leaf is dropped.
  */
 function cleanLayout(node: unknown, keep: (id: string) => boolean, seen: Set<string>): Layout | null | undefined {
   if (!isObject(node)) return undefined;
@@ -289,14 +301,19 @@ function cleanLayout(node: unknown, keep: (id: string) => boolean, seen: Set<str
   if (b === null) return a;
   const r = node.ratio;
   const ratio = typeof r === 'number' && r > 0 && r < 1 ? r : 0.5;
-  return { kind: 'split', dir: node.dir, ratio, a, b };
+  const split: Layout = { kind: 'split', dir: node.dir, ratio, a, b };
+  const keys = splitKeys(node.keys);
+  if (keys !== undefined) split.keys = keys;
+  return split;
 }
 
 /**
  * Repairs a stored state against a scene, as described in section 2.8. A panel whose view the
  * scene lacks is dropped together with its layout leaf, and a value that does not fit its
- * variable is dropped, as is a panel value of a scene-scoped variable. The repair falls back to
- * `initial` once every panel is dropped or when the clock channel is unknown. Beyond section 2.8,
+ * variable is dropped, as is a panel value of a scene-scoped variable. A split keeps its keys, the
+ * tween of its ratio (section 2.11), when they are valid, so that a restored layout still moves with
+ * the timeline, and loses them otherwise. The repair falls back to `initial` once every panel is
+ * dropped or when the clock channel is unknown. Beyond section 2.8,
  * it also drops values that are never read (undeclared ids, and a scene value of a panel-scoped variable),
  * a panel that the layout does not show or whose id is not an identifier, and a repeated leaf. It falls
  * back to `initial` as well on input that is not a state at all. It is pure and does not modify `stored`.

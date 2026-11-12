@@ -932,6 +932,17 @@ describe('a viewer embedded on a page, under a DOM stand-in', () => {
       expect(v.store.frame).toBe(steps - 1);
       expect(v.time).toBeCloseTo(L, 6);
     });
+    it('plays again from the start once a clock with "end": "stop" holds its end', async () => {
+      const { v, L } = await staged('stop');
+      v.goto('c');
+      v.play();
+      v.tick(v.anchor.time + 5000 * L);
+      expect(v.playing).toBe(false);
+      v.play();
+      v.tick(v.anchor.time + 100 * L);
+      expect(v.playing).toBe(true);
+      expect(v.time).toBeCloseTo(0.1 * L, 6);
+    });
     it('plays to a stage from a later loop of playback, without jumping to it', async () => {
       const { v, L } = await staged();
       const now = vi.spyOn(performance, 'now').mockReturnValue(1000);

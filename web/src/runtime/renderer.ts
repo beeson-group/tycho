@@ -208,6 +208,12 @@ attribute vec3 tcolor;
 #ifdef DASH
 attribute float dist;
 uniform highp sampler2D uDashFrom;
+uniform int uDashWidth;
+uniform float uSegBase;
+float restartAt(float j) {
+  int i = int(j + uSegBase + 0.5);
+  return texelFetch(uDashFrom, ivec2(i % uDashWidth, i / uDashWidth), 0).x;
+}
 varying float vDist;
 #endif
 uniform vec3 uColor;
@@ -226,8 +232,8 @@ void main() {
   vec3 rgb = uColor;
 #endif
 #ifdef DASH
-  // the pattern starts where the track enters the stage
-  vDist = dist - texelFetch(uDashFrom, texelOf(track), 0).x;
+  // the pattern starts again where the track last entered the stage
+  vDist = dist - restartAt(float(gl_VertexID / 2));
 #endif
   vColor = vec4(rgb, uFade * alphaOf(track) * mix(uTaperOpacity, 1.0, s));
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
@@ -248,6 +254,12 @@ attribute vec3 colorEnd;
 attribute float distStart;
 attribute float distEnd;
 uniform highp sampler2D uDashFrom;
+uniform int uDashWidth;
+uniform float uSegBase;
+float restartAt(float j) {
+  int i = int(j + uSegBase + 0.5);
+  return texelFetch(uDashFrom, ivec2(i % uDashWidth, i / uDashWidth), 0).x;
+}
 varying float vDist;
 #endif
 uniform vec3 uColor;
@@ -269,7 +281,7 @@ void main() {
   vec3 rgb = uColor;
 #endif
 #ifdef DASH
-  vDist = (atEnd ? distEnd : distStart) - texelFetch(uDashFrom, texelOf(track), 0).x;
+  vDist = (atEnd ? distEnd : distStart) - restartAt(float(gl_InstanceID));
 #endif
   vColor = vec4(rgb, uFade * alphaOf(track) * mix(uTaperOpacity, 1.0, s));
   gl_Position = corner(instanceStart, instanceEnd, uWidth * mix(uTaperWidth, 1.0, s));
@@ -914,6 +926,7 @@ class Pass {
       ...uniforms,
       uLap: { value: spec.lap },
       uSkip: { value: -1 },
+      uSegBase: { value: 0 },
       uOpacity: { value: spec.opacity },
       uWidth: { value: spec.width },
       uKernel: { value: src.kernel && !spec.highlight ? 1 : 0 },
@@ -926,6 +939,8 @@ class Pass {
 
   /** Shows the whole set or one track, or clears the pass when `what` is null. */
   show(what: 'set' | number | null): void {
+    // a pass of one track reads its segments' dash starts from the track's first segment on
+    this.mat.uniforms.uSegBase!.value = typeof what === 'number' ? this.src.set.start(what) - what : 0;
     const key = what === null ? '' : String(what);
     if (key === this.shown) return;
     this.clear();
@@ -1118,12 +1133,26 @@ function kernelOf(ctx: DrawContext, layer: TrackLayer, set: SetData): Kernel | n
 }
 
 /**
- * Where the dash pattern of a track starts (section 2.11), as an arclength along it: at its first sample when that lies in the
- * rectangle `[x0, x1] x [y0, y1]`, else where the track first crosses into it, as matplotlib clips a line to its figure before it
- * dashes it. `xy` holds the screen position of each of the `count` samples from `from`, two numbers per sample, and `dist` the
- * arclength of each. A track that never enters the rectangle starts at its first sample.
+ * Where the dash pattern of each segment of a track starts (section 2.11), as an arclength along the track, written to `out` from
+ * `at` on, one value per segment: where the track last entered the rectangle `[x0, x1] x [y0, y1]` at or before the segment, or its
+ * first sample when that lies in the rectangle, as matplotlib clips a line to its figure before it dashes it, which starts the
+ * pattern again at each entry. `xy` holds the screen position of each of the `count` samples from `from`, two numbers per sample,
+ * and `dist` the arclength of each. Before the track first enters the rectangle, its segments start at its first sample.
  */
-export function dashStart(xy: ArrayLike<number>, dist: ArrayLike<number>, from: number, count: number, x0: number, y0: number, x1: number, y1: number): number {
+export function dashRestarts(
+  xy: ArrayLike<number>,
+  dist: ArrayLike<number>,
+  from: number,
+  count: number,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  out: { [i: number]: number },
+  at: number,
+): void {
+  let restart = count > 0 ? dist[from]! : 0;
+  let wasInside = false;
   for (let i = 0; i + 1 < count; i++) {
     const ax = xy[2 * (from + i)]!;
     const ay = xy[2 * (from + i) + 1]!;
@@ -1132,7 +1161,7 @@ export function dashStart(xy: ArrayLike<number>, dist: ArrayLike<number>, from: 
     // Liang-Barsky: the part of the segment inside the rectangle runs from t0 to t1
     let t0 = 0;
     let t1 = 1;
-    let inside = true;
+    let crosses = true;
     for (const [q, r] of [
       [-dx, ax - x0],
       [dx, x1 - ax],
@@ -1140,19 +1169,22 @@ export function dashStart(xy: ArrayLike<number>, dist: ArrayLike<number>, from: 
       [dy, y1 - ay],
     ] as const) {
       if (q === 0) {
-        if (r < 0) inside = false;
+        if (r < 0) crosses = false;
       } else {
         const t = r / q;
         if (q < 0) t0 = Math.max(t0, t);
         else t1 = Math.min(t1, t);
       }
     }
-    if (inside && t0 <= t1) {
+    const inside = crosses && t0 <= t1;
+    // a segment that comes in from outside starts the pattern where it enters; one that goes on from inside keeps it
+    if (inside && (t0 > 0 || !wasInside)) {
       const d0 = dist[from + i]!;
-      return t0 === 0 ? d0 : d0 + t0 * (dist[from + i + 1]! - d0);
+      restart = d0 + t0 * (dist[from + i + 1]! - d0);
     }
+    out[at + i] = restart;
+    wasInside = inside && t1 >= 1;
   }
-  return count > 0 ? dist[from]! : 0;
 }
 
 /** A float texture with one RGBA texel per track, in rows of at most 2048. */
@@ -1306,9 +1338,10 @@ export class TrackDraw implements Draw {
   private readonly kernel: Kernel | null;
   private readonly ranges: ReturnType<typeof trackTexture>;
   private readonly alphas: ReturnType<typeof trackTexture> | null;
-  /** For a dashed layer, the arclength at which each track's dash pattern starts on the stage (section 2.11), else null. */
+  /** For a dashed layer, the arclength at which each segment's dash pattern starts on the stage (section 2.11), else null. */
   private readonly dashFrom: ReturnType<typeof trackTexture> | null;
   private dashScreen = new Float64Array(0);
+  private restartOut: number[] = [];
   private readonly resolution: THREE.IUniform<THREE.Vector2> = { value: new THREE.Vector2(1, 1) };
   private readonly uniforms: Record<string, THREE.IUniform>;
   private readonly baseHolder = new THREE.Object3D();
@@ -1384,7 +1417,7 @@ export class TrackDraw implements Draw {
     for (let t = 0; t < set.tracks; t++) this.ranges.data.set(EMPTY_RANGE, 4 * t);
     this.alphas = this.kernel === null ? null : trackTexture(set.tracks);
     const dash = dashed ? { uPixels: { value: 1 }, uDash: { value: new THREE.Vector2(layer.dash![0], layer.dash![1]) } } : null;
-    this.dashFrom = dashed ? trackTexture(set.tracks) : null;
+    this.dashFrom = dashed ? trackTexture(Math.max(1, set.samples - set.tracks)) : null;
     this.uniforms = {
       uRanges: { value: this.ranges.texture },
       uAlphas: { value: (this.alphas ?? this.ranges).texture },
@@ -1396,7 +1429,7 @@ export class TrackDraw implements Draw {
       uTaperOpacity: { value: this.fraction > 0 ? this.taperOpacity : 1 },
       uFade: { value: 1 },
       ...(dash ?? {}),
-      ...(this.dashFrom === null ? {} : { uDashFrom: { value: this.dashFrom.texture } }),
+      ...(this.dashFrom === null ? {} : { uDashFrom: { value: this.dashFrom.texture }, uDashWidth: { value: this.dashFrom.width } }),
     };
     if (layer.fill !== undefined) {
       const f = layer.fill;
@@ -1487,7 +1520,8 @@ export class TrackDraw implements Draw {
     const d = this.src.dist;
     if (d === null) return 0;
     const s = this.set.start(t);
-    const from = this.dashFrom?.data[4 * t] ?? 0;
+    const k = 'sample' in v ? Math.min(v.sample, this.set.count(t) - 2) : v.k;
+    const from = this.dashFrom?.data[4 * (s - t + Math.max(0, k))] ?? 0;
     if ('sample' in v) return d[s + v.sample]! - from;
     return (1 - v.w) * d[s + v.k]! + v.w * d[s + v.k + 1]! - from;
   }
@@ -1522,10 +1556,14 @@ export class TrackDraw implements Draw {
         xy[2 * i] = rect.x + ((nx + 1) / 2) * rect.w;
         xy[2 * i + 1] = rect.y + ((1 - ny) / 2) * rect.h;
       }
-      const start = dashStart(xy, dist, s, n, -margin, -margin, width + margin, height + margin);
-      if (from.data[4 * t] !== start) {
-        from.data[4 * t] = start;
-        changed = true;
+      const at = s - t;
+      dashRestarts(xy, dist, s, n, -margin, -margin, width + margin, height + margin, this.restartOut, 0);
+      for (let j = 0; j + 1 < n; j++) {
+        const v = this.restartOut[j]!;
+        if (from.data[4 * (at + j)] !== v) {
+          from.data[4 * (at + j)] = v;
+          changed = true;
+        }
       }
     }
     if (changed) from.texture.needsUpdate = true;

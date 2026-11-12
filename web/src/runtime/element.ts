@@ -1147,10 +1147,10 @@ export class TychoViewerElement extends Base {
       this.reachStage(index);
       return;
     }
-    const q0 = this.heldProgress ?? store.frame / steps;
-    this.heldProgress = q0;
-    const start = q0 * steps;
-    const target = (Math.floor(start / steps) + (at > now ? 0 : 1)) * steps + Math.min((at / L) * steps, steps * (1 - 1e-9));
+    const target = (at > now ? 0 : 1) * steps + Math.min((at / L) * steps, steps * (1 - 1e-9));
+    // the target is counted from the loop of the time shown, hence playback takes a new anchor there, in [0, steps)
+    if (store.playing) this.anchor = { index: this.playPosition(), time: performance.now() };
+    else this.heldProgress ??= store.frame / steps;
     store.setPlaying(true);
     this.stopAt = { x: target, index };
   }

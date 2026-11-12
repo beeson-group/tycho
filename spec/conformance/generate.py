@@ -1214,6 +1214,11 @@ def laps():
         layers[k].update(changes)
         return {"views": {"v": {"layers": layers}}}
 
+    def with_points(k):
+        layers = copy.deepcopy(doc["views"]["v"]["layers"])
+        layers[k] = {"kind": "points", "sets": layers[k]["sets"], "members": layers[k]["members"], "reveal": "grow"}
+        return {"views": {"v": {"layers": layers}}}
+
     rejections = [
         {"name": "C6: laps on a value clock", "rule": "C6", "scene": {"clock": {"mode": "value", "range": [0.0, 1.0]}}},
         {"name": "C6: laps of zero", "rule": "C6", "scene": {"clock": {"laps": 0}}},
@@ -1223,6 +1228,11 @@ def laps():
             "scene": {"clock": {"laps": 2}, "track_sets": {"loop": {"periodic": False}}},
         },
         {"name": "C6: laps 3 with a reading taken on a set that is not periodic", "rule": "C6", "scene": with_layer(5, head=True)},
+        {
+            "name": "C6: laps 3 with a points layer that grows on a set that is not periodic",
+            "rule": "C6",
+            "scene": with_points(5),
+        },
         {"name": "V3: a member count of zero", "rule": "V3", "scene": with_layer(5, members={"count": 0})},
         {
             "name": "V3: a driver member that is a count",

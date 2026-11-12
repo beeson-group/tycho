@@ -2,6 +2,7 @@
 // with keys (rule K5), the layout at a time, the formats of rule K7, and the drawing helpers of the stepped colors, the fills, the boxes, and the markers.
 import { describe, expect, it } from 'vitest';
 import { TychoError } from '../src/errors';
+import { evaluate } from '../src/evaluate/index';
 import {
   cameraWindow,
   checkCameraKeys,
@@ -20,7 +21,8 @@ import { dashRestarts, inset, layoutAt, fillSegment } from '../src/runtime/rende
 import { boxTicks, linePitch, markerStroke, tickLabel } from '../src/runtime/paint';
 import { stepIndex } from '../src/runtime/colors';
 import { tile } from '../src/runtime/tiles';
-import type { Clock, Layout } from '../src/scene';
+import type { Clock, Layout, TrackLayer } from '../src/scene';
+import { loadCorpus } from './corpus';
 
 const rule = (f: () => unknown): string => {
   try {
@@ -280,5 +282,15 @@ describe('drawing helpers (section 2.11)', () => {
     expect(markerStroke({ shape: 'disc', edge: '#000000', edge_width: 2 }, 10)).toBe(2);
     expect(markerStroke({ shape: 'ring' }, 12)).toBe(2);
     expect(markerStroke({ shape: 'cross', edge_width: 1.5 }, 12)).toBe(1.5);
+  });
+});
+
+describe('a points layer (rule K8)', () => {
+  it('is rejected by the evaluator where it grows on a set that is not periodic, under a clock with laps (rule C6)', () => {
+    const c = loadCorpus('laps');
+    const layers = c.scene.views.v!.layers;
+    const track = layers[5] as TrackLayer;
+    layers[5] = { kind: 'points', sets: track.sets, members: track.members, reveal: 'grow' };
+    expect(rule(() => evaluate(c.scene, c.data, c.scene.initial, 0))).toBe('C6');
   });
 });

@@ -130,6 +130,8 @@ export function checkTweened(value: unknown, what: string, ok: (v: unknown) => b
 }
 
 export const isOpacity = (v: unknown): boolean => typeof v === 'number' && v >= 0 && v <= 1;
+/** A value of the keys of a split (section 2.11), the share of its first side, in [0, 1]. */
+export const isShare = (v: unknown): boolean => typeof v === 'number' && v >= 0 && v <= 1;
 export const isPositive = (v: unknown): boolean => typeof v === 'number' && Number.isFinite(v) && v > 0;
 
 /** The shared value of a clock in value mode at progress `q`, by its range (rule C2) or its keys (rule K3). */

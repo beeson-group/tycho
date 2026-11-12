@@ -10,7 +10,7 @@ import { Frames } from './evaluate/frames.js';
 import { arrowParts, checkOutlineView, hasHead } from './evaluate/layers.js';
 import { checkState, displayFrame, layerVisible, layoutIds, oneSet, outlineTarget, querySets, variableDef, type PanelScope } from './evaluate/resolve.js';
 import { SetCache } from './evaluate/sets.js';
-import { checkCameraKeys, checkKeys, checkTweened, isOpacity, isPositive, loopSeconds } from './evaluate/timeline.js';
+import { checkCameraKeys, checkKeys, checkTweened, isOpacity, isPositive, isShare, loopSeconds } from './evaluate/timeline.js';
 import {
   ID_PATTERN,
   INDEX_CHANNEL,
@@ -632,7 +632,7 @@ function validateState(scene: Scene, frames: Frames, state: State, warnings: str
   const ratios = (node: Layout): void => {
     if (node.kind === 'panel') return;
     if (!(node.ratio > 0 && node.ratio < 1)) fail('2.8', `a split ratio is ${String(node.ratio)}, not in (0, 1)`);
-    if (node.keys !== undefined) checkKeys(node.keys, 'a split', (v) => typeof v === 'number' && v >= 0 && v <= 1);
+    if (node.keys !== undefined) checkKeys(node.keys, 'a split', isShare);
     ratios(node.a);
     ratios(node.b);
   };

@@ -150,7 +150,8 @@ export function readoutPieces(ctx: ReadoutContext, parts: readonly Part[]): stri
     else if ('clock' in p) {
       if (p.clock === 'index' || p.clock === 'steps') {
         const n = p.clock === 'index' ? i : steps;
-        out.push(p.factor !== undefined || p.offset !== undefined || p.decimals !== undefined || p.grouping ? formatPart(n, p) : String(n));
+        const format = p.factor !== undefined || p.offset !== undefined || p.decimals !== undefined || p.grouping;
+        out.push(format ? formatPart(n, p) : String(n).padStart(p.width ?? 0, ' '));
       } else if (p.clock === 'time') out.push(formatPart(s, p));
       else out.push(formatPart(scene.clock.mode === 'fraction' ? q : clockValue(scene.clock, q), p));
     } else if ('var' in p) {

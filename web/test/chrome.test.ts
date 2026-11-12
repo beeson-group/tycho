@@ -306,6 +306,17 @@ describe('chip menus', () => {
   });
 });
 
+describe('the DOM stand-in', () => {
+  it('cancels on uninstall the timers that were set through its window, which would fire without a window', async () => {
+    const { uninstall } = installDom();
+    const fired = vi.fn();
+    window.setTimeout(fired, 0);
+    uninstall();
+    await new Promise((done) => setTimeout(done, 5));
+    expect(fired).not.toHaveBeenCalled();
+  });
+});
+
 describe('the chrome under a DOM stand-in', () => {
   let uninstall: () => void = () => undefined;
   beforeEach(() => {

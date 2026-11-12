@@ -1627,26 +1627,24 @@ export class TrackDraw implements Draw {
     this.group.matrixWorldNeedsUpdate = true;
   }
 
-  /** Fades the layer as a whole by its opacity at time `s`, a tween or a number (section 2.11). */
+  /** Fades the layer as a whole by the tween of its opacity at time `s` (section 2.11), and returns the factor, 1 for an opacity that is a number. */
   private fade(s: number): number {
     const layer = this.layer;
-    const f = typeof layer.opacity === 'object' ? opacityAt(layer.opacity, s) / Math.max(this.opacity, 1e-9) : 1;
-    this.uniforms.uFade!.value = typeof layer.opacity === 'object' ? opacityAt(layer.opacity, s) : 1;
-    const marker = headMarker(layer);
     const fade = typeof layer.opacity === 'object' ? opacityAt(layer.opacity, s) : 1;
+    this.uniforms.uFade!.value = fade;
+    const marker = headMarker(layer);
     this.heads?.setOpacity(fade * opacityAt(marker.opacity, s));
     if (this.heads !== null && (typeof marker.size === 'object' || typeof marker.edge_width === 'object'))
       this.heads.setSize(sizeAt(marker.size, s, HEAD_SIZE), marker.edge_width === undefined ? undefined : numberAt(marker.edge_width, s, 0));
     if (this.glow !== null) this.glow.setOpacity(fade * opacityAt(marker.opacity, s) * (marker.glow?.opacity ?? 0.35));
     if (this.fill !== null) this.fill.material.opacity = fade * (layer.fill?.opacity ?? 0.25);
-    return f;
+    return fade;
   }
 
   /** Returns whether the picture changed through new members, a new highlight or selection, or a first fill. */
   update(plan: TrackPlan, scene: Scene, q: number): boolean {
     const s = timeAt(scene.clock, q);
-    this.fade(s);
-    const fadeNow = this.uniforms.uFade!.value as number;
+    const fadeNow = this.fade(s);
     const h = plan.highlight;
     const changed =
       plan.members.length !== this.members.length ||

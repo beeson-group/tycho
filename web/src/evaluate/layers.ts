@@ -1,12 +1,22 @@
 /** Polylines, trails, and layers by rules L1 to L5, with the point of rule C4 and the laps of rule C6. */
 import { fail } from '../errors.js';
-import { INDEX_CHANNEL, type ArrowLayer, type BodyLayer, type Clock, type OutlineLayer, type TrackLayer } from '../scene.js';
-import { bound, clockLaps, lapOf, TrackClock } from './clock.js';
+import { INDEX_CHANNEL, type ArrowLayer, type BodyLayer, type Clock, type LabelLayer, type OutlineLayer, type PointsLayer, type TrackLayer } from '../scene.js';
+import { bound, clockLaps, lapOf, layerClock, TrackClock } from './clock.js';
 import { scalarValue, type Context, type Frames } from './frames.js';
 import type { PanelScope } from './resolve.js';
 import { members, outlineTarget } from './resolve.js';
 import type { SetData } from './sets.js';
-import type { ArrowLayerResult, ArrowMemberResult, BodyLayerResult, MemberResult, OutlineLayerResult, TrackLayerResult, Vec3 } from './types.js';
+import type {
+  ArrowLayerResult,
+  ArrowMemberResult,
+  BodyLayerResult,
+  LabelLayerResult,
+  MemberResult,
+  OutlineLayerResult,
+  PointsLayerResult,
+  TrackLayerResult,
+  Vec3,
+} from './types.js';
 
 /**
  * A vertex is a stored sample or a point blended between samples k and k + 1, in the context of
@@ -80,6 +90,16 @@ export interface LayerEnv {
   channel: string;
   q: number;
   display: string;
+  /** The environment of the scene's clock, for a layer with a clock of its own (rule K4), whose driver still reads the scene's clock. */
+  base?: LayerEnv;
+}
+
+/** The environment in which a layer takes its readings: the scene's, or one on the layer's own clock (rule K4). */
+export function layerEnv(env: LayerEnv, layer: { clock?: TrackLayer['clock'] }): LayerEnv {
+  if (layer.clock === undefined) return env;
+  const base = env.base ?? env;
+  const clock = layerClock(base.clock, layer.clock);
+  return { ...base, clock, channel: clock.channels[0]!, base };
 }
 
 /** The driver's track, as a panel resolves it, or null when its set query does not match any set. */
@@ -89,11 +109,10 @@ export type Driver = { set: SetData; track: number } | null;
  * The driver's clock and loop reading, and the point at the reading in its lap. A body layer and a layer in the driver's context lack `before` and `after`,
  * thus the reading is clamped (rules L4 and L6). A caller that keeps the driver's clock on `env.channel` passes it as `tc`, which is otherwise built here.
  */
-export function driverPoint(
-  env: LayerEnv,
-  driver: NonNullable<Driver>,
-  tc = new TrackClock(driver.set, driver.track, env.channel),
-): { tc: TrackClock; loopReading: number; at: BlendVertex } {
+export function driverPoint(env: LayerEnv, driver: NonNullable<Driver>, tc?: TrackClock): { tc: TrackClock; loopReading: number; at: BlendVertex } {
+  // a layer clock does not move the driver, which reads the scene's clock (rule K4)
+  env = env.base ?? env;
+  tc ??= new TrackClock(driver.set, driver.track, env.channel);
   const laps = clockLaps(env.clock);
   const loopReading = laps * bound(tc.reading(env.clock, env.q))!;
   const lap = lapOf(loopReading, laps);
@@ -270,4 +289,114 @@ export function bodyLayer(env: LayerEnv, layer: BodyLayer, driver: Driver): Body
     result.trail = trail(tc, loopReading, laps, layerTrailFraction(layer), set.periodic).map((v) => vertexPosition(v, set, track, f));
   }
   return result;
+}
+
+/** How a track layer takes a sample into the display frame: in its own context, or in the driver's blended at its reading (rule L6). */
+function sampleTransform(env: LayerEnv, layer: TrackLayer, set: SetData, driver: Driver): { f: (ctx: Context) => Vec3; hidden: boolean } {
+  const from = set.def.frame;
+  const own = (ctx: Context): Vec3 => env.frames.transform(set.position(ctx.track, ctx.sample), from, env.display, ctx);
+  if ((layer.context ?? 'own') !== 'driver') return { f: own, hidden: false };
+  if (driver === null) return { f: own, hidden: true };
+  const { a, b, w } = driverContexts(driver, driverPoint(env, driver).at);
+  return {
+    hidden: false,
+    f: (ctx: Context): Vec3 => {
+      const p = set.position(ctx.track, ctx.sample);
+      const pa = env.frames.transform(p, from, env.display, a);
+      const pb = env.frames.transform(p, from, env.display, b);
+      return [(1 - w) * pa[0] + w * pb[0], (1 - w) * pa[1] + w * pb[1], (1 - w) * pa[2] + w * pb[2]];
+    },
+  };
+}
+
+/** Fails unless track `k` lies in the set, as a literal member index must (rule V3). */
+function checkMember(set: SetData, k: number, rule: string, what: string): void {
+  if (!Number.isInteger(k) || k < 0 || k >= set.tracks)
+    fail(rule, `${what} names member ${String(k)}, which is not a track of track set ${set.id} of ${set.tracks}`);
+}
+
+/**
+ * The point at the reading of member `k` of a set, clamped to [0, 1] as for a body (rule L4), in its lap of rule C6, under the clock
+ * of `env`, transformed by `f`. This is the anchor of a label at a member (rule K6) and the target of a camera key (rule K5).
+ */
+export function memberPoint(env: LayerEnv, set: SetData, k: number, f: (ctx: Context) => Vec3): Vec3 {
+  const laps = clockLaps(env.clock);
+  if (laps > 1 && !set.periodic) fail('C6', `a reading is taken on track set ${set.id}, which is not periodic, and the clock has ${laps} laps`);
+  const tc = new TrackClock(set, k, env.channel);
+  const at = lapOf(laps * bound(tc.reading(env.clock, env.q))!, laps);
+  return vertexPosition(point(tc, at.u, false, at.lap), set, k, f);
+}
+
+/** The target of a camera key (rule K5): the point at the reading of member `k` of a track layer, in the layer's context, or null when its set query does not match any set. */
+export function targetPoint(env: LayerEnv, layer: TrackLayer, set: SetData | null, k: number, driver: Driver): Vec3 | null {
+  if (set === null) return null;
+  checkMember(set, k, 'K5', 'a camera key');
+  const lenv = layerEnv(env, layer);
+  const { f, hidden } = sampleTransform(lenv, layer, set, driver);
+  if (hidden) return null;
+  return memberPoint(lenv, set, k, f);
+}
+
+/** The position of a label's anchor (rule K6), or null on the screen or when the anchor does not resolve. */
+export function labelLayer(env: LayerEnv, layer: LabelLayer, set: SetData | null, driver: Driver): LabelLayerResult {
+  const at = layer.at as unknown as Record<string, unknown>;
+  if (at === null || typeof at !== 'object') fail('K6', `a label's anchor is ${JSON.stringify(at)}, not an object`);
+  if ('screen' in at) return { kind: 'label', position: null };
+  if ('point' in at) {
+    const p = at.point as unknown;
+    if (!Array.isArray(p) || p.length !== 3 || !p.every((x) => typeof x === 'number' && Number.isFinite(x)))
+      fail('K6', `a label's point is ${JSON.stringify(p)}, not three finite numbers`);
+    const v: Vec3 = [p[0], p[1], p[2]];
+    if (at.frame === undefined) return { kind: 'label', position: v };
+    if (driver === null) return { kind: 'label', position: null };
+    // a point in another frame moves with the driver, as a body does (rule L4)
+    const { a, b, w } = driverContexts(driver, driverPoint(env, driver).at);
+    const pa = env.frames.transform(v, at.frame as string, env.display, a);
+    const pb = env.frames.transform(v, at.frame as string, env.display, b);
+    return { kind: 'label', position: [(1 - w) * pa[0] + w * pb[0], (1 - w) * pa[1] + w * pb[1], (1 - w) * pa[2] + w * pb[2]] };
+  }
+  if (!('sets' in at) || !('member' in at)) fail('K6', `a label's anchor is ${JSON.stringify(at)}, not a point, a member, or a place on the screen`);
+  if (set === null) return { kind: 'label', position: null };
+  const k = at.member as number;
+  checkMember(set, k, 'K6', 'a label');
+  const lenv = layerEnv(env, layer);
+  const from = set.def.frame;
+  const f = (ctx: Context): Vec3 => lenv.frames.transform(set.position(ctx.track, ctx.sample), from, lenv.display, ctx);
+  return { kind: 'label', position: memberPoint(lenv, set, k, f) };
+}
+
+/** The drawn samples of each member of a points layer (rule K8). */
+export function pointsLayer(env: LayerEnv, layer: PointsLayer, set: SetData | null): PointsLayerResult {
+  const reveal = layer.reveal ?? 'none';
+  if (reveal !== 'none' && reveal !== 'grow') fail('K8', `a points layer's reveal is ${JSON.stringify(reveal)}, not none or grow`);
+  for (const key of ['before', 'after'] as const) {
+    if (layer[key] !== undefined && layer[key] !== 'clamp' && layer[key] !== 'hidden')
+      fail('C3', `a points layer's ${key} is ${JSON.stringify(layer[key])}, not clamp or hidden`);
+  }
+  if (set === null) return { kind: 'points', set: null, members: [] };
+  const lenv = layerEnv(env, layer);
+  const hides = lenv.clock.mode === 'value' && (layer.before === 'hidden' || layer.after === 'hidden');
+  const reads = reveal === 'grow' || hides;
+  const laps = clockLaps(lenv.clock);
+  if (reads && laps > 1 && !set.periodic) fail('C6', `a reading is taken on track set ${set.id}, which is not periodic, and the clock has ${laps} laps`);
+  const from = set.def.frame;
+  const out: PointsLayerResult['members'] = [];
+  for (const t of members(env.scope, layer.members, set)) {
+    const m = set.count(t);
+    let last = m - 1;
+    if (reads) {
+      const tc = new TrackClock(set, t, lenv.channel);
+      const u = tc.reading(lenv.clock, lenv.q);
+      if (bound(u, layer.before, layer.after) === null) last = -1;
+      else if (reveal === 'grow') {
+        last = -1;
+        while (last + 1 < m && tc.at(last + 1) <= u) last++;
+      }
+    }
+    const points: Vec3[] = [];
+    for (let i = 0; i <= last; i++)
+      points.push(lenv.frames.transform(set.position(t, i), from, lenv.display, { set, track: t, sample: i, shifted: false, lap: 0 }));
+    out.push({ index: t, points });
+  }
+  return { kind: 'points', set: set.id, members: out };
 }

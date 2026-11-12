@@ -1,0 +1,363 @@
+{
+ "format": "tycho-scene",
+ "version": "0.4",
+ "requires": [
+  "clock.keys",
+  "layers.clock",
+  "camera.keys",
+  "layers.label",
+  "layers.points"
+ ],
+ "generator": "pytycho 0.2.0",
+ "title": "the timeline",
+ "frames": {
+  "root": {},
+  "spin": {
+   "parent": "root",
+   "rotation": {
+    "axis": "z",
+    "angle": {
+     "channel": "t"
+    }
+   }
+  }
+ },
+ "track_sets": {
+  "a": {
+   "frame": "root",
+   "tracks": 2,
+   "offsets": "a/offsets",
+   "positions": "a/positions",
+   "channels": {
+    "t": {
+     "view": "a/channels/t"
+    },
+    "tau": {
+     "view": "a/channels/tau"
+    }
+   },
+   "periodic": false
+  },
+  "pts": {
+   "frame": "root",
+   "tracks": 1,
+   "offsets": "pts/offsets",
+   "positions": "pts/positions",
+   "channels": {
+    "t": {
+     "view": "pts/channels/t"
+    }
+   },
+   "periodic": false
+  }
+ },
+ "clock": {
+  "mode": "value",
+  "channels": [
+   "t"
+  ],
+  "steps": 20,
+  "seconds": 10.0,
+  "keys": [
+   [
+    1.0,
+    0.0
+   ],
+   [
+    3.0,
+    2.0,
+    "smooth"
+   ],
+   [
+    5.0,
+    2.0
+   ],
+   [
+    5.0,
+    3.0
+   ],
+   [
+    7.0,
+    4.0,
+    "in-out"
+   ],
+   [
+    8.0,
+    6.0,
+    "hold"
+   ],
+   [
+    9.0,
+    8.0,
+    "out"
+   ]
+  ]
+ },
+ "views": {
+  "main": {
+   "frame": "root",
+   "driver": {
+    "sets": {
+     "set": "a"
+    },
+    "member": {
+     "index": 0
+    }
+   },
+   "layers": [
+    {
+     "kind": "track",
+     "sets": {
+      "set": "a"
+     },
+     "members": "all",
+     "reveal": "grow",
+     "head": true
+    },
+    {
+     "kind": "track",
+     "sets": {
+      "set": "a"
+     },
+     "members": "all",
+     "reveal": "grow",
+     "head": true,
+     "clock": {
+      "channel": "tau",
+      "keys": [
+       [
+        0.0,
+        10.0
+       ],
+       [
+        10.0,
+        0.0,
+        "in"
+       ]
+      ]
+     }
+    },
+    {
+     "kind": "points",
+     "sets": {
+      "set": "pts"
+     },
+     "members": "all",
+     "reveal": "grow",
+     "before": "hidden"
+    },
+    {
+     "kind": "points",
+     "sets": {
+      "set": "pts"
+     },
+     "members": "all",
+     "reveal": "grow",
+     "clock": {
+      "channel": "@index",
+      "range": [
+       0.0,
+       4.0
+      ]
+     }
+    },
+    {
+     "kind": "label",
+     "text": "fixed",
+     "at": {
+      "point": [
+       1.0,
+       2.0,
+       0.0
+      ]
+     }
+    },
+    {
+     "kind": "label",
+     "text": "turning",
+     "at": {
+      "point": [
+       1.0,
+       0.0,
+       0.0
+      ],
+      "frame": "spin"
+     }
+    },
+    {
+     "kind": "label",
+     "text": "member 1",
+     "at": {
+      "sets": {
+       "set": "a"
+      },
+      "member": 1
+     }
+    },
+    {
+     "kind": "label",
+     "text": "screen",
+     "at": {
+      "screen": [
+       0.5,
+       0.1
+      ]
+     }
+    },
+    {
+     "kind": "label",
+     "text": "member 0 by tau",
+     "at": {
+      "sets": {
+       "set": "a"
+      },
+      "member": 0
+     },
+     "clock": {
+      "channel": "tau",
+      "keys": [
+       [
+        0.0,
+        10.0
+       ],
+       [
+        10.0,
+        0.0,
+        "in"
+       ]
+      ]
+     }
+    }
+   ],
+   "camera": {
+    "kind": "plane",
+    "keys": [
+     {
+      "at": 1.0,
+      "width": 2.0,
+      "center": [
+       0.0,
+       0.0
+      ],
+      "ease": "smooth"
+     },
+     {
+      "at": 3.0,
+      "width": 4.0,
+      "follow": [
+       {
+        "layer": 0,
+        "member": 0
+       },
+       {
+        "layer": 0,
+        "member": 1
+       }
+      ],
+      "offset": [
+       0.5,
+       0.0
+      ],
+      "ease": "smooth"
+     },
+     {
+      "at": 6.0,
+      "width": 4.0,
+      "follow": [
+       {
+        "layer": 1,
+        "member": 0
+       }
+      ],
+      "ease": "in-out"
+     },
+     {
+      "at": 8.0,
+      "width": 8.0,
+      "center": [
+       4.0,
+       1.0
+      ],
+      "ease": "linear"
+     }
+    ]
+   }
+  },
+  "plot": {
+   "frame": "root",
+   "driver": {
+    "sets": {
+     "set": "a"
+    },
+    "member": {
+     "index": 0
+    }
+   },
+   "layers": [
+    {
+     "kind": "track",
+     "sets": {
+      "set": "a"
+     },
+     "members": {
+      "index": 0
+     },
+     "reveal": "none"
+    }
+   ],
+   "camera": {
+    "kind": "plane",
+    "aspect": "free",
+    "keys": [
+     {
+      "at": 0.0,
+      "width": 2.0,
+      "height": 1.0,
+      "center": [
+       0.0,
+       0.0
+      ],
+      "ease": "smooth"
+     },
+     {
+      "at": 10.0,
+      "width": 8.0,
+      "height": 4.0,
+      "center": [
+       4.0,
+       2.0
+      ],
+      "ease": "smooth"
+     }
+    ]
+   }
+  }
+ },
+ "initial": {
+  "variables": {},
+  "clock": {
+   "channel": "t"
+  },
+  "panels": {
+   "p1": {
+    "view": "main"
+   },
+   "p2": {
+    "view": "plot"
+   }
+  },
+  "layout": {
+   "kind": "split",
+   "dir": "row",
+   "ratio": 0.5,
+   "a": {
+    "kind": "panel",
+    "id": "p1"
+   },
+   "b": {
+    "kind": "panel",
+    "id": "p2"
+   }
+  }
+ }
+}

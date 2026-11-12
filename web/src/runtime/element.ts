@@ -16,6 +16,11 @@
  * its attribute, else from the block with the id `tycho-scene` or `tycho-data`, as on a page written by an older version. The
  * clock is not started by `autoplay` or `kiosk` under `prefers-reduced-motion: reduce`.
  *
+ * Methods for a presentation that steps through a scene (rule K9 of the spec): `seek(t)` shows time `t` of the timeline paused,
+ * `goto(stage)` shows a stage, given by its id or index, paused, `playTo(stage)` plays from the current time and pauses at a stage,
+ * and `next()` and `previous()` step through the stages. The property `time` is the time shown, and `currentStage` the id of the last
+ * stage at or before it. The event `tycho-stage` fires with `detail: { id, index, at }` when playback reaches a stage.
+ *
  * The custom properties `--tycho-background`, `--tycho-foreground`, and `--tycho-grid` of the host take precedence over the theme.
  * Text in HTML inherits the font of the host, and text on a canvas is set in `--tycho-font` when it is set. The clock runs only
  * while the element intersects the viewport and the page is visible, and it resumes from where it stopped. Keys act only while the
@@ -75,7 +80,9 @@ import {
   type FrameReport,
   type ReadoutTile,
 } from './readouts.js';
-import { GUTTER, StageRenderer } from './renderer.js';
+import { GUTTER, layoutAt, StageRenderer } from './renderer.js';
+import { paintStage } from './paint.js';
+import { loopSeconds as timelineSeconds } from '../evaluate/timeline.js';
 import {
   chipMenu,
   repair,
@@ -188,6 +195,7 @@ input[type=range]:disabled { opacity: 0.4; cursor: default; }
 
 .stage { position: relative; min-height: 120px; overflow: hidden; background: var(--gutter); }
 .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.stage canvas.paint { pointer-events: none; }
 .panels { position: absolute; inset: 0; }
 .panel { position: absolute; overflow: hidden; }
 .pbody { position: absolute; inset: 0; }
@@ -224,6 +232,8 @@ input[type=range]:disabled { opacity: 0.4; cursor: default; }
   text-shadow: 0 0 3px var(--bg), 0 0 3px var(--bg); }
 .perror { position: absolute; inset: 34px 12px auto 12px; z-index: 1; color: var(--error); white-space: pre-wrap; }
 .drop { position: absolute; inset: 0; z-index: 3; display: grid; place-items: center; background: var(--accent-2-tint); border: 2px solid var(--accent-2); }
+.pbody .follow { position: absolute; right: 8px; bottom: 8px; z-index: 2; padding: 3px 10px 3px 8px; font: inherit; font-size: 12px; cursor: pointer; }
+.pbody .follow[hidden] { display: none; }
 .drop span { font-size: 11px; color: var(--fg); background: var(--raised); border-radius: 4px; padding: 1px 6px; }
 .gutter { position: absolute; z-index: 2; touch-action: none; background: var(--gutter); }
 .gutter.row { cursor: col-resize; }
@@ -316,6 +326,8 @@ interface PanelDom {
   close: HTMLButtonElement;
   readouts: ReadoutDom[];
   error: HTMLDivElement;
+  /** Returns the panel to its camera keys, shown while the viewer has moved it off them. */
+  follow: HTMLButtonElement;
   drop: HTMLDivElement;
   dropLabel: HTMLSpanElement;
   bars: HTMLDivElement;
@@ -519,6 +531,24 @@ export class TychoViewerElement extends Base {
   private statsEl!: HTMLDivElement;
   private footer!: HTMLElement;
   private canvas: HTMLCanvasElement | null = null;
+  /** The 2D canvas over the stage, on which labels, boxes, and overlays are painted (section 2.11). */
+  private paintCanvas: HTMLCanvasElement | null = null;
+
+  /** The held progress, valid while the frame index is the one it was taken at. */
+  private get heldProgress(): number | null {
+    return this.heldValue !== null && this.store !== null && this.store.frame === this.heldFrame ? this.heldValue : null;
+  }
+
+  private set heldProgress(q: number | null) {
+    this.heldValue = q;
+    if (q !== null && this.scene !== null) this.heldFrame = Math.min(this.scene.clock.steps - 1, Math.floor(q * this.scene.clock.steps));
+  }
+  /** The progress shown while paused at a time between two frame indices, e.g. after `seek`, or null. */
+  private heldValue: number | null = null;
+  /** The frame index at which `heldValue` was taken. Any other frame index, e.g. after a scrub, drops it. */
+  private heldFrame = -1;
+  /** The loop position, unwrapped from the anchor of playback, at which `playTo` pauses, and the stage it stops at. */
+  private stopAt: { x: number; index: number } | null = null;
 
   private readonly panelDom = new Map<string, PanelDom>();
   private readonly gutterDom = new Map<string, HTMLDivElement>();
@@ -707,6 +737,8 @@ export class TychoViewerElement extends Base {
     if (this.scene === null || this.store === null || this.renderer !== null || !this.isConnected) return;
     this.canvas = el('canvas');
     this.stage.insertBefore(this.canvas, this.panelsEl);
+    this.paintCanvas = el('canvas', 'paint');
+    this.stage.insertBefore(this.paintCanvas, this.panelsEl);
     try {
       this.renderer = new StageRenderer(this.canvas, this.scene, this.geometry!, { theme: this.theme! });
     } catch (e) {
@@ -763,6 +795,8 @@ export class TychoViewerElement extends Base {
     this.renderer = null;
     this.canvas?.remove();
     this.canvas = null;
+    this.paintCanvas?.remove();
+    this.paintCanvas = null;
   }
 
   /** The computed value of a custom property on the host, or an empty string when it is not set. */
@@ -847,9 +881,17 @@ export class TychoViewerElement extends Base {
         t.play.classList.toggle('on', store.playing);
       }
       this.meter.reset();
+      if (store.playing) {
+        // playback resumes from the time that was held, between two frame indices, and from the start once a clock that
+        // ends with a stop holds the end of its loop, as a video plays again (rule K9)
+        const clock = this.scene!.clock;
+        const ended = clock.end === 'stop' && this.heldProgress !== null && this.heldProgress >= 1 - 2e-9;
+        this.anchor = { index: ended ? 0 : this.heldProgress === null ? store.frame : this.heldProgress * clock.steps, time: performance.now() };
+        this.heldProgress = null;
+      } else if (this.playProgress !== null) this.heldProgress = this.playProgress;
       this.playProgress = null;
+      if (!store.playing) this.stopAt = null;
       if (t !== null) this.showRate(null);
-      if (store.playing) this.anchor = { index: store.frame, time: performance.now() };
     }
     this.invalidate();
   }
@@ -895,9 +937,23 @@ export class TychoViewerElement extends Base {
     const store = this.store!;
     const clock = this.scene!.clock;
     if (store.playing) {
-      const x = loopPosition(this.anchor.index, now - this.anchor.time, 1000, clock.steps, this.speed, loopSeconds(clock));
-      store.setFrame(positionIndex(x, clock.steps));
-      this.playProgress = positionProgress(x, clock.steps);
+      let x = loopPosition(this.anchor.index, now - this.anchor.time, 1000, clock.steps, this.speed, loopSeconds(clock));
+      const stop = this.stopAt;
+      // a clock that ends with a stop holds the end of its loop, as a video does (rule K9)
+      const end = clock.end === 'stop' ? Math.floor(this.anchor.index / clock.steps) * clock.steps + clock.steps * (1 - 1e-9) : Infinity;
+      const target = Math.min(stop?.x ?? Infinity, end);
+      if (x >= target) {
+        x = target;
+        const reached = stop !== null && stop.x <= end ? stop.index : null;
+        store.setFrame(positionIndex(x, clock.steps));
+        this.playProgress = positionProgress(x, clock.steps);
+        this.stopAt = null;
+        this.pause();
+        if (reached !== null) this.reachStage(reached);
+      } else {
+        store.setFrame(positionIndex(x, clock.steps));
+        this.playProgress = positionProgress(x, clock.steps);
+      }
       this.dirty = true;
     }
     if (this.dirty) {
@@ -935,10 +991,16 @@ export class TychoViewerElement extends Base {
     const st = store.state;
     const { w, h } = this.stageSize;
     if (w < 1 || h < 1) return;
-    const q = store.playing && this.playProgress !== null ? this.playProgress : store.frame / scene.clock.steps;
-    const errors = renderer.renderAt(st, q, w, h, Math.min(window.devicePixelRatio || 1, 2));
+    const q = store.playing && this.playProgress !== null ? this.playProgress : (this.heldProgress ?? store.frame / scene.clock.steps);
+    const ratio = Math.min(window.devicePixelRatio || 1, 2);
+    const errors = renderer.renderAt(st, q, w, h, ratio);
+    this.paint(q, w, h, ratio);
+    if (this.animatedLayout) this.layoutDom(q);
     for (const [pid, dom] of this.panelDom) {
       setText(dom.error, errors.get(pid) ?? '');
+      // a panel panned or zoomed off its camera keys offers to follow them again
+      const off = renderer.offKeys?.(pid) ?? false;
+      if (dom.follow.hidden === off) dom.follow.hidden = !off;
       for (const r of dom.readouts) fillReadout(r, this.pieces(pid, r.parts, q));
       if (dom.barsFor !== st) {
         this.syncBars(pid, dom);
@@ -951,6 +1013,34 @@ export class TychoViewerElement extends Base {
       setRange(this.transport.scrub, store.frame);
       setText(this.transport.frame, `${store.frame} / ${scene.clock.steps}`);
     }
+  }
+
+  /** Whether a split of the layout moves with the timeline, so that the panels' elements follow it at every frame. */
+  private get animatedLayout(): boolean {
+    const keyed = (n: Layout): boolean => n.kind === 'split' && (n.keys !== undefined || keyed(n.a) || keyed(n.b));
+    return this.store !== null && keyed(this.store.state.layout);
+  }
+
+  /** Paints the labels, the boxes, the panel fades, and the overlays of section 2.11 over the stage at progress `q`. */
+  private paint(q: number, w: number, h: number, ratio: number): void {
+    const c = this.paintCanvas;
+    const renderer = this.renderer;
+    if (c === null || renderer === null || this.scene === null || this.theme === null) return;
+    const bw = Math.round(w * ratio);
+    const bh = Math.round(h * ratio);
+    if (c.width !== bw || c.height !== bh) {
+      c.width = bw;
+      c.height = bh;
+    }
+    const g = c.getContext('2d');
+    if (g === null) return;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.clearRect(0, 0, bw, bh);
+    g.setTransform(ratio, 0, 0, ratio, 0, 0);
+    paintStage(g, renderer, this.scene, this.store!.state, this.theme, q, w, h, (pid, parts) => {
+      const r = this.pieces(pid, parts, q);
+      return 'error' in r ? [] : r;
+    });
   }
 
   private pieces(pid: string, parts: Readout['parts'], q: number): string[] | { error: string } {
@@ -993,14 +1083,115 @@ export class TychoViewerElement extends Base {
     const store = this.store;
     if (store === null) return;
     this.pause();
+    this.heldProgress = null;
     store.setFrame(store.frame + by);
   }
 
+  // stages (rule K9)
+
+  /** The stages of the scene, in order of time. */
+  get stages(): { id: string; at: number; label?: string }[] {
+    return [...(this.scene?.stages ?? [])];
+  }
+
+  /** The time of the timeline shown, in seconds, or 0 before a scene loads. */
+  get time(): number {
+    if (this.scene === null || this.store === null) return 0;
+    const q = this.store.playing && this.playProgress !== null ? this.playProgress : (this.heldProgress ?? this.store.frame / this.scene.clock.steps);
+    return q * timelineSeconds(this.scene.clock);
+  }
+
+  /** The id of the last stage at or before the time shown, or null when there is none. */
+  get currentStage(): string | null {
+    const t = this.time + 1e-9;
+    let id: string | null = null;
+    for (const st of this.stages) if (st.at <= t) id = st.id;
+    return id;
+  }
+
+  private stageIndex(stage: string | number): number {
+    const all = this.stages;
+    const i = typeof stage === 'number' ? stage : all.findIndex((st) => st.id === stage);
+    if (!Number.isInteger(i) || i < 0 || i >= all.length) throw new Error(`the scene does not have a stage ${JSON.stringify(stage)}`);
+    return i;
+  }
+
+  /** Shows time `t` of the timeline, in seconds, paused. A time at the end of the loop holds its last picture. */
+  seek(t: number): void {
+    const scene = this.scene;
+    const store = this.store;
+    if (scene === null || store === null || !Number.isFinite(t)) return;
+    const L = timelineSeconds(scene.clock);
+    const q = Math.min(Math.max(t / L, 0), 1 - 1e-9);
+    this.stopAt = null;
+    this.pause();
+    this.heldProgress = q;
+    this.playProgress = null;
+    store.setFrame(Math.min(scene.clock.steps - 1, Math.floor(q * scene.clock.steps)));
+    this.invalidate();
+  }
+
+  /** Shows a stage, given by its id or its index, paused. */
+  goto(stage: string | number): void {
+    this.seek(this.stages[this.stageIndex(stage)]!.at);
+  }
+
+  /** Plays from the time shown, and pauses at the time of a stage, given by its id or index. A stage behind the time shown is reached on the next loop. */
+  playTo(stage: string | number): void {
+    const scene = this.scene;
+    const store = this.store;
+    if (scene === null || store === null) return;
+    const index = this.stageIndex(stage);
+    const L = timelineSeconds(scene.clock);
+    const steps = scene.clock.steps;
+    const now = this.time;
+    const at = this.stages[index]!.at;
+    if (Math.abs(at - now) < 1e-9) {
+      this.reachStage(index);
+      return;
+    }
+    const target = (at > now ? 0 : 1) * steps + Math.min((at / L) * steps, steps * (1 - 1e-9));
+    // the target is counted from the loop of the time shown, hence playback takes a new anchor there, in [0, steps)
+    if (store.playing) this.anchor = { index: this.playPosition(), time: performance.now() };
+    else this.heldProgress ??= store.frame / steps;
+    store.setPlaying(true);
+    this.stopAt = { x: target, index };
+  }
+
+  /** Plays to the next stage, and returns its id, or null when the time shown is at or past the last stage. */
+  next(): string | null {
+    const t = this.time + 1e-6;
+    const i = this.stages.findIndex((st) => st.at > t);
+    if (i < 0) return null;
+    this.playTo(i);
+    return this.stages[i]!.id;
+  }
+
+  /** Shows the stage before the time shown, paused, and returns its id, or null when there is none. */
+  previous(): string | null {
+    const t = this.time - 1e-6;
+    let i = -1;
+    this.stages.forEach((st, k) => {
+      if (st.at < t) i = k;
+    });
+    if (i < 0) return null;
+    this.goto(i);
+    return this.stages[i]!.id;
+  }
+
+  private reachStage(index: number): void {
+    const st = this.stages[index];
+    if (st === undefined) return;
+    this.dispatchEvent(new CustomEvent('tycho-stage', { detail: { id: st.id, index, at: st.at }, bubbles: true, composed: true }));
+  }
+
   /** Goes to a frame, playing on from there when playing. */
-  private seek(frame: number): void {
+  private seekFrame(frame: number): void {
     const store = this.store!;
     store.setFrame(frame);
     this.playProgress = null;
+    this.heldProgress = null;
+    this.stopAt = null;
     if (store.playing) this.anchor = { index: store.frame, time: performance.now() };
   }
 
@@ -1042,11 +1233,11 @@ export class TychoViewerElement extends Base {
     ev.preventDefault();
     if (action.kind === 'toggle') this.store.setPlaying(!this.store.playing);
     else if (action.kind === 'step') this.step(action.by);
-    else this.seek(action.frame);
+    else this.seekFrame(action.frame);
     return true;
   }
 
-  /** Fits every panel's camera to what it draws. */
+  /** Returns every panel with camera keys to its keys, and fits every other panel's camera to what it draws. */
   fitAll(): void {
     this.renderer?.refitAll();
     this.invalidate();
@@ -1128,7 +1319,7 @@ export class TychoViewerElement extends Base {
       this.transport = { play, scrub, frame, fps, channel };
     }
     const view = capsule('View', 'view');
-    const fit = iconButton('house', 'Reset every view', 'Reset every view: fit each panel to what it draws (F)');
+    const fit = iconButton('house', 'Reset every view', "Reset every view: return each panel to its timeline's camera, or fit it to what it draws (F)");
     fit.addEventListener('click', () => this.fitAll());
     const reset = iconButton('rotateCcw', 'Reset scene', 'Reset scene: panels, layout, and controls as written');
     reset.addEventListener('click', () => this.reset());
@@ -1670,7 +1861,14 @@ export class TychoViewerElement extends Base {
     const dropLabel = el('span');
     drop.appendChild(dropLabel);
     drop.hidden = true;
-    body.append(preadout, error, bars, drop);
+    const follow = el('button', 'btn follow');
+    follow.type = 'button';
+    follow.append(icon('house'), el('span', undefined, 'Timeline view'));
+    follow.title = "Back to the timeline's camera (F returns every panel)";
+    follow.hidden = true;
+    follow.addEventListener('pointerdown', stop);
+    follow.addEventListener('click', () => this.fitPanel(pid));
+    body.append(preadout, error, bars, drop, follow);
     body.addEventListener('dblclick', () => this.fitPanel(pid));
     const head = el('div', 'phead');
     const title = el('span', 't');
@@ -1719,6 +1917,7 @@ export class TychoViewerElement extends Base {
       close,
       readouts,
       error,
+      follow,
       drop,
       dropLabel,
       bars,
@@ -1739,10 +1938,11 @@ export class TychoViewerElement extends Base {
   }
 
   /** Places panels and gutters where the layout tiles the stage. */
-  private layoutDom(): void {
+  private layoutDom(q?: number): void {
     if (this.store === null) return;
     const { w, h } = this.stageSize;
-    const tiles = tile(this.store.state.layout, { x: 0, y: 0, w, h }, GUTTER);
+    const at = q ?? this.heldProgress ?? this.store.frame / this.scene!.clock.steps;
+    const tiles = tile(layoutAt(this.store.state.layout, at * timelineSeconds(this.scene!.clock)), { x: 0, y: 0, w, h }, GUTTER);
     for (const [pid, r] of tiles.panels) {
       const dom = this.panelDom.get(pid);
       if (!dom) continue;

@@ -176,7 +176,7 @@ def test_a_layer_in_the_driver_context_reads_the_frame_edges_on_the_driver():
     scene.view("v", frame="rot", driver=ty.driver(orbit, 0), layers=[ty.track(grid, context="driver")])
     scene.panel("p", "v")
     doc, data = scene.to_document(), scene.to_container()
-    assert (doc["version"], doc["requires"]) == ("0.3", ["layers.driver_context"])
+    assert (doc["version"], doc["requires"]) == ("0.4", ["layers.driver_context"])
     assert doc["views"]["v"]["layers"][0]["context"] == "driver"
     # at frame 1 of 4 the driver reads t = 0.5, halfway between rho = 1 and rho = 2 (rules L4 and L6)
     line = evaluate(doc, data, doc["initial"], 1)["panels"]["p"]["layers"][0]["members"][0]["line"]
@@ -281,7 +281,7 @@ def test_a_plane_camera_takes_an_aspect_and_an_orbit_camera_does_not():
     scene.panel("p", "v")
     doc = scene.to_document()
     assert doc["views"]["v"]["camera"] == {"kind": "plane", "aspect": "free"}
-    assert doc["version"] == "0.3"
+    assert doc["version"] == "0.4"
     with pytest.raises(ty.SceneError, match=r"2\.7: a camera aspect is 'stretch', not one of equal, free"):
         scene.view("w", frame="root", driver=ty.driver(moving, 0), layers=[], camera={"kind": "plane", "aspect": "stretch"})
     with pytest.raises(ty.SceneError, match=r"2\.7: .* camera has unknown keys \['aspect'\]"):
@@ -422,7 +422,7 @@ def test_readouts_and_sliders_are_checked_against_the_driver():
         "2.9: the slider over 'k' needs a selector by nearest",
     ):
         assert expected in message
-    with pytest.raises(ty.SceneError, match="of var, member, attr, channel, and clock, not one"):
+    with pytest.raises(ty.SceneError, match="of var, member, attr, channel, clock, keys, steps, sub, and sup, not one"):
         scene.readout("panel", {"member": "e", "attr": "mu"})
     with pytest.raises(ty.SceneError, match="digits"):
         scene.readout("panel", {"member": "e", "digits": 0})

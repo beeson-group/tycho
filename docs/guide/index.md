@@ -9,6 +9,7 @@ A TyCHO scene consists of NumPy arrays and declarations. A track is one trajecto
 - One clock gives the animation time that every panel shares ([the clock](clock.md)).
 - Views come with layers. A view is the template of one picture, and each layer draws one thing in it ([views and layers](views.md)).
 - Panels are the pictures on the page, each showing one view. Controls are the widgets that change variables, and readouts are the text that shows current values ([panels, controls, and readouts](panels.md)).
+- The timeline moves cameras, captions, labels, and fades by the time of the video rather than by a stored channel, and names the stages of a presentation ([the timeline](timeline.md)).
 
 The Python package pytycho writes the scene as two files, `scene.tys` for the declarations and `data.tyd` for the arrays. The browser runtime, i.e. the TypeScript program that pytycho inlines into the HTML page it writes, draws the scene. Two further pages cover thinning, i.e. keeping a subset of the stored samples of each track, and the HTML page with its video export.
 
@@ -46,6 +47,7 @@ variables
 clock
 views
 panels
+timeline
 thinning
 html
 ```

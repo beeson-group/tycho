@@ -22,8 +22,26 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { fail, TychoError } from '../errors.js';
-import { bound, clockLaps, lapOf, type TrackClock } from '../evaluate/clock.js';
-import { arrowLayer, driverContexts, driverPoint, hasHead, outlineLayer, point, type Driver, type LayerEnv, type Vertex } from '../evaluate/layers.js';
+import { bound, clockLaps, lapOf, layerClock, type TrackClock } from '../evaluate/clock.js';
+import {
+  arrowLayer,
+  driverContexts,
+  driverPoint,
+  hasHead,
+  labelLayer,
+  layerEnv,
+  loopPolyline,
+  outlineLayer,
+  point,
+  pointsLayer,
+  trail as trailVertices,
+  whole,
+  type Driver,
+  type LayerEnv,
+  type Vertex,
+} from '../evaluate/layers.js';
+import { cameraAt } from '../evaluate/index.js';
+import { numberAt, opacityAt, planeAxes, sizeAt, timeAt, tweenValue, type CameraWindow, type Key } from '../evaluate/timeline.js';
 import type { OutlineLayerResult, Vec3 } from '../evaluate/types.js';
 import type { Context, Frames } from '../evaluate/frames.js';
 import {
@@ -38,9 +56,41 @@ import {
   type PanelScope,
 } from '../evaluate/resolve.js';
 import type { SetData } from '../evaluate/sets.js';
-import type { ArrowLayer, BodyLayer, Camera, ColorSpec, MarkLayer, OutlineLayer, Scene, State, TrackLayer, View } from '../scene.js';
+import type {
+  ArrowLayer,
+  BodyLayer,
+  Camera,
+  Clock,
+  ColorSpec,
+  LabelLayer,
+  Layout,
+  Marker,
+  MarkLayer,
+  OutlineLayer,
+  PointsLayer,
+  Scene,
+  State,
+  TrackLayer,
+  View,
+} from '../scene.js';
 import { INDEX_CHANNEL } from '../scene.js';
-import { colorScale, coloring, gradientCss, gradientStops, hexRgb, mixHex, sceneTheme, type Coloring, type Rgb, type Theme } from './colors.js';
+import {
+  colorScale,
+  coloring,
+  gradientCss,
+  gradientStops,
+  hexRgb,
+  isStepped,
+  mixHex,
+  sceneTheme,
+  themed,
+  themedMarker,
+  themedSpec,
+  type Coloring,
+  type Rgb,
+  type Theme,
+} from './colors.js';
+import { markerCanvas, markerStroke, TICK_SIZE, type BoxPaint } from './paint.js';
 import {
   EMPTY_RANGE,
   GeometryCache,
@@ -96,6 +146,7 @@ uniform float uSkip;
 uniform float uOpacity;
 uniform float uFraction;
 uniform float uTaperOpacity;
+uniform float uFade;
 ivec2 texelOf(float tr) {
   int t = int(tr + 0.5);
   return ivec2(t % uRangesWidth, t / uRangesWidth);
@@ -154,6 +205,17 @@ const NARROW_VERTEX =
 #ifdef USE_TRACK_COLOR
 attribute vec3 tcolor;
 #endif
+#ifdef DASH
+attribute float dist;
+uniform highp sampler2D uDashFrom;
+uniform int uDashWidth;
+uniform float uSegBase;
+float restartAt(float j) {
+  int i = int(j + uSegBase + 0.5);
+  return texelFetch(uDashFrom, ivec2(i % uDashWidth, i / uDashWidth), 0).x;
+}
+varying float vDist;
+#endif
 uniform vec3 uColor;
 varying vec4 vColor;
 void main() {
@@ -169,7 +231,11 @@ void main() {
 #else
   vec3 rgb = uColor;
 #endif
-  vColor = vec4(rgb, alphaOf(track) * mix(uTaperOpacity, 1.0, s));
+#ifdef DASH
+  // the pattern starts again where the track last entered the stage
+  vDist = dist - restartAt(float(gl_VertexID / 2));
+#endif
+  vColor = vec4(rgb, uFade * alphaOf(track) * mix(uTaperOpacity, 1.0, s));
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 }
 `;
@@ -183,6 +249,18 @@ attribute vec3 instanceEnd;
 #ifdef USE_TRACK_COLOR
 attribute vec3 colorStart;
 attribute vec3 colorEnd;
+#endif
+#ifdef DASH
+attribute float distStart;
+attribute float distEnd;
+uniform highp sampler2D uDashFrom;
+uniform int uDashWidth;
+uniform float uSegBase;
+float restartAt(float j) {
+  int i = int(j + uSegBase + 0.5);
+  return texelFetch(uDashFrom, ivec2(i % uDashWidth, i / uDashWidth), 0).x;
+}
+varying float vDist;
 #endif
 uniform vec3 uColor;
 uniform float uWidth;
@@ -202,7 +280,10 @@ void main() {
 #else
   vec3 rgb = uColor;
 #endif
-  vColor = vec4(rgb, alphaOf(track) * mix(uTaperOpacity, 1.0, s));
+#ifdef DASH
+  vDist = (atEnd ? distEnd : distStart) - restartAt(float(gl_InstanceID));
+#endif
+  vColor = vec4(rgb, uFade * alphaOf(track) * mix(uTaperOpacity, 1.0, s));
   gl_Position = corner(instanceStart, instanceEnd, uWidth * mix(uTaperWidth, 1.0, s));
 }
 `;
@@ -216,10 +297,18 @@ attribute vec4 colorStart;
 attribute vec4 colorEnd;
 attribute float widthStart;
 attribute float widthEnd;
+#ifdef DASH
+attribute float distStart;
+attribute float distEnd;
+varying float vDist;
+#endif
 varying vec4 vColor;
 void main() {
   bool atEnd = position.y > 0.5;
   vColor = atEnd ? colorEnd : colorStart;
+#ifdef DASH
+  vDist = atEnd ? distEnd : distStart;
+#endif
   gl_Position = corner(instanceStart, instanceEnd, atEnd ? widthEnd : widthStart);
 }
 `;
@@ -275,7 +364,16 @@ void main() {
 
 const FRAGMENT = /* glsl */ `
 varying vec4 vColor;
+#ifdef DASH
+varying float vDist;
+uniform float uPixels;
+uniform vec2 uDash;
+#endif
 void main() {
+#ifdef DASH
+  // a dash of uDash.x and a gap of uDash.y pixels along the screen, from the arclength in the display frame
+  if (mod(vDist * uPixels, uDash.x + uDash.y) > uDash.x) discard;
+#endif
   gl_FragColor = vColor;
 }
 `;
@@ -323,11 +421,6 @@ function stretchOf(cam: Camera): THREE.Vector3 {
   return cam.kind === 'orbit' && cam.stretch !== undefined ? new THREE.Vector3(...cam.stretch) : new THREE.Vector3(1, 1, 1);
 }
 
-/** The display-frame axes a plane camera shows across and up the screen, as indices into a frame's `axes`. */
-function planeAxes(cam: Camera & { kind: 'plane' }): [number, number] {
-  return cam.plane === 'xz' ? [0, 2] : cam.plane === 'yz' ? [1, 2] : [0, 1];
-}
-
 /** The quad of a segment, with four corners and two triangles, drawn once per instance. */
 function quadGeometry(): THREE.InstancedBufferGeometry {
   const g = new THREE.InstancedBufferGeometry();
@@ -349,6 +442,20 @@ const material = (vertexShader: string, uniforms: Record<string, THREE.IUniform>
   });
 
 const clamp01 = (x: number): number => Math.min(1, Math.max(0, x));
+
+/**
+ * Makes a material blend each pixel, or each sample of a multisampled pixel, once per layer, as a translucent path of a plot
+ * does (section 2.11): a fragment passes only where the stencil does not hold the layer's mark yet, and leaves the mark. The
+ * stencil is cleared with each frame, and two flat layers of a panel carry different marks.
+ */
+function flatten(mat: THREE.Material, mark: number): void {
+  mat.stencilWrite = true;
+  mat.stencilRef = mark;
+  mat.stencilFunc = THREE.NotEqualStencilFunc;
+  mat.stencilFail = THREE.KeepStencilOp;
+  mat.stencilZFail = THREE.KeepStencilOp;
+  mat.stencilZPass = THREE.ReplaceStencilOp;
+}
 
 // buffers shared by every panel
 
@@ -393,6 +500,8 @@ export interface TrackPlan {
   color: ColorSpec | undefined;
   /** The context its samples are transformed in (rule L6). */
   context: 'own' | 'driver';
+  /** The clock the layer reads, the scene's or its own (rule K4). */
+  clock: Clock;
 }
 
 export interface BodyPlan {
@@ -415,6 +524,24 @@ export interface ArrowPlan {
   set: SetData | null;
   /** The clock channel the layer reads. */
   channel: string;
+  /** The clock the layer reads, the scene's or its own (rule K4). */
+  clock: Clock;
+}
+
+export interface PointsPlan {
+  kind: 'points';
+  index: number;
+  layer: PointsLayer;
+  /** Null when the set query does not match any track set. */
+  set: SetData | null;
+}
+
+export interface LabelPlan {
+  kind: 'label';
+  index: number;
+  layer: LabelLayer;
+  /** The set of an anchor at a member, or null. */
+  set: SetData | null;
 }
 
 export interface OutlinePlan {
@@ -423,7 +550,7 @@ export interface OutlinePlan {
   layer: OutlineLayer;
 }
 
-export type LayerPlan = TrackPlan | ArrowPlan | OutlinePlan | BodyPlan | MarkPlan;
+export type LayerPlan = TrackPlan | ArrowPlan | OutlinePlan | BodyPlan | MarkPlan | PointsPlan | LabelPlan;
 
 export interface PanelPlan {
   viewId: string;
@@ -436,7 +563,7 @@ export interface PanelPlan {
 
 /** A layer's color with a colormap keyed on a choice (section 2.7) resolved by the panel's value of the choice (rule V1). */
 export function resolveColor(scope: PanelScope, spec: ColorSpec | undefined): ColorSpec | undefined {
-  if (spec === undefined || typeof spec === 'string' || typeof spec.colormap === 'string') return spec;
+  if (spec === undefined || typeof spec === 'string' || isStepped(spec) || typeof spec.colormap === 'string') return spec;
   const by = spec.colormap;
   if (variableDef(scope.scene, by.var)?.kind !== 'choice') fail('2.7', `the colormap is keyed on ${by.var}, which is not a choice`);
   const value = variableValue(scope, by.var);
@@ -465,10 +592,11 @@ export function planPanel(scene: Scene, geometry: GeometryCache, state: State, p
       const id = oneSet(scope, layer.sets);
       const set = id === null ? null : geometry.sets.get(id);
       const members = set === null ? [] : resolveMembers(scope, layer.members, set);
-      const channel = needsReading(layer, scene.clock) ? state.clock.channel : null;
+      const clock = layer.clock === undefined ? scene.clock : layerClock(scene.clock, layer.clock);
+      const channel = needsReading(layer, clock) ? (layer.clock === undefined ? state.clock.channel : clock.channels[0]!) : null;
       const context = layer.context ?? 'own';
       if (context !== 'own' && context !== 'driver') fail('L6', `a track layer's context is ${JSON.stringify(context)}, not own or driver`);
-      if (set !== null && channel !== null && laps > 1 && !set.periodic)
+      if (set !== null && channel !== null && layer.clock === undefined && laps > 1 && !set.periodic)
         fail('C6', `a reading is taken on track set ${set.id}, which is not periodic, and the clock has ${laps} laps`);
       const hl = layer.highlight;
       if (hl?.kernel !== undefined) {
@@ -478,20 +606,34 @@ export function planPanel(scene: Scene, geometry: GeometryCache, state: State, p
       }
       const selected = set !== null && hl !== undefined ? selectorTrack(scope, { var: hl.var }, set) : null;
       const highlight = selected !== null && members.includes(selected) ? selected : null;
-      layers.push({ kind: 'track', index, layer, set, members, highlight, selected, channel, color: resolveColor(scope, layer.color), context });
+      layers.push({ kind: 'track', index, layer, set, members, highlight, selected, channel, color: resolveColor(scope, layer.color), context, clock });
     } else if (layer.kind === 'arrow') {
       const id = oneSet(scope, layer.sets);
-      layers.push({ kind: 'arrow', index, layer, set: id === null ? null : geometry.sets.get(id), channel: state.clock.channel });
+      const clock = layer.clock === undefined ? scene.clock : layerClock(scene.clock, layer.clock);
+      const channel = layer.clock === undefined ? state.clock.channel : clock.channels[0]!;
+      layers.push({ kind: 'arrow', index, layer, set: id === null ? null : geometry.sets.get(id), channel, clock });
     } else if (layer.kind === 'outline') layers.push({ kind: 'outline', index, layer });
     else if (layer.kind === 'body') layers.push({ kind: 'body', index, layer });
-    else layers.push({ kind: layer.kind, index, layer });
+    else if (layer.kind === 'points') {
+      const id = oneSet(scope, layer.sets);
+      layers.push({ kind: 'points', index, layer, set: id === null ? null : geometry.sets.get(id) });
+    } else if (layer.kind === 'label') {
+      const at = layer.at as { sets?: unknown };
+      const id = at !== null && typeof at === 'object' && 'sets' in at ? oneSet(scope, at.sets as never) : null;
+      layers.push({ kind: 'label', index, layer, set: id === null ? null : geometry.sets.get(id) });
+    } else layers.push({ kind: layer.kind, index, layer });
   });
   return { viewId: panel.view, view, display, scope, driver, layers };
 }
 
 /** What the camera fit depends on: the view, the display frame, the driver's track set, and the track sets of the track layers. */
 export function contentKey(plan: PanelPlan): string {
-  return [plan.viewId, plan.display, plan.driver?.set.id ?? '', ...plan.layers.map((l) => (l.kind === 'track' ? (l.set?.id ?? '') : ''))].join('\0');
+  return [
+    plan.viewId,
+    plan.display,
+    plan.driver?.set.id ?? '',
+    ...plan.layers.map((l) => (l.kind === 'track' || l.kind === 'points' ? (l.set?.id ?? '') : '')),
+  ].join('\0');
 }
 
 type Box6 = [number, number, number, number, number, number];
@@ -758,6 +900,8 @@ interface TrackSource {
   coloring: Coloring;
   /** The base passes read each track's opacity from the kernel's texel. */
   kernel: boolean;
+  /** For a dashed layer, the arclength of every sample from the first of its track in the frame of the buffers, else null. */
+  dist: Float32Array | null;
 }
 
 /**
@@ -782,16 +926,21 @@ class Pass {
       ...uniforms,
       uLap: { value: spec.lap },
       uSkip: { value: -1 },
+      uSegBase: { value: 0 },
       uOpacity: { value: spec.opacity },
       uWidth: { value: spec.width },
       uKernel: { value: src.kernel && !spec.highlight ? 1 : 0 },
     };
-    const defines = src.coloring.kind === 'sample' ? { USE_TRACK_COLOR: '' } : undefined;
+    const defines: Record<string, string> = {};
+    if (src.coloring.kind === 'sample') defines.USE_TRACK_COLOR = '';
+    if (src.dist !== null) defines.DASH = '';
     this.mat = material(this.wide ? WIDE_VERTEX : NARROW_VERTEX, own, defines);
   }
 
   /** Shows the whole set or one track, or clears the pass when `what` is null. */
   show(what: 'set' | number | null): void {
+    // a pass of one track reads its segments' dash starts from the track's first segment on
+    this.mat.uniforms.uSegBase!.value = typeof what === 'number' ? this.src.set.start(what) - what : 0;
     const key = what === null ? '' : String(what);
     if (key === this.shown) return;
     this.clear();
@@ -805,8 +954,8 @@ class Pass {
   }
 
   /** The four arrays in pair layout, for the whole set (shared) or for one track. */
-  private arrays(what: 'set' | number): { pos: Float32Array; u: Float32Array; tr: Float32Array; col: Float32Array | null } {
-    const { ctx, set, geo, display, readings, coloring: c, colorKey } = this.src;
+  private arrays(what: 'set' | number): { pos: Float32Array; u: Float32Array; tr: Float32Array; col: Float32Array | null; dist: Float32Array | null } {
+    const { ctx, set, geo, display, readings, coloring: c, colorKey, dist } = this.src;
     const lap = this.spec.lap;
     if (what === 'set') {
       return {
@@ -814,6 +963,7 @@ class Pass {
         u: ctx.shared.get(`u\0${set.id}\0${readings.channel}`, () => pairReadings(set, readings.u)),
         tr: ctx.shared.get(`t\0${set.id}`, () => pairTracks(set)),
         col: c.kind === 'sample' ? ctx.shared.get(`c\0${set.id}\0${colorKey}`, () => pairs(set, c.rgb, 3)) : null,
+        dist: dist === null ? null : ctx.shared.get(`d\0${set.id}\0${display}\0${keyOf(dist)}`, () => pairs(set, dist, 1)),
       };
     }
     const s = set.start(what);
@@ -823,6 +973,7 @@ class Pass {
       u: readingPairs(readings.u, s, m),
       tr: new Float32Array(2 * (m - 1)).fill(what),
       col: c.kind === 'sample' ? slicePairs(c.rgb, 3, s, m) : null,
+      dist: dist === null ? null : slicePairs(dist, 1, s, m),
     };
   }
 
@@ -837,6 +988,7 @@ class Pass {
     g.setAttribute('useg', attr('useg', a.u, 2));
     g.setAttribute('track', attr('track', a.tr, 1));
     if (a.col) g.setAttribute('tcolor', attr('tcolor', a.col, 3));
+    if (a.dist) g.setAttribute('dist', attr('dist', a.dist, 1));
     this.sharedNames = what === 'set' ? Object.keys(g.attributes) : [];
     return g;
   }
@@ -857,6 +1009,11 @@ class Pass {
       const col = buffer('c', a.col, 6);
       g.setAttribute('colorStart', new THREE.InterleavedBufferAttribute(col, 3, 0));
       g.setAttribute('colorEnd', new THREE.InterleavedBufferAttribute(col, 3, 3));
+    }
+    if (a.dist) {
+      const d = buffer('d', a.dist, 2);
+      g.setAttribute('distStart', new THREE.InterleavedBufferAttribute(d, 1, 0));
+      g.setAttribute('distEnd', new THREE.InterleavedBufferAttribute(d, 1, 1));
     }
     g.instanceCount = a.pos.length / 6;
     this.sharedNames = what === 'set' ? Object.keys(g.attributes).filter((n) => n !== 'position') : [];
@@ -891,6 +1048,9 @@ function keyOf(a: Float32Array): number {
   return id;
 }
 
+/** The floats of one end piece: its two ends, their colors with opacity, their widths, and their arclengths for a dash. */
+const PIECE = 18;
+
 /** The end pieces of every drawn track, computed on the CPU, as quads with a color, an opacity, and a width at each end. */
 class Pieces {
   readonly mesh: THREE.Mesh;
@@ -898,15 +1058,15 @@ class Pieces {
   private readonly mat: THREE.ShaderMaterial;
   n = 0;
 
-  constructor(capacity: number, resolution: THREE.IUniform) {
-    this.mat = material(PIECE_VERTEX, { uResolution: resolution });
+  constructor(capacity: number, resolution: THREE.IUniform, dash: Record<string, THREE.IUniform> | null = null) {
+    this.mat = material(PIECE_VERTEX, { uResolution: resolution, ...(dash ?? {}) }, dash === null ? {} : { DASH: '' });
     this.buffer = this.allocate(capacity);
     this.mesh = new THREE.Mesh(this.geometry(), this.mat);
     this.mesh.frustumCulled = false;
   }
 
   private allocate(capacity: number): THREE.InstancedInterleavedBuffer {
-    const b = new THREE.InstancedInterleavedBuffer(new Float32Array(16 * Math.max(1, capacity)), 16);
+    const b = new THREE.InstancedInterleavedBuffer(new Float32Array(PIECE * Math.max(1, capacity)), PIECE);
     b.setUsage(THREE.DynamicDrawUsage);
     return b;
   }
@@ -920,13 +1080,15 @@ class Pieces {
     g.setAttribute('colorEnd', new THREE.InterleavedBufferAttribute(b, 4, 10));
     g.setAttribute('widthStart', new THREE.InterleavedBufferAttribute(b, 1, 14));
     g.setAttribute('widthEnd', new THREE.InterleavedBufferAttribute(b, 1, 15));
+    g.setAttribute('distStart', new THREE.InterleavedBufferAttribute(b, 1, 16));
+    g.setAttribute('distEnd', new THREE.InterleavedBufferAttribute(b, 1, 17));
     g.instanceCount = 0;
     return g;
   }
 
   /** The array to write `count` pieces into, grown when it is too small. */
   begin(count: number): Float32Array {
-    if (16 * count > this.buffer.array.length) {
+    if (PIECE * count > this.buffer.array.length) {
       this.mesh.geometry.dispose();
       this.buffer = this.allocate(2 * count);
       this.mesh.geometry = this.geometry();
@@ -939,7 +1101,7 @@ class Pieces {
     (this.mesh.geometry as THREE.InstancedBufferGeometry).instanceCount = this.n;
     this.mesh.visible = this.n > 0;
     this.buffer.clearUpdateRanges();
-    this.buffer.addUpdateRange(0, 16 * this.n);
+    this.buffer.addUpdateRange(0, PIECE * this.n);
     this.buffer.needsUpdate = true;
   }
 
@@ -970,6 +1132,61 @@ function kernelOf(ctx: DrawContext, layer: TrackLayer, set: SetData): Kernel | n
   return { parameter: sel.parameter, width: k.width, opacity: k.opacity, values, extent: hi >= lo ? hi - lo : 0 };
 }
 
+/**
+ * Where the dash pattern of each segment of a track starts (section 2.11), as an arclength along the track, written to `out` from
+ * `at` on, one value per segment: where the track last entered the rectangle `[x0, x1] x [y0, y1]` at or before the segment, or its
+ * first sample when that lies in the rectangle, as matplotlib clips a line to its figure before it dashes it, which starts the
+ * pattern again at each entry. `xy` holds the screen position of each of the `count` samples from `from`, two numbers per sample,
+ * and `dist` the arclength of each. Before the track first enters the rectangle, its segments start at its first sample.
+ */
+export function dashRestarts(
+  xy: ArrayLike<number>,
+  dist: ArrayLike<number>,
+  from: number,
+  count: number,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  out: { [i: number]: number },
+  at: number,
+): void {
+  let restart = count > 0 ? dist[from]! : 0;
+  let wasInside = false;
+  for (let i = 0; i + 1 < count; i++) {
+    const ax = xy[2 * (from + i)]!;
+    const ay = xy[2 * (from + i) + 1]!;
+    const dx = xy[2 * (from + i + 1)]! - ax;
+    const dy = xy[2 * (from + i + 1) + 1]! - ay;
+    // Liang-Barsky: the part of the segment inside the rectangle runs from t0 to t1
+    let t0 = 0;
+    let t1 = 1;
+    let crosses = true;
+    for (const [q, r] of [
+      [-dx, ax - x0],
+      [dx, x1 - ax],
+      [-dy, ay - y0],
+      [dy, y1 - ay],
+    ] as const) {
+      if (q === 0) {
+        if (r < 0) crosses = false;
+      } else {
+        const t = r / q;
+        if (q < 0) t0 = Math.max(t0, t);
+        else t1 = Math.min(t1, t);
+      }
+    }
+    const inside = crosses && t0 <= t1;
+    // a segment that comes in from outside starts the pattern where it enters; one that goes on from inside keeps it
+    if (inside && (t0 > 0 || !wasInside)) {
+      const d0 = dist[from + i]!;
+      restart = d0 + t0 * (dist[from + i + 1]! - d0);
+    }
+    out[at + i] = restart;
+    wasInside = inside && t1 >= 1;
+  }
+}
+
 /** A float texture with one RGBA texel per track, in rows of at most 2048. */
 function trackTexture(tracks: number): { data: Float32Array; texture: THREE.DataTexture; width: number } {
   const width = Math.min(Math.max(tracks, 1), 2048);
@@ -982,6 +1199,123 @@ function trackTexture(tracks: number): { data: Float32Array; texture: THREE.Data
   return { data, texture, width };
 }
 
+/**
+ * The arclength of every sample from the first of its track, along the positions `pos` of x, y, z per sample, with the
+ * component along axis `up` scaled by `ratio`, so that a free aspect, which scales the two axes of the plane apart, dashes evenly.
+ */
+function arclengths(set: SetData, pos: ArrayLike<number>, up = 1, ratio = 1): Float32Array {
+  const out = new Float32Array(set.samples);
+  const k = [1, 1, 1];
+  k[up] = ratio;
+  for (let t = 0; t < set.tracks; t++) {
+    const s = set.start(t);
+    let d = 0;
+    out[s] = 0;
+    for (let i = 1; i < set.count(t); i++) {
+      const a = 3 * (s + i - 1);
+      const b = 3 * (s + i);
+      d += Math.hypot(k[0]! * (pos[b]! - pos[a]!), k[1]! * (pos[b + 1]! - pos[a + 1]!), k[2]! * (pos[b + 2]! - pos[a + 2]!));
+      out[s + i] = d;
+    }
+  }
+  return out;
+}
+
+/** The sprites of a marker (section 2.11), drawn from a texture of its shape, in one color or tinted per point. */
+export class MarkerSprites {
+  readonly points: THREE.Points;
+  private readonly material: THREE.PointsMaterial;
+  private readonly marker: Marker;
+  private readonly tinted: boolean;
+  private texSize = 0;
+  /** The width of the stroke the texture was drawn with, which may move with the timeline as the size does. */
+  private texEdge = -1;
+  private edgeWidth: number | undefined;
+
+  constructor(marker: Marker, size: number, tinted: boolean) {
+    this.marker = marker;
+    this.edgeWidth = typeof marker.edge_width === 'number' ? marker.edge_width : undefined;
+    this.tinted = tinted;
+    this.material = new THREE.PointsMaterial({
+      size,
+      sizeAttenuation: false,
+      vertexColors: tinted,
+      transparent: true,
+      alphaTest: 0.01,
+      depthTest: false,
+      depthWrite: false,
+    });
+    this.points = new THREE.Points(new THREE.BufferGeometry(), this.material);
+    this.points.frustumCulled = false;
+    this.grow(1);
+    this.setSize(size);
+  }
+
+  /**
+   * Sets the size of the sprites' shape in CSS pixels, and the width of its stroke when given, drawing the texture again when either
+   * moves, since the stroke is in CSS pixels and does not scale with the marker.
+   */
+  setSize(size: number, edgeWidth = this.edgeWidth): void {
+    this.edgeWidth = edgeWidth;
+    const marker: Marker = { ...this.marker, edge_width: edgeWidth };
+    this.material.size = size + markerStroke(marker, size);
+    const want = Math.max(1, size);
+    const edge = edgeWidth ?? 0;
+    if (Math.abs(want / Math.max(this.texSize, 1e-9) - 1) > 0.05 || Math.abs(edge - this.texEdge) > 0.05 * Math.max(edge, 0.5)) {
+      this.texSize = want;
+      this.texEdge = edge;
+      this.material.map?.dispose();
+      const t = new THREE.CanvasTexture(markerCanvas(this.tinted ? { ...marker, color: undefined } : marker, want));
+      t.needsUpdate = true;
+      this.material.map = t;
+      this.material.needsUpdate = true;
+    }
+  }
+
+  setOpacity(opacity: number): void {
+    this.material.opacity = opacity;
+  }
+
+  /** Room for `n` points. */
+  grow(n: number): void {
+    const have = this.points.geometry.getAttribute('position') as THREE.BufferAttribute | undefined;
+    if (have !== undefined && have.count >= n) return;
+    this.points.geometry.dispose();
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3 * n), 3).setUsage(THREE.DynamicDrawUsage));
+    g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(3 * n), 3).setUsage(THREE.DynamicDrawUsage));
+    this.points.geometry = g;
+  }
+
+  get position(): THREE.BufferAttribute {
+    return this.points.geometry.getAttribute('position') as THREE.BufferAttribute;
+  }
+
+  get color(): THREE.BufferAttribute {
+    return this.points.geometry.getAttribute('color') as THREE.BufferAttribute;
+  }
+
+  /** Draws the first `n` points. */
+  show(n: number): void {
+    this.position.needsUpdate = true;
+    this.color.needsUpdate = true;
+    this.points.geometry.setDrawRange(0, n);
+    this.points.visible = n > 0;
+  }
+
+  dispose(): void {
+    this.points.geometry.dispose();
+    this.material.map?.dispose();
+    this.material.dispose();
+  }
+}
+
+/** A head's marker, from the layer's `head` (rule L3 and section 2.11). */
+function headMarker(layer: TrackLayer): Marker & { glow?: { channel: string; color?: string; size?: number; opacity?: number } } {
+  const head = layer.head;
+  return typeof head === 'object' && head !== null ? (head as Marker) : {};
+}
+
 export class TrackDraw implements Draw {
   readonly key: string;
   readonly group = new THREE.Group();
@@ -990,6 +1324,7 @@ export class TrackDraw implements Draw {
   private readonly set: SetData;
   private readonly geo: TrackGeometry;
   private readonly clocks: TrackReadings | null;
+  private readonly clock: Clock;
   private readonly spec: RevealSpec;
   private readonly color: ColorSpec | undefined;
   private readonly width: number;
@@ -1003,6 +1338,10 @@ export class TrackDraw implements Draw {
   private readonly kernel: Kernel | null;
   private readonly ranges: ReturnType<typeof trackTexture>;
   private readonly alphas: ReturnType<typeof trackTexture> | null;
+  /** For a dashed layer, the arclength at which each segment's dash pattern starts on the stage (section 2.11), else null. */
+  private readonly dashFrom: ReturnType<typeof trackTexture> | null;
+  private dashScreen = new Float64Array(0);
+  private restartOut: number[] = [];
   private readonly resolution: THREE.IUniform<THREE.Vector2> = { value: new THREE.Vector2(1, 1) };
   private readonly uniforms: Record<string, THREE.IUniform>;
   private readonly baseHolder = new THREE.Object3D();
@@ -1010,9 +1349,18 @@ export class TrackDraw implements Draw {
   /** The passes built so far, by lap and kind, each built the first time its lap shows anything. */
   private readonly passes = new Map<string, Pass>();
   private readonly pieces: Pieces;
-  private heads: THREE.Points | null = null;
+  private heads: MarkerSprites | null = null;
+  private glow: MarkerSprites | null = null;
   private readonly headSize: number;
   private readonly headColor: Rgb | null;
+  private fill: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial> | null = null;
+  private fillBuffer = new Float32Array(0);
+  /** False for a layer that draws its heads alone (section 2.11). */
+  private readonly line: boolean;
+  /** The stencil mark of a flat layer, whose lines blend each pixel once (section 2.11), else 0. */
+  private readonly flatMark: number;
+  /** True when the layer's opacity or its head's size or opacity moves with the timeline, hence it is drawn every frame. */
+  private readonly tweened: boolean;
   private members: number[] = [];
   private highlight: number | null = null;
   private selected: number | null = null;
@@ -1030,15 +1378,19 @@ export class TrackDraw implements Draw {
     const layer = plan.layer;
     this.set = set;
     this.layer = layer;
+    this.clock = plan.clock;
     this.driverContext = plan.context === 'driver';
     if (this.driverContext) this.group.matrixAutoUpdate = false;
     this.geo = ctx.geometry.geometry(set.id, this.driverContext ? set.def.frame : display);
     this.clocks = plan.channel === null ? null : ctx.geometry.readings(set.id, plan.channel);
     const readings = this.clocks ?? ctx.geometry.readings(set.id, INDEX_CHANNEL);
-    this.spec = revealSpec(layer, set.periodic, clockLaps(ctx.scene.clock));
+    this.spec = revealSpec(layer, set.periodic, clockLaps(plan.clock));
     this.color = plan.color;
-    const color = coloring(plan.color, set, hexRgb(ctx.theme.foreground));
+    const color = coloring(themedSpec(plan.color, ctx.theme), set, hexRgb(ctx.theme.foreground));
     this.kernel = kernelOf(ctx, layer, set);
+    this.line = layer.line !== false;
+    this.flatMark = layer.flat === true ? (plan.index % 255) + 1 : 0;
+    const dashed = layer.dash !== undefined && this.line;
     this.src = {
       ctx,
       set,
@@ -1048,18 +1400,24 @@ export class TrackDraw implements Draw {
       colorKey: JSON.stringify(plan.color ?? null),
       coloring: color,
       kernel: this.kernel !== null,
+      dist: dashed ? ctx.shared.get(`dist\0${set.id}\0${this.geo.frame}`, () => arclengths(set, this.geo.positions)) : null,
     };
     this.width = layer.width ?? 1;
     this.hiWidth = layer.highlight?.width ?? this.width;
-    this.opacity = layer.opacity ?? 1;
+    this.opacity = typeof layer.opacity === 'number' ? layer.opacity : 1;
     this.hiOpacity = layer.highlight?.opacity ?? 1;
     this.fraction = this.spec.reveal === 'trail' ? this.spec.laps * this.spec.fraction : 0;
     this.taperWidth = layer.trail?.taper?.width ?? TAPER_WIDTH;
     this.taperOpacity = layer.trail?.taper?.opacity ?? TAPER_OPACITY;
+    const marker = themedMarker(headMarker(layer), ctx.theme);
+    this.tweened =
+      typeof layer.opacity === 'object' || typeof marker.size === 'object' || typeof marker.opacity === 'object' || typeof marker.edge_width === 'object';
 
     this.ranges = trackTexture(set.tracks);
     for (let t = 0; t < set.tracks; t++) this.ranges.data.set(EMPTY_RANGE, 4 * t);
     this.alphas = this.kernel === null ? null : trackTexture(set.tracks);
+    const dash = dashed ? { uPixels: { value: 1 }, uDash: { value: new THREE.Vector2(layer.dash![0], layer.dash![1]) } } : null;
+    this.dashFrom = dashed ? trackTexture(Math.max(1, set.samples - set.tracks)) : null;
     this.uniforms = {
       uRanges: { value: this.ranges.texture },
       uAlphas: { value: (this.alphas ?? this.ranges).texture },
@@ -1069,49 +1427,77 @@ export class TrackDraw implements Draw {
       uFraction: { value: this.fraction },
       uTaperWidth: { value: this.taperWidth },
       uTaperOpacity: { value: this.fraction > 0 ? this.taperOpacity : 1 },
+      uFade: { value: 1 },
+      ...(dash ?? {}),
+      ...(this.dashFrom === null ? {} : { uDashFrom: { value: this.dashFrom.texture }, uDashWidth: { value: this.dashFrom.width } }),
     };
+    if (layer.fill !== undefined) {
+      const f = layer.fill;
+      const rgb = hexRgb(
+        f.color !== undefined
+          ? themed(f.color, ctx.theme)
+          : color.kind === 'constant'
+            ? `#${new THREE.Color(...color.rgb).getHexString()}`
+            : ctx.theme.foreground,
+      );
+      const mat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color(...rgb),
+        transparent: true,
+        opacity: f.opacity ?? 0.25,
+        depthTest: false,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+      this.fill = new THREE.Mesh(new THREE.BufferGeometry(), mat);
+      this.fill.frustumCulled = false;
+      this.group.add(this.fill);
+    }
+    // the fill lies under the line, as it does in matplotlib
     this.group.add(this.baseHolder, this.hiHolder);
 
     // the end pieces computed on the CPU, at most two per track
-    this.pieces = new Pieces(2 * Math.min(set.tracks, 64), this.resolution);
+    this.pieces = new Pieces(2 * Math.min(set.tracks, 64), this.resolution, dash);
+    if (this.flatMark > 0) flatten(this.pieces.mesh.material as THREE.Material, this.flatMark);
     this.group.add(this.pieces.mesh);
 
-    const head = layer.head;
-    this.headSize = typeof head === 'object' && head !== null ? (head.size ?? HEAD_SIZE) : HEAD_SIZE;
-    this.headColor = typeof head === 'object' && head !== null && head.color !== undefined ? hexRgb(head.color) : null;
+    this.headSize = typeof marker.size === 'number' ? marker.size : HEAD_SIZE;
+    this.headColor = marker.color !== undefined ? hexRgb(marker.color) : null;
     if (hasHead(layer)) {
-      const hm = new THREE.PointsMaterial({
-        size: this.headSize,
-        sizeAttenuation: false,
-        map: ctx.disc,
-        alphaTest: 0.5,
-        vertexColors: true,
-        transparent: true,
-        depthTest: false,
-        depthWrite: false,
-      });
-      this.heads = new THREE.Points(new THREE.BufferGeometry(), hm);
-      this.heads.frustumCulled = false;
-      this.growHeads(1);
-      this.group.add(this.heads);
+      if (marker.glow !== undefined) {
+        const g = marker.glow;
+        this.glow = new MarkerSprites({ shape: 'disc', color: g.color ?? '#d62728' }, g.size ?? 2.4 * this.headSize, false);
+        this.glow.setOpacity(g.opacity ?? 0.35);
+        this.group.add(this.glow.points);
+      }
+      this.heads = new MarkerSprites(marker, this.headSize, marker.color === undefined);
+      this.group.add(this.heads.points);
     }
-  }
-
-  /** Room for `n` heads in the heads' buffers. */
-  private growHeads(n: number): void {
-    const heads = this.heads;
-    if (heads === null) return;
-    const have = heads.geometry.getAttribute('position') as THREE.BufferAttribute | undefined;
-    if (have !== undefined && have.count >= n) return;
-    heads.geometry.dispose();
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3 * n), 3).setUsage(THREE.DynamicDrawUsage));
-    g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(3 * n), 3).setUsage(THREE.DynamicDrawUsage));
-    heads.geometry = g;
   }
 
   resize(w: number, h: number): void {
     this.resolution.value.set(Math.max(1, w), Math.max(1, h));
+  }
+
+  /** The ratio of the pixels per unit up the screen to those across it, for which the arclengths of a dash were computed. */
+  private dashRatio = 1;
+
+  /**
+   * Sets the pixels per unit of the display frame across and up the screen, which a dash is measured in. Under a free aspect the two
+   * differ, and the arclengths are computed again, and the passes built again, when their ratio changes.
+   */
+  setPixels(across: number, up: number): void {
+    if (this.uniforms.uPixels === undefined || this.src.dist === null) return;
+    this.uniforms.uPixels.value = across;
+    const ratio = up / Math.max(across, 1e-12);
+    if (!(Math.abs(ratio / this.dashRatio - 1) > 0.01)) return;
+    this.dashRatio = ratio;
+    this.src.dist = arclengths(this.set, this.geo.positions, this.planeAxes[1], ratio);
+    for (const p of this.passes.values()) {
+      p.holder.removeFromParent();
+      p.dispose();
+    }
+    this.passes.clear();
+    this.filled = false;
   }
 
   /** The color of a vertex of track `t`, which is the layer's color or a blend of the colors of two samples. */
@@ -1127,6 +1513,60 @@ export class TrackDraw implements Draw {
       return;
     }
     for (let k = 0; k < 3; k++) out[o + k] = (1 - v.w) * c.rgb[3 * (s + v.k) + k]! + v.w * c.rgb[3 * (s + v.k + 1) + k]!;
+  }
+
+  /** The arclength of a vertex of track `t` for a dash, from where the track's pattern starts. */
+  private distAt(t: number, v: Vertex): number {
+    const d = this.src.dist;
+    if (d === null) return 0;
+    const s = this.set.start(t);
+    const k = 'sample' in v ? Math.min(v.sample, this.set.count(t) - 2) : v.k;
+    const from = this.dashFrom?.data[4 * (s - t + Math.max(0, k))] ?? 0;
+    if ('sample' in v) return d[s + v.sample]! - from;
+    return (1 - v.w) * d[s + v.k]! + v.w * d[s + v.k + 1]! - from;
+  }
+
+  /**
+   * Starts the dash pattern of each track where it enters the stage, of `width` by `height` CSS pixels widened by `margin`, as
+   * matplotlib clips a line to its figure before it dashes it (section 2.11). The panel draws with `camera` in `rect` of the stage.
+   * The dashes of a line that the camera follows then stay where they are on the screen rather than crawl along it.
+   */
+  placeDash(camera: THREE.Camera, rect: { x: number; y: number; w: number; h: number }, width: number, height: number, margin: number): void {
+    const from = this.dashFrom;
+    const dist = this.src.dist;
+    if (from === null || dist === null) return;
+    camera.updateMatrixWorld();
+    this.group.updateWorldMatrix(true, false);
+    const m = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).multiply(this.group.matrixWorld);
+    const e = m.elements;
+    const pos = this.geo.positions;
+    if (this.dashScreen.length < 2 * this.set.samples) this.dashScreen = new Float64Array(2 * this.set.samples);
+    const xy = this.dashScreen;
+    let changed = false;
+    for (const t of this.members) {
+      const s = this.set.start(t);
+      const n = this.set.count(t);
+      for (let i = s; i < s + n; i++) {
+        const x = pos[3 * i]!;
+        const y = pos[3 * i + 1]!;
+        const z = pos[3 * i + 2]!;
+        const w = e[3]! * x + e[7]! * y + e[11]! * z + e[15]!;
+        const nx = (e[0]! * x + e[4]! * y + e[8]! * z + e[12]!) / w;
+        const ny = (e[1]! * x + e[5]! * y + e[9]! * z + e[13]!) / w;
+        xy[2 * i] = rect.x + ((nx + 1) / 2) * rect.w;
+        xy[2 * i + 1] = rect.y + ((1 - ny) / 2) * rect.h;
+      }
+      const at = s - t;
+      dashRestarts(xy, dist, s, n, -margin, -margin, width + margin, height + margin, this.restartOut, 0);
+      for (let j = 0; j + 1 < n; j++) {
+        const v = this.restartOut[j]!;
+        if (from.data[4 * (at + j)] !== v) {
+          from.data[4 * (at + j)] = v;
+          changed = true;
+        }
+      }
+    }
+    if (changed) from.texture.needsUpdate = true;
   }
 
   /** Each track's opacity under the highlight's kernel, around the selected track's parameter value. */
@@ -1154,6 +1594,8 @@ export class TrackDraw implements Draw {
         { lap, highlight, width: highlight ? this.hiWidth : this.width, opacity: highlight ? this.hiOpacity : this.opacity },
         this.uniforms,
       );
+      // the highlight is drawn over a flat layer as over any other
+      if (this.flatMark > 0 && !highlight) flatten(p.mat, this.flatMark);
       (highlight ? this.hiHolder : this.baseHolder).add(p.holder);
       this.passes.set(key, p);
       this.showPass(p);
@@ -1164,16 +1606,17 @@ export class TrackDraw implements Draw {
   /** Shows the passes of the laps that draw a segment, building the ones not built yet, and hides the others. */
   private syncPasses(base: [number, number], hi: [number, number]): void {
     for (const p of this.passes.values()) p.holder.visible = false;
+    if (!this.line) return;
     if (this.baseWhat !== null) for (let lap = base[0]; lap <= base[1]; lap++) this.pass(lap, false).holder.visible = true;
     if (this.highlight !== null) for (let lap = hi[0]; lap <= hi[1]; lap++) this.pass(lap, true).holder.visible = true;
   }
 
   /**
-   * True when the layer does not take a reading and is not in the driver's context, so that what it draws changes only with its
-   * members, its highlight, and its selection.
+   * True when the layer does not take a reading, is not in the driver's context, and does not move with the timeline, so that
+   * what it draws changes only with its members, its highlight, and its selection.
    */
   get isStatic(): boolean {
-    return this.clocks === null && !this.driverContext;
+    return this.clocks === null && !this.driverContext && !this.tweened;
   }
 
   /** Moves a layer in the driver's context into the display frame at the driver's reading, or hides it when the driver does not match a set (rule L6). */
@@ -1184,8 +1627,26 @@ export class TrackDraw implements Draw {
     this.group.matrixWorldNeedsUpdate = true;
   }
 
+  /** Fades the layer as a whole by its opacity at time `s`, a tween or a number (section 2.11). */
+  private fade(s: number): number {
+    const layer = this.layer;
+    const f = typeof layer.opacity === 'object' ? opacityAt(layer.opacity, s) / Math.max(this.opacity, 1e-9) : 1;
+    this.uniforms.uFade!.value = typeof layer.opacity === 'object' ? opacityAt(layer.opacity, s) : 1;
+    const marker = headMarker(layer);
+    const fade = typeof layer.opacity === 'object' ? opacityAt(layer.opacity, s) : 1;
+    this.heads?.setOpacity(fade * opacityAt(marker.opacity, s));
+    if (this.heads !== null && (typeof marker.size === 'object' || typeof marker.edge_width === 'object'))
+      this.heads.setSize(sizeAt(marker.size, s, HEAD_SIZE), marker.edge_width === undefined ? undefined : numberAt(marker.edge_width, s, 0));
+    if (this.glow !== null) this.glow.setOpacity(fade * opacityAt(marker.opacity, s) * (marker.glow?.opacity ?? 0.35));
+    if (this.fill !== null) this.fill.material.opacity = fade * (layer.fill?.opacity ?? 0.25);
+    return f;
+  }
+
   /** Returns whether the picture changed through new members, a new highlight or selection, or a first fill. */
   update(plan: TrackPlan, scene: Scene, q: number): boolean {
+    const s = timeAt(scene.clock, q);
+    this.fade(s);
+    const fadeNow = this.uniforms.uFade!.value as number;
     const h = plan.highlight;
     const changed =
       plan.members.length !== this.members.length ||
@@ -1202,19 +1663,25 @@ export class TrackDraw implements Draw {
       for (const p of this.passes.values()) this.showPass(p);
       for (let t = 0; t < this.set.tracks; t++) this.ranges.data.set(EMPTY_RANGE, 4 * t);
       this.fillKernel();
-      this.growHeads(plan.members.length);
+      this.heads?.grow(plan.members.length);
+      this.glow?.grow(plan.members.length);
       this.filled = false;
     }
     if (this.clocks === null && this.filled) return false;
-    const P = this.pieces.begin(2 * plan.members.length);
-    const hp = this.heads?.geometry.getAttribute('position') as THREE.BufferAttribute | undefined;
-    const hc = this.heads?.geometry.getAttribute('color') as THREE.BufferAttribute | undefined;
+    const P = this.pieces.begin(this.line ? 2 * plan.members.length : 0);
+    const hp = this.heads?.position;
+    const hc = this.heads?.color;
+    const gp = this.glow?.position;
+    const glowChannel = headMarker(this.layer).glow?.channel;
+    const glowValues = glowChannel === undefined ? null : this.set.channel(glowChannel, '2.7');
     let heads = 0;
+    let glows = 0;
     const base: [number, number] = [Infinity, -Infinity];
     const hi: [number, number] = [Infinity, -Infinity];
+    const fillVerts: number[] = [];
     for (const t of plan.members) {
       const tc = this.clocks?.clocks[t] ?? null;
-      const rev = revealTrack(tc, scene.clock, q, this.spec, Math.fround);
+      const rev = revealTrack(tc, this.clock, q, this.spec, Math.fround);
       this.ranges.data.set(rev.range, 4 * t);
       const isHi = t === h;
       // every lap draws, also where all laps have the same positions and coincide, as the
@@ -1225,34 +1692,91 @@ export class TrackDraw implements Draw {
         r[1] = Math.max(r[1], rev.laps[1]);
       }
       const width = isHi ? this.hiWidth : this.width;
-      const alpha = isHi ? this.hiOpacity : this.alphas !== null ? this.alphas.data[4 * t]! : this.opacity;
+      const alpha = fadeNow * (isHi ? this.hiOpacity : this.alphas !== null ? this.alphas.data[4 * t]! : this.opacity);
       const tapered = this.fraction > 0 && rev.loop !== null;
-      for (const piece of rev.pieces) {
-        const o = 16 * this.pieces.n++;
-        piece.forEach((v, e) => {
-          this.geo.vertex(t, v, P, o + 3 * e);
-          this.colorAt(t, v, P, o + 6 + 4 * e);
-          const s = tapered ? clamp01(1 - (rev.loop! - vertexReading(tc!, v)) / this.fraction) : 1;
-          P[o + 9 + 4 * e] = alpha * (tapered ? this.taperOpacity + (1 - this.taperOpacity) * s : 1);
-          P[o + 14 + e] = width > 1 && tapered ? width * (this.taperWidth + (1 - this.taperWidth) * s) : width;
-        });
+      if (this.line) {
+        for (const piece of rev.pieces) {
+          const o = PIECE * this.pieces.n++;
+          piece.forEach((v, e) => {
+            this.geo.vertex(t, v, P, o + 3 * e);
+            this.colorAt(t, v, P, o + 6 + 4 * e);
+            const sv = tapered ? clamp01(1 - (rev.loop! - vertexReading(tc!, v)) / this.fraction) : 1;
+            P[o + 9 + 4 * e] = alpha * (tapered ? this.taperOpacity + (1 - this.taperOpacity) * sv : 1);
+            P[o + 14 + e] = width > 1 && tapered ? width * (this.taperWidth + (1 - this.taperWidth) * sv) : width;
+            P[o + 16 + e] = this.distAt(t, v);
+          });
+        }
       }
       if (hp !== undefined && hc !== undefined && rev.head !== null && heads < hp.count) {
         this.geo.vertex(t, rev.head, hp.array as Float32Array, 3 * heads);
         if (this.headColor !== null) (hc.array as Float32Array).set(this.headColor, 3 * heads);
         else this.colorAt(t, rev.head, hc.array as Float32Array, 3 * heads);
         heads++;
+        if (gp !== undefined && glowValues !== null) {
+          const v = rev.head;
+          // the head sits on sample k, or on k + 1 at the end of its segment, e.g. at the end of the track
+          const k = 'sample' in v ? v.sample : v.w >= 1 ? v.k + 1 : v.k;
+          if (glowValues[this.set.start(t) + k]! > 0) this.geo.vertex(t, v, gp.array as Float32Array, 3 * glows++);
+        }
       }
+      if (this.fill !== null && !rev.hidden) this.fillTrack(t, tc, rev.loop, fillVerts);
     }
     this.pieces.end();
-    if (this.heads !== null) {
-      hp!.needsUpdate = hc!.needsUpdate = true;
-      this.heads.geometry.setDrawRange(0, heads);
-    }
+    this.heads?.show(heads);
+    this.glow?.show(glows);
+    if (this.fill !== null) this.setFill(fillVerts);
     this.syncPasses(base, hi);
     this.ranges.texture.needsUpdate = true;
     this.filled = true;
     return true;
+  }
+
+  /** The vertices of the drawn polyline of track `t`, as rules L1, L2, and C6 give them, for a fill. */
+  private fillTrack(t: number, tc: TrackClock | null, loop: number | null, out: number[]): void {
+    const spec = this.spec;
+    const n = spec.laps;
+    let verts: Vertex[];
+    if (tc === null || loop === null || spec.reveal === 'none') verts = whole(this.set.count(t), n, spec.periodic);
+    else if (spec.reveal === 'grow') verts = loopPolyline(tc, 0, loop, n);
+    else verts = trailVertices(tc, loop, n, spec.fraction, spec.periodic);
+    const plane = this.planeAxes;
+    const base = this.layer.fill?.base ?? 0;
+    const p = new Float32Array(3);
+    let prev: [number, number] | null = null;
+    for (const v of verts) {
+      this.geo.vertex(t, v, p, 0);
+      const cur: [number, number] = [p[plane[0]]!, p[plane[1]]!];
+      if (prev !== null) fillSegment(prev, cur, base, out);
+      prev = cur;
+    }
+  }
+
+  /** The two axes of the plane the fill is laid out in, set by the panel's camera. */
+  planeAxes: [number, number] = [0, 1];
+
+  private setFill(verts: number[]): void {
+    const fill = this.fill!;
+    const n = verts.length / 2;
+    if (3 * n > this.fillBuffer.length) {
+      this.fillBuffer = new Float32Array(3 * Math.max(2 * n, 96));
+      fill.geometry.dispose();
+      fill.geometry = new THREE.BufferGeometry();
+      fill.geometry.setAttribute('position', new THREE.BufferAttribute(this.fillBuffer, 3).setUsage(THREE.DynamicDrawUsage));
+    }
+    const [ix, iy] = this.planeAxes;
+    this.fillBuffer.fill(0, 0, 3 * n);
+    for (let i = 0; i < n; i++) {
+      this.fillBuffer[3 * i + ix] = verts[2 * i]!;
+      this.fillBuffer[3 * i + iy] = verts[2 * i + 1]!;
+    }
+    const attr = fill.geometry.getAttribute('position') as THREE.BufferAttribute | undefined;
+    if (attr !== undefined) {
+      attr.clearUpdateRanges();
+      attr.addUpdateRange(0, 3 * n);
+      attr.needsUpdate = true;
+    }
+    fill.geometry.setDrawRange(0, n);
+    fill.visible = n > 0;
   }
 
   extend(): void {}
@@ -1260,7 +1784,7 @@ export class TrackDraw implements Draw {
   /** The colorbar of a colormapped layer, with the highlighted or single member marked on it, and the kernel's band. */
   colorbar(): Colorbar | null {
     const spec = this.color;
-    if (spec === undefined || typeof spec === 'string') return null;
+    if (spec === undefined || typeof spec === 'string' || isStepped(spec)) return null;
     const scale = colorScale(spec, this.set);
     const params = this.set.def.parameters ?? {};
     const def = scale.perTrack && Object.hasOwn(params, scale.name) ? params[scale.name] : undefined;
@@ -1284,14 +1808,154 @@ export class TrackDraw implements Draw {
     this.ranges.texture.dispose();
     this.alphas?.texture.dispose();
     this.pieces.dispose();
-    if (this.heads) {
-      this.heads.geometry.dispose();
-      (this.heads.material as THREE.Material).dispose();
+    this.heads?.dispose();
+    this.glow?.dispose();
+    if (this.fill !== null) {
+      this.fill.geometry.dispose();
+      this.fill.material.dispose();
     }
   }
 }
 
+/** Appends the triangles that shade the part of the segment from `a` to `b` above the line y = base, as x, y pairs. */
+export function fillSegment(a: [number, number], b: [number, number], base: number, out: number[]): void {
+  const [x0, y0] = a;
+  const [x1, y1] = b;
+  const up0 = y0 > base;
+  const up1 = y1 > base;
+  if (!up0 && !up1) return;
+  const quad = (xa: number, ya: number, xb: number, yb: number) => out.push(xa, base, xa, ya, xb, yb, xa, base, xb, yb, xb, base);
+  if (up0 && up1) {
+    quad(x0, y0, x1, y1);
+    return;
+  }
+  // the segment crosses the base line between its ends
+  const xc = x0 + ((base - y0) / (y1 - y0)) * (x1 - x0);
+  if (up0) out.push(x0, base, x0, y0, xc, base);
+  else out.push(xc, base, x1, y1, x1, base);
+}
+
+// points layers
+
+/** A points layer (rule K8): the drawn samples of its members as markers, from the evaluator's answer at each frame. */
+class PointsDraw implements Draw {
+  readonly key: string;
+  readonly group = new THREE.Group();
+  private readonly sprites: MarkerSprites;
+  private readonly layer: PointsLayer;
+  private readonly rgb: Rgb;
+  /** True when what the layer draws does not change with the clock. */
+  readonly isStatic: boolean;
+  private done = false;
+
+  constructor(ctx: DrawContext, layer: PointsLayer, key: string) {
+    this.key = key;
+    this.layer = layer;
+    const m = layer.marker ?? {};
+    this.rgb = hexRgb(m.color !== undefined ? themed(m.color, ctx.theme) : ctx.theme.foreground);
+    this.sprites = new MarkerSprites(themedMarker(m, ctx.theme), typeof m.size === 'number' ? m.size : 4, false);
+    this.group.add(this.sprites.points);
+    this.isStatic =
+      (layer.reveal ?? 'none') === 'none' &&
+      layer.before === undefined &&
+      layer.after === undefined &&
+      typeof m.size !== 'object' &&
+      typeof m.edge_width !== 'object' &&
+      typeof m.opacity !== 'object' &&
+      typeof layer.opacity !== 'object';
+  }
+
+  update(env: LayerEnv, plan: PointsPlan): void {
+    const s = timeAt(env.base?.clock ?? env.clock, env.q);
+    const m = this.layer.marker ?? {};
+    this.sprites.setOpacity(opacityAt(this.layer.opacity, s) * opacityAt(m.opacity, s));
+    if (typeof m.size === 'object' || typeof m.edge_width === 'object')
+      this.sprites.setSize(sizeAt(m.size, s, 4), m.edge_width === undefined ? undefined : numberAt(m.edge_width, s, 0));
+    if (this.isStatic && this.done) return;
+    const result = pointsLayer(env, this.layer, plan.set);
+    let n = 0;
+    for (const mem of result.members) n += mem.points.length;
+    this.sprites.grow(n);
+    const pos = this.sprites.position.array as Float32Array;
+    const col = this.sprites.color.array as Float32Array;
+    let i = 0;
+    for (const mem of result.members) {
+      for (const p of mem.points) {
+        pos.set(p, 3 * i);
+        col.set(this.rgb, 3 * i);
+        i++;
+      }
+    }
+    this.sprites.show(n);
+    this.done = true;
+  }
+
+  extend(box: THREE.Box3): void {
+    const a = this.sprites.position;
+    const r = this.sprites.points.geometry.drawRange;
+    for (let i = 0; i < Math.min(a.count, r.count); i++) box.expandByPoint(new THREE.Vector3(a.getX(i), a.getY(i), a.getZ(i)));
+  }
+
+  dispose(): void {
+    this.sprites.dispose();
+  }
+}
+
+// label layers
+
+/** A label layer (rule K6). It does not draw anything in GL, and the stage paints its text at the anchor that `update` finds. */
+class LabelDraw implements Draw {
+  readonly key: string;
+  readonly group = new THREE.Group();
+  readonly layer: LabelLayer;
+  /** The anchor in the display frame at the last frame, or null on the screen or when it does not resolve. */
+  at: THREE.Vector3 | null = null;
+
+  constructor(layer: LabelLayer, key: string) {
+    this.key = key;
+    this.layer = layer;
+  }
+
+  update(env: LayerEnv, plan: LabelPlan, driver: Driver): void {
+    const r = labelLayer(env, this.layer, plan.set, driver);
+    this.at = r.position === null ? null : new THREE.Vector3(...r.position);
+  }
+
+  extend(): void {}
+
+  dispose(): void {}
+}
+
 // body layers
+
+/** The textures of body images, decoded once per view of the data container and kept for the page's life. */
+const images = new WeakMap<GeometryCache, Map<string, Promise<THREE.Texture>>>();
+
+/** Decodes the image file held by a view of `uint8` bytes (section 2.11) into a texture. */
+function imageTexture(geometry: GeometryCache, view: string): Promise<THREE.Texture> {
+  let byView = images.get(geometry);
+  if (byView === undefined) images.set(geometry, (byView = new Map()));
+  let t = byView.get(view);
+  if (t === undefined) {
+    t = (async () => {
+      const bytes = geometry.bytes(view);
+      const type = bytes[0] === 0xff ? 'image/jpeg' : bytes[0] === 0x52 ? 'image/webp' : 'image/png';
+      const bitmap = await createImageBitmap(new Blob([bytes as Uint8Array<ArrayBuffer>], { type }), { imageOrientation: 'flipY' });
+      const texture = new THREE.Texture(bitmap as unknown as HTMLImageElement);
+      // Sampled pixel by pixel from one level, as matplotlib draws a photograph: an image about the size it is shown at stays as
+      // crisp as its own pixels wherever the body falls between two device pixels, where a linear blend would soften it.
+      texture.generateMipmaps = false;
+      texture.minFilter = THREE.NearestFilter;
+      texture.magFilter = THREE.NearestFilter;
+      texture.flipY = false;
+      texture.colorSpace = THREE.NoColorSpace;
+      texture.needsUpdate = true;
+      return texture;
+    })();
+    byView.set(view, t);
+  }
+  return t;
+}
 
 class BodyDraw implements Draw {
   readonly key: string;
@@ -1305,15 +1969,20 @@ class BodyDraw implements Draw {
   private readonly geometry: GeometryCache;
   private readonly scratch = new Float64Array(3);
   private capacity = 0;
+  private readonly layer: BodyLayer;
+  /** Resolves when the body's image is ready to draw, or at once for a body without an image. */
+  readonly ready: Promise<void>;
 
-  constructor(ctx: DrawContext, layer: BodyLayer, key: string) {
+  constructor(ctx: DrawContext, layer: BodyLayer, key: string, onImage: () => void = () => undefined) {
     this.key = key;
+    this.layer = layer;
     this.geometry = ctx.geometry;
     const bodies = ctx.scene.bodies ?? {};
     const body = Object.hasOwn(bodies, layer.body) ? bodies[layer.body] : undefined;
     this.label = body?.label ?? null;
     this.size = layer.size ?? BODY_SIZE;
-    const color = new THREE.Color(...hexRgb(body?.color ?? ctx.theme.foreground));
+    const color = new THREE.Color(...hexRgb(body?.color !== undefined ? themed(body.color, ctx.theme) : ctx.theme.foreground));
+    this.ready = Promise.resolve();
     const pg = new THREE.BufferGeometry();
     pg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3), 3).setUsage(THREE.DynamicDrawUsage));
     this.point = new THREE.Points(
@@ -1330,6 +1999,23 @@ class BodyDraw implements Draw {
       }),
     );
     this.point.frustumCulled = false;
+    const image = body?.image;
+    if (image !== undefined) {
+      // the image is drawn in place of the disc, once it is decoded (section 2.11)
+      const m = this.point.material as THREE.PointsMaterial;
+      m.color.setRGB(1, 1, 1);
+      m.alphaTest = 0.01;
+      m.map = null;
+      this.point.visible = false;
+      this.ready = imageTexture(ctx.geometry, image).then(
+        (t) => {
+          m.map = t;
+          m.needsUpdate = true;
+          onImage();
+        },
+        () => undefined,
+      );
+    }
     this.trail = new THREE.Line(
       new THREE.BufferGeometry(),
       new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.6, depthTest: false, depthWrite: false }),
@@ -1344,6 +2030,9 @@ class BodyDraw implements Draw {
    * and uploads only the vertices it draws.
    */
   update(env: LayerEnv, layer: BodyLayer, driver: PanelPlan['driver']): void {
+    const opacity = opacityAt(this.layer.opacity, timeAt(env.clock, env.q));
+    (this.point.material as THREE.PointsMaterial).opacity = opacity;
+    (this.trail.material as THREE.LineBasicMaterial).opacity = 0.6 * opacity;
     if (driver === null) {
       this.point.visible = false;
       this.trail.visible = false;
@@ -1358,7 +2047,7 @@ class BodyDraw implements Draw {
     const at = lapOf(loopReading, laps);
     const s = this.scratch;
     table.vertex(point(tc, at.u, false, at.lap), s);
-    this.point.visible = true;
+    this.point.visible = !this.hasImage || (this.point.material as THREE.PointsMaterial).map !== null;
     this.at = new THREE.Vector3(s[0], s[1], s[2]);
     const pa = this.point.geometry.getAttribute('position') as THREE.BufferAttribute;
     pa.setXYZ(0, s[0]!, s[1]!, s[2]!);
@@ -1391,7 +2080,20 @@ class BodyDraw implements Draw {
     if (this.at !== null) box.expandByPoint(this.at);
   }
 
+  /** Hides a body drawn as an image while its position is outside the view, as matplotlib clips an annotation box (section 2.11). */
+  clip(camera: THREE.Camera): void {
+    if (!this.hasImage || this.at === null) return;
+    const v = this.at.clone().project(camera);
+    if (Math.abs(v.x) > 1 || Math.abs(v.y) > 1) this.point.visible = false;
+  }
+
+  private get hasImage(): boolean {
+    const bodies = this.geometry.scene.bodies ?? {};
+    return Object.hasOwn(bodies, this.layer.body) && bodies[this.layer.body]!.image !== undefined;
+  }
+
   dispose(): void {
+    (this.point.material as THREE.PointsMaterial).map?.dispose();
     for (const o of [this.point, this.trail]) {
       o.geometry.dispose();
       (o.material as THREE.Material).dispose();
@@ -1417,7 +2119,9 @@ class ArrowDraw implements Draw {
     const { layer } = plan;
     const uniforms = {
       uResolution: this.resolution,
-      uColor: { value: new THREE.Vector4(...hexRgb(layer.color ?? ctx.theme.foreground), layer.opacity ?? 1) },
+      uColor: {
+        value: new THREE.Vector4(...hexRgb(themed(layer.color ?? ctx.theme.foreground, ctx.theme)), typeof layer.opacity === 'number' ? layer.opacity : 1),
+      },
       uWidth: { value: layer.width ?? 1 },
       uHead: { value: layer.head?.size ?? ARROWHEAD_SIZE },
       uHeadWidth: { value: ARROWHEAD_WIDTH },
@@ -1444,6 +2148,8 @@ class ArrowDraw implements Draw {
 
   /** Rule L7 as `arrowLayer` in evaluate/layers.ts evaluates it, on the clocks that the geometry cache keeps for the set. */
   update(env: LayerEnv, plan: ArrowPlan & { set: SetData }): void {
+    if (typeof plan.layer.opacity === 'object')
+      (this.shaft.material.uniforms.uColor!.value as THREE.Vector4).w = opacityAt(plan.layer.opacity, timeAt(env.clock, env.q));
     const clocks = this.geometry.readings(plan.set.id, plan.channel).clocks;
     const result = arrowLayer(env, plan.layer, plan.set, (t) => clocks[t]!);
     const shown = result.members.filter((m) => m.base !== null && m.tip !== null);
@@ -1535,7 +2241,7 @@ class OutlineDraw implements Draw {
   constructor(ctx: DrawContext, layer: OutlineLayer, key: string) {
     this.key = key;
     this.layer = layer;
-    const color = new THREE.Vector4(...hexRgb(layer.color ?? ctx.theme.foreground), layer.opacity ?? 1);
+    const color = new THREE.Vector4(...hexRgb(themed(layer.color ?? ctx.theme.foreground, ctx.theme)), typeof layer.opacity === 'number' ? layer.opacity : 1);
     this.mesh = new THREE.Mesh(new THREE.BufferGeometry(), material(OUTLINE_VERTEX, { uColor: { value: color } }));
     this.mesh.frustumCulled = false;
     this.mesh.visible = false;
@@ -1543,6 +2249,8 @@ class OutlineDraw implements Draw {
   }
 
   update(env: LayerEnv, driver: Driver): void {
+    if (typeof this.layer.opacity === 'object')
+      (this.mesh.material.uniforms.uColor!.value as THREE.Vector4).w = opacityAt(this.layer.opacity, timeAt(env.clock, env.q));
     this.map = outlineLayer(env, this.layer, driver);
   }
 
@@ -1608,6 +2316,8 @@ class MarkDraw implements Draw {
   readonly full: boolean;
   /** True when the mark gives tick numbers under a plane camera, i.e. for axes spanning the view or a grid with labels. */
   readonly ticks: boolean;
+  /** An axes layer with `"span": "box"`, which the stage paints around the plot rather than in GL (section 2.11). */
+  readonly box: MarkLayer | null;
   private readonly theme: Theme;
   private readonly lines: THREE.LineSegments;
   private shown = '';
@@ -1619,6 +2329,7 @@ class MarkDraw implements Draw {
     this.kind = layer.kind;
     this.theme = ctx.theme;
     const plane = cam.kind === 'plane';
+    this.box = layer.kind === 'axes' && layer.span === 'box' && plane ? layer : null;
     if (layer.kind === 'axes') {
       this.full = (layer.span ?? (plane ? 'full' : 'positive')) === 'full';
       this.ticks = plane && this.full;
@@ -1643,7 +2354,7 @@ class MarkDraw implements Draw {
   }
 
   layout(box: THREE.Box3, cam: Camera, stretch = new THREE.Vector3(1, 1, 1)): void {
-    if (this.follows) return;
+    if (this.follows || this.box !== null) return;
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
     const ext = Math.max(size.x, size.y, size.z, 1e-9);
@@ -1738,11 +2449,15 @@ const DRAG_MS = 100;
 /** How long after the last coarse rebuild the underlays are drawn again with antialiasing, in milliseconds. */
 const REFINE_MS = 150;
 
-/** A render target of `width` by `height` device pixels for copies pixel for pixel, multisampled when `samples` is above 0. */
+/**
+ * A render target of `width` by `height` device pixels for copies pixel for pixel, multisampled when `samples` is above 0. It
+ * has a stencil, for flat layers, which three attaches together with a depth buffer.
+ */
 function pixelTarget(width: number, height: number, samples: number): THREE.WebGLRenderTarget {
   return new THREE.WebGLRenderTarget(width, height, {
     samples,
-    depthBuffer: false,
+    depthBuffer: true,
+    stencilBuffer: true,
     minFilter: THREE.NearestFilter,
     magFilter: THREE.NearestFilter,
     generateMipmaps: false,
@@ -1813,7 +2528,12 @@ class PanelRender {
   plan: PanelPlan | null = null;
   error: string | null = null;
   readonly draws = new Map<number, Draw>();
+  /** The part of the panel the camera draws into, inside the view's margin, in stage pixels. */
   rect: Rect = { x: 0, y: 0, w: 1, h: 1 };
+  /** The panel's tile on the stage, margin included. */
+  outer: Rect = { x: 0, y: 0, w: 1, h: 1 };
+  /** The window of a camera with keys at the last frame, or null. */
+  window: CameraWindow | null = null;
   /** What the panel draws, as far as the fit depends on it. A change refits the camera. */
   content = '';
   needsFit = true;
@@ -1874,6 +2594,9 @@ export class StageRenderer {
    */
   private scratch: THREE.WebGLRenderTarget | null = null;
   private readonly viewport = new THREE.Vector4();
+  /** The canvas's viewport and scissor in CSS pixels, as they were set for the panel being drawn. */
+  private readonly cssViewport = new THREE.Vector4();
+  private readonly cssScissor = new THREE.Vector4();
   private readonly buffer = new THREE.Vector2();
   private readonly region = new THREE.Box2();
   private readonly corner = new THREE.Vector2();
@@ -1891,7 +2614,8 @@ export class StageRenderer {
     this.canvas = canvas;
     // colors are sRGB as the page gives them, written unconverted
     THREE.ColorManagement.enabled = false;
-    this.gl = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: options.preserveDrawingBuffer ?? false });
+    // the stencil serves flat layers (section 2.11)
+    this.gl = new THREE.WebGLRenderer({ canvas, antialias: true, stencil: true, preserveDrawingBuffer: options.preserveDrawingBuffer ?? false });
     this.cacheStatic = options.cacheStatic ?? true;
     this.coarseDrags = options.coarseDrags ?? true;
     this.blit = blitPass();
@@ -1951,6 +2675,15 @@ export class StageRenderer {
 
   refitAll(): void {
     for (const pid of this.panels.keys()) this.refit(pid);
+  }
+
+  /**
+   * Whether the viewer has panned or zoomed a panel whose camera has keys (rule K5), so that the panel no longer follows them. A
+   * refit hands the camera back to its keys.
+   */
+  offKeys(pid: string): boolean {
+    const p = this.panels.get(pid);
+    return p !== undefined && p.userMoved && p.cameraSpec.kind === 'plane' && p.cameraSpec.keys !== undefined;
   }
 
   private makeControls(p: PanelRender): void {
@@ -2021,6 +2754,11 @@ export class StageRenderer {
         this.drawCoarse(p, this.underlay, vp);
         this.scheduleRefine();
       } else this.drawFine(p, this.underlay, vp);
+      // Leaving a render target, three floors the canvas's viewport and scissor in device pixels, where setViewport and setScissor
+      // round them. At a fractional pixel ratio the rest of the panel would then be drawn a pixel shorter, and shifted by half a
+      // pixel, at every frame that draws the underlay again, hence the panel's own viewport and scissor are set once more.
+      this.gl.setViewport(this.gl.getViewport(this.cssViewport));
+      this.gl.setScissor(this.gl.getScissor(this.cssScissor));
     }
     this.blit.material.uniforms.uUnderlay!.value = this.underlay.texture;
     this.gl.render(this.blit.scene, this.blit.camera);
@@ -2032,7 +2770,7 @@ export class StageRenderer {
     target.scissor.copy(r);
     target.scissorTest = true;
     this.gl.setRenderTarget(target);
-    this.gl.clear(true, false, false);
+    this.gl.clear(true, false, true);
     this.gl.render(p.staticScene, p.camera);
     this.gl.setRenderTarget(null);
   }
@@ -2065,7 +2803,7 @@ export class StageRenderer {
     s.scissor.set(0, 0, r.z, r.w);
     s.scissorTest = true;
     this.gl.setRenderTarget(s);
-    this.gl.clear(true, false, false);
+    this.gl.clear(true, false, true);
     this.gl.render(p.staticScene, p.camera);
     this.gl.setRenderTarget(null);
     this.region.min.set(0, 0);
@@ -2114,14 +2852,17 @@ export class StageRenderer {
         let key: string;
         if (lp.kind === 'track') {
           if (lp.set === null) continue;
-          const color = lp.color === undefined ? theme : JSON.stringify(lp.color);
+          const color = `${JSON.stringify(lp.color ?? null)}\0${theme}`;
           key = `track\0${plan.viewId}\0${lp.index}\0${lp.set.id}\0${plan.display}\0${lp.channel ?? ''}\0${color}`;
         } else if (lp.kind === 'arrow') {
           if (lp.set === null) continue;
-          const look = JSON.stringify([lp.layer.color ?? theme, lp.layer.opacity, lp.layer.width, lp.layer.head]);
+          const look = JSON.stringify([lp.layer.color ?? null, theme, lp.layer.opacity, lp.layer.width, lp.layer.head]);
           key = `arrow\0${plan.viewId}\0${lp.index}\0${lp.set.id}\0${plan.display}\0${lp.channel}\0${look}`;
         } else if (lp.kind === 'outline') {
-          key = `outline\0${plan.viewId}\0${lp.index}\0${JSON.stringify([lp.layer, lp.layer.color === undefined ? theme : ''])}`;
+          key = `outline\0${plan.viewId}\0${lp.index}\0${JSON.stringify([lp.layer, theme])}`;
+        } else if (lp.kind === 'points' || lp.kind === 'label') {
+          if (lp.kind === 'points' && lp.set === null) continue;
+          key = `${lp.kind}\0${plan.viewId}\0${lp.index}\0${lp.set?.id ?? ''}\0${plan.display}\0${JSON.stringify(lp.layer)}\0${theme}`;
         } else key = `${lp.kind}\0${plan.viewId}\0${lp.index}\0${plan.display}\0${theme}`;
         keep.add(lp.index);
         const old = p.draws.get(lp.index);
@@ -2142,8 +2883,15 @@ export class StageRenderer {
               : lp.kind === 'outline'
                 ? new OutlineDraw(this.ctx, lp.layer, key)
                 : lp.kind === 'body'
-                  ? new BodyDraw(this.ctx, lp.layer, key)
-                  : new MarkDraw(this.ctx, lp.layer, p.cameraSpec, key);
+                  ? new BodyDraw(this.ctx, lp.layer, key, () => {
+                      p.underlayDirty = true;
+                      this.onChange();
+                    })
+                  : lp.kind === 'points'
+                    ? new PointsDraw(this.ctx, lp.layer, key)
+                    : lp.kind === 'label'
+                      ? new LabelDraw(lp.layer, key)
+                      : new MarkDraw(this.ctx, lp.layer, p.cameraSpec, key);
         // layers stack in their order, and within a layer its objects in the order they were added
         draw.group.renderOrder = lp.index;
         let k = 0;
@@ -2188,15 +2936,19 @@ export class StageRenderer {
     const scene = this.ctx.scene;
     const env: LayerEnv = { scope: plan.scope, frames: this.ctx.geometry.frames, clock: scene.clock, channel: state.clock.channel, q, display: plan.display };
     p.error = null;
+    const axes = p.cameraSpec.kind === 'plane' ? planeAxes(p.cameraSpec) : ([0, 1] as [number, number]);
     try {
       for (const lp of plan.layers) {
         const d = p.draws.get(lp.index);
         if (d instanceof TrackDraw && lp.kind === 'track') {
+          d.planeAxes = axes;
           if (d.update(lp, scene, q) && d.isStatic) p.underlayDirty = true;
           if (d.driverContext) d.place(env, plan.driver);
-        } else if (d instanceof ArrowDraw && lp.kind === 'arrow') d.update(env, lp as ArrowPlan & { set: SetData });
+        } else if (d instanceof ArrowDraw && lp.kind === 'arrow') d.update(layerEnv(env, lp.layer), lp as ArrowPlan & { set: SetData });
         else if (d instanceof OutlineDraw && lp.kind === 'outline') d.update(env, plan.driver);
         else if (d instanceof BodyDraw && lp.kind === 'body') d.update(env, lp.layer, plan.driver);
+        else if (d instanceof PointsDraw && lp.kind === 'points') d.update(layerEnv(env, lp.layer), lp);
+        else if (d instanceof LabelDraw && lp.kind === 'label') d.update(env, lp, plan.driver);
       }
     } catch (e) {
       if (!(e instanceof TychoError)) throw e;
@@ -2209,7 +2961,7 @@ export class StageRenderer {
     const box = new THREE.Box3();
     const b = p.plan === null ? null : fitBox(p.plan, this.ctx.geometry);
     if (b !== null) box.set(new THREE.Vector3(b[0], b[1], b[2]), new THREE.Vector3(b[3], b[4], b[5]));
-    else for (const d of p.draws.values()) if (d instanceof BodyDraw && d.group.visible) d.extend(box);
+    else for (const d of p.draws.values()) if ((d instanceof BodyDraw && d.group.visible) || d instanceof PointsDraw) d.extend(box);
     if (box.isEmpty()) box.set(new THREE.Vector3(-1, -1, -1), new THREE.Vector3(1, 1, 1));
     const spec = p.cameraSpec;
     // the camera sees the box as stretched by the scale of the panel's scenes
@@ -2305,7 +3057,8 @@ export class StageRenderer {
       this.gl.setSize(w, h, false);
       this.size = { w, h, ratio: pixelRatio };
     }
-    const tiles = tile(state.layout, { x: 0, y: 0, w, h }, GUTTER);
+    const s = timeAt(this.ctx.scene.clock, q);
+    const tiles = tile(layoutAt(state.layout, s), { x: 0, y: 0, w, h }, GUTTER);
     for (const p of [...this.panels.values()]) if (!Object.hasOwn(state.panels, p.id)) this.disposePanel(p);
     const replan = state !== this.lastState;
     this.lastState = state;
@@ -2316,25 +3069,37 @@ export class StageRenderer {
     this.gl.clear();
     this.gl.setScissorTest(true);
     // every camera is moved before any panel is drawn, since an outline on one panel shows what another panel's camera shows at this frame
-    for (const [pid, rect] of tiles.panels) {
+    for (const [pid, outer] of tiles.panels) {
       const p = this.panel(pid);
       const replanned = replan || p.plan === null;
       if (replanned) this.replan(p, state);
+      const rect = inset(outer, p.plan?.view.margin);
       const resized = rect.w !== p.rect.w || rect.h !== p.rect.h;
+      p.outer = outer;
       p.rect = rect;
       this.advance(p, state, q);
       if (p.needsFit || (resized && !p.userMoved)) this.fit(p);
       else if (resized) this.aspect(p);
+      this.keyed(p, state, q);
       this.turn(p, q);
       this.follow(p);
+      for (const d of p.draws.values()) if (d instanceof BodyDraw) d.clip(p.camera);
+      const ortho = p.camera instanceof THREE.OrthographicCamera ? p.camera : null;
+      const across = ortho === null ? 1 : p.rect.w / Math.max(1e-12, (ortho.right - ortho.left) / ortho.zoom);
+      const up = ortho === null ? 1 : p.rect.h / Math.max(1e-12, (ortho.top - ortho.bottom) / ortho.zoom);
+      for (const d of p.draws.values()) if (d instanceof TrackDraw) d.setPixels(across, up);
+      // a dash pattern starts where its track enters the stage, widened by one device pixel, as matplotlib clips a line to its figure
+      for (const d of p.draws.values()) if (d instanceof TrackDraw) d.placeDash(p.camera, p.rect, w, h, 1 / pixelRatio);
     }
-    for (const [pid, rect] of tiles.panels) {
+    for (const [pid] of tiles.panels) {
       const p = this.panel(pid);
+      const rect = p.rect;
       if (p.error !== null) {
         errors.set(pid, p.error);
         continue;
       }
-      if (rect.w < 1 || rect.h < 1) continue;
+      // a view faded out entirely is not drawn, rather than drawn under a cover whose edge may fall between two device pixels
+      if (rect.w < 1 || rect.h < 1 || opacityAt(p.plan?.view.opacity, s) <= 0) continue;
       for (const d of p.draws.values()) d.resize?.(rect.w, rect.h);
       for (const d of p.draws.values()) if (d instanceof OutlineDraw) d.place(p, d.target === null ? undefined : this.panels.get(d.target));
       const y = h - rect.y - rect.h;
@@ -2364,12 +3129,14 @@ export class StageRenderer {
     const names = frame?.axes ?? ['x', 'y', 'z'];
     const { normal } = cameraBasis(p.cameraSpec);
     const k = stretchOf(p.cameraSpec);
+    const ox = p.rect.x - p.outer.x;
+    const oy = p.rect.y - p.outer.y;
     const add = (text: string, at: THREE.Vector3, dx: number, hide: boolean): Item => {
       const s = at.clone().multiply(k).project(p.camera);
       const x = ((s.x + 1) / 2) * p.rect.w + dx;
       const y = ((1 - s.y) / 2) * p.rect.h;
       const inside = s.z > -1 && s.z < 1 && x >= 0 && x <= p.rect.w && y >= 0 && y <= p.rect.h;
-      const item = { text, x, y, hidden: hide || !inside };
+      const item = { text, x: x + ox, y: y + oy, hidden: hide || !inside };
       items.push(item);
       return item;
     };
@@ -2380,13 +3147,13 @@ export class StageRenderer {
       const axes = marks.some((d) => d.follows && d.kind === 'axes');
       const ticks = marks.some((d) => d.ticks);
       for (const l of planeLabels(p.view, ticks, axes ? [title(ix), title(iy)] : null)) {
-        const item = { ...l, hidden: false };
+        const item = { ...l, x: l.x + ox, y: l.y + oy, hidden: false };
         items.push(item);
         if (l.kind === 'title') titles.push(item);
       }
     }
     for (const d of p.draws.values()) {
-      if (d instanceof MarkDraw && d.kind === 'axes' && !d.follows) {
+      if (d instanceof MarkDraw && d.kind === 'axes' && !d.follows && d.box === null) {
         d.tips.forEach((tip, i) => {
           const name = names[i] ?? '';
           const factor = k.getComponent(i);
@@ -2442,6 +3209,115 @@ export class StageRenderer {
     });
   }
 
+  /**
+   * Moves a plane camera with keys to its window at progress `q` (rule K5), unless the viewer has moved the camera since its
+   * last fit. The window's height is its own under a free aspect, and the width over the panel's aspect ratio otherwise.
+   */
+  private keyed(p: PanelRender, state: State, q: number): void {
+    const spec = p.cameraSpec;
+    p.window = null;
+    if (spec.kind !== 'plane' || spec.keys === undefined || p.plan === null || p.userMoved || !(p.camera instanceof THREE.OrthographicCamera)) return;
+    const scene = this.ctx.scene;
+    const env: LayerEnv = {
+      scope: p.plan.scope,
+      frames: this.ctx.geometry.frames,
+      clock: scene.clock,
+      channel: state.clock.channel,
+      q,
+      display: p.plan.display,
+    };
+    let win: CameraWindow | null;
+    try {
+      win = cameraAt(env, p.plan.view, this.ctx.geometry.sets, p.plan.driver);
+    } catch (e) {
+      if (!(e instanceof TychoError)) throw e;
+      p.error = e.message;
+      return;
+    }
+    if (win === null) return;
+    p.window = win;
+    const cam = p.camera;
+    const { right, up, normal } = cameraBasis(spec);
+    const aspect = p.rect.w / Math.max(1, p.rect.h);
+    const hw = win.width / 2;
+    const hh = win.height !== null ? win.height / 2 : hw / aspect;
+    // the camera keeps its depth along the normal, and moves in the plane to the window's center
+    const depth = cam.position.dot(normal);
+    const center = right.clone().multiplyScalar(win.center[0]).addScaledVector(up, win.center[1]);
+    const target = center.clone().addScaledVector(normal, p.target.dot(normal));
+    p.fitting = true;
+    p.halfWidth = hw;
+    p.halfHeight = hh;
+    cam.left = -hw;
+    cam.right = hw;
+    cam.top = hh;
+    cam.bottom = -hh;
+    cam.zoom = 1;
+    cam.position.copy(center).addScaledVector(normal, depth);
+    cam.up.copy(up);
+    cam.lookAt(target);
+    cam.updateProjectionMatrix();
+    p.target.copy(target);
+    if (p.controls) {
+      p.controls.target.copy(target);
+      p.controls.update();
+    }
+    p.fitting = false;
+  }
+
+  /** Resolves once every body image of the drawn panels is decoded, so that a video does not start without them. */
+  async ready(): Promise<void> {
+    const waits: Promise<void>[] = [];
+    for (const p of this.panels.values()) for (const d of p.draws.values()) if (d instanceof BodyDraw) waits.push(d.ready);
+    await Promise.all(waits);
+  }
+
+  /** What the stage paints over a panel at the last frame (section 2.11), in stage pixels, or null for a panel that is not drawn. */
+  paintInfo(pid: string): PanelPaint | null {
+    const p = this.panels.get(pid);
+    if (p === undefined || p.plan === null || p.error !== null) return null;
+    const scene = this.ctx.scene;
+    const k = stretchOf(p.cameraSpec);
+    const project = (at: THREE.Vector3): [number, number] | null => {
+      const v = at.clone().multiply(k).project(p.camera);
+      if (!(v.z > -1 && v.z < 1)) return null;
+      return [p.rect.x + ((v.x + 1) / 2) * p.rect.w, p.rect.y + ((1 - v.y) / 2) * p.rect.h];
+    };
+    const labels: PanelPaint['labels'] = [];
+    let box: PanelPaint['box'] = null;
+    let boxTitles: PanelPaint['boxTitles'];
+    for (const lp of p.plan.layers) {
+      const d = p.draws.get(lp.index);
+      if (d instanceof LabelDraw) {
+        const at = d.layer.at as { screen?: [number, number] };
+        let xy: [number, number] | null;
+        const screen = at !== null && typeof at === 'object' && 'screen' in at && at.screen !== undefined;
+        if (screen) xy = [p.rect.x + at.screen![0] * p.rect.w, p.rect.y + at.screen![1] * p.rect.h];
+        else xy = d.at === null ? null : project(d.at);
+        if (xy !== null) labels.push({ layer: d.layer, x: xy[0], y: xy[1], clip: !screen });
+      } else if (d instanceof MarkDraw && d.box !== null && p.view !== null && p.cameraSpec.kind === 'plane') {
+        const frame = scene.frames[p.plan.display];
+        const names = frame?.axes ?? ['', '', ''];
+        const [ix, iy] = planeAxes(p.cameraSpec);
+        const title = (i: number) => (names[i] && frame?.unit ? `${names[i]} [${frame.unit}]` : (names[i] ?? ''));
+        const ticks = (d.box as { ticks?: string[] }).ticks ?? ['x', 'y'];
+        box = {
+          rect: p.rect,
+          x0: p.view.x0,
+          x1: p.view.x1,
+          y0: p.view.y0,
+          y1: p.view.y1,
+          ticks: { x: ticks.includes('x'), y: ticks.includes('y') },
+          size: (d.box as { size?: number }).size ?? TICK_SIZE,
+          titles: [title(ix), title(iy)],
+          opacity: d.box.opacity,
+        };
+        boxTitles = (d.box as { titles?: PanelPaint['boxTitles'] }).titles;
+      }
+    }
+    return { outer: p.outer, rect: p.rect, opacity: p.plan.view.opacity, labels, box, ...(boxTitles !== undefined ? { boxTitles } : {}) };
+  }
+
   dispose(): void {
     for (const p of [...this.panels.values()]) this.disposePanel(p);
     if (this.refineTimer !== null) clearTimeout(this.refineTimer);
@@ -2453,4 +3329,37 @@ export class StageRenderer {
     // free the context now rather than at collection, since a page may hold only a few
     this.gl.forceContextLoss();
   }
+}
+
+/** What the stage paints over a panel (section 2.11): its labels at their anchors, the box of an axes layer, and the view's opacity. */
+export interface PanelPaint {
+  outer: Rect;
+  rect: Rect;
+  opacity: View['opacity'];
+  /** The titles of the box's axes layer, when it gives its own (section 2.11). */
+  boxTitles?: MarkLayer extends never ? never : Extract<MarkLayer, { kind: 'axes' }>['titles'];
+  /** The labels at their anchors, `clip` for an anchor at a point, which is hidden outside the plot. */
+  labels: { layer: LabelLayer; x: number; y: number; clip: boolean }[];
+  /** The box of an axes layer, with the opacity of the layer, which the stage reads at the time of the timeline. */
+  box: (Omit<BoxPaint, 'opacity'> & { opacity: MarkLayer['opacity'] }) | null;
+}
+
+/** A rectangle less a view's margin, given as fractions of its height and width (section 2.11). */
+export function inset(r: Rect, margin: View['margin']): Rect {
+  if (margin === undefined) return r;
+  const l = Math.round((margin.left ?? 0) * r.w);
+  const rt = Math.round((margin.right ?? 0) * r.w);
+  const t = Math.round((margin.top ?? 0) * r.h);
+  const b = Math.round((margin.bottom ?? 0) * r.h);
+  return { x: r.x + l, y: r.y + t, w: Math.max(0, r.w - l - rt), h: Math.max(0, r.h - t - b) };
+}
+
+/** The layout at time `s` of the timeline, each split with keys at the ratio its tween gives then, clamped into [0, 1] (section 2.11). */
+export function layoutAt(layout: Layout, s: number): Layout {
+  if (layout.kind === 'panel') return layout;
+  const a = layoutAt(layout.a, s);
+  const b = layoutAt(layout.b, s);
+  const ratio = layout.keys === undefined ? layout.ratio : Math.min(1, Math.max(0, tweenValue(layout.keys as Key[], s)));
+  if (a === layout.a && b === layout.b && ratio === layout.ratio) return layout;
+  return { ...layout, ratio, a, b };
 }

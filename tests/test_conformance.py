@@ -60,7 +60,10 @@ def compare(actual, expected, tol, where="$"):
             assert set(expected) <= set(actual), f"{where}: missing panels {set(expected) - set(actual)}"
         elif where.startswith("$.panels.") and where.count(".") == 2:
             assert set(expected) <= set(actual), f"{where}: keys {sorted(actual)} != {sorted(expected)}"
-            assert set(actual) <= {"frame", "layers"}, f"{where}: keys {sorted(actual)} != {sorted(expected)}"
+            assert set(actual) <= {"frame", "layers", "camera"}, f"{where}: keys {sorted(actual)} != {sorted(expected)}"
+            assert ("camera" in actual) == ("camera" in expected) or "layers" not in expected, (
+                f"{where}: keys {sorted(actual)} != {sorted(expected)}"
+            )
         else:
             assert set(actual) == set(expected), f"{where}: keys {sorted(actual)} != {sorted(expected)}"
         for k, e in expected.items():

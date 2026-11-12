@@ -64,6 +64,16 @@ export type Variable =
       scope?: 'scene' | 'panel';
     };
 /**
+ * @minItems 1
+ *
+ * This interface was referenced by `Scene`'s JSON-Schema
+ * via the `definition` "keys".
+ */
+export type Keys = [
+  [number | string, number | string] | [number | string, number | string, number | string],
+  ...([number | string, number | string] | [number | string, number | string, number | string])[]
+];
+/**
  * This interface was referenced by `Scene`'s JSON-Schema
  * via the `definition` "camera".
  */
@@ -72,6 +82,69 @@ export type Camera =
       kind: 'plane';
       plane?: 'xy' | 'xz' | 'yz';
       aspect?: 'equal' | 'free';
+      /**
+       * @minItems 1
+       */
+      keys?: [
+        {
+          at: number;
+          width: number;
+          height?: number;
+          /**
+           * @minItems 2
+           * @maxItems 2
+           */
+          center?: [number, number];
+          /**
+           * @minItems 1
+           */
+          follow?: [
+            {
+              layer: number;
+              member: number;
+            },
+            ...{
+              layer: number;
+              member: number;
+            }[]
+          ];
+          /**
+           * @minItems 2
+           * @maxItems 2
+           */
+          offset?: [number, number];
+          ease?: Ease;
+        },
+        ...{
+          at: number;
+          width: number;
+          height?: number;
+          /**
+           * @minItems 2
+           * @maxItems 2
+           */
+          center?: [number, number];
+          /**
+           * @minItems 1
+           */
+          follow?: [
+            {
+              layer: number;
+              member: number;
+            },
+            ...{
+              layer: number;
+              member: number;
+            }[]
+          ];
+          /**
+           * @minItems 2
+           * @maxItems 2
+           */
+          offset?: [number, number];
+          ease?: Ease;
+        }[]
+      ];
     }
   | {
       kind: 'orbit';
@@ -84,6 +157,11 @@ export type Camera =
       stretch?: [number, number, number];
       turn?: number;
     };
+/**
+ * This interface was referenced by `Scene`'s JSON-Schema
+ * via the `definition` "ease".
+ */
+export type Ease = 'linear' | 'smooth' | 'in' | 'out' | 'in-out' | 'hold';
 /**
  * This interface was referenced by `Scene`'s JSON-Schema
  * via the `definition` "setQuery".
@@ -117,14 +195,24 @@ export type Layer =
         | boolean
         | {
             color?: Color;
-            size?: number;
+            size?: Size;
+            shape?: 'disc' | 'ring' | 'square' | 'diamond' | 'triangle' | 'star' | 'cross' | 'plus';
+            edge?: Color;
+            edge_width?: number | Tween;
+            opacity?: Opacity;
+            glow?: {
+              channel: Name;
+              color?: Color;
+              size?: number;
+              opacity?: number;
+            };
           };
       before?: 'clamp' | 'hidden';
       after?: 'clamp' | 'hidden';
       context?: 'own' | 'driver';
       fit?: boolean;
       color?: ColorSpec;
-      opacity?: number;
+      opacity?: Opacity;
       width?: number;
       highlight?: {
         var: Id;
@@ -136,6 +224,19 @@ export type Layer =
         };
       };
       visible?: VarRef;
+      clock?: LayerClock;
+      line?: boolean;
+      flat?: boolean;
+      /**
+       * @minItems 2
+       * @maxItems 2
+       */
+      dash?: [number, number];
+      fill?: {
+        base?: number;
+        color?: Color;
+        opacity?: number;
+      };
     }
   | {
       kind: 'arrow';
@@ -150,18 +251,19 @@ export type Layer =
       before?: 'clamp' | 'hidden';
       after?: 'clamp' | 'hidden';
       color?: Color;
-      opacity?: number;
+      opacity?: Opacity;
       width?: number;
       head?: {
         size?: number;
       };
       visible?: VarRef;
+      clock?: LayerClock;
     }
   | {
       kind: 'outline';
       view: Id;
       color?: Color;
-      opacity?: number;
+      opacity?: Opacity;
       width?: number;
       /**
        * @minItems 2
@@ -177,15 +279,64 @@ export type Layer =
       trail?: Trail;
       size?: number;
       visible?: VarRef;
+      opacity?: Opacity;
     }
   | {
       kind: 'axes';
-      span?: 'positive' | 'full';
+      span?: 'positive' | 'full' | 'box';
       visible?: VarRef;
+      ticks?: ('x' | 'y')[];
+      size?: number;
+      opacity?: Opacity;
+      /**
+       * @minItems 2
+       * @maxItems 2
+       */
+      titles?: [Text, Text];
     }
   | {
       kind: 'grid';
       labels?: boolean;
+      visible?: VarRef;
+      opacity?: Opacity;
+    }
+  | {
+      kind: 'label';
+      text: Text;
+      at: Anchor;
+      /**
+       * @minItems 2
+       * @maxItems 2
+       */
+      offset?: [number, number];
+      align?: 'start' | 'center' | 'end';
+      baseline?: 'top' | 'middle' | 'bottom' | 'alphabetic';
+      size?: number;
+      color?: Color;
+      weight?: 'normal' | 'bold';
+      linespacing?: number;
+      box?: Box;
+      opacity?: Opacity;
+      leader?:
+        | boolean
+        | {
+            color?: Color;
+            width?: number;
+          };
+      clock?: LayerClock;
+      visible?: VarRef;
+    }
+  | {
+      kind: 'points';
+      sets: SetQuery;
+      members: MemberRef;
+      marker?: Marker;
+      reveal?: 'none' | 'grow';
+      before?: 'clamp' | 'hidden';
+      after?: 'clamp' | 'hidden';
+      clock?: LayerClock;
+      fit?: boolean;
+      opacity?: Opacity;
       visible?: VarRef;
     };
 /**
@@ -201,6 +352,16 @@ export type MemberRef =
       count: number;
     }
   | VarRef;
+/**
+ * This interface was referenced by `Scene`'s JSON-Schema
+ * via the `definition` "size".
+ */
+export type Size = number | Tween;
+/**
+ * This interface was referenced by `Scene`'s JSON-Schema
+ * via the `definition` "opacity".
+ */
+export type Opacity = number | Tween;
 /**
  * This interface was referenced by `Scene`'s JSON-Schema
  * via the `definition` "colorSpec".
@@ -234,12 +395,121 @@ export type ColorSpec =
        * @maxItems 2
        */
       clip?: [number, number];
+    }
+  | {
+      channel: Name;
+      /**
+       * @minItems 1
+       */
+      steps: [number, ...number[]];
+      /**
+       * @minItems 2
+       */
+      colors: [Color, Color, ...Color[]];
     };
 /**
  * This interface was referenced by `Scene`'s JSON-Schema
  * via the `definition` "colormapName".
  */
 export type ColormapName = 'viridis' | 'plasma' | 'cividis' | 'blues' | 'reds';
+/**
+ * This interface was referenced by `Scene`'s JSON-Schema
+ * via the `definition` "text".
+ */
+export type Text = string | TextPart[];
+/**
+ * This interface was referenced by `Scene`'s JSON-Schema
+ * via the `definition` "textPart".
+ */
+export type TextPart =
+  | string
+  | {
+      var: Id;
+      digits?: number;
+      decimals?: number;
+      grouping?: boolean;
+      factor?: number;
+      offset?: number;
+      width?: number;
+    }
+  | {
+      member: Name;
+      digits?: number;
+      decimals?: number;
+      grouping?: boolean;
+      factor?: number;
+      offset?: number;
+      width?: number;
+    }
+  | {
+      attr: Name;
+      digits?: number;
+      decimals?: number;
+      grouping?: boolean;
+      factor?: number;
+      offset?: number;
+      width?: number;
+    }
+  | {
+      channel: Name;
+      digits?: number;
+      decimals?: number;
+      grouping?: boolean;
+      factor?: number;
+      offset?: number;
+      width?: number;
+    }
+  | {
+      clock: 'index' | 'steps' | 'value' | 'time';
+      digits?: number;
+      decimals?: number;
+      grouping?: boolean;
+      factor?: number;
+      offset?: number;
+      width?: number;
+    }
+  | {
+      keys: Keys;
+      digits?: number;
+      decimals?: number;
+      grouping?: boolean;
+      factor?: number;
+      offset?: number;
+      width?: number;
+    }
+  | {
+      steps: [number | string, number | string][];
+    }
+  | {
+      sub: string;
+    }
+  | {
+      sup: string;
+    };
+/**
+ * This interface was referenced by `Scene`'s JSON-Schema
+ * via the `definition` "anchor".
+ */
+export type Anchor =
+  | {
+      /**
+       * @minItems 3
+       * @maxItems 3
+       */
+      point: [number, number, number];
+      frame?: Id;
+    }
+  | {
+      sets: SetQuery;
+      member: number;
+    }
+  | {
+      /**
+       * @minItems 2
+       * @maxItems 2
+       */
+      screen: [number, number];
+    };
 /**
  * This interface was referenced by `Scene`'s JSON-Schema
  * via the `definition` "control".
@@ -274,10 +544,78 @@ export type Layout =
       ratio: number;
       a: Layout;
       b: Layout;
+      keys?: Keys;
+    };
+/**
+ * This interface was referenced by `Scene`'s JSON-Schema
+ * via the `definition` "overlay".
+ */
+export type Overlay =
+  | {
+      kind: 'text';
+      text: Text;
+      /**
+       * @minItems 2
+       * @maxItems 2
+       */
+      at: [number, number];
+      align?: 'start' | 'center' | 'end';
+      baseline?: 'top' | 'middle' | 'bottom' | 'alphabetic';
+      size?: number;
+      color?: Color;
+      weight?: 'normal' | 'bold';
+      linespacing?: number;
+      box?: Box;
+      opacity?: Opacity;
+    }
+  | {
+      kind: 'legend';
+      /**
+       * @minItems 2
+       * @maxItems 2
+       */
+      at: [number, number];
+      entries: {
+        label:
+          | string
+          | (
+              | string
+              | {
+                  sub: string;
+                }
+              | {
+                  sup: string;
+                }
+            )[];
+        line?: {
+          color?: Color;
+          width?: number;
+          /**
+           * @minItems 2
+           * @maxItems 2
+           */
+          dash?: [number, number];
+          opacity?: number;
+        };
+        marker?: Marker;
+        /**
+         * @minItems 1
+         */
+        colors?: [Color, ...Color[]];
+      }[];
+      columns?: number;
+      size?: number;
+      color?: Color;
+      align?: 'start' | 'center' | 'end';
+      baseline?: 'top' | 'middle' | 'bottom' | 'alphabetic';
+      opacity?: Opacity;
+      handle_length?: number;
+      handle_pad?: number;
+      column_spacing?: number;
     };
 
 /**
- * Structure of scene.tys, version 0.3. The rules that this schema cannot express are in tycho-scene.md.
+ * Structure of scene.tys, version 0.4. The rules that this schema cannot express are in tycho-scene.md.
  */
 export interface Scene {
   format: 'tycho-scene';
@@ -305,6 +643,12 @@ export interface Scene {
   controls?: Control[];
   readouts?: Readout[];
   initial: State;
+  stages?: {
+    id: Id;
+    at: number;
+    label?: string;
+  }[];
+  overlays?: Overlay[];
 }
 /**
  * This interface was referenced by `Scene`'s JSON-Schema
@@ -314,6 +658,8 @@ export interface Theme {
   background?: Color;
   foreground?: Color;
   grid?: Color;
+  font?: string;
+  gutter?: Color;
 }
 /**
  * This interface was referenced by `Scene`'s JSON-Schema
@@ -364,6 +710,7 @@ export interface Body {
   frame: Id;
   position: Point;
   color?: Color;
+  image?: Name;
 }
 /**
  * This interface was referenced by `Scene`'s JSON-Schema
@@ -420,6 +767,8 @@ export interface Clock {
   range?: [number, number];
   laps?: number;
   seconds?: number;
+  keys?: Keys;
+  end?: 'loop' | 'stop';
 }
 /**
  * This interface was referenced by `Scene`'s JSON-Schema
@@ -431,6 +780,13 @@ export interface View {
   camera?: Camera;
   driver: Driver;
   layers: Layer[];
+  opacity?: Opacity;
+  margin?: {
+    top?: number;
+    right?: number;
+    bottom?: number;
+    left?: number;
+  };
 }
 /**
  * This interface was referenced by `Scene`'s JSON-Schema
@@ -464,6 +820,13 @@ export interface Trail {
 }
 /**
  * This interface was referenced by `Scene`'s JSON-Schema
+ * via the `definition` "tween".
+ */
+export interface Tween {
+  keys: Keys;
+}
+/**
+ * This interface was referenced by `Scene`'s JSON-Schema
  * via the `definition` "colormapByChoice".
  */
 export interface ColormapByChoice {
@@ -474,34 +837,48 @@ export interface ColormapByChoice {
 }
 /**
  * This interface was referenced by `Scene`'s JSON-Schema
+ * via the `definition` "layerClock".
+ */
+export interface LayerClock {
+  channel: Name;
+  /**
+   * @minItems 2
+   * @maxItems 2
+   */
+  range?: [number, number];
+  keys?: Keys;
+}
+/**
+ * This interface was referenced by `Scene`'s JSON-Schema
+ * via the `definition` "box".
+ */
+export interface Box {
+  fill?: Color;
+  edge?: Color;
+  edge_width?: number;
+  pad?: number;
+  radius?: number;
+  opacity?: number;
+}
+/**
+ * This interface was referenced by `Scene`'s JSON-Schema
+ * via the `definition` "marker".
+ */
+export interface Marker {
+  shape?: 'disc' | 'ring' | 'square' | 'diamond' | 'triangle' | 'star' | 'cross' | 'plus';
+  size?: Size;
+  color?: Color;
+  edge?: Color;
+  edge_width?: number | Tween;
+  opacity?: Opacity;
+}
+/**
+ * This interface was referenced by `Scene`'s JSON-Schema
  * via the `definition` "readout".
  */
 export interface Readout {
   place: 'caption' | 'panel';
-  parts: (
-    | string
-    | {
-        var: Id;
-        digits?: number;
-      }
-    | {
-        member: Name;
-        digits?: number;
-      }
-    | {
-        attr: Name;
-        factor?: number;
-        offset?: number;
-        digits?: number;
-      }
-    | {
-        channel: Name;
-        digits?: number;
-      }
-    | {
-        clock: 'index' | 'steps';
-      }
-  )[];
+  parts: TextPart[];
 }
 /**
  * This interface was referenced by `Scene`'s JSON-Schema

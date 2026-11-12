@@ -2,7 +2,7 @@
 // stand-in of dom-shim.ts, without a renderer, since WebGL is not available under Node.
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { chromeTokens, colormapName, cssColorHex, DEFAULT_THEME, hostTheme, PALETTES } from '../src/runtime/colors';
+import { chromeTokens, colormapName, cssColorHex, DEFAULT_THEME, hostTheme, PALETTES, themed } from '../src/runtime/colors';
 import { buildChip, buildReadout, dropText, fillReadout, TychoViewerElement } from '../src/runtime/element';
 import { GeometryCache } from '../src/runtime/geometry';
 import { GLYPHS, icon } from '../src/runtime/icons';
@@ -21,6 +21,7 @@ import {
   stopAt,
 } from '../src/runtime/readouts';
 import { mergeColorbars, type Colorbar } from '../src/runtime/overlay';
+import { loopSeconds } from '../src/evaluate/timeline';
 import { chipMenu, withAdd, withPlacement } from '../src/runtime/state';
 import type { Control, Readout, Scene, State } from '../src/scene';
 import { validate } from '../src/validate';
@@ -74,6 +75,11 @@ describe('readout tiles', () => {
     expect(pieces).toHaveLength(parts.length);
     expect(pieces.join('')).toBe(readoutText(ctx, parts));
     expect(readoutPieces({ ...ctx, panel: 'nope' }, parts)).toEqual([]);
+  });
+  it('pad the frame index and the step count to the width of the part (rule K7)', () => {
+    const c = loadCorpus('two-panels');
+    const ctx = { scene: c.scene, geometry: new GeometryCache(c.scene, c.data), state: c.scene.initial, panel: 'p1', frameIndex: 3 };
+    expect(readoutText(ctx, [{ clock: 'index', width: 4 }, '/', { clock: 'steps', width: 6 }])).toBe(`   3/${String(c.scene.clock.steps).padStart(6)}`);
   });
 });
 
@@ -297,6 +303,17 @@ describe('chip menus', () => {
       b: { kind: 'panel', id: 'p3' },
     });
     expect(withPlacement(scene, st, { kind: 'add' }, payload, 2, () => false)).toBe(st);
+  });
+});
+
+describe('the DOM stand-in', () => {
+  it('cancels on uninstall the timers that were set through its window, which would fire without a window', async () => {
+    const { uninstall } = installDom();
+    const fired = vi.fn();
+    window.setTimeout(fired, 0);
+    uninstall();
+    await new Promise((done) => setTimeout(done, 5));
+    expect(fired).not.toHaveBeenCalled();
   });
 });
 
@@ -654,13 +671,18 @@ describe('a viewer embedded on a page, under a DOM stand-in', () => {
     it('takes a palette in place of the scene theme, and a custom property of the host over both', () => {
       const none = () => '';
       const scene = { background: '#102030', foreground: '#405060', grid: '#708090' };
-      expect(hostTheme(scene, null, none)).toEqual(scene);
-      expect(hostTheme(scene, 'sepia', none)).toEqual(scene);
-      expect(hostTheme(scene, 'dark', none)).toEqual({ background: '#050505', foreground: '#f2f2ef', grid: '#232320' });
-      expect(hostTheme(scene, 'light', none)).toEqual({ background: '#faf8f3', foreground: '#141413', grid: '#e3e0d8' });
+      // the theme keeps the scene's own foreground and background, which the colors equal to them follow
+      const own = { sceneForeground: '#405060', sceneBackground: '#102030' };
+      expect(hostTheme(scene, null, none)).toEqual({ ...scene, ...own });
+      expect(hostTheme(scene, 'sepia', none)).toEqual({ ...scene, ...own });
+      expect(hostTheme(scene, 'dark', none)).toEqual({ background: '#050505', foreground: '#f2f2ef', grid: '#232320', ...own });
+      expect(hostTheme(scene, 'light', none)).toEqual({ background: '#faf8f3', foreground: '#141413', grid: '#e3e0d8', ...own });
       const set = (p: string) => (p === '--tycho-grid' ? ' #ABC ' : '');
-      expect(hostTheme(scene, 'light', set)).toEqual({ ...PALETTES.light, grid: '#aabbcc' });
-      expect(hostTheme(scene, null, set)).toEqual({ ...scene, grid: '#aabbcc' });
+      expect(hostTheme(scene, 'light', set)).toEqual({ ...PALETTES.light, grid: '#aabbcc', ...own });
+      expect(hostTheme(scene, null, set)).toEqual({ ...scene, grid: '#aabbcc', ...own });
+      expect(themed('#405060', hostTheme(scene, 'dark', none))).toBe('#f2f2ef');
+      expect(themed('#102030', hostTheme(scene, 'dark', none))).toBe('#050505');
+      expect(themed('#123456', hostTheme(scene, 'dark', none))).toBe('#123456');
     });
     it('reads a form of a color it cannot parse only through a canvas, and ignores what is not a color', () => {
       expect(cssColorHex('#AbCdEf')).toBe('#abcdef');
@@ -674,7 +696,7 @@ describe('a viewer embedded on a page, under a DOM stand-in', () => {
       const accent = host.style['--accent'];
       host.setAttribute('theme', 'light');
       v.attributeChangedCallback();
-      expect(v.renderer.setTheme).toHaveBeenLastCalledWith(PALETTES.light);
+      expect(v.renderer.setTheme).toHaveBeenLastCalledWith(expect.objectContaining(PALETTES.light));
       expect(host.style['--bg']).toBe('#faf8f3');
       expect(host.style['--fg']).toBe('#141413');
       expect(host.style['--highlight']).toBe('#000000');
@@ -809,7 +831,7 @@ describe('a viewer embedded on a page, under a DOM stand-in', () => {
       v.playProgress = 0.25;
       v.intersecting = false;
       v.syncShown();
-      v.seek(5);
+      v.seekFrame(5);
       v.intersecting = true;
       v.syncShown();
       expect(v.anchor.index).toBe(5);
@@ -852,6 +874,134 @@ describe('a viewer embedded on a page, under a DOM stand-in', () => {
       v.syncBars('pulsating', dom);
       const grad = dom.barDom[0].grad;
       expect([grad.classList.contains('live'), grad.getAttribute('role'), grad.getAttribute('aria-label')]).toEqual([true, 'slider', 'eccentricity']);
+    });
+  });
+
+  describe('stages (rule K9)', () => {
+    /** A live viewer of the dressed Broucke scene with three stages, at 0, a quarter, and a half of its loop. */
+    async function staged(end?: 'stop') {
+      const { scene, bytes } = dressedBroucke();
+      const L = loopSeconds(scene.clock);
+      scene.stages = [
+        { id: 'a', at: 0 },
+        { id: 'b', at: L / 4 },
+        { id: 'c', at: L / 2 },
+      ];
+      if (end !== undefined) scene.clock.end = end;
+      const { v } = viewer();
+      await v.load(JSON.stringify(scene), bytes);
+      v.unsubscribe = v.store.subscribe((c: string) => v.onChange(c));
+      v.onChange('state');
+      v.renderer = { setTheme: vi.fn(), renderAt: () => new Map(), refitAll: () => undefined };
+      v.dispatchEvent = vi.fn();
+      v.syncShown();
+      return { v, L, steps: scene.clock.steps };
+    }
+    it('seeks a time paused, between two frame indices, and names the stage at or before it', async () => {
+      const { v, L, steps } = await staged();
+      expect(v.stages.map((st: { id: string }) => st.id)).toEqual(['a', 'b', 'c']);
+      v.seek(0.3 * L);
+      expect(v.playing).toBe(false);
+      expect(v.time).toBeCloseTo(0.3 * L, 9);
+      expect(v.store.frame).toBe(Math.floor(0.3 * steps));
+      expect(v.currentStage).toBe('b');
+      v.seek(-1);
+      expect(v.currentStage).toBe('a');
+    });
+    it('goes to a stage by id or index, and refuses one it does not have', async () => {
+      const { v, L } = await staged();
+      v.goto('c');
+      expect(v.time).toBeCloseTo(L / 2, 9);
+      v.goto(1);
+      expect(v.currentStage).toBe('b');
+      expect(() => v.goto('nope')).toThrow(/stage/);
+      expect(() => v.goto(7)).toThrow(/stage/);
+    });
+    it('plays to a stage and pauses on it, and fires tycho-stage there', async () => {
+      const { v, L } = await staged();
+      v.goto('a');
+      v.playTo('c');
+      expect(v.playing).toBe(true);
+      v.tick(v.anchor.time + 1000 * L);
+      expect(v.playing).toBe(false);
+      expect(v.time).toBeCloseTo(L / 2, 6);
+      expect(v.dispatchEvent).toHaveBeenCalledTimes(1);
+      expect(v.dispatchEvent.mock.calls[0][0].detail).toEqual({ id: 'c', index: 2, at: L / 2 });
+    });
+    it('steps with next and previous', async () => {
+      const { v, L } = await staged();
+      v.goto('a');
+      expect(v.next()).toBe('b');
+      v.tick(v.anchor.time + 1000 * L);
+      expect(v.currentStage).toBe('b');
+      expect(v.previous()).toBe('a');
+      expect(v.time).toBe(0);
+      v.goto('c');
+      expect(v.next()).toBeNull();
+    });
+    it('holds the end of the loop under "end": "stop", rather than starting the next', async () => {
+      const { v, L, steps } = await staged('stop');
+      v.goto('c');
+      v.play();
+      v.tick(v.anchor.time + 5000 * L);
+      expect(v.playing).toBe(false);
+      expect(v.store.frame).toBe(steps - 1);
+      expect(v.time).toBeCloseTo(L, 6);
+    });
+    it('plays again from the start once a clock with "end": "stop" holds its end', async () => {
+      const { v, L } = await staged('stop');
+      v.goto('c');
+      v.play();
+      v.tick(v.anchor.time + 5000 * L);
+      expect(v.playing).toBe(false);
+      v.play();
+      v.tick(v.anchor.time + 100 * L);
+      expect(v.playing).toBe(true);
+      expect(v.time).toBeCloseTo(0.1 * L, 6);
+    });
+    it('plays to a stage from a later loop of playback, without jumping to it', async () => {
+      const { v, L } = await staged();
+      const now = vi.spyOn(performance, 'now').mockReturnValue(1000);
+      v.goto('a');
+      v.play();
+      // playback is in its third loop, at a tenth of it
+      now.mockReturnValue(1000 + 2100 * L);
+      v.tick(1000 + 2100 * L);
+      v.playTo('c');
+      v.tick(1000 + 2200 * L);
+      expect(v.playing).toBe(true);
+      expect(v.time).toBeCloseTo(0.2 * L, 6);
+      v.tick(1000 + 2600 * L);
+      expect(v.playing).toBe(false);
+      expect(v.time).toBeCloseTo(L / 2, 6);
+      expect(v.dispatchEvent.mock.calls.at(-1)[0].detail).toEqual({ id: 'c', index: 2, at: L / 2 });
+      now.mockRestore();
+    });
+  });
+
+  describe('the camera keys of the timeline (rule K5)', () => {
+    it('a panel moved off its camera keys offers to follow them again, and F returns every panel to them', async () => {
+      let off = true;
+      const { v, host } = await live({ kiosk: '' });
+      const renderer = { ...v.renderer, colorbars: () => [], offKeys: () => off, refit: vi.fn(), refitAll: vi.fn() };
+      v.renderer = renderer;
+      v.stageSize = { w: 400, h: 300 };
+      const [pid, dom] = [...v.panelDom.entries()][0];
+      v.draw();
+      expect(dom.follow.hidden).toBe(false);
+      renderer.refit.mockImplementation(() => (off = false));
+      dom.follow.click();
+      expect(renderer.refit).toHaveBeenCalledWith(pid);
+      v.draw();
+      expect(dom.follow.hidden).toBe(true);
+      off = true;
+      v.draw();
+      expect(dom.follow.hidden).toBe(false);
+      renderer.refitAll.mockImplementation(() => (off = false));
+      host.dispatchEvent({ type: 'keydown', key: 'f', stopPropagation() {}, preventDefault() {}, composedPath: () => [host] });
+      expect(renderer.refitAll).toHaveBeenCalledTimes(1);
+      v.draw();
+      expect(dom.follow.hidden).toBe(true);
     });
   });
 

@@ -16,6 +16,7 @@
  * the GPU and the CPU together draw the polyline of rules L1, L2 and C6.
  */
 import type { DataStore } from '../container.js';
+import { fail } from '../errors.js';
 import { bound, clockLaps, lapOf, TrackClock } from '../evaluate/clock.js';
 import { Frames } from '../evaluate/frames.js';
 import { hasHead, point, type Vertex } from '../evaluate/layers.js';
@@ -208,10 +209,21 @@ export class GeometryCache {
   private readonly readingsBy = new Map<string, TrackReadings>();
   private readonly bodyTrails = new Map<string, BodyTrailTable>();
 
+  private readonly data: DataStore;
+
   constructor(scene: Scene, data: DataStore) {
     this.scene = scene;
+    this.data = data;
     this.sets = new SetCache(scene, data);
     this.frames = new Frames(scene);
+  }
+
+  /** The bytes of a view of `uint8` elements, e.g. the image file of a body (section 2.11). */
+  bytes(name: string): Uint8Array {
+    if (!this.data.has(name)) fail('2.4', `the data container does not hold view ${JSON.stringify(name)}`);
+    const v = this.data.view(name);
+    if (v.dtype !== 'uint8') fail('2.4', `view ${name} holds ${v.dtype}, not the uint8 bytes of an image`);
+    return v.data as Uint8Array;
   }
 
   /** Throws an error of rule C6 when the clock is in value mode but has laps. */
@@ -257,10 +269,12 @@ export class GeometryCache {
  * reading is clamped to [0, 1], and the channel is blended between the samples of rule C4 in the
  * context of the driver's lap of rule C6.
  */
-export function channelAtReading(set: SetData, tc: TrackClock, track: number, channel: string, clock: Clock, q: number): number {
+export function channelAtReading(set: SetData, tc: TrackClock, track: number, channel: string, clock: Clock, q: number, hold = false): number {
   const laps = clockLaps(clock);
   const at = lapOf(laps * bound(tc.reading(clock, q))!, laps);
   const { k, w } = tc.locate(at.u);
+  // a channel with interp hold keeps the value of sample k up to the next sample (rule K7)
+  if (hold) return set.channelAt(channel, track, w >= 1 ? k + 1 : k, false, at.lap);
   return (1 - w) * set.channelAt(channel, track, k, false, at.lap) + w * set.channelAt(channel, track, k + 1, false, at.lap);
 }
 

@@ -38,17 +38,19 @@ export function tile(layout: Layout, rect: Rect, gutter: number): Tiles {
       return;
     }
     const row = node.dir === 'row';
-    const extent = Math.max(0, (row ? r.w : r.h) - gutter);
-    const a = Math.round(extent * node.ratio);
+    // a split with keys may give one side all of its extent (section 2.11), and it then does not have a gutter
+    const g = node.ratio <= 0 || node.ratio >= 1 ? 0 : gutter;
+    const extent = Math.max(0, (row ? r.w : r.h) - g);
+    const a = Math.round(extent * Math.min(1, Math.max(0, node.ratio)));
     const b = extent - a;
     if (row) {
       walk(node.a, { x: r.x, y: r.y, w: a, h: r.h }, `${path}a`);
-      out.gutters.push({ path, dir: node.dir, rect: { x: r.x + a, y: r.y, w: gutter, h: r.h }, outer: r });
-      walk(node.b, { x: r.x + a + gutter, y: r.y, w: b, h: r.h }, `${path}b`);
+      if (g > 0) out.gutters.push({ path, dir: node.dir, rect: { x: r.x + a, y: r.y, w: g, h: r.h }, outer: r });
+      walk(node.b, { x: r.x + a + g, y: r.y, w: b, h: r.h }, `${path}b`);
     } else {
       walk(node.a, { x: r.x, y: r.y, w: r.w, h: a }, `${path}a`);
-      out.gutters.push({ path, dir: node.dir, rect: { x: r.x, y: r.y + a, w: r.w, h: gutter }, outer: r });
-      walk(node.b, { x: r.x, y: r.y + a + gutter, w: r.w, h: b }, `${path}b`);
+      if (g > 0) out.gutters.push({ path, dir: node.dir, rect: { x: r.x, y: r.y + a, w: r.w, h: g }, outer: r });
+      walk(node.b, { x: r.x, y: r.y + a + g, w: r.w, h: b }, `${path}b`);
     }
   };
   walk(layout, rect, '');

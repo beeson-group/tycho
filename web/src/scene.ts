@@ -14,6 +14,8 @@ export type ArrowLayer = Extract<Layer, { kind: 'arrow' }>;
 export type OutlineLayer = Extract<Layer, { kind: 'outline' }>;
 export type BodyLayer = Extract<Layer, { kind: 'body' }>;
 export type MarkLayer = Extract<Layer, { kind: 'axes' | 'grid' }>;
+export type LabelLayer = Extract<Layer, { kind: 'label' }>;
+export type PointsLayer = Extract<Layer, { kind: 'points' }>;
 export type Selector = Extract<Variable, { kind: 'selector' }>;
 export type Choice = Extract<Variable, { kind: 'choice' }>;
 export type Toggle = Extract<Variable, { kind: 'toggle' }>;
@@ -22,10 +24,20 @@ export type VariableValue = number | string | boolean;
 
 /** The scene format version this reader implements. */
 export const SCENE_MAJOR = 0;
-export const SCENE_MINOR = 3;
+export const SCENE_MINOR = 4;
 
-/** Features from `requires` that this reader implements, i.e. the features of section 4 that version 0.3 of the format includes. */
-export const SUPPORTED_FEATURES: ReadonlySet<string> = new Set(['frames.origin_channel', 'layers.arrows', 'layers.driver_context', 'layers.outline']);
+/** Features from `requires` that this reader implements, i.e. the features of section 4 that version 0.4 of the format includes. */
+export const SUPPORTED_FEATURES: ReadonlySet<string> = new Set([
+  'frames.origin_channel',
+  'layers.arrows',
+  'layers.driver_context',
+  'layers.outline',
+  'clock.keys',
+  'layers.clock',
+  'camera.keys',
+  'layers.label',
+  'layers.points',
+]);
 
 export const TOP_LEVEL_KEYS: ReadonlySet<string> = new Set([
   'format',
@@ -43,6 +55,8 @@ export const TOP_LEVEL_KEYS: ReadonlySet<string> = new Set([
   'controls',
   'readouts',
   'initial',
+  'stages',
+  'overlays',
 ]);
 
 export const ID_PATTERN = /^[A-Za-z0-9_.-]+$/;

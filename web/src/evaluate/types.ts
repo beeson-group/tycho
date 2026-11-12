@@ -60,11 +60,40 @@ export interface MarkLayerResult {
   kind: 'axes' | 'grid';
 }
 
-export type LayerResult = TrackLayerResult | ArrowLayerResult | OutlineLayerResult | BodyLayerResult | MarkLayerResult;
+export interface LabelLayerResult {
+  kind: 'label';
+  /** The anchor in the display frame (rule K6), or null for an anchor on the screen or one that does not resolve. */
+  position: Vec3 | null;
+}
+
+export interface PointsMemberResult {
+  index: number;
+  /** The drawn samples in storage order (rule K8). Empty while the member is hidden or before its first sample is reached. */
+  points: Vec3[];
+}
+
+export interface PointsLayerResult {
+  kind: 'points';
+  /** Null when the set query does not match any track set, and `members` is then empty. */
+  set: string | null;
+  members: PointsMemberResult[];
+}
+
+export type LayerResult = TrackLayerResult | ArrowLayerResult | OutlineLayerResult | BodyLayerResult | MarkLayerResult | LabelLayerResult | PointsLayerResult;
+
+/** The window of a camera with keys (rule K5). */
+export interface CameraResult {
+  center: [number, number];
+  width: number;
+  /** Null unless the keys give a height, under a camera of free aspect. */
+  height: number | null;
+}
 
 export interface PanelResult {
   frame: string;
   layers: LayerResult[];
+  /** Present only when the view's camera has keys, and null when the camera does not have a window at the frame (rule K5). */
+  camera?: CameraResult | null;
 }
 
 export interface EvaluateResult {

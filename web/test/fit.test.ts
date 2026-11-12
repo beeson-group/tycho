@@ -704,3 +704,28 @@ describe('a track layer in the driver context (L6)', () => {
     draw.dispose();
   });
 });
+
+describe('a plane camera with keys (rule K5)', () => {
+  it('shows its fit again once its keys do not give a window', () => {
+    // the key at 5 s follows layer 1, whose set query does not match any set, hence the camera lacks a window from 2 s on
+    const camera: Camera = {
+      kind: 'plane',
+      keys: [
+        { at: 2, center: [5, 0.5], width: 4 },
+        { at: 5, follow: [{ layer: 1, member: 0 }], width: 4 },
+      ],
+    };
+    const { stage, p } = widePanel(camera, [{ kind: 'track', sets: { tags: { family: 'none' } }, members: 'all' }]);
+    const state: State = stage.ctx.scene.initial;
+    const across = () => {
+      stage.follow(p);
+      return [p.view.x0, p.view.x1];
+    };
+    const fitted = across();
+    // one loop lasts 8 s, hence the progress 0.125 is the time 1 s, before the first key
+    stage.keyed(p, state, 0.125);
+    expect(across()).toEqual([3, 7].map((x) => expect.closeTo(x, 9)));
+    stage.keyed(p, state, 0.5);
+    expect(across()).toEqual(fitted.map((x: number) => expect.closeTo(x, 9)));
+  });
+});

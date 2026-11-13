@@ -22,7 +22,7 @@
  * stage at or before it. The event `tycho-stage` fires with `detail: { id, index, at }` when playback reaches a stage.
  *
  * The custom properties `--tycho-background`, `--tycho-foreground`, and `--tycho-grid` of the host take precedence over the theme.
- * Text in HTML inherits the font of the host, and text on a canvas is set in `--tycho-font` when it is set. The clock runs only
+ * Text in HTML inherits the font of the host, and text drawn on a canvas is set in `--tycho-font` when it is set. The clock runs only
  * while the element intersects the viewport and the page is visible, and it resumes from where it stopped. Keys act only while the
  * element or a descendant has focus, and a key that the viewer uses does not reach the page.
  *
@@ -54,6 +54,8 @@ import {
   sizePreset,
   webCodecsMissing,
   type ExportOptions,
+  type ExportSource,
+  type Picture,
   type SizePreset,
 } from './export.js';
 import { GeometryCache } from './geometry.js';
@@ -82,6 +84,7 @@ import {
 } from './readouts.js';
 import { GUTTER, layoutAt, StageRenderer } from './renderer.js';
 import { paintStage } from './paint.js';
+import { rasterize } from './raster.js';
 import { loopSeconds as timelineSeconds } from '../evaluate/timeline.js';
 import {
   chipMenu,
@@ -114,6 +117,8 @@ button, select, input { font: inherit; color: inherit; margin: 0; }
 .root { position: absolute; inset: 0; display: grid; grid-template-rows: auto 1fr auto auto; }
 .root.kiosk { grid-template-rows: 1fr; }
 .root.kiosk header, .root.kiosk .stats, .root.kiosk footer, .root.kiosk .phead { display: none; }
+.root.picture { grid-template-rows: 1fr auto; }
+.root.picture header, .root.picture footer, .root.picture .phead { display: none; }
 .root.lean:not(.keep-panels) .add, .root.lean:not(.keep-panels) .phead .icon, .root.lean .frame, .root.lean .fps, .root.lean .cap.view, .root.lean .cap.export { display: none; }
 .root.dragging, .root.dragging * { cursor: grabbing !important; }
 
@@ -512,6 +517,11 @@ export class TychoViewerElement extends Base {
   /** The colors in use, or null before a scene loads. */
   private theme: Theme | null = null;
   private kiosk = false;
+  /**
+   * What a twin made by `exportVideo` shows, or null for a viewer on the page. A twin is hidden, is drawn only by the export, and
+   * does not save its state. As `kiosk` it is the picture of a kiosk viewer, and as `picture` the stage over its caption readouts.
+   */
+  private twin: 'kiosk' | 'picture' | null = null;
   private lean = false;
   private keepPanels = false;
   private loading = false;
@@ -594,6 +604,8 @@ export class TychoViewerElement extends Base {
   private refreshExport: (() => void) | null = null;
 
   connectedCallback(): void {
+    // a twin is set up by openTwin and not loaded from the page
+    if (this.twin !== null) return;
     if (this.shadowRoot === null) this.buildShell();
     if (this.scene !== null) {
       this.applyTheme();
@@ -616,14 +628,17 @@ export class TychoViewerElement extends Base {
   }
 
   private buildShell(): void {
-    this.kiosk = this.hasAttribute('kiosk');
+    this.kiosk = this.hasAttribute('kiosk') || this.twin === 'kiosk';
     this.lean = this.hasAttribute('lean');
     this.keepPanels = this.lean && (this.getAttribute('lean') ?? '').split(/\s+/).includes('panels');
     const shadow = this.attachShadow({ mode: 'open' });
     const style = el('style');
     style.textContent = STYLE;
     shadow.appendChild(style);
-    this.root = el('div', `root${this.kiosk ? ' kiosk' : ''}${this.lean ? ' lean' : ''}${this.keepPanels ? ' keep-panels' : ''}`);
+    this.root = el(
+      'div',
+      `root${this.kiosk ? ' kiosk' : ''}${this.twin === 'picture' ? ' picture' : ''}${this.lean ? ' lean' : ''}${this.keepPanels ? ' keep-panels' : ''}`,
+    );
     this.header = el('header');
     this.titleEl = el('h1');
     this.varsEl = el('div', 'vars');
@@ -740,7 +755,9 @@ export class TychoViewerElement extends Base {
     this.paintCanvas = el('canvas', 'paint');
     this.stage.insertBefore(this.paintCanvas, this.panelsEl);
     try {
-      this.renderer = new StageRenderer(this.canvas, this.scene, this.geometry!, { theme: this.theme! });
+      // a twin's frames are read back from its canvas after each draw
+      const twin = this.twin === null ? {} : { preserveDrawingBuffer: true, coarseDrags: false };
+      this.renderer = new StageRenderer(this.canvas, this.scene, this.geometry!, { theme: this.theme!, ...twin });
     } catch (e) {
       this.fail(`WebGL is not available: ${(e as Error).message}`);
       return;
@@ -748,6 +765,10 @@ export class TychoViewerElement extends Base {
     this.renderer.onChange = () => this.invalidate();
     this.unsubscribe = this.store.subscribe((change) => this.onChange(change));
     this.measureStage();
+    if (this.twin !== null) {
+      this.onChange('state');
+      return;
+    }
     this.resizeObserver = new ResizeObserver(() => {
       this.measureStage();
       this.layoutDom();
@@ -827,7 +848,7 @@ export class TychoViewerElement extends Base {
   }
 
   private save(): void {
-    if (this.kiosk) return;
+    if (this.kiosk || this.twin !== null) return;
     window.clearTimeout(this.saveTimer);
     this.saveTimer = window.setTimeout(() => this.flushSave(), 300);
   }
@@ -902,7 +923,7 @@ export class TychoViewerElement extends Base {
   }
 
   private schedule(): void {
-    if (this.raf === 0 && this.renderer !== null && this.shown) this.raf = requestAnimationFrame((t) => this.tick(t));
+    if (this.raf === 0 && this.renderer !== null && this.shown && this.twin === null) this.raf = requestAnimationFrame((t) => this.tick(t));
   }
 
   /** Stops the animation loop when the element stops being shown, and restarts it when the element comes back, with the clock where it paused. */
@@ -983,7 +1004,8 @@ export class TychoViewerElement extends Base {
     this.stageSize = { w: this.stage.clientWidth, h: this.stage.clientHeight };
   }
 
-  private draw(): void {
+  /** Draws the stage and its overlays at the pixel ratio of the screen, at most 2, or at `ratio` when it is given. */
+  private draw(ratio = Math.min(window.devicePixelRatio || 1, 2)): void {
     const renderer = this.renderer;
     const store = this.store!;
     const scene = this.scene!;
@@ -992,7 +1014,6 @@ export class TychoViewerElement extends Base {
     const { w, h } = this.stageSize;
     if (w < 1 || h < 1) return;
     const q = store.playing && this.playProgress !== null ? this.playProgress : (this.heldProgress ?? store.frame / scene.clock.steps);
-    const ratio = Math.min(window.devicePixelRatio || 1, 2);
     const errors = renderer.renderAt(st, q, w, h, ratio);
     this.paint(q, w, h, ratio);
     if (this.animatedLayout) this.layoutDom(q);
@@ -1331,16 +1352,88 @@ export class TychoViewerElement extends Base {
   // video export
 
   /**
-   * Exports a video of the current state, at the viewer's playback speed unless `options.speed` is set,
-   * and resolves to an MP4 blob. It rejects for the reasons that exportVideo in export.ts lists, and when
-   * the viewer has not loaded a scene.
+   * Exports a video of the current state, at the viewer's playback speed unless `options.speed` is set, and resolves to an MP4
+   * blob. The frames show what a kiosk viewer of this size shows when `options.kiosk` is true, which is the default for a kiosk
+   * viewer, and the stage over its caption readouts otherwise. It rejects for the reasons that exportVideo in export.ts lists, and
+   * when the viewer has not loaded a scene.
    */
   exportVideo(options: ExportOptions = {}): Promise<Blob> {
     if (this.scene === null || this.store === null || this.geometry === null) return Promise.reject(new Error('the viewer has not loaded a scene'));
-    const stage = { w: this.stage.clientWidth, h: this.stage.clientHeight };
-    const font = this.hostProperty('--tycho-font');
-    const look = { ...(this.theme === null ? {} : { theme: this.theme }), ...(font === '' ? {} : { font }) };
-    return runExport({ scene: this.scene, geometry: this.geometry, state: this.store.state, stage, ...look }, { speed: this.speed, ...options });
+    const kiosk = options.kiosk ?? this.kiosk;
+    const scene = this.scene;
+    const source: ExportSource = {
+      clock: scene.clock,
+      stage: this.pictureSize(kiosk),
+      open: (w, h, ratio) => this.openTwin(kiosk ? 'kiosk' : 'picture', w, h, ratio),
+    };
+    return runExport(source, { speed: this.speed, ...options });
+  }
+
+  /** The size in CSS pixels of what an export shows at the size of this viewer, i.e. the whole viewer for a kiosk, and the stage over the caption readouts otherwise. */
+  private pictureSize(kiosk: boolean): { w: number; h: number } {
+    if (kiosk) return { w: this.clientWidth, h: this.clientHeight };
+    const stats = this.kiosk ? 0 : this.statsEl.offsetHeight;
+    return { w: this.stage.clientWidth, h: this.stage.clientHeight + stats };
+  }
+
+  /**
+   * Lays out a hidden twin of this viewer at w by h CSS pixels, with a frozen copy of the state, for an export to draw. The twin
+   * lives in this viewer's shadow root, hence it inherits the font, the custom properties, and the theme of this viewer.
+   */
+  private async openTwin(kind: 'kiosk' | 'picture', w: number, h: number, ratio: number): Promise<Picture> {
+    const twin = document.createElement(this.localName) as TychoViewerElement;
+    twin.twin = kind;
+    const theme = this.getAttribute('theme');
+    if (theme !== null) twin.setAttribute('theme', theme);
+    twin.style.cssText = `position: absolute; left: 0; top: 0; width: ${w}px; height: ${h}px; min-height: 0; visibility: hidden; pointer-events: none;`;
+    twin.tabIndex = -1;
+    twin.setAttribute('aria-hidden', 'true');
+    twin.buildShell();
+    twin.scene = this.scene;
+    twin.sceneText = this.sceneText;
+    twin.geometry = this.geometry;
+    twin.store = new Store(structuredClone(this.store!.state), this.scene!.clock.steps);
+    twin.choice = twin.templateChoice();
+    twin.statusEl.hidden = true;
+    twin.titleEl.textContent = this.scene!.title ?? '';
+    this.root.appendChild(twin);
+    try {
+      // the theme is read from the computed style, which the twin has once it is in the page
+      twin.applyTheme();
+      twin.buildTopBar();
+      twin.buildFooter();
+      twin.start();
+      if (twin.renderer === null) throw new Error(twin.statusEl.textContent ?? 'the export cannot draw the stage');
+      // a first frame builds the panels' draws, whose body images are decoded, and the fonts are loaded, before the video starts
+      twin.drawAt(0, 0, ratio);
+      await twin.renderer.ready();
+      await document.fonts?.ready;
+    } catch (e) {
+      twin.stop();
+      twin.remove();
+      throw e;
+    }
+    return {
+      draw: (g, index, q) => {
+        twin.drawAt(index, q, ratio);
+        rasterize(g, twin);
+      },
+      close: () => {
+        twin.stop();
+        twin.remove();
+      },
+    };
+  }
+
+  /** Draws a twin at frame index `index` and progress `q`, at `ratio` canvas pixels per CSS pixel. */
+  private drawAt(index: number, q: number, ratio: number): void {
+    this.store!.setFrame(index);
+    // the progress is held at the frame index of the export's schedule, which may round differently from the progress
+    this.heldValue = q;
+    this.heldFrame = index;
+    this.measureStage();
+    this.layoutDom(q);
+    this.draw(ratio);
   }
 
   private buildExport(): void {
@@ -1404,7 +1497,7 @@ export class TychoViewerElement extends Base {
     );
     fps.value = '30';
     // the stage preset's size depends on the rate, since the size and the rate must fit one H.264 level together
-    const stageSize = () => sizePreset('stage', { w: this.stage.clientWidth, h: this.stage.clientHeight }, window.devicePixelRatio || 1, Number(fps.value));
+    const stageSize = () => sizePreset('stage', this.pictureSize(this.kiosk), window.devicePixelRatio || 1, Number(fps.value));
     const loops = select(
       'Loops',
       EXPORT_LOOPS.map((n) => [String(n), n === 1 ? '1 loop' : `${n} loops`]),

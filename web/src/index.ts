@@ -13,7 +13,7 @@ export { evaluate } from './evaluate/index.js';
 export type * from './evaluate/types.js';
 export { TychoViewerElement, define } from './runtime/element.js';
 export { EXPORT_LIMITS, sizePreset } from './runtime/export.js';
-export type { ExportOptions, ExportSize, SizePreset } from './runtime/export.js';
+export type { ExportLimits, ExportOptions, ExportSize, SizePreset } from './runtime/export.js';
 export { formatNumber } from './runtime/readouts.js';
 export { colormap, colormapCss } from './runtime/colormaps.js';
 

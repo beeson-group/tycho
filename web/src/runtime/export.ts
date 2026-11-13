@@ -1,26 +1,23 @@
 /**
- * Video export. An export freezes a state snapshot and steps the frame index through whole loops at the
- * rate live playback uses. The renderer of live playback draws each frame into a canvas of fixed size and pixel ratio
- * that is never on the page, and the readouts and the caption are written onto it as text. The frames are
- * encoded as H.264 through WebCodecs and muxed into an MP4 file with mp4-muxer. A frame thus depends only
- * on the snapshot, the frame index, the size, and the pixel ratio, and the cameras take the fit the panels
- * start with. VP9 is not used as a fallback, because QuickTime, and with it every Mac, does not open VP9 in an
- * MP4. A size or a browser that H.264 cannot serve is therefore refused.
+ * Video export. An export freezes a state snapshot and steps the frame index through whole loops at the rate live playback uses.
+ * Each frame is a picture that the viewer lays out at the size of the video in CSS pixels and paints onto a canvas at the pixel
+ * ratio of the video, i.e. what a viewer of that size shows on the page, with the cameras at the fit the panels start with. The
+ * frames are encoded as H.264 through WebCodecs and muxed into an MP4 file with mp4-muxer. VP9 is not used as a fallback, because
+ * QuickTime, and with it every Mac, does not open VP9 in an MP4. A size or a browser that H.264 cannot serve is therefore refused.
  *
  * Everything above the comment `// in the browser`, from the schedule to the muxing in Mp4Writer, is pure and runs under Node.
  */
 import { ArrayBufferTarget, Muxer } from 'mp4-muxer';
-import type { Layout, Readout, Scene, State } from '../scene.js';
-import { hexRgb, mixHex, sceneTheme, type Theme } from './colors.js';
-import type { GeometryCache } from './geometry.js';
-import type { Colorbar, PanelLabel } from './overlay.js';
-import { formatNumber, LAP_SECONDS, loopPosition, loopSeconds, positionIndex, positionProgress, readoutPieces, readoutText } from './readouts.js';
-import { GUTTER, layoutAt, StageRenderer } from './renderer.js';
-import { gutterColor, paintStage } from './paint.js';
-import { tile } from './tiles.js';
+import type { Clock } from '../scene.js';
+import { LAP_SECONDS, loopPosition, loopSeconds, positionIndex, positionProgress } from './readouts.js';
 
-/** The longest export allowed, in frames and in seconds. A longer export is refused. */
-export const EXPORT_LIMITS = { frames: 2000, seconds: 90 } as const;
+export interface ExportLimits {
+  frames: number;
+  seconds: number;
+}
+
+/** The longest export allowed by default, in frames and in seconds. A longer export is refused unless `limits` of ExportOptions raises them. */
+export const EXPORT_LIMITS: Readonly<ExportLimits> = { frames: 2000, seconds: 90 };
 export const EXPORT_FPS = [24, 30, 60] as const;
 export const EXPORT_LOOPS = [1, 2, 3, 4] as const;
 
@@ -53,14 +50,14 @@ export function frameSchedule(steps: number, fps: number, loops: number, speed =
   };
 }
 
-/** Why an export of `count` frames at `fps` is refused, or null when it is not. */
-export function checkExport(count: number, fps: number): string | null {
+/** Why an export of `count` frames at `fps` is refused under `limits`, or null when it is not. */
+export function checkExport(count: number, fps: number, limits: ExportLimits = EXPORT_LIMITS): string | null {
   if (!(count >= 1)) return `the frame count of the export is ${count}, not a count of at least one`;
-  if (count > EXPORT_LIMITS.frames) {
-    return `${count} frames is more than the ${EXPORT_LIMITS.frames} an export may have: lower the frame rate or the loops, or raise the speed`;
+  if (count > limits.frames) {
+    return `${count} frames is more than the ${limits.frames} an export may have: lower the frame rate or the loops, or raise the speed`;
   }
-  if (count / fps > EXPORT_LIMITS.seconds) {
-    return `${(count / fps).toFixed(1)} s is longer than the ${EXPORT_LIMITS.seconds} s an export may last: lower the loops or raise the speed`;
+  if (count / fps > limits.seconds) {
+    return `${(count / fps).toFixed(1)} s is longer than the ${limits.seconds} s an export may last: lower the loops or raise the speed`;
   }
   return null;
 }
@@ -184,7 +181,18 @@ export interface ExportOptions {
   speed?: number;
   /** The frame index of the first frame. Defaults to 0. */
   start?: number;
+  /**
+   * Whether each frame is the picture of a kiosk viewer of the video's size in CSS pixels, i.e. the stage alone. Otherwise a frame
+   * holds the stage over the caption readouts. Defaults to whether the viewer has the attribute `kiosk`.
+   */
+  kiosk?: boolean;
+  /** The longest export allowed, by default EXPORT_LIMITS. */
+  limits?: ExportLimits;
   bitrate?: number;
+  /** The number of frames from one key frame to the next, by default twice the frame rate. Infinity makes the first frame the only key frame. */
+  keyFrameInterval?: number;
+  /** The hardware acceleration asked of the H.264 encoder, by default `no-preference`. */
+  hardwareAcceleration?: HardwareAcceleration;
   /** Called with the encoder configuration the browser accepted, before the first frame. */
   onConfig?: (config: VideoEncoderConfig) => void;
   /** Called with each frame, as a canvas of the video's size, after it is drawn and before it is encoded. */
@@ -193,17 +201,20 @@ export interface ExportOptions {
   signal?: AbortSignal;
 }
 
-/** What an export draws: a scene, its data, and the snapshot to freeze. */
+/** A picture laid out at a size, which an export draws at each frame. */
+export interface Picture {
+  /** Draws frame index `index` at progress `q` onto `g`, whose transform maps the picture's CSS pixels to the canvas. */
+  draw(g: CanvasRenderingContext2D, index: number, q: number): void;
+  close(): void;
+}
+
+/** What an export draws, as the viewer gives it. */
 export interface ExportSource {
-  scene: Scene;
-  geometry: GeometryCache;
-  state: State;
-  /** The stage's size in CSS pixels, for the `stage` preset. */
-  stage?: { w: number; h: number };
-  /** The theme to draw with, by default the scene's. */
-  theme?: Theme;
-  /** The font family of the text on the canvas, by default FONT. */
-  font?: string;
+  clock: Clock;
+  /** The size of the picture on the page in CSS pixels, which the `stage` preset starts from. */
+  stage: { w: number; h: number };
+  /** Lays out the picture at w by h CSS pixels, to be drawn at `ratio` video pixels per CSS pixel, and resolves once it can be drawn. */
+  open(w: number, h: number, ratio: number): Promise<Picture>;
 }
 
 export function webCodecsMissing(): string | null {
@@ -215,126 +226,51 @@ export function webCodecsMissing(): string | null {
  * The first H.264 configuration this browser's encoder accepts, at the lowest level that holds the
  * size and rate. The profiles high, main, and baseline are tried in turn, in the avc format used in an MP4.
  */
-export async function chooseConfig(width: number, height: number, fps: number, bitrate: number): Promise<VideoEncoderConfig> {
+export async function chooseConfig(
+  width: number,
+  height: number,
+  fps: number,
+  bitrate: number,
+  hardwareAcceleration: HardwareAcceleration = 'no-preference',
+): Promise<VideoEncoderConfig> {
   if (!avcFits(width, height, fps)) {
     throw new Error(
       `${width} by ${height} at ${fps} fps is past H.264, which needs even sides, at most ${AVC_MAX_SIDE} pixels a side, and a frame size and rate within level 5.2`,
     );
   }
   for (const profile of ['high', 'main', 'baseline'] as const) {
-    const config: VideoEncoderConfig = { codec: avcCodec(width, height, fps, profile)!, width, height, bitrate, framerate: fps, avc: { format: 'avc' } };
+    const codec = avcCodec(width, height, fps, profile)!;
+    const config: VideoEncoderConfig = { codec, width, height, bitrate, framerate: fps, hardwareAcceleration, avc: { format: 'avc' } };
     if ((await VideoEncoder.isConfigSupported(config)).supported === true) return config;
   }
   throw new Error(`this browser does not have an H.264 encoder for ${width} by ${height} at ${fps} fps, and an MP4 that QuickTime opens needs H.264`);
 }
 
-const FONT = '"Helvetica Neue", Arial, sans-serif';
-
-/** The first panel in layout order, whose driver the caption reads. */
-function firstLeaf(n: Layout): string {
-  return n.kind === 'panel' ? n.id : firstLeaf(n.a);
-}
-const CAPTION_LINE = 18;
-
-/** Text with a halo of the background, so that it reads over lines. */
-function text(g: CanvasRenderingContext2D, s: string, x: number, y: number, fg: string, bg: string): void {
-  g.lineJoin = 'round';
-  g.lineWidth = 3;
-  g.strokeStyle = bg;
-  g.strokeText(s, x, y);
-  g.fillStyle = fg;
-  g.fillText(s, x, y);
-}
-
-/** Draws a panel label as the page places it, centered vertically on (x, y) and turned to read upward when rotated. Exported for the tests. */
-export function drawLabel(g: CanvasRenderingContext2D, l: PanelLabel, x: number, y: number, fg: string, bg: string, font = FONT): void {
-  g.font = `${l.kind === 'title' ? 13 : 12}px ${font}`;
-  g.textAlign = l.align === 'center' ? 'center' : l.align === 'end' ? 'right' : 'left';
-  if (l.rotate) {
-    g.save();
-    g.translate(x, y);
-    g.rotate(-Math.PI / 2);
-    text(g, l.text, 0, 0, fg, bg);
-    g.restore();
-  } else text(g, l.text, x, y, fg, bg);
-  g.textAlign = 'left';
-}
-
-export function drawColorbars(
-  g: CanvasRenderingContext2D,
-  bars: Colorbar[],
-  right: number,
-  top: number,
-  fg: string,
-  dim: string,
-  line: string,
-  bg: string,
-  font = FONT,
-): void {
-  let x = right;
-  g.font = `11px ${font}`;
-  for (const b of [...bars].reverse()) {
-    const hi = formatNumber(b.hi, 3);
-    const lo = formatNumber(b.lo, 3);
-    const w = Math.max(g.measureText(b.label).width, 13 + Math.max(g.measureText(hi).width, g.measureText(lo).width));
-    x -= w;
-    g.textBaseline = 'top';
-    text(g, b.label, x, top, dim, bg);
-    const y0 = top + 16;
-    const grad = g.createLinearGradient(0, y0 + 120, 0, y0);
-    for (const [t, css] of b.stops) grad.addColorStop(t, css);
-    g.fillStyle = grad;
-    g.fillRect(x, y0, 8, 120);
-    g.strokeStyle = line;
-    g.lineWidth = 1;
-    g.strokeRect(x + 0.5, y0 + 0.5, 7, 119);
-    if (b.band !== null) {
-      // the part a highlight's kernel lights, shaded over the bar
-      const [r, gr, bl] = hexRgb(fg).map((c) => Math.round(255 * c));
-      g.fillStyle = `rgba(${r}, ${gr}, ${bl}, 0.18)`;
-      g.fillRect(x - 3, y0 + 120 * (1 - b.band[1]), 14, 120 * (b.band[1] - b.band[0]));
-    }
-    text(g, hi, x + 13, y0, dim, bg);
-    g.textBaseline = 'bottom';
-    text(g, lo, x + 13, y0 + 120, dim, bg);
-    if (b.marker !== null) {
-      const my = y0 + 120 * (1 - b.marker);
-      g.fillStyle = fg;
-      g.beginPath();
-      g.moveTo(x - 1, my);
-      g.lineTo(x - 7, my - 4);
-      g.lineTo(x - 7, my + 4);
-      g.closePath();
-      g.fill();
-    }
-    x -= 12;
-  }
-}
-
 /**
  * Exports a video of `source` and resolves to an MP4 blob of H.264. Rejects with an AbortError
  * when `options.signal` aborts, and with an Error that gives the reason when WebCodecs is missing, when
- * the browser does not have an H.264 encoder for the size, or when the export would exceed EXPORT_LIMITS.
+ * the browser does not have an H.264 encoder for the size, or when the export would exceed its limits.
  */
 export async function exportVideo(source: ExportSource, options: ExportOptions = {}): Promise<Blob> {
   const missing = webCodecsMissing();
   if (missing !== null) throw new Error(missing);
-  const { scene, geometry } = source;
-  const state = structuredClone(source.state);
   const fps = options.fps ?? 30;
   const size =
     typeof options.size === 'object'
       ? options.size
       : sizePreset(options.size ?? '720p', source.stage, typeof window === 'undefined' ? 1 : window.devicePixelRatio, fps);
-  const schedule = frameSchedule(scene.clock.steps, fps, options.loops ?? 1, options.speed ?? 1, options.start ?? 0, loopSeconds(scene.clock));
-  const refused = checkExport(schedule.count, fps);
+  const clock = source.clock;
+  const schedule = frameSchedule(clock.steps, fps, options.loops ?? 1, options.speed ?? 1, options.start ?? 0, loopSeconds(clock));
+  const refused = checkExport(schedule.count, fps, options.limits);
   if (refused !== null) throw new Error(refused);
+  const keyEvery = options.keyFrameInterval ?? 2 * fps;
+  if (!(keyEvery >= 1)) throw new Error(`the key-frame interval is ${keyEvery}, not a count of at least one frame`);
   const { width, height, pixelRatio: ratio } = size;
   const signal = options.signal;
   const aborted = () => new DOMException('the export was canceled', 'AbortError');
   if (signal?.aborted) throw aborted();
 
-  const config = await chooseConfig(width, height, fps, options.bitrate ?? exportBitrate(width, height, fps));
+  const config = await chooseConfig(width, height, fps, options.bitrate ?? exportBitrate(width, height, fps), options.hardwareAcceleration);
   options.onConfig?.(config);
   const writer = new Mp4Writer(width, height, fps);
   let failure: unknown = null;
@@ -351,95 +287,21 @@ export async function exportVideo(source: ExportSource, options: ExportOptions =
     error: (e) => (failure = e),
   });
   encoder.configure(config);
-
-  // each frame holds the stage above a strip of caption lines, laid out in CSS pixels
-  const font = source.font ?? source.theme?.font ?? sceneTheme(scene).font ?? FONT;
-  const theme = { ...(source.theme ?? sceneTheme(scene)), font };
-  const bg = mixHex(theme.background, theme.background, 0);
-  const fg = mixHex(theme.foreground, theme.foreground, 0);
-  const dim = mixHex(theme.foreground, theme.background, 0.4);
-  const line = mixHex(theme.foreground, theme.background, 0.8);
-  const gutter = gutterColor(theme);
-  const captions = (scene.readouts ?? []).filter((r) => r.place === 'caption');
-  const panelReadouts = (scene.readouts ?? []).filter((r) => r.place === 'panel');
-  const logicalW = width / ratio;
-  const logicalH = height / ratio;
-  const stripH = captions.length > 0 ? 10 + CAPTION_LINE * captions.length : 0;
-  const stageW = Math.floor(logicalW);
-  const stageH = Math.floor(logicalH - stripH);
-  const glCanvas = document.createElement('canvas');
-  // the frames are read back from the canvas after each draw
-  const renderer = new StageRenderer(glCanvas, scene, geometry, { preserveDrawingBuffer: true, coarseDrags: false, theme });
-  const frame = document.createElement('canvas');
-  frame.width = width;
-  frame.height = height;
-  const g = frame.getContext('2d', { alpha: false })!;
-  const first = firstLeaf(state.layout);
-  const seconds = loopSeconds(scene.clock);
-  const read = (pid: string, parts: Readout['parts'], index: number, q: number) => {
-    try {
-      return readoutText({ scene, geometry, state, panel: pid, frameIndex: index, progress: q }, parts);
-    } catch (e) {
-      return (e as Error).message;
-    }
-  };
-
+  let picture: Picture | null = null;
   try {
-    // a first frame builds the panels' draws, whose body images are decoded before the video starts
-    renderer.renderAt(state, schedule.progress(0), stageW, stageH, ratio);
-    await renderer.ready();
+    picture = await source.open(width / ratio, height / ratio, ratio);
+    const frame = document.createElement('canvas');
+    frame.width = width;
+    frame.height = height;
+    const g = frame.getContext('2d', { alpha: false })!;
     for (let k = 0; k < schedule.count; k++) {
       if (signal?.aborted) throw aborted();
       if (failure !== null) throw failure;
-      const index = schedule.index(k);
-      const q = schedule.progress(k);
-      const errors = renderer.renderAt(state, q, stageW, stageH, ratio);
-      const tiles = tile(layoutAt(state.layout, q * seconds), { x: 0, y: 0, w: stageW, h: stageH }, GUTTER);
-      g.setTransform(1, 0, 0, 1, 0, 0);
-      g.fillStyle = bg;
-      g.fillRect(0, 0, width, height);
-      g.drawImage(glCanvas, 0, 0);
       g.setTransform(ratio, 0, 0, ratio, 0, 0);
-      g.fillStyle = gutter;
-      for (const gt of tiles.gutters) g.fillRect(gt.rect.x, gt.rect.y, gt.rect.w, gt.rect.h);
-      g.save();
-      paintStage(g, renderer, scene, state, theme, q, stageW, stageH, (pid, parts) => {
-        try {
-          return readoutPieces({ scene, geometry, state, panel: pid, frameIndex: index, progress: q }, parts);
-        } catch {
-          return [];
-        }
-      });
-      g.restore();
-      for (const [pid, r] of tiles.panels) {
-        g.save();
-        g.beginPath();
-        g.rect(r.x, r.y, r.w, r.h);
-        g.clip();
-        g.textBaseline = 'middle';
-        for (const l of renderer.labels(pid)) drawLabel(g, l, r.x + l.x, r.y + l.y, fg, bg, font);
-        drawColorbars(g, renderer.colorbars(pid), r.x + r.w - 10, r.y + 10, fg, dim, line, bg, font);
-        g.font = `13px ${font}`;
-        g.textBaseline = 'bottom';
-        const lines = panelReadouts
-          .map((ro) => read(pid, ro.parts, index, q))
-          .join('\n')
-          .split('\n');
-        lines.reverse().forEach((s, i) => text(g, s, r.x + 8, r.y + r.h - 6 - 17 * i, fg, bg));
-        const error = errors.get(pid);
-        if (error !== undefined) {
-          g.textBaseline = 'top';
-          text(g, error, r.x + 12, r.y + 12, '#e0a24a', bg);
-        }
-        g.restore();
-      }
-      g.font = `13px ${font}`;
-      g.textBaseline = 'alphabetic';
-      captions.forEach((c, i) => text(g, read(first, c.parts, index, q), 14, stageH + 5 + CAPTION_LINE * (i + 1) - 4, fg, bg));
-
+      picture.draw(g, schedule.index(k), schedule.progress(k));
       options.onFrame?.(frame, k);
       const video = new VideoFrame(frame, { timestamp: Math.round((k * 1e6) / fps), duration: Math.round(1e6 / fps) });
-      encoder.encode(video, { keyFrame: k % (2 * fps) === 0 });
+      encoder.encode(video, { keyFrame: k % keyEvery === 0 });
       video.close();
       options.onProgress?.(k + 1, schedule.count);
       // keep a few frames in the encoder, and let the page breathe between frames
@@ -450,7 +312,7 @@ export async function exportVideo(source: ExportSource, options: ExportOptions =
     if (failure !== null) throw failure;
   } finally {
     if (encoder.state !== 'closed') encoder.close();
-    renderer.dispose();
+    picture?.close();
   }
   return new Blob([writer.finish() as Uint8Array<ArrayBuffer>], { type: 'video/mp4' });
 }

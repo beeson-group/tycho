@@ -1,6 +1,7 @@
 // Tests the pure parts of the video export, and an MP4 round trip of synthetic frames that does not need a codec.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { avcCodec, avcFits, checkExport, chooseConfig, defaultExportFps, exportBitrate, frameSchedule, Mp4Writer, sizePreset } from '../src/runtime/export';
+import { parseGradient, parseShadows } from '../src/runtime/raster';
 
 describe('frame schedule', () => {
   it('runs one loop in 8 s at speed 1, at the rate live playback steps', () => {
@@ -53,7 +54,7 @@ describe('frame schedule', () => {
     // the Broucke example has one lap of 480 steps, 8 s a loop
     expect([0.25, 0.5, 1, 2, 4].map((speed) => defaultExportFps(480, speed, 8))).toEqual([60, 60, 60, 60, 60]);
   });
-  it('is refused past 2000 frames or 90 s', () => {
+  it('is refused past 2000 frames or 90 s, or past the limits a caller gives', () => {
     expect(checkExport(frameSchedule(480, 60, 4, 1).count, 60)).toBeNull();
     expect(checkExport(2000, 30)).toBeNull();
     expect(checkExport(2001, 30)).toMatch(/2001 frames/);
@@ -62,6 +63,10 @@ describe('frame schedule', () => {
     // at 24 fps and above, the frame ceiling binds first, hence the time ceiling shows at a lower rate
     expect(checkExport(1000, 10)).toMatch(/100\.0 s is longer than the 90 s an export may last: lower the loops or raise the speed/);
     expect(checkExport(0, 30)).toMatch(/is 0, not a count of at least one/);
+    // one loop of the demo of slides at 60 fps, 4320 frames over 72 s, under raised limits
+    expect(checkExport(4320, 60)).toMatch(/4320 frames/);
+    expect(checkExport(4320, 60, { frames: 4320, seconds: 72 })).toBeNull();
+    expect(checkExport(4320, 50, { frames: 5000, seconds: 80 })).toMatch(/86\.4 s is longer than the 80 s/);
   });
 });
 
@@ -287,5 +292,31 @@ describe('MP4 muxing of synthetic frames, without a codec', () => {
     expect(() => w.add(frames[0]!, true, 0, 33333, { decoderConfig: { codec: 'vp09.00.60.08' } })).toThrow(/H\.264 only, not vp09/);
     expect(() => w.add(frames[0]!, true, 0, 33333, { decoderConfig: { codec: 'avc1.64001e' } })).toThrow(/avcC/);
     expect(() => new Mp4Writer(641, 360, 30)).toThrow(/even sides/);
+  });
+});
+
+describe('computed styles the raster reads', () => {
+  it('reads each shadow of a list, with its color first, as Chrome writes it', () => {
+    expect(parseShadows('none')).toEqual([]);
+    expect(parseShadows('rgb(0, 0, 0) 0px 0px 3px, rgba(0, 0, 0, 0.5) 1px -2px 0px 4px inset')).toEqual([
+      { color: 'rgb(0, 0, 0)', x: 0, y: 0, blur: 3, spread: 0, inset: false },
+      { color: 'rgba(0, 0, 0, 0.5)', x: 1, y: -2, blur: 0, spread: 4, inset: true },
+    ]);
+  });
+
+  it('reads the direction and the stops of a linear gradient, and nothing else', () => {
+    expect(parseGradient('linear-gradient(to right, rgb(0, 0, 0), rgb(255, 255, 255) 50%, rgb(9, 9, 9))')).toEqual({
+      dir: [1, 0],
+      stops: [
+        [0, 'rgb(0, 0, 0)'],
+        [0.5, 'rgb(255, 255, 255)'],
+        [1, 'rgb(9, 9, 9)'],
+      ],
+    });
+    const turned = parseGradient('linear-gradient(90deg, red, blue)')!;
+    expect(turned.dir[0]).toBeCloseTo(1);
+    expect(turned.dir[1]).toBeCloseTo(0);
+    expect(parseGradient('linear-gradient(rgb(1, 2, 3), rgb(4, 5, 6))')!.dir).toEqual([0, 1]);
+    expect(parseGradient('url("a.png")')).toBeNull();
   });
 });

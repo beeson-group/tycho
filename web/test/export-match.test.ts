@@ -108,12 +108,15 @@ tycho-viewer { position: absolute; left: 0; top: 0; width: 480px; height: 360px;
   }
 
   it('draws the picture of the viewer on the page, within the antialiasing of text', async () => {
-    for (const index of [0, 21, 50]) {
-      const r = await compare(index);
-      expect([r.width, r.height]).toEqual([960, 720]);
-      // the mean difference of a channel, out of 255, and the share of pixels that differ by more than a quarter of the range
-      expect(r.mean, `frame index ${index}`).toBeLessThan(0.5);
-      expect(r.far, `frame index ${index}`).toBeLessThan(2e-4);
+    const results = [];
+    for (const index of [0, 21, 50]) results.push({ index, ...(await compare(index)) });
+    for (const r of results) {
+      const at = `frame index ${r.index} of ${JSON.stringify(results)}`;
+      expect([r.width, r.height], at).toEqual([960, 720]);
+      // the mean difference of a channel, out of 255, and the share of pixels that differ by more than a quarter of the range. The
+      // antialiasing of text on Linux differs at about 0.1% of the pixels, and the old drawing of the export gave a mean of 8.3
+      expect(r.mean, at).toBeLessThan(0.5);
+      expect(r.far, at).toBeLessThan(2e-3);
     }
   }, 60000);
 });

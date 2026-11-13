@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+message: "If you use TyCHO, please cite it as below."
+title: "TyCHO"
+abstract: "Animated, interactive astrodynamics visualizations in a single HTML file"
+type: software
+license: Apache-2.0
+repository-code: "https://github.com/beeson-group/tycho"
+url: "https://pytycho.readthedocs.io/"
+authors:
+  - given-names: Claudio
+    family-names: Vestini
+    affiliation: Princeton University
+    orcid: "https://orcid.org/0009-0005-6154-0574"
+  - given-names: Nina
+    family-names: Karampela
+    affiliation: Princeton University
+  - given-names: Jack Sydney
+    family-names: Schwartz
+    affiliation: Princeton University
+keywords:
+  - astrodynamics
+  - visualization
+  - three-body
+  - periodic orbits
+  - webgl

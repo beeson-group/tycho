@@ -12,11 +12,13 @@ import { sceneTheme } from '../src/runtime/colors';
 import { GeometryCache, pairReadings, pairs, readingPairs, revealSpec, revealTrack, slicePairs, vertexReading } from '../src/runtime/geometry';
 import { mergeColorbars, type Colorbar } from '../src/runtime/overlay';
 import {
+  barsBox,
   cameraMoved,
   contentKey,
   fitBox,
   kernelOpacity,
   labelBox,
+  labelOver,
   labelsOverlap,
   orthoFit,
   planeLabels,
@@ -472,6 +474,28 @@ describe("a plane camera's axes and grid follow the visible rectangle", () => {
         .map((l) => l.text);
     expect([kinds(880, 160), kinds(880, 159), kinds(159, 440), kinds(150, 150)]).toEqual([['x', 'y'], ['y'], ['x'], []]);
     expect(planeLabels(planeView(camera(0, 0, 1.1, 2), { kind: 'plane', plane: 'xy' }, 880, 150), true, ['x', 'y']).some((l) => l.kind === 'tick')).toBe(true);
+  });
+  it('keeps the y tick column below the head, a line of text clear of its bottom edge', () => {
+    const v = planeView(camera(0, 0, 1.1, 2), { kind: 'plane', plane: 'xy' }, 880, 440);
+    const left = (top: number) =>
+      planeLabels(v, true, null, top)
+        .filter((l) => l.align === 'end')
+        .map((l) => l.y);
+    // 0.5 sits 120 px from the top. it stays under a head 110 px tall and is dropped under one 111 px tall
+    expect(Math.min(...left(0))).toBe(120);
+    expect(left(110)).toEqual(left(0));
+    expect(Math.min(...left(111))).toBeGreaterThan(120);
+  });
+  it('keep a label clear of the colorbars when its line of text does not reach their box', () => {
+    const c = { head: 27, bars: { right: 10, top: 37, width: 50, height: 140 } };
+    expect(barsBox(c, 600)).toEqual([538, 35, 592, 179]);
+    expect(barsBox({ head: 27, bars: null }, 600)).toBeNull();
+    expect(barsBox({ head: 27, bars: { ...c.bars, height: 0 } }, 600)).toBeNull();
+    const box = barsBox(c, 600)!;
+    // a line of 12 px text is 18 px tall, hence a label centered 9 px below the box touches it, and one 8 px below overlaps it
+    expect(labelOver({ text: 'm2', x: 530, y: 188 }, box)).toBe(false);
+    expect(labelOver({ text: 'm2', x: 530, y: 187 }, box)).toBe(true);
+    expect(labelOver({ text: 'm2', x: 538, y: 100, align: 'end' }, box)).toBe(false);
   });
 });
 

@@ -69,6 +69,9 @@ CHANNELS = ("true_anomaly", "rho", "time")
 PARAMETERS = ("eccentricity", "period", "closure_error")
 SAMPLES = 480
 STEPS = 480
+# the fractions of each panel left outside the plot box, for the head on top, the colorbar on the right, and the tick numbers and
+# axis titles on the left and at the bottom. they are sized for the shortest panel, the rotating one, at 1200 by 675 CSS pixels
+MARGIN = {"top": 0.17, "right": 0.16, "bottom": 0.26, "left": 0.15}
 
 
 def declare_frames(scene: ty.Scene):
@@ -186,9 +189,10 @@ def build(input_path: Path, out_dir: Path, members_per_family: int | None, write
             ty.track(members_of, e, trail=0.3, head={"color": "#f0e442", "size": 9}, color="#ffffff", width=2.0),
             ty.body(m1, trail=1.0, size=6.0),
             ty.body(m2, trail=1.0, size=4.0),
-            ty.axes(),
-            ty.grid(),
+            ty.axes(span="box"),
+            ty.grid(labels=False),
         ],
+        margin=MARGIN,
     )
     # each frame gets one panel. the left 60% holds the pulsating and the barycentric frame over the rotating
     # frame, and the right 40% holds the two inertial frames centered on the primary and on the secondary

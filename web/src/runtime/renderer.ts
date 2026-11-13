@@ -839,14 +839,39 @@ export function labelsOverlap(a: PanelLabel, b: PanelLabel): boolean {
 /** The height below which a panel does not have room for the x title under its tick row, and the width below which it does not have room for the y title. */
 const TITLE_ROOM = 160;
 
+/** Half the height of a line of 12 px text in the overlay, whose line box is taller than the font size by the font's leading. */
+const HALF_LINE = 9;
+
 /**
- * The labels of a plane view. Tick numbers run along the bottom and the left edges, clear of the corners.
- * The two axis titles sit at the bottom center and the left center, the second reading upward, each in a
+ * What covers a panel's drawing besides its labels, measured by the viewer: the height of the panel's head, and the box of its
+ * colorbars, given by its distance from the panel's right edge, its top, its width, and its height, in CSS pixels.
+ */
+export interface Clearance {
+  head: number;
+  bars: { right: number; top: number; width: number; height: number } | null;
+}
+
+/** The colorbars' box of `c` in a panel `w` pixels wide, as [left, top, right, bottom], grown by 2 px on each side. */
+export function barsBox(c: Clearance, w: number): [number, number, number, number] | null {
+  const b = c.bars;
+  return b === null || b.width <= 0 || b.height <= 0 ? null : [w - b.right - b.width - 2, b.top - 2, w - b.right + 2, b.top + b.height + 2];
+}
+
+/** True when the box of label `l`, as tall as its line of text, overlaps `box`, given as [left, top, right, bottom]. */
+export function labelOver(l: PanelLabel, box: [number, number, number, number]): boolean {
+  const [ll, lt, lr, lb] = labelBox(l);
+  const grow = l.rotate ? [HALF_LINE - 6, 0] : [0, HALF_LINE - 6];
+  return ll - grow[0]! < box[2] && box[0] < lr + grow[0]! && lt - grow[1]! < box[3] && box[1] < lb + grow[1]!;
+}
+
+/**
+ * The labels of a plane view. Tick numbers run along the bottom and the left edges, clear of the corners
+ * and below `top`, the bottom of the panel's head. The two axis titles sit at the bottom center and the left center, the second reading upward, each in a
  * separate row outside the tick numbers. The tick row is centered 28 px above the bottom edge and the x
  * title 10 px above it. The y title sits 10 px from the left edge, and the y tick column is right-aligned
  * clear of it at its widest number. A panel too short or too narrow for a title keeps its ticks.
  */
-export function planeLabels(v: PlaneView, ticks: boolean, titles: [string, string] | null): PanelLabel[] {
+export function planeLabels(v: PlaneView, ticks: boolean, titles: [string, string] | null, top = 0): PanelLabel[] {
   const out: PanelLabel[] = [];
   const sx = (x: number) => ((x - v.x0) / (v.x1 - v.x0)) * v.w;
   const sy = (y: number) => v.h - ((y - v.y0) / (v.y1 - v.y0)) * v.h;
@@ -854,7 +879,7 @@ export function planeLabels(v: PlaneView, ticks: boolean, titles: [string, strin
     const left: PanelLabel[] = [];
     for (const y of multiples(v.y0, v.y1, v.stepY)) {
       const py = sy(y);
-      if (py > 22 && py < v.h - 44) left.push({ text: tickText(y, v.stepY), x: 0, y: py, align: 'end', kind: 'tick' });
+      if (py > Math.max(22, top + HALF_LINE) && py < v.h - 44) left.push({ text: tickText(y, v.stepY), x: 0, y: py, align: 'end', kind: 'tick' });
     }
     // the column ends where its widest number starts 22 px from the edge, clear of the y title
     const column = Math.max(44, 22 + Math.max(0, ...left.map((l) => tickWidth(l.text))));
@@ -2536,6 +2561,8 @@ class PanelRender {
   element: HTMLElement | null = null;
   /** Text over the panel: tick numbers, axis titles, and body labels. */
   labels: HTMLElement | null = null;
+  /** The head and the colorbars over the panel, which its labels are kept clear of. */
+  clearance: Clearance = { head: 0, bars: null };
   plan: PanelPlan | null = null;
   error: string | null = null;
   readonly draws = new Map<number, Draw>();
@@ -2675,6 +2702,11 @@ export class StageRenderer {
       element.append(p.labels);
       this.makeControls(p);
     }
+  }
+
+  /** Sets the head and the colorbars over a panel, as the viewer measured them, for the labels drawn from the next frame on. */
+  setClearance(pid: string, clearance: Clearance): void {
+    this.panel(pid).clearance = clearance;
   }
 
   /** Fits a panel's camera to what it draws at the next frame, forgetting how the user moved the camera. */
@@ -3135,7 +3167,8 @@ export class StageRenderer {
    * The labels of a panel at the last frame, in CSS pixels from the panel's corner. They are the tick
    * numbers and axis titles of a plane camera, the axis titles at the tips of axes laid out from the
    * box, and the body labels beside their discs. An axis title under a shown body label is hidden,
-   * since the body label is the name of the disc beside it.
+   * since the body label is the name of the disc beside it. A body label that would cover the colorbars
+   * moves to the other side of its disc, and a label still over them is hidden, since neither text could be read.
    */
   private labelItems(p: PanelRender): (PanelLabel & { hidden: boolean })[] {
     if (p.plan === null) return [];
@@ -3149,6 +3182,7 @@ export class StageRenderer {
     const k = stretchOf(p.cameraSpec);
     const ox = p.rect.x - p.outer.x;
     const oy = p.rect.y - p.outer.y;
+    const bars = barsBox(p.clearance, p.outer.w);
     const add = (text: string, at: THREE.Vector3, dx: number, hide: boolean): Item => {
       const s = at.clone().multiply(k).project(p.camera);
       const x = ((s.x + 1) / 2) * p.rect.w + dx;
@@ -3164,7 +3198,7 @@ export class StageRenderer {
       const title = (i: number) => (names[i] && frame?.unit ? `${names[i]} [${frame.unit}]` : (names[i] ?? ''));
       const axes = marks.some((d) => d.follows && d.kind === 'axes');
       const ticks = marks.some((d) => d.ticks);
-      for (const l of planeLabels(p.view, ticks, axes ? [title(ix), title(iy)] : null)) {
+      for (const l of planeLabels(p.view, ticks, axes ? [title(ix), title(iy)] : null, p.clearance.head - oy)) {
         const item = { ...l, x: l.x + ox, y: l.y + oy, hidden: false };
         items.push(item);
         if (l.kind === 'title') titles.push(item);
@@ -3179,9 +3213,16 @@ export class StageRenderer {
           titles.push(add(title, tip, 4, p.cameraSpec.kind === 'plane' && Math.abs(tip.clone().normalize().dot(normal)) > 0.99));
         });
       } else if (d instanceof BodyDraw && d.label !== null && d.at !== null && d.group.visible) {
-        bodies.push(add(d.label, d.at, d.size / 2 + 3, false));
+        const item = add(d.label, d.at, d.size / 2 + 3, false);
+        if (bars !== null && labelOver(item, bars)) {
+          items.pop();
+          const left = add(d.label, d.at, -(d.size / 2 + 3), false);
+          left.align = 'end';
+          bodies.push(left);
+        } else bodies.push(item);
       }
     }
+    if (bars !== null) for (const l of items) if (labelOver(l, bars)) l.hidden = true;
     const shown = bodies.filter((b) => !b.hidden);
     for (const t of titles) if (shown.some((b) => labelsOverlap(t, b))) t.hidden = true;
     return items;

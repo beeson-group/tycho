@@ -52,7 +52,7 @@ import numpy as np
 import pytycho as ty
 
 HERE = Path(__file__).resolve().parent
-# the SHA-256 of the released broucke-input.tyd, set in each release as described in CONTRIBUTING.md.
+# the SHA-256 of the released broucke-input.tyd, set in each release as described in .agents/skills/release/SKILL.md.
 # read_input() checks the file against it if set
 INPUT_SHA256: str | None = "763334cf42d7dd1712de1954c3318eab5ec7e3b4d060623e09bee824ed86dba5"
 FAMILIES = [("7", 0.012155), ("8", 0.5), ("11", 0.5)]

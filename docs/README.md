@@ -49,4 +49,4 @@ mkdir -p docs/_extra/examples
 cp examples/broucke/broucke.html examples/broucke/broucke.png docs/_extra/examples/
 ```
 
-A poster is a PNG (Portable Network Graphics) image named after its page, e.g. `broucke.png`, which the gallery shows as a still of the page. It can be a frame of the video export of the page, and `web/scripts/poster.mjs` takes one from a built page, as `CONTRIBUTING.md` describes in its release steps.
+A poster is a PNG (Portable Network Graphics) image named after its page, e.g. `broucke.png`, which the gallery shows as a still of the page. It can be a frame of the video export of the page, and `web/scripts/poster.mjs` takes one from a built page, as described in the release skill, `.agents/skills/release/SKILL.md`.

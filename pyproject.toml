@@ -132,5 +132,5 @@ pythonVersion = "3.10"
 typeCheckingMode = "standard"
 
 [tool.codespell]
-ignore-words-list = ["inout", "istall", "useg"]  # an OpenGL Shading Language keyword, isTall, and a shader uniform in web/src/runtime
+ignore-words-list = ["afterall", "inout", "istall", "useg"]  # a hook of vitest, an OpenGL Shading Language keyword, isTall, and a shader uniform in web/src/runtime
 skip = ["web/package-lock.json"]

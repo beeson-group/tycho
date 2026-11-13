@@ -41,9 +41,9 @@ camera stretches z by a factor of STRETCH_Z, and it turns by TURN degrees about 
 
 With ``--slide dark`` or ``--slide light``, the script instead writes ``manifolds-slide-<mode>.html`` and its two files, the
 page from which the video of the halo for a slide of the talk template is exported. It holds the halo alone, with the inertial
-panel above the rotating panel for a portrait zone of 600 by 800 px. It is drawn in the colors of the deck for the mode, with
+panel above the rotating panel for a portrait figure box of 600 by 800 px. It is drawn in the colors of the deck for the mode, with
 a label on each panel, without the caption, and without a highlight. The video is exported from it with
-``web/scripts/video.mjs``, as ``CONTRIBUTING.md`` says.
+``web/scripts/video.mjs``, as described in the header of the script.
 
 With ``--arcs N``, only the first N arcs of every leg are kept, for a quick run.
 """

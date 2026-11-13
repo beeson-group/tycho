@@ -187,6 +187,8 @@ export interface ExportOptions {
   bitrate?: number;
   /** Called with the encoder configuration the browser accepted, before the first frame. */
   onConfig?: (config: VideoEncoderConfig) => void;
+  /** Called with each frame, as a canvas of the video's size, after it is drawn and before it is encoded. */
+  onFrame?: (frame: HTMLCanvasElement, k: number) => void;
   onProgress?: (done: number, total: number) => void;
   signal?: AbortSignal;
 }
@@ -435,6 +437,7 @@ export async function exportVideo(source: ExportSource, options: ExportOptions =
       g.textBaseline = 'alphabetic';
       captions.forEach((c, i) => text(g, read(first, c.parts, index, q), 14, stageH + 5 + CAPTION_LINE * (i + 1) - 4, fg, bg));
 
+      options.onFrame?.(frame, k);
       const video = new VideoFrame(frame, { timestamp: Math.round((k * 1e6) / fps), duration: Math.round(1e6 / fps) });
       encoder.encode(video, { keyFrame: k % (2 * fps) === 0 });
       video.close();

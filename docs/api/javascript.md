@@ -63,7 +63,7 @@ The viewer looks up the selectors first in its root node, which is the document 
 
 Apart from `theme`, the attributes are read once, when the element connects, which happens when it is inserted into the document. A later change of an attribute does not load another scene, and the method `load` below serves for this instead. Since the viewer fills its CSS box (the rectangle that the layout of the page gives it), it must be given a size. The pages written by pytycho give it one with `tycho-viewer { display: block; width: 100%; height: 100%; }`.
 
-The custom properties `--tycho-background`, `--tycho-foreground`, and `--tycho-grid` of the host take precedence over the theme. Text in HTML inherits the font of the host, and text on a canvas, i.e. in a video export, is set in `--tycho-font` when this property is set. The clock runs only while the element intersects the viewport and the page is visible, and it resumes from where it paused. A key that the viewer uses does not reach the page, so that a deck does not also navigate.
+The custom properties `--tycho-background`, `--tycho-foreground`, and `--tycho-grid` of the host take precedence over the theme. Text in HTML inherits the font of the host, and text that the viewer draws on a canvas is set in `--tycho-font` when this property is set. A video export uses the same fonts as the page. The clock runs only while the element intersects the viewport and the page is visible, and it resumes from where it paused. A key that the viewer uses does not reach the page, so that a deck does not also navigate.
 
 The element is a `TychoViewerElement`, with the methods and properties below.
 
@@ -124,7 +124,9 @@ The returned promise rejects with an `AbortError` when `options.signal` aborts, 
 
 - The browser lacks a WebCodecs encoder. WebCodecs is the browser API that encodes video frames.
 - The browser lacks an H.264 encoder that takes the size.
-- The export would pass the ceiling of `EXPORT_LIMITS`, `{frames: 2000, seconds: 90}`.
+- The export would pass `options.limits`, by default `EXPORT_LIMITS`, i.e. `{frames: 2000, seconds: 90}`.
+
+Each frame is the picture that the viewer shows on the page at the time of this frame, when the viewer is laid out at the size of the video in CSS pixels. The runtime lays out a hidden copy of the viewer at this size, inside the viewer, so that the copy inherits the fonts and the custom properties of the page, and it paints the copy's canvases and its text onto the frame. A kiosk export thus leaves out the caption, as the kiosk page does, and the export of any other viewer holds the caption under the panels.
 
 The options are an `ExportOptions` object, with the keys below.
 
@@ -136,9 +138,16 @@ The options are an `ExportOptions` object, with the keys below.
 | `speed` | the speed of the viewer | the playback speed, at which a lap of the clock (one traversal of a track, rule C6) lasts 8 s divided by the speed |
 | `start` | 0 | the frame index of the first frame |
 | `bitrate` | 0.08 bits per pixel per frame, within 1 to 40 Mbit/s | the target bitrate in bits per second. The default is ample for lines on a plain background |
+| `kiosk` | the `kiosk` attribute of the viewer | whether the picture is that of a kiosk viewer, i.e. the stage alone, which then fills the video, without the caption |
+| `limits` | `EXPORT_LIMITS` | an `ExportLimits`, `{frames, seconds}`, the longest export allowed. One loop of 72 s at 60 fps, 4320 frames, needs `{frames: 4320, seconds: 72}` or more |
+| `keyFrameInterval` | twice `fps`, i.e. a key frame every 2 s | the number of frames from one key frame to the next. `Infinity` gives a single key frame, the first, which suits a video that loops on a slide, since a software encoder makes the picture jump at each key frame |
+| `hardwareAcceleration` | `'no-preference'` | the `hardwareAcceleration` of the encoder configuration of WebCodecs, i.e. `'no-preference'`, `'prefer-hardware'`, or `'prefer-software'` |
 | `onConfig` | | a function called before the first frame with the encoder configuration that the browser accepted |
 | `onProgress` | | a function called after each frame with the number of frames done and the total |
+| `onFrame` | | a function called with each frame, a canvas, and its index, before the frame is encoded, e.g. to keep a still for a poster |
 | `signal` | | an `AbortSignal` that cancels the export |
+
+The video states its color in the MP4, as BT.709 primaries and matrix, the sRGB transfer function, and limited range, which are the values that the browser gives the frames of a canvas.
 
 The function `sizePreset(preset, stage, devicePixelRatio, fps)` returns the `ExportSize` that a preset gives, which an export dialog you build can show before the export starts. The three presets give the following sizes.
 

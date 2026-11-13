@@ -36,6 +36,7 @@ Scene format 0.4 is written and read at this version, and scenes of formats 0.2 
 - The script `web/scripts/video.mjs` exports the video of a page in headless Chrome, through `exportVideo`, and writes the MP4 and a poster.
 - The clock can be given `seconds`, the length of one loop at speed 1, in either mode, with `scene.clock(..., seconds=24)`. Without it, a loop lasts 8 seconds for each lap, as before.
 - The viewer element takes the attribute `lean`, under which the Add panel group, the icons of the panel heads, the frame and rate readouts, the View group, and Export are hidden, while the title, the controls of the scene, play, the scrubber, and the speed menu stay. It is meant for a slide on which the controls of the scene are worked by hand, where `kiosk` hides too much. With the value `panels`, the Add panel group and the icons of the panel heads stay, for a slide on which panels are added by hand.
+- The options `limits`, `keyFrameInterval`, `hardwareAcceleration`, `kiosk`, and `onFrame` of `exportVideo` raise the ceiling of an export, e.g. to one loop of 72 s at 60 fps, set the interval of the key frames, down to a single key frame, choose the encoder, record a kiosk picture from any viewer, and hand each frame to the caller. The type `ExportLimits` is exported.
 
 ### Changed
 
@@ -44,6 +45,8 @@ Scene format 0.4 is written and read at this version, and scenes of formats 0.2 
 - The ends of a colorbar are written as integers when both are integers, as for an iterate count, so that a bar from 0 to 10 is ticked 0 and 10 rather than 0.00 and 10.0.
 
 ### Fixed
+
+- A frame of a video export is the picture of the viewer on the page at the time of this frame, at the same size in CSS pixels. The runtime lays out a hidden copy of the viewer at the size of the video and paints it onto the frame. Hence the export of a kiosk viewer leaves out the caption, the text is set in the fonts of the page with the halos of its labels, the colorbar sits where the page draws it with the same ticks and marker, and the camera fit of a kiosk export is that of the page, whose stage is not shortened by a caption strip.
 
 - An axis title under the label of a body is hidden, while the label is kept, since it is the name of the disc beside it. In the rotating panel of the manifolds slide, the title of the x axis was drawn over the label of the Moon, which is on the x axis. The overlap is found from boxes estimated from the text, so that the same titles are hidden in a page and in an exported video.
 - At a fractional device pixel ratio, e.g. 1.5, a panel no longer shifts by half a device pixel at the frames at which its static layers are drawn again. Leaving the target of those layers, three floored the canvas's viewport and scissor where setting them rounds them, so that the panel's other layers were drawn one pixel shorter at those frames, and a still picture shook in an exported video. The first frame of a video shifted the same way.

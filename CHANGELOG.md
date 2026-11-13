@@ -42,6 +42,7 @@ Scene format 0.4 is written and read at this version, and scenes of formats 0.2 
 
 - The colorbar of a layer colored by a parameter is a slider of the selector of that parameter under `kiosk` too, where the link was off before, so that a click on the bar of a kiosk page sets the value.
 - A key pressed while a tab, a switch, or a button of the viewer has the focus acts on the viewer, unless the control takes the key itself, as a button takes Space and Enter. Hence `0` rewinds the loop right after a click on a tab, where the key was swallowed before.
+- The panels of the Broucke example draw each plot in a box, with the tick numbers and the axis titles outside it, and leave a margin around the box for the panel's head and the colorbar, so that neither the text nor the colorbar is drawn over the orbits.
 - The ends of a colorbar are written as integers when both are integers, as for an iterate count, so that a bar from 0 to 10 is ticked 0 and 10 rather than 0.00 and 10.0.
 
 ### Fixed

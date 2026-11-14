@@ -898,6 +898,20 @@ describe('a viewer embedded on a page, under a DOM stand-in', () => {
       const grad = dom.barDom[0].grad;
       expect([grad.classList.contains('live'), grad.getAttribute('role'), grad.getAttribute('aria-label')]).toEqual([true, 'slider', 'eccentricity']);
     });
+    it('writes the height of a panel head into a property that is not a color token, so that the head keeps its background', async () => {
+      const { v } = await live();
+      v.renderer = { ...v.renderer, setClearance: vi.fn() };
+      const [pid, dom] = [...v.panelDom.entries()][0];
+      dom.head.offsetHeight = 30;
+      v.measureOverlay(pid, dom);
+      const written = Object.keys(dom.host.style).filter((k) => k.startsWith('--'));
+      expect(written.map((k) => dom.host.style[k])).toContain('30px');
+      const tokens = chromeTokens(DEFAULT_THEME);
+      expect(written.filter((k) => k in tokens)).toEqual([]);
+      const css = readFileSync(new URL('../src/runtime/element.ts', import.meta.url), 'utf8');
+      const background = /\.phead \{[^}]*background: var\((--[\w-]+)\)/.exec(css)?.[1];
+      expect(background !== undefined && background in tokens).toBe(true);
+    });
   });
 
   describe('stages (rule K9)', () => {

@@ -58,6 +58,7 @@ Scene format 0.4 is written and read at this version, and scenes of formats 0.2 
 - At a fractional device pixel ratio, e.g. 1.5, a panel no longer shifts by half a device pixel at the frames at which its static layers are drawn again. Leaving the target of those layers, three floored the canvas's viewport and scissor where setting them rounds them, so that the panel's other layers were drawn one pixel shorter at those frames, and a still picture shook in an exported video. The first frame of a video shifted the same way.
 - The static layers of a panel are no longer lost at a fractional device pixel ratio, e.g. 1.25. At such a ratio, the viewport was rounded up past the end of the drawing buffer, and the copy of these layers was refused by WebGL, which left the panel gray.
 - A drag across a panel of an orbit camera turns the view about the camera's up axis, as a turntable, and a drag up the panel tilts it toward this axis (#7). The controls took the axis from the camera before its up was set, i.e. from three's default, +y, hence a scene with the up axis z, the default, was tumbled about a horizontal axis.
+- The head of a panel has the background of the theme again, the surface color at 80% opacity. The viewer wrote the height of the head into `--head`, the color token of this background, and the head was drawn transparent over the picture of the panel.
 
 ## [0.2.0] - 2026-11-06
 

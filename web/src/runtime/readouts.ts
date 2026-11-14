@@ -310,11 +310,10 @@ export function keyAction(key: string, shift: boolean, steps: number): KeyAction
     case 'x':
     case 'y':
     case 'z':
-      return { kind: 'view', axis: key, sign: shift ? -1 : 1 };
     case 'X':
     case 'Y':
     case 'Z':
-      return { kind: 'view', axis: key.toLowerCase() as 'x' | 'y' | 'z', sign: -1 };
+      return { kind: 'view', axis: key.toLowerCase() as 'x' | 'y' | 'z', sign: shift ? -1 : 1 };
     case ']':
       return { kind: 'turn', degrees: shift ? 90 : 15 };
     case '[':

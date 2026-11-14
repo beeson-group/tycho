@@ -1,0 +1,93 @@
+name: PR Agent
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, synchronize]
+  issue_comment:  # zizmor: ignore[dangerous-triggers] a command is taken only from an owner, a member, or a collaborator, see the guard below
+    types: [created]
+
+permissions: {}
+
+jobs:
+  # an event sent by a bot starts nothing, and neither does an event of a fork, since the events
+  # of a fork run without the repository secrets, so no key for the model reaches the review. A
+  # comment is taken only from a comment on a pull request, and only from an owner, a member, or
+  # a collaborator, since anyone can comment on a public repository. The command itself and the
+  # effective permission are checked in this job, which holds no concurrency group, so a comment
+  # that is refused cannot cancel the review that is running
+  authorize:
+    if: >-
+      ${{ github.event.sender.type != 'Bot' &&
+      (github.event_name != 'issue_comment' ||
+      (github.event.issue.pull_request &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association))) &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      authorized: ${{ steps.check.outputs.authorized }}
+    steps:
+      # the association of a comment and the role of the sender say nothing about their access to
+      # this repository, hence the effective permission decides. The body is trimmed before the
+      # command is taken from it, since PR-Agent also reads a command behind a newline
+      - name: Check the command and the sender's permission
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SENDER: ${{ github.event.sender.login }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          authorized=false
+          if [ "$GITHUB_EVENT_NAME" = "issue_comment" ]; then
+            trimmed="$(printf '%s' "$COMMENT_BODY" | sed -z 's/^[[:space:]]*//')"
+            case "$trimmed" in
+              /*) ;;
+              *) echo "authorized=false" >> "$GITHUB_OUTPUT"; exit 0 ;;
+            esac
+          fi
+          # a query that fails counts as no access, so the review is refused rather than run
+          perm="$(gh api "repos/${{ github.repository }}/collaborators/$SENDER/permission" --jq .permission || echo none)"
+          case "$perm" in
+            write | maintain | admin) authorized=true ;;
+          esac
+          echo "authorized=$authorized" >> "$GITHUB_OUTPUT"
+  # the review runs only on the word of the job above, and an authorized person can review any
+  # pull request, one opened by a bot included
+  pr_agent_job:
+    needs: authorize
+    if: needs.authorize.outputs.authorized == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # the issue number of a pull request is its number, so a comment-triggered run shares the
+    # group with the synchronize runs of the same pull request. The group belongs to the job,
+    # hence a run whose job the condition above skips enters no group and cancels nothing
+    concurrency:
+      group: pr-agent-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - name: PR Agent action step
+        id: pragent
+        uses: docker://pragent/pr-agent:0.50.0-github_action
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # use low reasoning for GLM and disable Qwen thinking to leave time for an answer
+          # bound reasoning and the answer together with max_output_tokens
+          config.model: "openai/glm-5"
+          config.fallback_models: '["openai/qwen3"]'
+          config.custom_model_max_tokens: "1000000"
+          config.max_model_tokens: "64000"
+          config.max_output_tokens: "8192"
+          LITELLM.EXTRA_BODY: '{"chat_template_kwargs": {"reasoning_effort": "low", "enable_thinking": false}}'
+          config.ai_timeout: "600"
+          config.retry_same_model_on_timeout: "false"
+          OPENAI.API_BASE: "https://ellm.nrp-nautilus.io/v1"
+          OPENAI.KEY: ${{ secrets.NRP_API_KEY }}
+          github_action_config.auto_describe: "true"
+          github_action_config.auto_review: "true"
+          github_action_config.auto_improve: "true"
+          github_action_config.pr_actions: '["opened", "reopened", "ready_for_review", "synchronize"]'

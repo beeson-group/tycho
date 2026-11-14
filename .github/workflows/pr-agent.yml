@@ -55,12 +55,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # GLM-5.3 on the NRP gateway, with Qwen3.8-Flash-Next as the fallback. The gateway
           # separates a model's reasoning from its answer, so the commands receive clean JSON.
-          # The repository knobs are in .pr_agent.toml
+          # A call gets ten minutes, since the model can reason for many minutes before its
+          # answer. The repository knobs are in .pr_agent.toml
           config.model: "openai/glm-5"
           config.fallback_models: '["openai/qwen3"]'
           config.custom_model_max_tokens: "1000000"
           config.max_model_tokens: "64000"
-          config.ai_timeout: "300"
+          config.ai_timeout: "600"
           OPENAI.API_BASE: "https://ellm.nrp-nautilus.io/v1"
           OPENAI.KEY: ${{ secrets.NRP_API_KEY }}
           github_action_config.auto_describe: "true"

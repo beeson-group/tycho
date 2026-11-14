@@ -1,20 +1,21 @@
 """The NumPy evaluator of a TyCHO scene, section 3 of ``spec/tycho-scene.md``.
 
 The evaluator is the reference for the behavior that TyCHO defines, i.e. the edge equation of the frame tree, the
-clock reading, the blend between two stored samples, the trail, and the laps of a periodic track. It does not hold
+clock reading, the blend between two stored samples, the trail, and the revolutions of a periodic trajectory. It does not hold
 the frame formula of any dynamical model. Every frame is instead the generic edge ``p_child = s * R * (p_parent - o)``
-of rule F1. The scale ``s`` and the angle of the rotation ``R`` are each a number, a track set attribute, or a per-sample
-channel, and the origin ``o`` is three numbers, attributes, or channels, or the position of a body (rule F2). The TypeScript
+of rule `transform`. The scale ``s`` and the angle of the rotation ``R`` are each a number, a trajectory set attribute, or a per-sample
+channel, and the origin ``o`` is three numbers, attributes, or channels, or the position of a body (rule `origin`). The TypeScript
 evaluator in ``web/`` is the second implementation, and both must reproduce every case of the conformance corpus in
 ``spec/conformance/``. Every computation runs in float64.
 
-:meth:`pytycho.TrackSet.thin` also uses :class:`FrameTree` to measure arclength in frames other than
-the frame of the track set.
+:meth:`pytycho.TrajectorySet.thin` also uses :class:`FrameTree` to measure arclength in frames other than
+the frame of the trajectory set.
 """
 
 from __future__ import annotations
 
 import math
+import re
 from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
@@ -33,10 +34,10 @@ class EvaluationError(ValueError):
 
 
 class Context:
-    """The context of rule 2.2 for ``n`` points at once, made of one track set, one track, and one sample per point.
+    """The context of rule `context-number` for ``n`` points at once, made of one trajectory set, one trajectory, and one sample per point.
 
-    ``attrs`` are the track set's attributes. ``channel(name)`` returns the channel's value at each
-    point's sample, already raised by the channel's advance times the lap of rule C6.
+    ``attrs`` are the trajectory set's attributes. ``channel(name)`` returns the channel's value at each
+    point's sample, already raised by the channel's advance times the revolution of rule `revolutions`.
     """
 
     __slots__ = ("_channel", "attrs", "n")
@@ -49,21 +50,22 @@ class Context:
     def channel(self, name: str) -> np.ndarray:
         values = self._channel(name)
         if values is None:
-            raise EvaluationError(f"F5: the context's track set lacks channel {name!r}")
+            raise EvaluationError(f"transform-channels: the context's trajectory set lacks channel {name!r}")
         return values
 
     def attr(self, name: str) -> float:
         try:
             return float(self.attrs[name])
         except KeyError:
-            raise EvaluationError(f"F5: the context's track set lacks attribute {name!r}") from None
+            raise EvaluationError(f"transform-channels: the context's trajectory set lacks attribute {name!r}") from None
 
 
 def _number(value: Any, what: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise EvaluationError(f"{what} is {value!r}, not a number")
+        message = f"{what} is {value!r}, not a number"
+        raise EvaluationError(message if re.match(r"[a-z][a-z0-9-]*: ", message) else f"scene: {message}")
     if not math.isfinite(value):
-        raise EvaluationError(f"S4: {what} is {value!r}, not finite")
+        raise EvaluationError(f"finite-number: {what} is {value!r}, not finite")
     return float(value)
 
 
@@ -73,19 +75,20 @@ def scalar(spec: Any, ctx: Context) -> float | np.ndarray:
         return _number(spec.get("factor", 1.0), "a factor") * ctx.attr(spec["attr"]) + _number(spec.get("offset", 0.0), "an offset")
     if isinstance(spec, Mapping) and "channel" in spec:
         if spec["channel"] == INDEX:
-            raise EvaluationError(f"2.2: {INDEX} is not allowed in a frame edge")
+            raise EvaluationError(f"context-number: {INDEX} is not allowed in a frame edge")
         return ctx.channel(spec["channel"])
     return _number(spec, "a scalar")
 
 
 def _point(spec: Any, ctx: Context, *, channels: bool = False) -> np.ndarray:
-    """Three scalars as an ``(n, 3)`` array, with a channel allowed only under ``channels``, i.e. in an origin (rules F2 and 2.4)."""
+    """Three scalars as an ``(n, 3)`` array, with a channel allowed only under ``channels``, i.e. in an origin (rules `origin` and
+    `body`)."""
     if not isinstance(spec, list) or len(spec) != 3:
-        raise EvaluationError(f"F2: an origin or a position is three scalars, not {spec!r}")
+        raise EvaluationError(f"origin: an origin or a position is three scalars, not {spec!r}")
     out = np.empty((ctx.n, 3))
     for j, value in enumerate(spec):
         if not channels and isinstance(value, Mapping) and "channel" in value:
-            raise EvaluationError("F2: the position of a body takes a number or an attribute, not a channel")
+            raise EvaluationError("origin: the position of a body takes a number or an attribute, not a channel")
         out[:, j] = scalar(value, ctx)
     return out
 
@@ -94,28 +97,29 @@ def _point(spec: Any, ctx: Context, *, channels: bool = False) -> np.ndarray:
 
 
 class FrameTree:
-    """The frames and bodies of a scene document, and the transforms between frames (rules F1 to F3 and F6)."""
+    """The frames and bodies of a scene document, and the transforms between frames (rules `transform` to `frame-path` and
+    `body-origin-cycle`)."""
 
     def __init__(self, frames: Mapping[str, Any], bodies: Mapping[str, Any] | None = None) -> None:
         self.frames = frames
         self.bodies = bodies or {}
         roots = [fid for fid, f in frames.items() if "parent" not in f]
         if len(roots) != 1:
-            raise EvaluationError(f"2.3: the frames have {len(roots)} roots, not one: {roots}")
+            raise EvaluationError(f"frame: the frames have {len(roots)} roots, not one: {roots}")
         self.root = roots[0]
         for fid in frames:
             self.ancestors(fid)
         root = frames[self.root]
         if any(k in root for k in ("origin", "rotation", "scale")):
-            raise EvaluationError(f"2.3: the root frame {self.root!r} has an origin, a rotation, or a scale")
+            raise EvaluationError(f"frame: the root frame {self.root!r} has an origin, a rotation, or a scale")
         for fid, frame in frames.items():
             scale = frame.get("scale")
             if scale == 0 or (
                 isinstance(scale, Mapping) and "attr" in scale and scale.get("factor", 1) == 0 and scale.get("offset", 0) == 0
             ):
-                raise EvaluationError(f"F2: the scale of frame {fid!r} is zero")
+                raise EvaluationError(f"origin: the scale of frame {fid!r} is zero")
         for fid in frames:
-            # rule F6 is checked at load, whatever is drawn
+            # rule `body-origin-cycle` is checked at load, whatever is drawn
             self.requirements(fid, self.root)
 
     def ancestors(self, fid: str) -> list[str]:
@@ -124,7 +128,7 @@ class FrameTree:
         while "parent" in self._frame(chain[-1]):
             parent = self._frame(chain[-1])["parent"]
             if parent in chain:
-                raise EvaluationError(f"2.3: the parents of frame {fid!r} form a cycle")
+                raise EvaluationError(f"frame: the parents of frame {fid!r} form a cycle")
             chain.append(parent)
         return chain
 
@@ -132,10 +136,10 @@ class FrameTree:
         try:
             return self.frames[fid]
         except KeyError:
-            raise EvaluationError(f"2.3: frame {fid!r} is not declared") from None
+            raise EvaluationError(f"frame: frame {fid!r} is not declared") from None
 
     def path(self, src: str, dst: str) -> tuple[list[str], list[str]]:
-        """The edges from ``src`` to ``dst`` (rule F3), each identified by its child frame.
+        """The edges from ``src`` to ``dst`` (rule `frame-path`), each identified by its child frame.
 
         The first list holds the edges applied inversely, from ``src`` up to the lowest common
         ancestor. The second holds those applied forward, from below this ancestor down to ``dst``.
@@ -167,7 +171,7 @@ class FrameTree:
         try:
             spec = self.bodies[body]
         except KeyError:
-            raise EvaluationError(f"2.4: body {body!r} is not declared") from None
+            raise EvaluationError(f"body: body {body!r} is not declared") from None
         return self.transform(_point(spec.get("position"), ctx), spec["frame"], frame, ctx, _stack)
 
     def _edge(self, fid: str, ctx: Context, stack: tuple[str, ...]):
@@ -177,7 +181,7 @@ class FrameTree:
             o: Any = 0.0
         elif isinstance(origin, Mapping):
             if fid in stack:
-                raise EvaluationError(f"F6: the origin of frame {fid!r} depends on itself")
+                raise EvaluationError(f"body-origin-cycle: the origin of frame {fid!r} depends on itself")
             o = self.body_position(origin["body"], frame["parent"], ctx, (*stack, fid))
         else:
             o = _point(origin, ctx, channels=True)
@@ -189,14 +193,14 @@ class FrameTree:
         s = frame.get("scale")
         s = 1.0 if s is None else np.broadcast_to(np.asarray(scalar(s, ctx), dtype=np.float64), (ctx.n,))[:, None]
         if np.any(np.asarray(s) == 0.0):
-            raise EvaluationError(f"F2: the scale of frame {fid!r} is zero")
+            raise EvaluationError(f"origin: the scale of frame {fid!r} is zero")
         return o, axis, angle, s
 
     def requirements(self, src: str, dst: str, _stack: tuple[str, ...] = ()) -> tuple[set[str], set[str]]:
-        """The channels and attributes that a context must carry to take a point from ``src`` to ``dst`` (rule F5).
+        """The channels and attributes that a context must carry to take a point from ``src`` to ``dst`` (rule `transform-channels`).
 
         For an origin at a body, the result also holds the attributes of the body's position and the requirements of
-        the path from the body's frame to the edge's parent frame. Raises when an origin depends on itself (rule F6).
+        the path from the body's frame to the edge's parent frame. Raises when an origin depends on itself (rule `body-origin-cycle`).
         """
         channels: set[str] = set()
         attrs: set[str] = set()
@@ -208,7 +212,7 @@ class FrameTree:
             origin = frame.get("origin")
             if isinstance(origin, Mapping):
                 if fid in _stack:
-                    raise EvaluationError(f"F6: the origin of frame {fid!r} depends on itself")
+                    raise EvaluationError(f"body-origin-cycle: the origin of frame {fid!r} depends on itself")
                 c, a = self.body_requirements(origin["body"], frame["parent"], (*_stack, fid))
                 channels |= c
                 attrs |= a
@@ -221,13 +225,13 @@ class FrameTree:
         """The channels and attributes needed for the body's position in ``frame``."""
         spec = self.bodies.get(body)
         if spec is None:
-            raise EvaluationError(f"2.4: body {body!r} is not declared")
+            raise EvaluationError(f"body: body {body!r} is not declared")
         if spec.get("frame") not in self.frames:
-            raise EvaluationError(f"2.4: body {body!r} is in frame {spec.get('frame')!r}, which is not declared")
+            raise EvaluationError(f"body: body {body!r} is in frame {spec.get('frame')!r}, which is not declared")
         channels, attrs = self.requirements(spec["frame"], frame, _stack)
         position = spec.get("position")
         if not isinstance(position, list) or len(position) != 3:
-            raise EvaluationError(f"2.4: the position of body {body!r} is three scalars, not {position!r}")
+            raise EvaluationError(f"body: the position of body {body!r} is three scalars, not {position!r}")
         for value in position:
             _collect(value, channels, attrs)
         return channels, attrs
@@ -242,7 +246,8 @@ def _collect(spec: Any, channels: set[str], attrs: set[str]) -> None:
 
 
 def _rotate(p: np.ndarray, axis: str, angle: np.ndarray, *, inverse: bool) -> np.ndarray:
-    """Returns ``R p``, or ``R^T p`` when ``inverse``, where ``R`` is the right-handed rotation by ``angle`` about ``axis`` (rule F1)."""
+    """Returns ``R p``, or ``R^T p`` when ``inverse``, where ``R`` is the right-handed rotation by ``angle`` about ``axis`` (rule
+    `transform`)."""
     c, s = np.cos(angle), np.sin(angle)
     if inverse:
         s = -s
@@ -253,14 +258,15 @@ def _rotate(p: np.ndarray, axis: str, angle: np.ndarray, *, inverse: bool) -> np
         return np.hstack([x, c * y - s * z, s * y + c * z])
     if axis == "y":
         return np.hstack([c * x + s * z, y, -s * x + c * z])
-    raise EvaluationError(f"rotation axis {axis!r} is not x, y, or z")
+    raise EvaluationError(f"transform: rotation axis {axis!r} is not x, y, or z")
 
 
-# track data
+# trajectory data
 
 
-class Track:
-    """One track of a track set, with its positions as an ``(m, 3)`` array, its channels, and the attributes of its track set."""
+class Trajectory:
+    """One trajectory of a trajectory set, with its positions as an ``(m, 3)`` array, its channels, and the attributes of its trajectory
+    set."""
 
     def __init__(self, positions: np.ndarray, channels: Mapping[str, np.ndarray], attrs: Mapping[str, float], periodic: bool) -> None:
         self.positions = positions
@@ -274,84 +280,92 @@ class Track:
             return np.arange(self.m, dtype=np.float64)
         return self.channels.get(name)
 
-    def context(self, lap: int = 0) -> Context:
-        """The context of every sample in lap ``lap`` of rule C6. Lap -1 is the shifted context of rule L2."""
+    def context(self, revolution: int = 0) -> Context:
+        """The context of every sample in revolution ``revolution`` of rule `revolutions`. Revolution -1 is the shifted context of rule
+        `trail-wrap`."""
 
-        return Context(self.attrs, lambda name: _raised(self.channel(name), lap), self.m)
+        return Context(self.attrs, lambda name: _raised(self.channel(name), revolution), self.m)
 
-    def sample_context(self, lap: int, sample: int, n: int) -> Context:
-        """The context of sample ``sample`` in lap ``lap``, repeated for ``n`` points.
+    def sample_context(self, revolution: int, sample: int, n: int) -> Context:
+        """The context of sample ``sample`` in revolution ``revolution``, repeated for ``n`` points.
 
-        A layer in the driver's context reads its points in this context (rule L6).
+        A layer that reads from the reference reads its points in this context (rule `read-from`).
         """
 
         def channel(name: str) -> np.ndarray | None:
-            values = _raised(self.channel(name), lap)
+            values = _raised(self.channel(name), revolution)
             return None if values is None else np.full(n, values[sample])
 
         return Context(self.attrs, channel, n)
 
     def clock_values(self, name: str) -> np.ndarray:
-        """The clock channel's values along the track, checked against rule T3."""
+        """The clock channel's values along the trajectory, checked against rule `monotone-clock-channel`."""
         if name == INDEX:
             return np.arange(self.m, dtype=np.float64)
         c = self.channel(name)
         if c is None:
-            raise EvaluationError(f"C5: the track lacks clock channel {name!r}")
+            raise EvaluationError(f"clock-channel-carried: the trajectory lacks clock channel {name!r}")
         d = np.diff(c)
         if not np.all(np.isfinite(c)) or not (np.all(d > 0) or np.all(d < 0)) or not np.isfinite(c[-1] - c[0]):
-            raise EvaluationError(f"T3: clock channel {name!r} is not strictly monotone with a finite span along a track")
+            raise EvaluationError(
+                f"monotone-clock-channel: clock channel {name!r} is not strictly monotone with a finite span along a trajectory"
+            )
         return c
 
     def sample_readings(self, name: str) -> np.ndarray:
-        """The sample readings ``u_i`` of rule C1 for clock channel ``name``."""
+        """The sample readings ``u_i`` of rule `sample-fraction` for clock channel ``name``."""
         c = self.clock_values(name)
         return (c - c[0]) / (c[-1] - c[0])
 
 
-def _raised(values: np.ndarray | None, lap: int) -> np.ndarray | None:
-    """A channel's values raised by ``lap`` times its advance over one period (rule C6)."""
-    if values is None or lap == 0:
+def _raised(values: np.ndarray | None, revolution: int) -> np.ndarray | None:
+    """A channel's values raised by ``revolution`` times its advance over one period (rule `revolutions`)."""
+    if values is None or revolution == 0:
         return values
-    return values + lap * (values[-1] - values[0])
+    return values + revolution * (values[-1] - values[0])
 
 
 class SetData:
-    """A track set of the scene document, read from the container as float64."""
+    """A trajectory set of the scene document, read from the container as float64."""
 
     def __init__(self, sid: str, spec: Mapping[str, Any], container: Container) -> None:
         self.id = sid
         self.spec = spec
-        if not isinstance(spec, Mapping) or not all(k in spec for k in ("frame", "tracks", "offsets", "positions")):
-            raise EvaluationError(f"2.1: track set {sid!r} lacks frame, tracks, offsets, or positions")
+        if not isinstance(spec, Mapping) or not all(k in spec for k in ("frame", "trajectories", "offsets", "positions")):
+            raise EvaluationError(f"trajectory-set: trajectory set {sid!r} lacks frame, trajectories, offsets, or positions")
 
-        def view(name: Any) -> np.ndarray:
+        def array(name: Any) -> np.ndarray:
             try:
-                return container.view(name)
+                return container.array(name)
             except (KeyError, TypeError):
-                raise EvaluationError(f"2.1: track set {sid!r} names view {name!r}, which the data container lacks") from None
+                raise EvaluationError(
+                    f"trajectory-set: trajectory set {sid!r} names array {name!r}, which the data container lacks"
+                ) from None
 
-        self.tracks = spec["tracks"]
-        if isinstance(self.tracks, bool) or not isinstance(self.tracks, int) or self.tracks < 1:
-            raise EvaluationError(f"2.1: track set {sid!r} has tracks {self.tracks!r}, not a count of at least one")
-        offsets = view(spec["offsets"])
-        if offsets.dtype != np.uint32 or offsets.shape != (self.tracks + 1,):
+        self.trajectories = spec["trajectories"]
+        if isinstance(self.trajectories, bool) or not isinstance(self.trajectories, int) or self.trajectories < 1:
             raise EvaluationError(
-                f"2.1: track set {sid!r}: offsets view {spec['offsets']!r} is {offsets.dtype} of shape {offsets.shape}, "
-                f"not uint32 of shape ({self.tracks + 1},)"
+                f"trajectory-set: trajectory set {sid!r} has trajectories {self.trajectories!r}, not a count of at least one"
+            )
+        offsets = array(spec["offsets"])
+        if offsets.dtype != np.uint32 or offsets.shape != (self.trajectories + 1,):
+            raise EvaluationError(
+                f"trajectory-set: trajectory set {sid!r}: offsets array {spec['offsets']!r} is {offsets.dtype} of shape {offsets.shape}, "
+                f"not uint32 of shape ({self.trajectories + 1},)"
             )
         self.offsets = offsets.astype(np.int64)
         if self.offsets[0] != 0:
-            raise EvaluationError(f"2.1: track set {sid!r}: offsets[0] is {self.offsets[0]}, not 0")
+            raise EvaluationError(f"trajectory-set: trajectory set {sid!r}: offsets[0] is {self.offsets[0]}, not 0")
         if np.any(np.diff(self.offsets) < 2):
             t = int(np.flatnonzero(np.diff(self.offsets) < 2)[0])
             n = int(self.offsets[t + 1] - self.offsets[t])
-            raise EvaluationError(f"T1: track set {sid!r}: the sample count of track {t} is {n}, fewer than two")
-        positions = view(spec["positions"]).astype(np.float64)
+            raise EvaluationError(f"two-samples: trajectory set {sid!r}: the sample count of trajectory {t} is {n}, fewer than two")
+        positions = array(spec["positions"]).astype(np.float64)
         size = int(self.offsets[-1])
         if positions.ndim != 2 or positions.shape[0] != size or positions.shape[1] not in (2, 3):
             raise EvaluationError(
-                f"2.1: track set {sid!r}: positions view {spec['positions']!r} has shape {positions.shape}, not ({size}, 2) or ({size}, 3)"
+                f"trajectory-set: trajectory set {sid!r}: positions array {spec['positions']!r} has shape {positions.shape}, not "
+                f"({size}, 2) or ({size}, 3)"
             )
         if positions.shape[1] == 2:
             positions = np.hstack([positions, np.zeros((size, 1))])
@@ -359,41 +373,46 @@ class SetData:
         self.channels = {}
         for name, info in (spec.get("channels") or {}).items():
             if name == INDEX:
-                raise EvaluationError(f"S3: track set {sid!r} declares a channel named {INDEX}, which is reserved")
-            values = view(info["view"] if isinstance(info, Mapping) else None).astype(np.float64)
+                raise EvaluationError(f"identifier: trajectory set {sid!r} declares a channel named {INDEX}, which is reserved")
+            values = array(info["array"] if isinstance(info, Mapping) else None).astype(np.float64)
             if values.shape != (size,):
-                raise EvaluationError(f"2.1: track set {sid!r}: channel {name!r} has shape {values.shape}, not ({size},)")
+                raise EvaluationError(f"trajectory-set: trajectory set {sid!r}: channel {name!r} has shape {values.shape}, not ({size},)")
             self.channels[name] = values
         self.parameters = {}
         for name, info in (spec.get("parameters") or {}).items():
-            values = view(info["view"] if isinstance(info, Mapping) else None).astype(np.float64)
-            if values.shape != (self.tracks,):
-                raise EvaluationError(f"2.1: track set {sid!r}: parameter {name!r} has shape {values.shape}, not ({self.tracks},)")
+            if name == INDEX:
+                raise EvaluationError(f"identifier: trajectory set {sid!r} declares a parameter named {INDEX}, which is reserved")
+            values = array(info["array"] if isinstance(info, Mapping) else None).astype(np.float64)
+            if values.shape != (self.trajectories,):
+                raise EvaluationError(
+                    f"trajectory-set: trajectory set {sid!r}: parameter {name!r} has shape {values.shape}, not ({self.trajectories},)"
+                )
             if not np.all(np.isfinite(values)):
                 t = int(np.flatnonzero(~np.isfinite(values))[0])
-                raise EvaluationError(f"2.1: parameter {name!r} of track set {sid!r} is not finite at track {t}")
+                raise EvaluationError(f"trajectory-set: parameter {name!r} of trajectory set {sid!r} is not finite at trajectory {t}")
             self.parameters[name] = values
-        self.attrs = {k: _number(v, f"attribute {k!r} of track set {sid!r}") for k, v in (spec.get("attrs") or {}).items()}
+        self.attrs = {k: _number(v, f"attribute {k!r} of trajectory set {sid!r}") for k, v in (spec.get("attrs") or {}).items()}
         self.tags = spec.get("tags") or {}
         self.frame = spec["frame"]
         self.periodic = spec.get("periodic", False)
         if not isinstance(self.periodic, bool):
-            raise EvaluationError(f"T2: track set {sid!r} has periodic {self.periodic!r}, not a boolean")
+            raise EvaluationError(f"periodic: trajectory set {sid!r} has periodic {self.periodic!r}, not a boolean")
 
-    def track(self, i: int) -> Track:
+    def trajectory(self, i: int) -> Trajectory:
         a, b = self.offsets[i], self.offsets[i + 1]
-        return Track(self.positions[a:b], {k: v[a:b] for k, v in self.channels.items()}, self.attrs, self.periodic)
+        return Trajectory(self.positions[a:b], {k: v[a:b] for k, v in self.channels.items()}, self.attrs, self.periodic)
 
 
 # readings, points, and polylines
 
-# A vertex ("sample", i, lap) is stored sample i, and a vertex ("blend", k, w, lap) is the point at weight w between
-# samples k and k + 1. Both are taken in the context of lap `lap` of rule C6, where lap -1 is the shifted context of rule L2.
+# A vertex ("sample", i, revolution) is stored sample i, and a vertex ("blend", k, w, revolution) is the point at weight w between
+# samples k and k + 1. Both are taken in the context of revolution `revolution` of rule `revolutions`, where revolution -1 is the shifted
+# context of rule `trail-wrap`.
 Vertex = tuple
 
 
 def segment(u_samples: np.ndarray, u: float) -> tuple[int, float]:
-    """The segment ``k`` and the weight ``w`` of rule C4, where ``k`` is the last index with ``u_k <= u``, and at most ``m - 2``."""
+    """The segment ``k`` and the weight ``w`` of rule `segment`, where ``k`` is the last index with ``u_k <= u``, and at most ``m - 2``."""
     m = len(u_samples)
     k = int(np.searchsorted(u_samples, u, side="right")) - 1
     k = min(max(k, 0), m - 2)
@@ -402,51 +421,53 @@ def segment(u_samples: np.ndarray, u: float) -> tuple[int, float]:
     return k, float(w)
 
 
-def polyline(u_samples: np.ndarray, ua: float, ub: float, lap: int = 0) -> list[Vertex]:
-    """The polyline of rule L1 between readings ``ua <= ub`` in one lap."""
-    first = ("blend", *segment(u_samples, ua), lap)
+def polyline(u_samples: np.ndarray, ua: float, ub: float, revolution: int = 0) -> list[Vertex]:
+    """The polyline of rule `polyline` between readings ``ua <= ub`` in one revolution."""
+    first = ("blend", *segment(u_samples, ua), revolution)
     if ua == ub:
         return [first]
-    inner = [("sample", int(i), lap) for i in np.flatnonzero((u_samples > ua) & (u_samples < ub))]
-    return [first, *inner, ("blend", *segment(u_samples, ub), lap)]
+    inner = [("sample", int(i), revolution) for i in np.flatnonzero((u_samples > ua) & (u_samples < ub))]
+    return [first, *inner, ("blend", *segment(u_samples, ub), revolution)]
 
 
-def lap_of(loop_reading: float, laps: int) -> tuple[int, float]:
-    """The lap of a loop reading, and the reading within this lap (rule C6)."""
-    j = min(math.floor(loop_reading), laps - 1)
+def revolution_of(loop_reading: float, revolutions: int) -> tuple[int, float]:
+    """The revolution of a loop reading, and the reading within this revolution (rule `revolutions`)."""
+    j = min(math.floor(loop_reading), revolutions - 1)
     return j, loop_reading - j
 
 
-def loop_polyline(u_samples: np.ndarray, ua: float, ub: float, laps: int) -> list[Vertex]:
-    """The polyline of rule C6 between loop readings ``ua <= ub``, joined across laps."""
-    ja, a = lap_of(ua, laps)
-    jb, b = lap_of(ub, laps)
+def loop_polyline(u_samples: np.ndarray, ua: float, ub: float, revolutions: int) -> list[Vertex]:
+    """The polyline of rule `revolutions` between loop readings ``ua <= ub``, joined across revolutions."""
+    ja, a = revolution_of(ua, revolutions)
+    jb, b = revolution_of(ub, revolutions)
     if ja == jb:
         return polyline(u_samples, a, b, ja)
-    # the closing sample of a lap and the first sample of the next lap make one vertex. the first sample is kept
+    # the closing sample of a revolution and the first sample of the next revolution make one vertex. the first sample is kept
     out = polyline(u_samples, a, 1.0, ja)[:-1]
     for j in range(ja + 1, jb):
         out += polyline(u_samples, 0.0, 1.0, j)[:-1]
     return out + polyline(u_samples, 0.0, b, jb)
 
 
-def whole(m: int, laps: int, periodic: bool) -> list[Vertex]:
-    """Every sample of every lap, joined (rule C6). A track set that is not periodic has one lap."""
-    if laps == 1 or not periodic:
+def whole(m: int, revolutions: int, periodic: bool) -> list[Vertex]:
+    """Every sample of every revolution, joined (rule `revolutions`). A trajectory set that is not periodic has one revolution."""
+    if revolutions == 1 or not periodic:
         return [("sample", i, 0) for i in range(m)]
-    return [("sample", i, j) for j in range(laps) for i in range(m - 1)] + [("sample", m - 1, laps - 1)]
+    return [("sample", i, j) for j in range(revolutions) for i in range(m - 1)] + [("sample", m - 1, revolutions - 1)]
 
 
-def trail(u_samples: np.ndarray, loop_reading: float, laps: int, fraction: float, periodic: bool) -> list[Vertex]:
-    """The trail of rules L1, L2 and C6, from loop reading ``loop_reading - laps * fraction`` to ``loop_reading``."""
-    tail = loop_reading - laps * fraction
+def trail(u_samples: np.ndarray, loop_reading: float, revolutions: int, fraction: float, periodic: bool) -> list[Vertex]:
+    """The trail of rules `polyline`, `trail-wrap` and `revolutions`, from loop reading ``loop_reading - revolutions * fraction`` to
+    ``loop_reading``."""
+    tail = loop_reading - revolutions * fraction
     if tail < 0.0 and not periodic:
         tail = 0.0
-    return loop_polyline(u_samples, tail, loop_reading, laps)
+    return loop_polyline(u_samples, tail, loop_reading, revolutions)
 
 
 def resolve_vertices(vertices: Iterable[Vertex], table: Callable[[int], np.ndarray]) -> list[list[float]]:
-    """The positions of the vertices, read from ``table(lap)``, which holds the samples already transformed in the context of each lap."""
+    """The positions of the vertices, read from ``table(revolution)``, which holds the samples already transformed in the context of each
+    revolution."""
     out = []
     for vertex in vertices:
         t = table(vertex[-1])
@@ -464,7 +485,7 @@ EASES = ("linear", "smooth", "in", "out", "in-out", "hold")
 
 
 def ease(name: Any, x: float) -> float:
-    """The ease ``E(x)`` of rule K2, with every product computed from the left."""
+    """The ease ``E(x)`` of rule `ease`, with every product computed from the left."""
     if name == "linear":
         return x
     if name == "smooth":
@@ -481,52 +502,52 @@ def ease(name: Any, x: float) -> float:
         return 1.0 - y * y * y / 2.0
     if name == "hold":
         return 0.0
-    raise EvaluationError(f"K2: the ease {name!r} is not one of {', '.join(EASES)}")
+    raise EvaluationError(f"ease: the ease {name!r} is not one of {', '.join(EASES)}")
 
 
-def tween_keys(keys: Any, what: str) -> list[tuple[float, float, str]]:
-    """The keys of a tween as ``(t, v, ease)``, checked against rules K1 and K2."""
-    if isinstance(keys, Mapping) and "keys" in keys:
-        keys = keys["keys"]
-    if not isinstance(keys, list) or not keys:
-        raise EvaluationError(f"K1: {what} has keys {keys!r}, not a nonempty list")
+def keyframe_list(value: Any, what: str) -> list[tuple[float, float, str]]:
+    """Keyframes as ``(t, v, ease)``, checked against rules `keyframes` and `ease`."""
+    if isinstance(value, Mapping) and "keyframes" in value:
+        value = value["keyframes"]
+    if not isinstance(value, list) or not value:
+        raise EvaluationError(f"keyframes: {what} has keyframes {value!r}, not a nonempty list")
     out: list[tuple[float, float, str]] = []
-    for key in keys:
-        if not isinstance(key, list) or len(key) not in (2, 3):
-            raise EvaluationError(f"K1: a key of {what} is {key!r}, not [t, v] or [t, v, ease]")
-        t = _number(key[0], f"K1: the time of a key of {what}")
-        v = _number(key[1], f"K1: the value of a key of {what}")
-        name = key[2] if len(key) == 3 else "linear"
+    for item in value:
+        if not isinstance(item, list) or len(item) not in (2, 3):
+            raise EvaluationError(f"keyframes: a keyframe of {what} is {item!r}, not [t, v] or [t, v, ease]")
+        t = _number(item[0], f"keyframes: the time of a keyframe of {what}")
+        v = _number(item[1], f"keyframes: the value of a keyframe of {what}")
+        name = item[2] if len(item) == 3 else "linear"
         if name not in EASES:
-            raise EvaluationError(f"K2: a key of {what} has the ease {name!r}, not one of {', '.join(EASES)}")
+            raise EvaluationError(f"ease: a keyframe of {what} has the ease {name!r}, not one of {', '.join(EASES)}")
         if out and t < out[-1][0]:
-            raise EvaluationError(f"K1: the key times of {what} decrease from {out[-1][0]} to {t}")
+            raise EvaluationError(f"keyframes: the keyframe times of {what} decrease from {out[-1][0]} to {t}")
         out.append((t, v, name))
     return out
 
 
-def tween_value(keys: list[tuple[float, float, str]], s: float) -> float:
-    """The value of a tween at time ``s`` of the timeline (rule K1)."""
+def keyframe_value(keyframes: list[tuple[float, float, str]], s: float) -> float:
+    """The value of keyframes at time ``s`` of the timeline (rule `keyframes`)."""
     i = -1
-    for j, key in enumerate(keys):
-        if key[0] <= s:
+    for j, item in enumerate(keyframes):
+        if item[0] <= s:
             i = j
     if i < 0:
-        return keys[0][1]
-    if i == len(keys) - 1:
-        return keys[i][1]
-    t0, v0, _ = keys[i]
-    t1, v1, name = keys[i + 1]
+        return keyframes[0][1]
+    if i == len(keyframes) - 1:
+        return keyframes[i][1]
+    t0, v0, _ = keyframes[i]
+    t1, v1, name = keyframes[i + 1]
     x = (s - t0) / (t1 - t0)
     return v0 + ease(name, x) * (v1 - v0)
 
 
 def loop_seconds(clock: Mapping[str, Any]) -> float:
-    """The length ``L`` of one loop in seconds: the clock's seconds, or 8 seconds per lap (sections 2.6 and 2.11)."""
+    """The length ``L`` of one loop in seconds: the clock's seconds, or 8 seconds per revolution (sections 2.6 and 2.11)."""
     if "seconds" in clock:
         return _number(clock["seconds"], "the clock seconds")
-    laps = clock.get("laps", 1)
-    return 8.0 * (laps if isinstance(laps, int) and not isinstance(laps, bool) else 1)
+    revolutions = clock.get("revolutions", 1)
+    return 8.0 * (revolutions if isinstance(revolutions, int) and not isinstance(revolutions, bool) else 1)
 
 
 # the evaluator
@@ -535,7 +556,7 @@ def loop_seconds(clock: Mapping[str, Any]) -> float:
 def evaluate(document: Mapping[str, Any], container: Container | bytes, state: Mapping[str, Any], frame_index: int) -> dict[str, Any]:
     """Evaluates every panel of ``state`` at clock frame ``frame_index``.
 
-    Returns ``{"panels": {panel id: {"frame": id, "layers": [...]}}}`` as section 3 of
+    Returns ``{"panels": {shown panel id: {"frame": id, "layers": [...]}}}`` as section 3 of
     ``spec/tycho-scene.md`` gives it, with every position as three float64 numbers in plain
     lists. The function is pure.
     """
@@ -544,286 +565,307 @@ def evaluate(document: Mapping[str, Any], container: Container | bytes, state: M
     return _Evaluator(document, container).run(state, frame_index)
 
 
-KINDS = ("track", "arrow", "outline", "body", "axes", "grid", "label", "points")
+KINDS = ("trajectories", "arrow", "inset_box", "body", "axes", "grid", "label", "points")
 
 
 class _Evaluator:
     def __init__(self, document: Mapping[str, Any], container: Container) -> None:
-        if not isinstance(document, Mapping) or not all(k in document for k in ("frames", "track_sets", "clock", "views")):
-            raise EvaluationError("2: the document lacks frames, track_sets, clock, or views")
+        if not isinstance(document, Mapping) or not all(k in document for k in ("frames", "trajectory_sets", "clock", "panels")):
+            raise EvaluationError("scene: the document lacks frames, trajectory_sets, clock, or panels")
         self.doc = document
         self.container = container
         self.tree = FrameTree(document["frames"], document.get("bodies") or {})
-        self.variables = document.get("variables") or {}
-        for vid, spec in self.variables.items():
-            if not isinstance(spec, Mapping) or spec.get("kind") not in ("selector", "choice", "toggle") or "default" not in spec:
-                raise EvaluationError(f"2.5: variable {vid!r} lacks a known kind or a default")
-            if spec["kind"] == "selector" and spec.get("by", "nearest") == "nearest" and "parameter" not in spec:
-                raise EvaluationError(f"2.5: selector {vid!r} is by nearest but does not name a parameter")
+        self.inputs = document.get("inputs") or {}
+        for iid, spec in self.inputs.items():
+            if not isinstance(spec, Mapping) or spec.get("kind") not in ("parameter", "choice", "toggle") or "default" not in spec:
+                raise EvaluationError(f"input: input {iid!r} lacks a known kind or a default")
+            if spec["kind"] == "parameter" and not isinstance(spec.get("parameter"), str):
+                raise EvaluationError(f"input: parameter input {iid!r} does not name a parameter")
         self._sets: dict[str, SetData] = {}
 
     def set_data(self, sid: str) -> SetData:
         if sid not in self._sets:
             try:
-                spec = self.doc["track_sets"][sid]
+                spec = self.doc["trajectory_sets"][sid]
             except KeyError:
-                raise EvaluationError(f"2.1: track set {sid!r} is not declared") from None
+                raise EvaluationError(f"trajectory-set: trajectory set {sid!r} is not declared") from None
             self._sets[sid] = SetData(sid, spec, self.container)
         return self._sets[sid]
 
     def run(self, state: Mapping[str, Any], frame_index: int) -> dict[str, Any]:
         clock = self.doc["clock"]
         if not isinstance(state, Mapping) or not all(k in state for k in ("clock", "panels", "layout")):
-            raise EvaluationError("2.8: the state lacks clock, panels, or layout")
+            raise EvaluationError("state: the state lacks clock, panels, or layout")
         channel = state["clock"].get("channel") if isinstance(state["clock"], Mapping) else None
         if not isinstance(channel, str) or channel not in clock.get("channels", []):
-            raise EvaluationError(f"2.6: the state's clock channel {channel!r} is not one of the scene's clock channels")
-        steps = clock.get("steps")
-        if isinstance(steps, bool) or not isinstance(steps, int) or steps < 1:
-            raise EvaluationError(f"2.6: the clock has steps {steps!r}, not a count of at least one")
+            raise EvaluationError(f"clock: the state's clock channel {channel!r} is not one of the scene's clock channels")
+        frame_count = clock.get("frame_count")
+        if isinstance(frame_count, bool) or not isinstance(frame_count, int) or frame_count < 1:
+            raise EvaluationError(f"clock: the clock has frame_count {frame_count!r}, not a count of at least one")
         if isinstance(frame_index, bool) or not isinstance(frame_index, (int, np.integer)):
-            raise EvaluationError(f"2.6: the frame index {frame_index!r} is not an integer")
-        q = (int(frame_index) % steps) / steps
+            raise EvaluationError(f"clock: the frame index {frame_index!r} is not an integer")
+        q = (int(frame_index) % frame_count) / frame_count
         reading = _Reading(clock, channel, q)
         self.check_state(state)
         panels = {}
-        for pid, panel in state["panels"].items():
-            panels[pid] = _Panel(self, state, panel, reading).run()
+        for sid, shown in state["panels"].items():
+            panels[sid] = _Panel(self, state, shown, reading).run()
         return {"panels": panels}
 
     def check_state(self, state: Mapping[str, Any]) -> None:
-        """Checks that the values fit their variables and that the layout shows every panel once (section 2.8)."""
+        """Checks that the values fit their inputs and that the layout shows every shown panel once (section 2.8)."""
 
         def held(values: Any, where: str) -> None:
             if values is None:
                 return
             if not isinstance(values, Mapping):
-                raise EvaluationError(f"2.8: the variables of {where} are not an object")
-            for vid, value in values.items():
-                spec = self.variables.get(vid)
+                raise EvaluationError(f"state: the inputs of {where} are not an object")
+            for iid, value in values.items():
+                spec = self.inputs.get(iid)
                 if spec is None:
                     continue
                 kind, choices = spec["kind"], spec.get("values", [])
-                if kind == "selector":
+                if kind == "parameter":
                     ok = not isinstance(value, bool) and isinstance(value, (int, float)) and math.isfinite(value)
                 elif kind == "choice":
                     ok = value in choices
                 else:
                     ok = isinstance(value, bool)
                 if not ok:
-                    raise EvaluationError(f"2.5: {where}: {kind} {vid!r} cannot hold {value!r}")
+                    raise EvaluationError(f"input: {where}: {kind} {iid!r} cannot hold {value!r}")
 
-        held(state.get("variables"), "the state")
+        held(state.get("inputs"), "the state")
         if not isinstance(state["panels"], Mapping) or not state["panels"]:
-            raise EvaluationError("2.8: the state does not have a panel")
-        for pid, panel in state["panels"].items():
-            if not isinstance(panel, Mapping) or "view" not in panel:
-                raise EvaluationError(f"2.8: panel {pid!r} does not name a view")
-            held(panel.get("variables"), f"panel {pid!r}")
+            raise EvaluationError("state: the state does not have a panel")
+        for sid, shown in state["panels"].items():
+            if not isinstance(shown, Mapping) or "panel" not in shown:
+                raise EvaluationError(f"state: shown panel {sid!r} does not name a declared panel")
+            held(shown.get("inputs"), f"shown panel {sid!r}")
 
         shown = _leaves(state["layout"])
         if sorted(shown) != sorted(state["panels"]):
             raise EvaluationError(
-                f"2.8: the layout shows the panels {sorted(shown)}, while the state has the panels {sorted(state['panels'])}"
+                f"state: the layout shows the panels {sorted(shown)}, while the state has the panels {sorted(state['panels'])}"
             )
 
 
 def _leaves(node: Any) -> list[str]:
-    """The panel ids of a layout, in layout order (section 2.8)."""
+    """The shown panel ids of a layout, in layout order (section 2.8)."""
     if not isinstance(node, Mapping):
-        raise EvaluationError(f"2.8: the layout node {node!r} is not an object")
+        raise EvaluationError(f"state: the layout node {node!r} is not an object")
     if node.get("kind") == "panel":
         if not isinstance(node.get("id"), str):
-            raise EvaluationError(f"2.8: a layout panel has id {node.get('id')!r}, not a string")
+            raise EvaluationError(f"state: a layout panel has id {node.get('id')!r}, not a string")
         return [node["id"]]
     if node.get("kind") == "split":
         return _leaves(node.get("a")) + _leaves(node.get("b"))
-    raise EvaluationError(f"2.8: a layout node has kind {node.get('kind')!r}, not panel or split")
+    raise EvaluationError(f"state: a layout node has kind {node.get('kind')!r}, not panel or split")
 
 
 class _Reading:
-    """The clock at one frame index (rules C1 to C3, the laps of rule C6, and the keys of rule K3)."""
+    """The clock at one frame index (rules `sample-fraction` to `before-after`, the revolutions of rule `revolutions`, and the keyframes of
+    rule `clock-keyframes`)."""
 
     def __init__(self, clock: Mapping[str, Any], channel: str, q: float) -> None:
         self.mode = clock["mode"]
         self.channel = channel
         self.q = q
-        if self.mode not in ("fraction", "value"):
-            raise EvaluationError(f"2.6: the clock mode is {self.mode!r}, not fraction or value")
-        self.laps = clock.get("laps", 1)
-        if "laps" in clock and self.mode == "value":
-            raise EvaluationError("C6: the clock is in value mode but has laps")
-        if isinstance(self.laps, bool) or not isinstance(self.laps, int) or self.laps < 1:
-            raise EvaluationError(f"C6: the clock has laps {self.laps!r}, not an integer of at least one")
+        if self.mode not in ("fraction", "epoch"):
+            raise EvaluationError(f"clock: the clock mode is {self.mode!r}, not fraction or epoch")
+        self.revolutions = clock.get("revolutions", 1)
+        if "revolutions" in clock and self.mode == "epoch":
+            raise EvaluationError("revolutions: the clock is in epoch mode but has revolutions")
+        if isinstance(self.revolutions, bool) or not isinstance(self.revolutions, int) or self.revolutions < 1:
+            raise EvaluationError(f"revolutions: the clock has revolutions {self.revolutions!r}, not an integer of at least one")
         # the time of the timeline, s = q * L (section 2.11)
         self.s = q * loop_seconds(clock)
-        if self.mode == "value":
-            if "range" in clock and "keys" in clock:
-                raise EvaluationError("K3: the clock is in value mode and has both a range and keys, not one")
-            if "keys" in clock:
-                self.v = tween_value(tween_keys(clock["keys"], "the clock"), self.s)
+        if self.mode == "epoch":
+            if "range" in clock and "keyframes" in clock:
+                raise EvaluationError("clock-keyframes: the clock is in epoch mode and has both a range and keyframes, not one")
+            if "keyframes" in clock:
+                self.v = keyframe_value(keyframe_list(clock["keyframes"], "the clock"), self.s)
             else:
                 rng = clock.get("range")
                 if not isinstance(rng, list) or len(rng) != 2:
-                    raise EvaluationError("C2: the clock is in value mode but does not have a range of two numbers")
+                    raise EvaluationError("clock-mode: the clock is in epoch mode but does not have a range of two numbers")
                 a, b = (_number(x, "a clock range value") for x in rng)
                 self.v = a + q * (b - a)
-        elif "keys" in clock:
-            raise EvaluationError("K3: the clock is in fraction mode and has keys, which only a value clock takes")
+        elif "keyframes" in clock:
+            raise EvaluationError("clock-keyframes: the clock is in fraction mode and has keyframes, which only an epoch clock takes")
 
     @classmethod
     def of_layer(cls, spec: Any, scene: _Reading) -> _Reading:
-        """The clock of a layer (rule K4), in value mode with its own channel, in one lap, at the progress of the scene's clock."""
+        """The clock of a layer (rule `layer-clock`), in epoch mode with its own channel, in one revolution, at the progress of the scene's
+        clock."""
         if not isinstance(spec, Mapping) or not isinstance(spec.get("channel"), str):
-            raise EvaluationError(f"K4: a layer's clock is a dict with a channel, not {spec!r}")
-        if ("range" in spec) == ("keys" in spec):
-            raise EvaluationError(f"K4: a layer's clock gives {'both' if 'range' in spec else 'neither'} of a range and keys, not one")
+            raise EvaluationError(f"layer-clock: a layer's clock is a dict with a channel, not {spec!r}")
+        if ("range" in spec) == ("keyframes" in spec):
+            raise EvaluationError(
+                f"layer-clock: a layer's clock gives {'both' if 'range' in spec else 'neither'} of a range and keyframes, not one"
+            )
         out = cls.__new__(cls)
-        out.mode, out.channel, out.q, out.laps, out.s = "value", spec["channel"], scene.q, 1, scene.s
-        if "keys" in spec:
-            out.v = tween_value(tween_keys(spec["keys"], "a layer's clock"), scene.s)
+        out.mode, out.channel, out.q, out.revolutions, out.s = "epoch", spec["channel"], scene.q, 1, scene.s
+        if "keyframes" in spec:
+            out.v = keyframe_value(keyframe_list(spec["keyframes"], "a layer's clock"), scene.s)
         else:
             rng = spec["range"]
             if not isinstance(rng, list) or len(rng) != 2:
-                raise EvaluationError(f"K4: a layer's clock range is {rng!r}, not two numbers")
+                raise EvaluationError(f"layer-clock: a layer's clock range is {rng!r}, not two numbers")
             a, b = (_number(x, "a layer's clock range value") for x in rng)
             out.v = a + scene.q * (b - a)
         return out
 
-    def of(self, track: Track) -> float:
-        """The track's reading ``u``, before any clamp."""
+    def of(self, trajectory: Trajectory) -> float:
+        """The trajectory's reading ``u``, before any clamp."""
         if self.mode == "fraction":
             return self.q
-        c = track.clock_values(self.channel)
+        c = trajectory.clock_values(self.channel)
         return float((self.v - c[0]) / (c[-1] - c[0]))
 
 
 class _Panel:
-    def __init__(self, ev: _Evaluator, state: Mapping[str, Any], panel: Mapping[str, Any], reading: _Reading) -> None:
+    def __init__(self, ev: _Evaluator, state: Mapping[str, Any], shown: Mapping[str, Any], reading: _Reading) -> None:
         self.ev = ev
         self.state = state
-        self.panel = panel
+        self.shown = shown
         self.reading = reading
         try:
-            self.view = ev.doc["views"][panel["view"]]
+            self.declared = ev.doc["panels"][shown["panel"]]
         except (KeyError, TypeError):
-            raise EvaluationError(f"2.8: a panel shows {panel.get('view')!r}, which is not a view") from None
-        if not isinstance(self.view, Mapping) or not all(k in self.view for k in ("frame", "driver", "layers")):
-            raise EvaluationError(f"2.7: view {panel['view']!r} lacks frame, driver, or layers")
-        # the driver is resolved for every panel, whether or not a layer uses it (section 2.7)
-        driver = self.view["driver"]
-        if not isinstance(driver, Mapping) or "sets" not in driver or "member" not in driver:
-            raise EvaluationError(f"2.7: the driver of view {panel['view']!r} lacks sets or member")
-        data = self.one(driver["sets"])
-        self.driver: tuple[SetData, int] | None = None
+            raise EvaluationError(f"state: a shown panel names {shown.get('panel')!r}, which is not a declared panel") from None
+        if not isinstance(self.declared, Mapping) or not all(k in self.declared for k in ("frame", "reference", "layers")):
+            raise EvaluationError(f"panel: panel {shown['panel']!r} lacks frame, reference, or layers")
+        # the reference trajectory is resolved for every panel, whether or not a layer uses it (section 2.7)
+        reference = self.declared["reference"]
+        if not isinstance(reference, Mapping) or "sets" not in reference or "member" not in reference:
+            raise EvaluationError(f"panel: the reference of panel {shown['panel']!r} lacks sets or member")
+        data = self.one(reference["sets"])
+        self.reference: tuple[SetData, int] | None = None
         if data is not None:
-            if driver["member"] == "all" or (isinstance(driver["member"], Mapping) and "count" in driver["member"]):
-                raise EvaluationError(f"V3: the driver's member is {driver['member']!r}, but a driver resolves to one track")
+            if reference["member"] == "all" or (isinstance(reference["member"], Mapping) and "evenly_spaced" in reference["member"]):
+                raise EvaluationError(
+                    f"members: the member of the reference is {reference['member']!r}, but a reference resolves to one trajectory"
+                )
             missing = [c for c in ev.doc["clock"]["channels"] if c != INDEX and c not in data.channels]
             if missing:
-                raise EvaluationError(f"C5: the driver's track set {data.id!r} lacks clock channels {missing}")
-            if reading.laps > 1 and not data.periodic:
-                raise EvaluationError(f"C6: the driver's track set {data.id!r} is not periodic, and the clock has {reading.laps} laps")
-            self.driver = (data, self.members(driver["member"], data)[0])
+                raise EvaluationError(
+                    f"clock-channel-carried: the trajectory set {data.id!r} of the reference lacks clock channels {missing}"
+                )
+            if reading.revolutions > 1 and not data.periodic:
+                raise EvaluationError(
+                    f"revolutions: the trajectory set {data.id!r} of the reference is not periodic, and the clock has "
+                    f"{reading.revolutions} revolutions"
+                )
+            self.reference = (data, self.members(reference["member"], data)[0])
 
-    # variables (rule V1)
+    # inputs (rule `input-scope`)
 
-    def var(self, vid: str, panel: Mapping[str, Any] | None = None) -> Any:
-        """The value of a variable in this panel, or in ``panel`` when given (rule V1)."""
+    def input(self, iid: str, shown: Mapping[str, Any] | None = None) -> Any:
+        """The value of an input in this shown panel, or in the shown panel ``shown`` when given (rule `input-scope`)."""
         try:
-            spec = self.ev.variables[vid]
+            spec = self.ev.inputs[iid]
         except KeyError:
-            raise EvaluationError(f"2.5: variable {vid!r} is not declared") from None
-        if spec.get("scope", "scene") == "panel":
-            values = (self.panel if panel is None else panel).get("variables", {})
+            raise EvaluationError(f"input: input {iid!r} is not declared") from None
+        if spec.get("scope", "shared") == "per_panel":
+            values = (self.shown if shown is None else shown).get("inputs", {})
         else:
-            values = self.state.get("variables", {})
-        return values.get(vid, spec["default"])
+            values = self.state.get("inputs", {})
+        return values.get(iid, spec["default"])
 
-    def value(self, spec: Any, panel: Mapping[str, Any] | None = None) -> Any:
-        if isinstance(spec, Mapping) and "var" in spec:
-            return self.var(spec["var"], panel)
+    def value(self, spec: Any, shown: Mapping[str, Any] | None = None) -> Any:
+        if isinstance(spec, Mapping) and "input" in spec:
+            return self.input(spec["input"], shown)
         return spec
 
-    # set queries and members (rules V2 and V3)
+    # set queries and members (rules `set-query` and `members`)
 
     def match(self, query: Any) -> list[str]:
-        sets = self.ev.doc["track_sets"]
+        sets = self.ev.doc["trajectory_sets"]
         if isinstance(query, Mapping) and "set" in query:
             if query["set"] not in sets:
-                raise EvaluationError(f"V2: the set query names {query['set']!r}, which is not a track set")
+                raise EvaluationError(f"set-query: the set query names {query['set']!r}, which is not a trajectory set")
             return [query["set"]]
         if not isinstance(query, Mapping) or not isinstance(query.get("tags"), Mapping):
-            raise EvaluationError(f'V2: a set query is {{"set": id}} or {{"tags": {{...}}}}, not {query!r}')
+            raise EvaluationError(f'set-query: a set query is {{"set": id}} or {{"tags": {{...}}}}, not {query!r}')
         wanted = {name: self.value(v) for name, v in query["tags"].items()}
         return [sid for sid, s in sets.items() if all((s.get("tags") or {}).get(k) == v for k, v in wanted.items())]
 
     def one(self, query: Mapping[str, Any]) -> SetData | None:
         matches = self.match(query)
         if len(matches) > 1:
-            raise EvaluationError(f"V2: the set query {dict(query)} matches the {len(matches)} track sets {matches}, where one is needed")
+            raise EvaluationError(
+                f"set-query: the set query {dict(query)} matches the {len(matches)} trajectory sets {matches}, where one is needed"
+            )
         return self.ev.set_data(matches[0]) if matches else None
 
     def members(self, ref: Any, data: SetData) -> list[int]:
         if ref == "all":
-            return list(range(data.tracks))
+            return list(range(data.trajectories))
         if isinstance(ref, Mapping) and "index" in ref:
             k = ref["index"]
             if isinstance(k, bool) or not isinstance(k, int):
-                raise EvaluationError(f"V3: member index {k!r} is not an integer")
-            if not 0 <= k < data.tracks:
-                raise EvaluationError(f"V3: member index {k} is not below the track count {data.tracks} of track set {data.id!r}")
+                raise EvaluationError(f"members: member index {k!r} is not an integer")
+            if not 0 <= k < data.trajectories:
+                raise EvaluationError(
+                    f"members: member index {k} is not below the trajectory count {data.trajectories} of trajectory set {data.id!r}"
+                )
             return [k]
-        if isinstance(ref, Mapping) and "count" in ref:
-            n = ref["count"]
+        if isinstance(ref, Mapping) and "evenly_spaced" in ref:
+            n = ref["evenly_spaced"]
             if isinstance(n, bool) or not isinstance(n, int) or n < 1:
-                raise EvaluationError(f"V3: member count {n!r} is not an integer of at least one")
-            return sparse(data.tracks, n)
-        if isinstance(ref, Mapping) and "var" in ref:
-            return [self.selected(ref["var"], data)]
-        raise EvaluationError(f'V3: a member reference is \'all\', {{"index": k}}, {{"count": n}}, or {{"var": id}}, not {ref!r}')
+                raise EvaluationError(f"members: member count {n!r} is not an integer of at least one")
+            return sparse(data.trajectories, n)
+        if isinstance(ref, Mapping) and "input" in ref:
+            return [self.selected(ref["input"], data)]
+        raise EvaluationError(
+            f'members: a member reference is \'all\', {{"index": k}}, {{"evenly_spaced": n}}, or {{"input": id}}, not {ref!r}'
+        )
 
-    def selected(self, vid: str, data: SetData) -> int:
-        spec = self.ev.variables.get(vid)
-        if spec is None or spec.get("kind") != "selector":
-            raise EvaluationError(f"V3: variable {vid!r} is not a selector")
-        value = self.var(vid)
+    def selected(self, iid: str, data: SetData) -> int:
+        spec = self.ev.inputs.get(iid)
+        if spec is None or spec.get("kind") != "parameter":
+            raise EvaluationError(f"members: input {iid!r} is not a parameter input")
+        value = self.input(iid)
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
-            raise EvaluationError(f"2.5: selector {vid!r} holds {value!r}, not a finite number")
+            raise EvaluationError(f"input: parameter input {iid!r} holds {value!r}, not a finite number")
         value = float(value)
-        if spec.get("by", "nearest") == "index":
-            return min(max(math.floor(value + 0.5), 0), data.tracks - 1)
         parameter = spec["parameter"]
-        if parameter not in data.parameters:
-            raise EvaluationError(f"V3: track set {data.id!r} lacks parameter {parameter!r} for selector {vid!r}")
+        if parameter == INDEX:
+            values = np.arange(data.trajectories, dtype=np.float64)
+        elif parameter in data.parameters:
+            values = data.parameters[parameter]
+        else:
+            raise EvaluationError(f"members: trajectory set {data.id!r} lacks parameter {parameter!r} for parameter input {iid!r}")
         # argmin takes the first of equal distances, i.e. the lowest index
-        return int(np.argmin(np.abs(data.parameters[parameter] - value)))
+        return int(np.argmin(np.abs(values - value)))
 
     # layers
 
     def run(self) -> dict[str, Any]:
-        frame = self.value(self.view["frame"])
+        frame = self.value(self.declared["frame"])
         if frame not in self.ev.doc["frames"]:
-            raise EvaluationError(f"2.7: the view displays {frame!r}, which is not a frame")
+            raise EvaluationError(f"panel: the panel displays {frame!r}, which is not a frame")
         self.frame = frame
         layers = []
-        for layer in self.view["layers"]:
+        for layer in self.declared["layers"]:
             if not isinstance(layer, Mapping) or layer.get("kind") not in KINDS:
-                raise EvaluationError(f"S1: layer kind {layer.get('kind') if isinstance(layer, Mapping) else layer!r} is not implemented")
+                raise EvaluationError(
+                    f"version: layer kind {layer.get('kind') if isinstance(layer, Mapping) else layer!r} is not implemented"
+                )
             if "visible" in layer:
                 visible = layer["visible"]
-                vid = visible.get("var") if isinstance(visible, Mapping) else None
-                if vid is None or self.ev.variables.get(vid, {}).get("kind") != "toggle":
-                    raise EvaluationError(f"L5: a layer's visible names {vid!r}, which is not a toggle")
-                if self.var(vid) is False:
+                iid = visible.get("input") if isinstance(visible, Mapping) else None
+                if iid is None or self.ev.inputs.get(iid, {}).get("kind") != "toggle":
+                    raise EvaluationError(f"visible: a layer's visible names {iid!r}, which is not a toggle")
+                if self.input(iid) is False:
                     continue
             kind = layer["kind"]
-            if kind == "track":
-                layers.append(self.track_layer(layer))
+            if kind == "trajectories":
+                layers.append(self.trajectories_layer(layer))
             elif kind == "arrow":
                 layers.append(self.arrow_layer(layer))
-            elif kind == "outline":
-                layers.append(self.outline_layer(layer))
+            elif kind == "inset_box":
+                layers.append(self.inset_box_layer(layer))
             elif kind == "body":
                 layers.append(self.body_layer(layer))
             elif kind == "label":
@@ -833,18 +875,18 @@ class _Panel:
             else:
                 layers.append({"kind": kind})
         out: dict[str, Any] = {"frame": frame, "layers": layers}
-        camera = self.view.get("camera") or {"kind": "plane"}
-        if isinstance(camera, Mapping) and camera.get("kind", "plane") == "plane" and "keys" in camera:
+        camera = self.declared.get("camera") or {"kind": "2d"}
+        if isinstance(camera, Mapping) and camera.get("kind", "2d") == "2d" and "keyframes" in camera:
             out["camera"] = self.camera(camera)
         return out
 
     def reading_of(self, layer: Mapping[str, Any]) -> _Reading:
-        """The clock a layer takes its readings on: its own (rule K4), or the scene's."""
+        """The clock a layer takes its readings on: its own (rule `layer-clock`), or the scene's."""
         return _Reading.of_layer(layer["clock"], self.reading) if "clock" in layer else self.reading
 
-    def clamped(self, track: Track, layer: Mapping[str, Any], reading: _Reading | None = None) -> float | None:
-        """The reading on ``track``, clamped, or None when the track is hidden under rule C3."""
-        u = (reading or self.reading).of(track)
+    def clamped(self, trajectory: Trajectory, layer: Mapping[str, Any], reading: _Reading | None = None) -> float | None:
+        """The reading on ``trajectory``, clamped, or None when the trajectory is hidden under rule `before-after`."""
+        u = (reading or self.reading).of(trajectory)
         if u < 0.0:
             if layer.get("before", "clamp") == "hidden":
                 return None
@@ -855,319 +897,343 @@ class _Panel:
             u = 1.0
         return u
 
-    def track_layer(self, layer: Mapping[str, Any]) -> dict[str, Any]:
+    def trajectories_layer(self, layer: Mapping[str, Any]) -> dict[str, Any]:
         data = self.one(layer["sets"])
         if data is None:
-            return {"kind": "track", "set": None, "members": []}
+            return {"kind": "trajectories", "set": None, "members": []}
         reveal = layer.get("reveal", "none")
         if reveal not in ("none", "grow", "trail"):
-            raise EvaluationError(f"2.7: a track layer's reveal is {reveal!r}, not none, grow, or trail")
+            raise EvaluationError(f"panel: a trajectories layer's reveal is {reveal!r}, not none, grow, or trail")
         head = layer.get("head", False)
         if not isinstance(head, (bool, Mapping)):
-            raise EvaluationError(f"L3: a track layer's head is {head!r}, not a boolean or an object")
+            raise EvaluationError(f"head: a trajectories layer's head is {head!r}, not a boolean or an object")
         # a head object gives the same point as true
         head = head is True or isinstance(head, Mapping)
         for key in ("before", "after"):
             if layer.get(key, "clamp") not in ("clamp", "hidden"):
-                raise EvaluationError(f"C3: a track layer's {key} is {layer[key]!r}, not clamp or hidden")
+                raise EvaluationError(f"before-after: a trajectories layer's {key} is {layer[key]!r}, not clamp or hidden")
         fraction = _fraction(layer) if reveal == "trail" else 0.0
-        context = layer.get("context", "own")
-        if context not in ("own", "driver"):
-            raise EvaluationError(f"L6: a track layer's context is {context!r}, not own or driver")
-        # under rule C5, a reading is not taken on a track drawn whole and never hidden, whose track set need not carry the clock channels
+        read_from = layer.get("read_from", "own")
+        if read_from not in ("own", "reference"):
+            raise EvaluationError(f"read-from: a trajectories layer's read_from is {read_from!r}, not own or reference")
+        # under rule `clock-channel-carried`, a reading is not taken on a trajectory drawn whole and never hidden, whose trajectory set
+        # need not carry the clock channels
         rd = self.reading_of(layer)
-        hides = rd.mode == "value" and "hidden" in (layer.get("before"), layer.get("after"))
+        hides = rd.mode == "epoch" and "hidden" in (layer.get("before"), layer.get("after"))
         reads = reveal != "none" or head or hides
-        laps = rd.laps
-        if reads and laps > 1 and not data.periodic:
-            raise EvaluationError(f"C6: a reading is taken on track set {data.id!r}, which is not periodic, and the clock has {laps} laps")
-        at = self.driver_point() if context == "driver" and self.driver is not None else None
+        revolutions = rd.revolutions
+        if reads and revolutions > 1 and not data.periodic:
+            raise EvaluationError(
+                f"revolutions: a reading is taken on trajectory set {data.id!r}, which is not periodic, and the clock has "
+                f"{revolutions} revolutions"
+            )
+        at = self.reference_point() if read_from == "reference" and self.reference is not None else None
         members = []
         for i in self.members(layer["members"], data):
-            track = data.track(i)
+            trajectory = data.trajectory(i)
             entry: dict[str, Any] = {"index": i}
-            u = self.clamped(track, layer, rd) if reads else 0.0
-            if u is None or (context == "driver" and at is None):
+            u = self.clamped(trajectory, layer, rd) if reads else 0.0
+            if u is None or (read_from == "reference" and at is None):
                 entry["line"] = []
                 if head:
                     entry["head"] = None
                 members.append(entry)
                 continue
-            loop_reading = laps * u
-            u_samples = track.sample_readings(rd.channel) if reads else np.empty(0)
+            loop_reading = revolutions * u
+            u_samples = trajectory.sample_readings(rd.channel) if reads else np.empty(0)
             if reveal == "none":
-                vertices = whole(track.m, laps, track.periodic)
+                vertices = whole(trajectory.m, revolutions, trajectory.periodic)
             elif reveal == "grow":
-                vertices = loop_polyline(u_samples, 0.0, loop_reading, laps)
+                vertices = loop_polyline(u_samples, 0.0, loop_reading, revolutions)
             else:
-                vertices = trail(u_samples, loop_reading, laps, fraction, track.periodic)
+                vertices = trail(u_samples, loop_reading, revolutions, fraction, trajectory.periodic)
 
             if at is not None:
-                table = _every_lap(self.in_driver_context(track.positions, data.frame, at))
+                table = _every_revolution(self.in_reference_context(trajectory.positions, data.frame, at))
             else:
 
-                def positions(lap: int, t: Track = track) -> np.ndarray:
-                    return self.ev.tree.transform(t.positions, data.frame, self.frame, t.context(lap))
+                def positions(revolution: int, t: Trajectory = trajectory) -> np.ndarray:
+                    return self.ev.tree.transform(t.positions, data.frame, self.frame, t.context(revolution))
 
-                table = _by_lap(positions)
+                table = _by_revolution(positions)
             entry["line"] = resolve_vertices(vertices, table)
             if head:
-                j, within = lap_of(loop_reading, laps)
+                j, within = revolution_of(loop_reading, revolutions)
                 entry["head"] = resolve_vertices([("blend", *segment(u_samples, within), j)], table)[0]
             members.append(entry)
-        return {"kind": "track", "set": data.id, "members": members}
+        return {"kind": "trajectories", "set": data.id, "members": members}
 
     def arrow_layer(self, layer: Mapping[str, Any]) -> dict[str, Any]:
-        """The base and the tip of each member's arrow at the reading (rule L7)."""
+        """The base and the tip of each member's arrow at the reading (rule `arrow`)."""
         vector = layer.get("vector")
         if not isinstance(vector, list) or len(vector) not in (2, 3) or not all(isinstance(c, str) for c in vector):
-            raise EvaluationError(f"L7: an arrow layer's vector is {vector!r}, not two or three channel names")
+            raise EvaluationError(f"arrow: an arrow layer's vector is {vector!r}, not two or three channel names")
         if INDEX in vector:
-            raise EvaluationError(f"L7: {INDEX} is not allowed in the vector of an arrow layer")
+            raise EvaluationError(f"arrow: {INDEX} is not allowed in the vector of an arrow layer")
         scale = layer.get("scale", 1.0)
         if isinstance(scale, Mapping) and "channel" in scale:
-            raise EvaluationError("L7: the scale of an arrow layer takes a number or an attribute, not a channel")
+            raise EvaluationError("arrow: the scale of an arrow layer takes a number or an attribute, not a channel")
         for key in ("before", "after"):
             if layer.get(key, "clamp") not in ("clamp", "hidden"):
-                raise EvaluationError(f"C3: an arrow layer's {key} is {layer[key]!r}, not clamp or hidden")
+                raise EvaluationError(f"before-after: an arrow layer's {key} is {layer[key]!r}, not clamp or hidden")
         data = self.one(layer["sets"])
         if data is None:
             return {"kind": "arrow", "set": None, "members": []}
         for name in vector:
             if name not in data.channels:
-                raise EvaluationError(f"L7: track set {data.id!r} lacks channel {name!r} of an arrow layer's vector")
+                raise EvaluationError(f"arrow: trajectory set {data.id!r} lacks channel {name!r} of an arrow layer's vector")
         rd = self.reading_of(layer)
-        laps = rd.laps
-        if laps > 1 and not data.periodic:
-            raise EvaluationError(f"C6: a reading is taken on track set {data.id!r}, which is not periodic, and the clock has {laps} laps")
+        revolutions = rd.revolutions
+        if revolutions > 1 and not data.periodic:
+            raise EvaluationError(
+                f"revolutions: a reading is taken on trajectory set {data.id!r}, which is not periodic, and the clock has "
+                f"{revolutions} revolutions"
+            )
         members = []
         for i in self.members(layer["members"], data):
-            track = data.track(i)
-            u = self.clamped(track, layer, rd)
+            trajectory = data.trajectory(i)
+            u = self.clamped(trajectory, layer, rd)
             if u is None:
                 members.append({"index": i, "base": None, "tip": None})
                 continue
-            # the vector is read from the stored values in every lap, since rule C6 raises only the context
-            v = np.zeros((track.m, 3))
+            # the vector is read from the stored values in every revolution, since rule `revolutions` raises only the context
+            v = np.zeros((trajectory.m, 3))
             for j, name in enumerate(vector):
-                v[:, j] = track.channels[name]
-            tips = track.positions + scalar(scale, track.context()) * v
+                v[:, j] = trajectory.channels[name]
+            tips = trajectory.positions + scalar(scale, trajectory.context()) * v
 
-            def table(points: np.ndarray, t: Track = track) -> Callable[[int], np.ndarray]:
-                return _by_lap(lambda lap: self.ev.tree.transform(points, data.frame, self.frame, t.context(lap)))
+            def table(points: np.ndarray, t: Trajectory = trajectory) -> Callable[[int], np.ndarray]:
+                return _by_revolution(lambda revolution: self.ev.tree.transform(points, data.frame, self.frame, t.context(revolution)))
 
-            j, within = lap_of(laps * u, laps)
-            at = [("blend", *segment(track.sample_readings(rd.channel), within), j)]
-            base = resolve_vertices(at, table(track.positions))[0]
+            j, within = revolution_of(revolutions * u, revolutions)
+            at = [("blend", *segment(trajectory.sample_readings(rd.channel), within), j)]
+            base = resolve_vertices(at, table(trajectory.positions))[0]
             members.append({"index": i, "base": base, "tip": resolve_vertices(at, table(tips))[0]})
         return {"kind": "arrow", "set": data.id, "members": members}
 
-    def outline_layer(self, layer: Mapping[str, Any]) -> dict[str, Any]:
-        """The target panel and frame of an outline layer, and the affine map from the target frame at the driver's reading (rule L8)."""
-        views = self.ev.doc["views"]
-        vid = layer.get("view")
-        if not isinstance(vid, str) or vid not in views:
-            raise EvaluationError(f"L8: an outline layer names {vid!r}, which is not a view")
-        if vid == self.panel["view"]:
-            raise EvaluationError(f"L8: an outline layer of view {vid!r} names its own view")
-        camera = views[vid].get("camera") or {"kind": "plane"}
-        if camera.get("kind") != "plane":
-            raise EvaluationError(f"L8: an outline layer names view {vid!r}, whose camera is not a plane camera")
-        out: dict[str, Any] = {"kind": "outline", "view": vid, "panel": None, "frame": None, "origin": None, "axes": None}
-        panels = self.state["panels"]
-        target = next((pid for pid in _leaves(self.state["layout"]) if panels[pid].get("view") == vid), None)
+    def inset_box_layer(self, layer: Mapping[str, Any]) -> dict[str, Any]:
+        """The target panel and frame of an inset box layer, and the affine map from the target frame at the reading of the
+        reference trajectory (rule `inset-box`)."""
+        declared = self.ev.doc["panels"]
+        pid = layer.get("panel")
+        if not isinstance(pid, str) or pid not in declared:
+            raise EvaluationError(f"inset-box: an inset box layer names {pid!r}, which is not a declared panel")
+        if pid == self.shown["panel"]:
+            raise EvaluationError(f"inset-box: an inset box layer of panel {pid!r} names its own panel")
+        camera = declared[pid].get("camera") or {"kind": "2d"}
+        if camera.get("kind") != "2d":
+            raise EvaluationError(f"inset-box: an inset box layer names panel {pid!r}, whose camera is not a 2d camera")
+        out: dict[str, Any] = {"kind": "inset_box", "panel": pid, "shown_panel": None, "frame": None, "origin": None, "axes": None}
+        shown = self.state["panels"]
+        # the first shown copy of the target panel in layout order
+        target = next((sid for sid in _leaves(self.state["layout"]) if shown[sid].get("panel") == pid), None)
         if target is None:
             return out
-        frame = self.value(views[vid]["frame"], panels[target])
+        frame = self.value(declared[pid]["frame"], shown[target])
         if frame not in self.ev.doc["frames"]:
-            raise EvaluationError(f"2.7: the view {vid!r} displays {frame!r}, which is not a frame")
-        out["panel"], out["frame"] = target, frame
-        if self.driver is None:
+            raise EvaluationError(f"panel: the panel {pid!r} displays {frame!r}, which is not a frame")
+        out["shown_panel"], out["frame"] = target, frame
+        if self.reference is None:
             return out
         # every edge is affine for a fixed context, and so is the blend of two, hence the map is given by the images of the origin and the
         # unit points
-        image = self.in_driver_context(np.vstack([np.zeros(3), np.eye(3)]), frame, self.driver_point())
+        image = self.in_reference_context(np.vstack([np.zeros(3), np.eye(3)]), frame, self.reference_point())
         out["origin"] = [float(x) for x in image[0]]
         out["axes"] = [[float(x) for x in image[j] - image[0]] for j in (1, 2, 3)]
         return out
 
-    def driver_point(self) -> tuple[Track, np.ndarray, float, int, int, float]:
-        """The driver's track, its sample readings, its loop reading, and the lap, segment, and weight of the point at the reading.
+    def reference_point(self) -> tuple[Trajectory, np.ndarray, float, int, int, float]:
+        """The reference trajectory, its sample readings, its loop reading, and the revolution, segment, and weight of the point
+        at the reading.
 
-        A body layer and a layer in the driver's context lack before and after, thus the reading is clamped (rules L4 and L6).
+        A body layer and a layer that reads from the reference lack before and after, thus the reading is clamped (rules
+        `body-layer` and `read-from`).
         """
-        assert self.driver is not None
-        data, k_member = self.driver
-        track = data.track(k_member)
-        loop_reading = self.reading.laps * min(max(self.reading.of(track), 0.0), 1.0)
-        u_samples = track.sample_readings(self.reading.channel)
-        j, within = lap_of(loop_reading, self.reading.laps)
+        assert self.reference is not None
+        data, k_member = self.reference
+        trajectory = data.trajectory(k_member)
+        loop_reading = self.reading.revolutions * min(max(self.reading.of(trajectory), 0.0), 1.0)
+        u_samples = trajectory.sample_readings(self.reading.channel)
+        j, within = revolution_of(loop_reading, self.reading.revolutions)
         k, w = segment(u_samples, within)
-        return track, u_samples, loop_reading, j, k, w
+        return trajectory, u_samples, loop_reading, j, k, w
 
-    def in_driver_context(self, points: np.ndarray, src: str, at: tuple[Track, np.ndarray, float, int, int, float]) -> np.ndarray:
-        """Points of frame ``src`` in the display frame, in the blended context of the driver's point ``at`` (rules L4 and L6)."""
-        track, _, _, j, k, w = at
+    def in_reference_context(self, points: np.ndarray, src: str, at: tuple[Trajectory, np.ndarray, float, int, int, float]) -> np.ndarray:
+        """Points of frame ``src`` in the display frame, in the blended context of the point ``at`` of the reference trajectory
+        (rules `body-layer` and `read-from`)."""
+        trajectory, _, _, j, k, w = at
         n = len(points)
-        a = self.ev.tree.transform(points, src, self.frame, track.sample_context(j, k, n))
-        b = self.ev.tree.transform(points, src, self.frame, track.sample_context(j, k + 1, n))
+        a = self.ev.tree.transform(points, src, self.frame, trajectory.sample_context(j, k, n))
+        b = self.ev.tree.transform(points, src, self.frame, trajectory.sample_context(j, k + 1, n))
         return (1.0 - w) * a + w * b
 
     def body_layer(self, layer: Mapping[str, Any]) -> dict[str, Any]:
         body = layer.get("body")
         if not isinstance(body, str) or body not in self.ev.tree.bodies:
-            raise EvaluationError(f"L4: a body layer draws {body!r}, which is not a body")
+            raise EvaluationError(f"body-layer: a body layer draws {body!r}, which is not a body")
         out: dict[str, Any] = {"kind": "body", "body": body}
         fraction = _fraction(layer) if "trail" in layer else None
-        if self.driver is None:
+        if self.reference is None:
             out["position"] = None
             if fraction is not None:
                 out["trail"] = []
             return out
-        track, u_samples, loop_reading, j, k, w = self.driver_point()
-        laps = self.reading.laps
+        trajectory, u_samples, loop_reading, j, k, w = self.reference_point()
+        revolutions = self.reading.revolutions
         tree = self.ev.tree
-        table = _by_lap(lambda lap: tree.body_position(body, self.frame, track.context(lap)))
+        table = _by_revolution(lambda revolution: tree.body_position(body, self.frame, trajectory.context(revolution)))
         out["position"] = resolve_vertices([("blend", k, w, j)], table)[0]
         if fraction is not None:
-            out["trail"] = resolve_vertices(trail(u_samples, loop_reading, laps, fraction, track.periodic), table)
+            out["trail"] = resolve_vertices(trail(u_samples, loop_reading, revolutions, fraction, trajectory.periodic), table)
         return out
 
-    def point_at_reading(self, layer: Mapping[str, Any], data: SetData, k: int, *, context: str = "own") -> list[float] | None:
-        """The point at the reading of track ``k`` of ``data`` under the layer's clock, with the reading clamped to [0, 1] as in rule L4.
+    def point_at_reading(self, layer: Mapping[str, Any], data: SetData, k: int, *, read_from: str = "own") -> list[float] | None:
+        """The point at the reading of trajectory ``k`` of ``data`` under the layer's clock, with the reading clamped to [0, 1] as
+        in rule `body-layer`.
 
-        It is taken in the context of its sample in its lap of rule C6, or in the driver's context (rule L6), where it is None
-        without a driver.
+        It is taken in the context of its sample in its revolution of rule `revolutions`, or, with ``read_from="reference"``, in
+        the context of the reference trajectory (rule `read-from`), where it is None without a reference trajectory.
         """
         rd = self.reading_of(layer)
-        if rd.laps > 1 and not data.periodic:
+        if rd.revolutions > 1 and not data.periodic:
             raise EvaluationError(
-                f"C6: a reading is taken on track set {data.id!r}, which is not periodic, and the clock has {rd.laps} laps"
+                f"revolutions: a reading is taken on trajectory set {data.id!r}, which is not periodic, and the clock has "
+                f"{rd.revolutions} revolutions"
             )
-        track = data.track(k)
-        u = min(max(rd.of(track), 0.0), 1.0)
-        j, within = lap_of(rd.laps * u, rd.laps)
-        kk, w = segment(track.sample_readings(rd.channel), within)
-        if context == "driver":
-            if self.driver is None:
+        trajectory = data.trajectory(k)
+        u = min(max(rd.of(trajectory), 0.0), 1.0)
+        j, within = revolution_of(rd.revolutions * u, rd.revolutions)
+        kk, w = segment(trajectory.sample_readings(rd.channel), within)
+        if read_from == "reference":
+            if self.reference is None:
                 return None
-            table = _every_lap(self.in_driver_context(track.positions, data.frame, self.driver_point()))
+            table = _every_revolution(self.in_reference_context(trajectory.positions, data.frame, self.reference_point()))
         else:
-            table = _by_lap(lambda lap: self.ev.tree.transform(track.positions, data.frame, self.frame, track.context(lap)))
+            table = _by_revolution(
+                lambda revolution: self.ev.tree.transform(trajectory.positions, data.frame, self.frame, trajectory.context(revolution))
+            )
         return resolve_vertices([("blend", kk, w, j)], table)[0]
 
     def label_layer(self, layer: Mapping[str, Any]) -> dict[str, Any]:
-        """The position of a label's anchor in the display frame (rule K6), or None on the screen and without a set or a driver."""
+        """The position of a label's anchor in the display frame (rule `label`), or None on the screen and without a set or a reference
+        trajectory."""
         at = layer.get("at")
         out: dict[str, Any] = {"kind": "label", "position": None}
         if not isinstance(at, Mapping):
-            raise EvaluationError(f"K6: a label's anchor is {at!r}, not an object")
+            raise EvaluationError(f"label: a label's anchor is {at!r}, not an object")
         if "screen" in at:
             return out
         if "point" in at:
             point = at["point"]
             if not isinstance(point, list) or len(point) != 3:
-                raise EvaluationError(f"K6: a label's point is {point!r}, not three numbers")
-            p = np.array([[_number(x, "K6: a label's point") for x in point]])
+                raise EvaluationError(f"label: a label's point is {point!r}, not three numbers")
+            p = np.array([[_number(x, "label: a label's point") for x in point]])
             if "frame" not in at:
                 out["position"] = [float(x) for x in p[0]]
                 return out
             if at["frame"] not in self.ev.doc["frames"]:
-                raise EvaluationError(f"K6: a label's point is in {at['frame']!r}, which is not a frame")
-            if self.driver is None:
+                raise EvaluationError(f"label: a label's point is in {at['frame']!r}, which is not a frame")
+            if self.reference is None:
                 return out
-            out["position"] = [float(x) for x in self.in_driver_context(p, at["frame"], self.driver_point())[0]]
+            out["position"] = [float(x) for x in self.in_reference_context(p, at["frame"], self.reference_point())[0]]
             return out
         if "sets" in at:
             k = at.get("member")
             if isinstance(k, bool) or not isinstance(k, int) or k < 0:
-                raise EvaluationError(f"K6: a label's member is {k!r}, not a track index")
+                raise EvaluationError(f"label: a label's member is {k!r}, not a trajectory index")
             data = self.one(at["sets"])
             if data is None:
                 return out
-            if k >= data.tracks:
-                raise EvaluationError(f"K6: a label's member {k} is not below the track count {data.tracks} of track set {data.id!r}")
+            if k >= data.trajectories:
+                raise EvaluationError(
+                    f"label: a label's member {k} is not below the trajectory count {data.trajectories} of trajectory set {data.id!r}"
+                )
             out["position"] = self.point_at_reading(layer, data, k)
             return out
-        raise EvaluationError(f"K6: a label's anchor is a point, a member, or a screen place, not {dict(at)!r}")
+        raise EvaluationError(f"label: a label's anchor is a point, a member, or a screen place, not {dict(at)!r}")
 
     def points_layer(self, layer: Mapping[str, Any]) -> dict[str, Any]:
-        """The drawn samples of every member of a points layer (rule K8)."""
+        """The drawn samples of every member of a points layer (rule `points`)."""
         reveal = layer.get("reveal", "none")
         if reveal not in ("none", "grow"):
-            raise EvaluationError(f"K8: a points layer's reveal is {reveal!r}, not none or grow")
+            raise EvaluationError(f"points: a points layer's reveal is {reveal!r}, not none or grow")
         for key in ("before", "after"):
             if layer.get(key, "clamp") not in ("clamp", "hidden"):
-                raise EvaluationError(f"C3: a points layer's {key} is {layer[key]!r}, not clamp or hidden")
+                raise EvaluationError(f"before-after: a points layer's {key} is {layer[key]!r}, not clamp or hidden")
         data = self.one(layer["sets"])
         if data is None:
             return {"kind": "points", "set": None, "members": []}
         rd = self.reading_of(layer)
-        hides = rd.mode == "value" and "hidden" in (layer.get("before"), layer.get("after"))
-        if (reveal == "grow" or hides) and rd.laps > 1 and not data.periodic:
+        hides = rd.mode == "epoch" and "hidden" in (layer.get("before"), layer.get("after"))
+        if (reveal == "grow" or hides) and rd.revolutions > 1 and not data.periodic:
             raise EvaluationError(
-                f"C6: a reading is taken on track set {data.id!r}, which is not periodic, and the clock has {rd.laps} laps"
+                f"revolutions: a reading is taken on trajectory set {data.id!r}, which is not periodic, and the clock has "
+                f"{rd.revolutions} revolutions"
             )
         members = []
         for i in self.members(layer["members"], data):
-            track = data.track(i)
-            # each sample in its own context, in lap 0
-            p = self.ev.tree.transform(track.positions, data.frame, self.frame, track.context(0))
-            shown = np.ones(track.m, dtype=bool)
+            trajectory = data.trajectory(i)
+            # each sample in its own context, in revolution 0
+            p = self.ev.tree.transform(trajectory.positions, data.frame, self.frame, trajectory.context(0))
+            shown = np.ones(trajectory.m, dtype=bool)
             if reveal == "grow" or hides:
-                u = rd.of(track)
+                u = rd.of(trajectory)
                 if (u < 0.0 and layer.get("before") == "hidden") or (u > 1.0 and layer.get("after") == "hidden"):
                     shown[:] = False
                 elif reveal == "grow":
-                    shown = np.zeros(track.m, dtype=bool) if u < 0.0 else track.sample_readings(rd.channel) <= u
+                    shown = np.zeros(trajectory.m, dtype=bool) if u < 0.0 else trajectory.sample_readings(rd.channel) <= u
             members.append({"index": i, "points": [[float(x) for x in row] for row in p[shown]]})
         return {"kind": "points", "set": data.id, "members": members}
 
     def camera(self, camera: Mapping[str, Any]) -> dict[str, Any] | None:
-        """The window of a plane camera with keys at the time of the timeline (rule K5), or None when a key it needs lacks a center."""
-        keys = camera["keys"]
-        layers = self.view["layers"]
+        """The window of a 2d camera with keyframes at the time of the timeline (rule `camera-keyframes`), or None when a keyframe
+        it needs lacks a center."""
+        keys = camera["keyframes"]
+        layers = self.declared["layers"]
         if not isinstance(keys, list) or not keys:
-            raise EvaluationError(f"K5: the keys of a camera are {keys!r}, not a nonempty list")
+            raise EvaluationError(f"camera-keyframes: the keyframes of a camera are {keys!r}, not a nonempty list")
         axes = {"xy": (0, 1), "xz": (0, 2), "yz": (1, 2)}.get(camera.get("plane", "xy"))
         if axes is None:
-            raise EvaluationError(f"2.7: a camera plane is {camera.get('plane')!r}, not xy, xz, or yz")
+            raise EvaluationError(f"panel: a camera plane is {camera.get('plane')!r}, not xy, xz, or yz")
         checked = []
         for key in keys:
             if not isinstance(key, Mapping):
-                raise EvaluationError(f"K5: a camera key is {key!r}, not an object")
-            at = _number(key.get("at"), "K5: the time of a camera key")
-            width = _number(key.get("width"), "K5: the width of a camera key")
+                raise EvaluationError(f"camera-keyframes: a camera keyframe is {key!r}, not an object")
+            at = _number(key.get("at"), "camera-keyframes: the time of a camera keyframe")
+            width = _number(key.get("width"), "camera-keyframes: the width of a camera keyframe")
             if width <= 0.0:
-                raise EvaluationError(f"K5: the width of a camera key is {width}, not positive")
+                raise EvaluationError(f"camera-keyframes: the width of a camera keyframe is {width}, not positive")
             height = None
             if "height" in key:
-                height = _number(key["height"], "K5: the height of a camera key")
+                height = _number(key["height"], "camera-keyframes: the height of a camera keyframe")
                 if height <= 0.0:
-                    raise EvaluationError(f"K5: the height of a camera key is {height}, not positive")
+                    raise EvaluationError(f"camera-keyframes: the height of a camera keyframe is {height}, not positive")
             name = key.get("ease", "linear")
             if name not in EASES:
-                raise EvaluationError(f"K2: a camera key has the ease {name!r}, not one of {', '.join(EASES)}")
+                raise EvaluationError(f"ease: a camera keyframe has the ease {name!r}, not one of {', '.join(EASES)}")
             for target in key.get("follow", []):
                 i = target.get("layer") if isinstance(target, Mapping) else None
                 k = target.get("member") if isinstance(target, Mapping) else None
                 if not isinstance(i, int) or not isinstance(k, int) or isinstance(i, bool) or isinstance(k, bool) or i < 0 or k < 0:
-                    raise EvaluationError(f"K5: a camera target is {target!r}, not a layer index and a member index")
-                if i >= len(layers) or not isinstance(layers[i], Mapping) or layers[i].get("kind") != "track":
-                    raise EvaluationError(f"K5: a camera key follows layer {i}, which is not a track layer of the view")
-                data = self.one(layers[i]["sets"])
-                if data is not None and k >= data.tracks:
+                    raise EvaluationError(f"camera-keyframes: a camera target is {target!r}, not a layer index and a member index")
+                if i >= len(layers) or not isinstance(layers[i], Mapping) or layers[i].get("kind") != "trajectories":
                     raise EvaluationError(
-                        f"K5: a camera key follows member {k}, which is not below the track count {data.tracks} of {data.id!r}"
+                        f"camera-keyframes: a camera keyframe follows layer {i}, which is not a trajectories layer of the panel"
+                    )
+                data = self.one(layers[i]["sets"])
+                if data is not None and k >= data.trajectories:
+                    raise EvaluationError(
+                        f"camera-keyframes: a camera keyframe follows member {k}, which is not below the trajectory count "
+                        f"{data.trajectories} of {data.id!r}"
                     )
             if checked and at < checked[-1][0]:
-                raise EvaluationError(f"K5: the times of the camera keys decrease from {checked[-1][0]} to {at}")
+                raise EvaluationError(f"camera-keyframes: the times of the camera keyframes decrease from {checked[-1][0]} to {at}")
             checked.append((at, width, height, name))
         heights = [c[2] is not None for c in checked]
         if any(heights) and not all(heights):
-            raise EvaluationError("K5: some keys of a camera give a height and others do not")
+            raise EvaluationError("camera-keyframes: some keyframes of a camera give a height and others do not")
         if any(heights) and camera.get("aspect", "equal") != "free":
-            raise EvaluationError('K5: a camera key gives a height, which only a camera with "aspect": "free" takes')
+            raise EvaluationError('camera-keyframes: a camera keyframe gives a height, which only a camera with "aspect": "free" takes')
 
         def center(key: Mapping[str, Any]) -> list[float] | None:
             points = []
@@ -1176,19 +1242,19 @@ class _Panel:
                 data = self.one(layer["sets"])
                 if data is None:
                     continue
-                p = self.point_at_reading(layer, data, target["member"], context=layer.get("context", "own"))
+                p = self.point_at_reading(layer, data, target["member"], read_from=layer.get("read_from", "own"))
                 if p is not None:
                     points.append(p)
             if points:
                 offset = key.get("offset", [0.0, 0.0])
                 a = sum(p[axes[0]] for p in points) / len(points)
                 b = sum(p[axes[1]] for p in points) / len(points)
-                return [a + _number(offset[0], "K5: an offset"), b + _number(offset[1], "K5: an offset")]
+                return [a + _number(offset[0], "camera-keyframes: an offset"), b + _number(offset[1], "camera-keyframes: an offset")]
             if "center" in key:
                 c = key["center"]
                 if not isinstance(c, list) or len(c) != 2:
-                    raise EvaluationError(f"K5: the center of a camera key is {c!r}, not two numbers")
-                return [_number(c[0], "K5: a center"), _number(c[1], "K5: a center")]
+                    raise EvaluationError(f"camera-keyframes: the center of a camera keyframe is {c!r}, not two numbers")
+                return [_number(c[0], "camera-keyframes: a center"), _number(c[1], "camera-keyframes: a center")]
             return None
 
         s = self.reading.s
@@ -1223,37 +1289,37 @@ def _fraction(layer: Mapping[str, Any]) -> float:
     """The trail fraction ``trail.fraction`` of a layer, in ``(0, 1]`` (section 2.7)."""
     spec = layer.get("trail")
     if not isinstance(spec, Mapping) or "fraction" not in spec:
-        raise EvaluationError("2.7: a layer draws a trail but lacks a trail fraction")
+        raise EvaluationError("panel: a layer draws a trail but lacks a trail fraction")
     f = _number(spec["fraction"], "a trail fraction")
     if not 0.0 < f <= 1.0:
-        raise EvaluationError(f"2.7: the trail fraction {f} is not in (0, 1]")
+        raise EvaluationError(f"panel: the trail fraction {f} is not in (0, 1]")
     return f
 
 
-def sparse(tracks: int, n: int) -> list[int]:
-    """The tracks of ``{"count": n}`` (rule V3), which are every ``step``-th track from the first, and the last.
+def sparse(trajectories: int, n: int) -> list[int]:
+    """The trajectories of ``{"evenly_spaced": n}`` (rule `members`), which are every ``step``-th trajectory from the first, and the last.
 
-    The step is ``floor(tracks / n + 0.5)``, or 1 when ``n`` is at least ``tracks``.
+    The step is ``floor(trajectories / n + 0.5)``, or 1 when ``n`` is at least ``trajectories``.
     """
-    step = 1 if n >= tracks else math.floor(tracks / n + 0.5)
-    out = list(range(0, tracks, step))
-    if out[-1] != tracks - 1:
-        out.append(tracks - 1)
+    step = 1 if n >= trajectories else math.floor(trajectories / n + 0.5)
+    out = list(range(0, trajectories, step))
+    if out[-1] != trajectories - 1:
+        out.append(trajectories - 1)
     return out
 
 
-def _every_lap(positions: np.ndarray) -> Callable[[int], np.ndarray]:
-    """A table of positions that is the same in every lap, as for a layer in the driver's context (rule L6)."""
-    return lambda _lap: positions
+def _every_revolution(positions: np.ndarray) -> Callable[[int], np.ndarray]:
+    """A table of positions that is the same in every revolution, as for a layer that reads from the reference (rule `read-from`)."""
+    return lambda _revolution: positions
 
 
-def _by_lap(compute: Callable[[int], np.ndarray]) -> Callable[[int], np.ndarray]:
-    """Returns ``compute`` wrapped in a cache, so that it runs once per lap."""
+def _by_revolution(compute: Callable[[int], np.ndarray]) -> Callable[[int], np.ndarray]:
+    """Returns ``compute`` wrapped in a cache, so that it runs once per revolution."""
     cache: dict[int, np.ndarray] = {}
 
-    def get(lap: int) -> np.ndarray:
-        if lap not in cache:
-            cache[lap] = compute(lap)
-        return cache[lap]
+    def get(revolution: int) -> np.ndarray:
+        if revolution not in cache:
+            cache[revolution] = compute(revolution)
+        return cache[revolution]
 
     return get

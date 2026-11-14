@@ -1,14 +1,14 @@
 {
  "format": "tycho-scene",
- "version": "0.4",
+ "version": "0.5",
  "requires": [
-  "clock.keys",
+  "clock.keyframes",
   "layers.clock",
-  "camera.keys",
+  "camera.keyframes",
   "layers.label",
   "layers.points"
  ],
- "generator": "pytycho 0.2.0",
+ "generator": "pytycho 0.3.0",
  "title": "the timeline",
  "frames": {
   "root": {},
@@ -22,43 +22,43 @@
    }
   }
  },
- "track_sets": {
+ "trajectory_sets": {
   "a": {
    "frame": "root",
-   "tracks": 2,
+   "trajectories": 2,
    "offsets": "a/offsets",
    "positions": "a/positions",
    "channels": {
     "t": {
-     "view": "a/channels/t"
+     "array": "a/channels/t"
     },
     "tau": {
-     "view": "a/channels/tau"
+     "array": "a/channels/tau"
     }
    },
    "periodic": false
   },
   "pts": {
    "frame": "root",
-   "tracks": 1,
+   "trajectories": 1,
    "offsets": "pts/offsets",
    "positions": "pts/positions",
    "channels": {
     "t": {
-     "view": "pts/channels/t"
+     "array": "pts/channels/t"
     }
    },
    "periodic": false
   }
  },
  "clock": {
-  "mode": "value",
+  "mode": "epoch",
   "channels": [
    "t"
   ],
-  "steps": 20,
+  "frame_count": 20,
   "seconds": 10.0,
-  "keys": [
+  "keyframes": [
    [
     1.0,
     0.0
@@ -93,10 +93,10 @@
    ]
   ]
  },
- "views": {
+ "panels": {
   "main": {
    "frame": "root",
-   "driver": {
+   "reference": {
     "sets": {
      "set": "a"
     },
@@ -106,7 +106,7 @@
    },
    "layers": [
     {
-     "kind": "track",
+     "kind": "trajectories",
      "sets": {
       "set": "a"
      },
@@ -115,7 +115,7 @@
      "head": true
     },
     {
-     "kind": "track",
+     "kind": "trajectories",
      "sets": {
       "set": "a"
      },
@@ -124,7 +124,7 @@
      "head": true,
      "clock": {
       "channel": "tau",
-      "keys": [
+      "keyframes": [
        [
         0.0,
         10.0
@@ -215,7 +215,7 @@
      },
      "clock": {
       "channel": "tau",
-      "keys": [
+      "keyframes": [
        [
         0.0,
         10.0
@@ -230,8 +230,8 @@
     }
    ],
    "camera": {
-    "kind": "plane",
-    "keys": [
+    "kind": "2d",
+    "keyframes": [
      {
       "at": 1.0,
       "width": 2.0,
@@ -285,7 +285,7 @@
   },
   "plot": {
    "frame": "root",
-   "driver": {
+   "reference": {
     "sets": {
      "set": "a"
     },
@@ -295,7 +295,7 @@
    },
    "layers": [
     {
-     "kind": "track",
+     "kind": "trajectories",
      "sets": {
       "set": "a"
      },
@@ -306,9 +306,9 @@
     }
    ],
    "camera": {
-    "kind": "plane",
+    "kind": "2d",
     "aspect": "free",
-    "keys": [
+    "keyframes": [
      {
       "at": 0.0,
       "width": 2.0,
@@ -334,16 +334,16 @@
   }
  },
  "initial": {
-  "variables": {},
+  "inputs": {},
   "clock": {
    "channel": "t"
   },
   "panels": {
    "p1": {
-    "view": "main"
+    "panel": "main"
    },
    "p2": {
-    "view": "plot"
+    "panel": "plot"
    }
   },
   "layout": {

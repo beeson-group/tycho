@@ -1,6 +1,6 @@
 {
  "format": "tycho-scene",
- "version": "0.2",
+ "version": "0.5",
  "generator": "pytycho 0.2.0",
  "title": "Broucke families, three members each",
  "frames": {
@@ -71,7 +71,7 @@
    ]
   }
  },
- "track_sets": {
+ "trajectory_sets": {
   "family-7-periapsis": {
    "label": "Broucke family 7 periapsis",
    "frame": "rotating-pulsating",
@@ -82,26 +82,26 @@
    "attrs": {
     "mu": 0.012155
    },
-   "tracks": 3,
+   "trajectories": 3,
    "offsets": "family-7-periapsis/offsets",
    "positions": "family-7-periapsis/positions",
    "channels": {
     "true_anomaly": {
-     "view": "family-7-periapsis/true_anomaly",
+     "array": "family-7-periapsis/true_anomaly",
      "interp": "linear"
     },
     "rho": {
-     "view": "family-7-periapsis/rho",
+     "array": "family-7-periapsis/rho",
      "interp": "linear"
     },
     "time": {
-     "view": "family-7-periapsis/time",
+     "array": "family-7-periapsis/time",
      "interp": "linear"
     }
    },
    "parameters": {
     "eccentricity": {
-     "view": "family-7-periapsis/eccentricity",
+     "array": "family-7-periapsis/eccentricity",
      "label": "eccentricity"
     }
    },
@@ -117,26 +117,26 @@
    "attrs": {
     "mu": 0.012155
    },
-   "tracks": 3,
+   "trajectories": 3,
    "offsets": "family-7-apoapsis/offsets",
    "positions": "family-7-apoapsis/positions",
    "channels": {
     "true_anomaly": {
-     "view": "family-7-apoapsis/true_anomaly",
+     "array": "family-7-apoapsis/true_anomaly",
      "interp": "linear"
     },
     "rho": {
-     "view": "family-7-apoapsis/rho",
+     "array": "family-7-apoapsis/rho",
      "interp": "linear"
     },
     "time": {
-     "view": "family-7-apoapsis/time",
+     "array": "family-7-apoapsis/time",
      "interp": "linear"
     }
    },
    "parameters": {
     "eccentricity": {
-     "view": "family-7-apoapsis/eccentricity",
+     "array": "family-7-apoapsis/eccentricity",
      "label": "eccentricity"
     }
    },
@@ -152,26 +152,26 @@
    "attrs": {
     "mu": 0.5
    },
-   "tracks": 3,
+   "trajectories": 3,
    "offsets": "family-8-periapsis/offsets",
    "positions": "family-8-periapsis/positions",
    "channels": {
     "true_anomaly": {
-     "view": "family-8-periapsis/true_anomaly",
+     "array": "family-8-periapsis/true_anomaly",
      "interp": "linear"
     },
     "rho": {
-     "view": "family-8-periapsis/rho",
+     "array": "family-8-periapsis/rho",
      "interp": "linear"
     },
     "time": {
-     "view": "family-8-periapsis/time",
+     "array": "family-8-periapsis/time",
      "interp": "linear"
     }
    },
    "parameters": {
     "eccentricity": {
-     "view": "family-8-periapsis/eccentricity",
+     "array": "family-8-periapsis/eccentricity",
      "label": "eccentricity"
     }
    },
@@ -187,33 +187,33 @@
    "attrs": {
     "mu": 0.5
    },
-   "tracks": 3,
+   "trajectories": 3,
    "offsets": "family-8-apoapsis/offsets",
    "positions": "family-8-apoapsis/positions",
    "channels": {
     "true_anomaly": {
-     "view": "family-8-apoapsis/true_anomaly",
+     "array": "family-8-apoapsis/true_anomaly",
      "interp": "linear"
     },
     "rho": {
-     "view": "family-8-apoapsis/rho",
+     "array": "family-8-apoapsis/rho",
      "interp": "linear"
     },
     "time": {
-     "view": "family-8-apoapsis/time",
+     "array": "family-8-apoapsis/time",
      "interp": "linear"
     }
    },
    "parameters": {
     "eccentricity": {
-     "view": "family-8-apoapsis/eccentricity",
+     "array": "family-8-apoapsis/eccentricity",
      "label": "eccentricity"
     }
    },
    "periodic": true
   }
  },
- "variables": {
+ "inputs": {
   "family": {
    "kind": "choice",
    "values": [
@@ -221,7 +221,7 @@
     "8"
    ],
    "default": "7",
-   "scope": "scene"
+   "scope": "shared"
   },
   "branch": {
    "kind": "choice",
@@ -230,7 +230,7 @@
     "apoapsis"
    ],
    "default": "periapsis",
-   "scope": "scene"
+   "scope": "shared"
   },
   "frame": {
    "kind": "choice",
@@ -242,14 +242,13 @@
     "inertial-m2"
    ],
    "default": "rotating-pulsating",
-   "scope": "panel"
+   "scope": "per_panel"
   },
   "e": {
-   "kind": "selector",
-   "by": "nearest",
+   "kind": "parameter",
    "parameter": "eccentricity",
    "default": 0.0,
-   "scope": "scene"
+   "scope": "shared"
   }
  },
  "clock": {
@@ -259,38 +258,38 @@
    "time",
    "@index"
   ],
-  "steps": 64
+  "frame_count": 64
  },
- "views": {
+ "panels": {
   "main": {
    "frame": {
-    "var": "frame"
+    "input": "frame"
    },
-   "driver": {
+   "reference": {
     "sets": {
      "tags": {
       "family": {
-       "var": "family"
+       "input": "family"
       },
       "branch": {
-       "var": "branch"
+       "input": "branch"
       }
      }
     },
     "member": {
-     "var": "e"
+     "input": "e"
     }
    },
    "layers": [
     {
-     "kind": "track",
+     "kind": "trajectories",
      "sets": {
       "tags": {
        "family": {
-        "var": "family"
+        "input": "family"
        },
        "branch": {
-        "var": "branch"
+        "input": "branch"
        }
       }
      },
@@ -309,13 +308,13 @@
   }
  },
  "initial": {
-  "variables": {},
+  "inputs": {},
   "clock": {
    "channel": "true_anomaly"
   },
   "panels": {
    "p1": {
-    "view": "main"
+    "panel": "main"
    }
   },
   "layout": {

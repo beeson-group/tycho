@@ -1,0 +1,153 @@
+{
+ "format": "tycho-scene",
+ "version": "0.5",
+ "requires": [
+  "layers.read_from"
+ ],
+ "generator": "pytycho 0.3.0",
+ "title": "a grid and a grown ring in the reference trajectory's context over two revolutions",
+ "frames": {
+  "rot": {
+   "label": "rotating",
+   "axes": [
+    "x",
+    "y",
+    "z"
+   ],
+   "unit": "DU"
+  },
+  "inertial": {
+   "label": "inertial",
+   "axes": [
+    "X",
+    "Y",
+    "Z"
+   ],
+   "unit": "DU",
+   "parent": "rot",
+   "rotation": {
+    "axis": "z",
+    "angle": {
+     "channel": "t"
+    }
+   }
+  }
+ },
+ "trajectory_sets": {
+  "loop": {
+   "frame": "rot",
+   "trajectories": 1,
+   "offsets": "loop/offsets",
+   "positions": "loop/positions",
+   "channels": {
+    "t": {
+     "array": "loop/channels/t"
+    }
+   },
+   "periodic": true
+  },
+  "grid": {
+   "frame": "rot",
+   "trajectories": 2,
+   "offsets": "grid/offsets",
+   "positions": "grid/positions",
+   "periodic": false
+  },
+  "ring": {
+   "frame": "rot",
+   "trajectories": 1,
+   "offsets": "ring/offsets",
+   "positions": "ring/positions",
+   "channels": {
+    "t": {
+     "array": "ring/channels/t"
+    }
+   },
+   "periodic": true
+  }
+ },
+ "inputs": {
+  "frame": {
+   "kind": "choice",
+   "values": [
+    "rot",
+    "inertial"
+   ],
+   "default": "inertial",
+   "scope": "per_panel"
+  }
+ },
+ "clock": {
+  "mode": "fraction",
+  "channels": [
+   "t",
+   "@index"
+  ],
+  "frame_count": 8,
+  "revolutions": 2
+ },
+ "panels": {
+  "v": {
+   "frame": {
+    "input": "frame"
+   },
+   "reference": {
+    "sets": {
+     "set": "loop"
+    },
+    "member": {
+     "index": 0
+    }
+   },
+   "layers": [
+    {
+     "kind": "trajectories",
+     "sets": {
+      "set": "grid"
+     },
+     "members": "all",
+     "reveal": "none",
+     "read_from": "reference"
+    },
+    {
+     "kind": "trajectories",
+     "sets": {
+      "set": "ring"
+     },
+     "members": "all",
+     "reveal": "grow",
+     "head": true,
+     "read_from": "reference"
+    },
+    {
+     "kind": "trajectories",
+     "sets": {
+      "set": "loop"
+     },
+     "members": "all",
+     "reveal": "none",
+     "head": true
+    }
+   ],
+   "camera": {
+    "kind": "2d",
+    "plane": "xy"
+   }
+  }
+ },
+ "initial": {
+  "inputs": {},
+  "clock": {
+   "channel": "t"
+  },
+  "panels": {
+   "p1": {
+    "panel": "v"
+   }
+  },
+  "layout": {
+   "kind": "panel",
+   "id": "p1"
+  }
+ }
+}

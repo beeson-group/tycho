@@ -1,10 +1,10 @@
 [
  {
-  "name": "K1: clock keys whose times decrease",
-  "rule": "K1",
+  "name": "keyframes: clock keyframes whose times decrease",
+  "rule": "keyframes",
   "scene": {
    "clock": {
-    "keys": [
+    "keyframes": [
      [
       2.0,
       0.0
@@ -18,11 +18,11 @@
   }
  },
  {
-  "name": "K2: a clock key with an ease that is not defined",
-  "rule": "K2",
+  "name": "ease: a clock keyframe with an ease that is not defined",
+  "rule": "ease",
   "scene": {
    "clock": {
-    "keys": [
+    "keyframes": [
      [
       0.0,
       0.0
@@ -37,8 +37,8 @@
   }
  },
  {
-  "name": "K3: a value clock with both a range and keys",
-  "rule": "K3",
+  "name": "clock-keyframes: an epoch clock with both a range and keyframes",
+  "rule": "clock-keyframes",
   "scene": {
    "clock": {
     "range": [
@@ -49,8 +49,8 @@
   }
  },
  {
-  "name": "K3: a fraction clock with keys",
-  "rule": "K3",
+  "name": "clock-keyframes: a fraction clock with keyframes",
+  "rule": "clock-keyframes",
   "scene": {
    "clock": {
     "mode": "fraction"
@@ -58,14 +58,14 @@
   }
  },
  {
-  "name": "K4: a layer clock with both a range and keys",
-  "rule": "K4",
+  "name": "layer-clock: a layer clock with both a range and keyframes",
+  "rule": "layer-clock",
   "scene": {
-   "views": {
+   "panels": {
     "main": {
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "sets": {
         "set": "a"
        },
@@ -74,7 +74,7 @@
        "head": true
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "sets": {
         "set": "a"
        },
@@ -83,7 +83,7 @@
        "head": true,
        "clock": {
         "channel": "tau",
-        "keys": [
+        "keyframes": [
          [
           0.0,
           10.0
@@ -178,7 +178,7 @@
        },
        "clock": {
         "channel": "tau",
-        "keys": [
+        "keyframes": [
          [
           0.0,
           10.0
@@ -197,14 +197,14 @@
   }
  },
  {
-  "name": "C5: a layer clock on a channel that the layer's set lacks",
-  "rule": "C5",
+  "name": "clock-channel-carried: a layer clock on a channel that the layer's set lacks",
+  "rule": "clock-channel-carried",
   "scene": {
-   "views": {
+   "panels": {
     "main": {
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "sets": {
         "set": "a"
        },
@@ -213,7 +213,7 @@
        "head": true
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "sets": {
         "set": "a"
        },
@@ -306,7 +306,7 @@
        },
        "clock": {
         "channel": "tau",
-        "keys": [
+        "keyframes": [
          [
           0.0,
           10.0
@@ -325,13 +325,13 @@
   }
  },
  {
-  "name": "K5: camera keys whose times decrease",
-  "rule": "K5",
+  "name": "camera-keyframes: camera keyframes whose times decrease",
+  "rule": "camera-keyframes",
   "scene": {
-   "views": {
+   "panels": {
     "main": {
      "camera": {
-      "keys": [
+      "keyframes": [
        {
         "at": 1.0,
         "width": 2.0,
@@ -387,13 +387,13 @@
   }
  },
  {
-  "name": "K5: a camera key follows a points layer",
-  "rule": "K5",
+  "name": "camera-keyframes: a camera keyframe follows a points layer",
+  "rule": "camera-keyframes",
   "scene": {
-   "views": {
+   "panels": {
     "main": {
      "camera": {
-      "keys": [
+      "keyframes": [
        {
         "at": 1.0,
         "width": 2.0,
@@ -449,13 +449,13 @@
   }
  },
  {
-  "name": "K5: a camera key follows a member past the track count",
-  "rule": "K5",
+  "name": "camera-keyframes: a camera keyframe follows a member past the trajectory count",
+  "rule": "camera-keyframes",
   "scene": {
-   "views": {
+   "panels": {
     "main": {
      "camera": {
-      "keys": [
+      "keyframes": [
        {
         "at": 1.0,
         "width": 2.0,
@@ -511,13 +511,13 @@
   }
  },
  {
-  "name": "K2: a camera key with an ease that is not defined",
-  "rule": "K2",
+  "name": "ease: a camera keyframe with an ease that is not defined",
+  "rule": "ease",
   "scene": {
-   "views": {
+   "panels": {
     "main": {
      "camera": {
-      "keys": [
+      "keyframes": [
        {
         "at": 1.0,
         "width": 2.0,
@@ -573,14 +573,14 @@
   }
  },
  {
-  "name": "K6: a label at a member past the track count",
-  "rule": "K6",
+  "name": "label: a label at a member past the trajectory count",
+  "rule": "label",
   "scene": {
-   "views": {
+   "panels": {
     "main": {
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "sets": {
         "set": "a"
        },
@@ -589,7 +589,7 @@
        "head": true
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "sets": {
         "set": "a"
        },
@@ -598,7 +598,7 @@
        "head": true,
        "clock": {
         "channel": "tau",
-        "keys": [
+        "keyframes": [
          [
           0.0,
           10.0
@@ -689,7 +689,7 @@
        },
        "clock": {
         "channel": "tau",
-        "keys": [
+        "keyframes": [
          [
           0.0,
           10.0
@@ -708,14 +708,14 @@
   }
  },
  {
-  "name": "K8: a points layer whose reveal is trail",
-  "rule": "K8",
+  "name": "points: a points layer whose reveal is trail",
+  "rule": "points",
   "scene": {
-   "views": {
+   "panels": {
     "main": {
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "sets": {
         "set": "a"
        },
@@ -724,7 +724,7 @@
        "head": true
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "sets": {
         "set": "a"
        },
@@ -733,7 +733,7 @@
        "head": true,
        "clock": {
         "channel": "tau",
-        "keys": [
+        "keyframes": [
          [
           0.0,
           10.0
@@ -823,7 +823,7 @@
        },
        "clock": {
         "channel": "tau",
-        "keys": [
+        "keyframes": [
          [
           0.0,
           10.0

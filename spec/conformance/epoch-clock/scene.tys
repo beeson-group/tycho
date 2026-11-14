@@ -1,0 +1,160 @@
+{
+ "format": "tycho-scene",
+ "version": "0.5",
+ "generator": "pytycho 0.3.0, spec/conformance/generate.py",
+ "frames": {
+  "plane": {}
+ },
+ "trajectory_sets": {
+  "a": {
+   "frame": "plane",
+   "tags": {
+    "family": "a"
+   },
+   "trajectories": 2,
+   "offsets": "a/offsets",
+   "positions": "a/positions",
+   "channels": {
+    "t": {
+     "array": "a/t"
+    }
+   },
+   "parameters": {
+    "p": {
+     "array": "a/p"
+    }
+   }
+  },
+  "b": {
+   "frame": "plane",
+   "tags": {
+    "family": "b"
+   },
+   "trajectories": 1,
+   "offsets": "b/offsets",
+   "positions": "b/positions",
+   "channels": {
+    "t": {
+     "array": "b/t"
+    }
+   },
+   "parameters": {
+    "p": {
+     "array": "b/p"
+    }
+   }
+  }
+ },
+ "inputs": {
+  "fam": {
+   "kind": "choice",
+   "values": [
+    "a",
+    "b"
+   ],
+   "default": "a",
+   "scope": "shared"
+  },
+  "sel": {
+   "kind": "parameter",
+   "parameter": "p",
+   "default": 0.25,
+   "scope": "shared"
+  },
+  "show": {
+   "kind": "toggle",
+   "default": false,
+   "scope": "per_panel"
+  }
+ },
+ "clock": {
+  "mode": "epoch",
+  "channels": [
+   "t"
+  ],
+  "frame_count": 8,
+  "range": [
+   -1.0,
+   7.0
+  ]
+ },
+ "panels": {
+  "v": {
+   "frame": "plane",
+   "reference": {
+    "sets": {
+     "tags": {
+      "family": {
+       "input": "fam"
+      }
+     }
+    },
+    "member": {
+     "input": "sel"
+    }
+   },
+   "layers": [
+    {
+     "kind": "trajectories",
+     "sets": {
+      "tags": {
+       "family": {
+        "input": "fam"
+       }
+      }
+     },
+     "members": "all",
+     "reveal": "grow",
+     "head": true,
+     "before": "hidden",
+     "after": "hidden"
+    },
+    {
+     "kind": "trajectories",
+     "sets": {
+      "tags": {
+       "family": {
+        "input": "fam"
+       }
+      }
+     },
+     "members": {
+      "input": "sel"
+     },
+     "reveal": "grow",
+     "head": true
+    },
+    {
+     "kind": "trajectories",
+     "sets": {
+      "tags": {
+       "family": {
+        "input": "fam"
+       }
+      }
+     },
+     "members": "all",
+     "reveal": "none",
+     "visible": {
+      "input": "show"
+     }
+    }
+   ]
+  }
+ },
+ "initial": {
+  "inputs": {},
+  "clock": {
+   "channel": "t"
+  },
+  "panels": {
+   "p1": {
+    "panel": "v"
+   }
+  },
+  "layout": {
+   "kind": "panel",
+   "id": "p1"
+  }
+ }
+}

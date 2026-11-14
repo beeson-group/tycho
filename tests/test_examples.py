@@ -54,19 +54,21 @@ def test_broucke_example_builds_a_valid_scene(tmp_path):
     doc = json.loads((tmp_path / "broucke.tys").read_text())
     jsonschema.Draft202012Validator(SCHEMA).validate(doc)
     container = Container.read(tmp_path / "broucke.tyd")
-    assert all(s["tracks"] == 3 for s in doc["track_sets"].values())
-    assert len(doc["track_sets"]) == 6
+    assert all(s["trajectories"] == 3 for s in doc["trajectory_sets"].values())
+    assert len(doc["trajectory_sets"]) == 6
     out = evaluate(doc, container, doc["initial"], 120)
     layers = out["panels"]["inertial"]["layers"]
-    # the sparse context holds every track of a track set of three, and the white trail has the head
+    # the sparse subset holds every trajectory of a trajectory set of three, and the white trail has the head
     assert len(layers[0]["members"]) == len(layers[1]["members"]) == 3
     assert layers[4]["members"][0]["head"] is not None
-    assert doc["views"]["main"]["layers"][0]["color"]["colormap"]["map"]["inertial-m2"] == "cividis"
+    # each frame is a declared panel with the colormap of the frame, hence Add panel offers the five frames
+    assert sorted(doc["panels"]) == sorted(build.PANELS)
+    assert doc["panels"]["inertial-m2"]["layers"][0]["color"]["colormap"] == "cividis"
     # the pulsation scale rho and the time channel come from the input, with one value per stored sample
-    rho = container.view("family-7-periapsis/channels/rho")
-    assert rho.shape == container.view("family-7-periapsis/channels/time").shape
+    rho = container.array("family-7-periapsis/channels/rho")
+    assert rho.shape == container.array("family-7-periapsis/channels/time").shape
     assert float(rho.min()) > 0.0
-    assert int(np.diff(container.view("family-7-periapsis/offsets")).max()) <= 480
+    assert int(np.diff(container.array("family-7-periapsis/offsets")).max()) <= 480
 
 
 def _lines(out, panel: str, layer: int) -> list[int]:
@@ -82,50 +84,50 @@ def test_manifolds_example_builds_a_valid_scene(tmp_path):
     doc = json.loads((tmp_path / "manifolds.tys").read_text())
     jsonschema.Draft202012Validator(SCHEMA).validate(doc)
     container = Container.read(tmp_path / "manifolds.tyd")
-    sets = doc["track_sets"]
+    sets = doc["trajectory_sets"]
     assert len(sets) == 15
-    assert all(sets[s]["tracks"] == (1 if s.endswith("-orbit") else 3) for s in sets)
-    assert doc["views"]["main"]["camera"] == {
-        "kind": "orbit",
+    assert all(sets[s]["trajectories"] == (1 if s.endswith("-orbit") else 3) for s in sets)
+    assert doc["panels"]["main"]["camera"] == {
+        "kind": "3d",
         "projection": "perspective",
         "up": "z",
         "stretch": [1.0, 1.0, build.STRETCH_Z],
-        "turn": build.TURN,
+        "auto_rotate": build.AUTO_ROTATE,
     }
     clock = doc["clock"]
-    assert clock["mode"] == "value"
+    assert clock["mode"] == "epoch"
     assert clock["seconds"] == 24.0
     manifold_time = float(Container(MANIFOLDS_INPUT.read_bytes()).meta["manifold_time"])
     assert clock["range"][0] == -manifold_time
 
-    # the time of a stable leg increases along the stored track and runs from the departure minus the manifold time
-    offsets = container.view("halo-L1-stable-left/offsets")
-    stable_time = container.view("halo-L1-stable-left/channels/time")[offsets[0] : offsets[1]]
-    departure = container.view("halo-L1-stable-left/parameters/departure")
+    # the time of a stable leg increases along the stored trajectory and runs from the departure minus the manifold time
+    offsets = container.array("halo-L1-stable-left/offsets")
+    stable_time = container.array("halo-L1-stable-left/channels/time")[offsets[0] : offsets[1]]
+    departure = container.array("halo-L1-stable-left/parameters/departure")
     assert bool(np.all(np.diff(stable_time) > 0))
     assert stable_time[0] == pytest.approx(departure[0] - manifold_time)
     assert stable_time[-1] < departure[0]
     # a stable arc ends where it comes within the clearance of the orbit, and an unstable arc starts where it leaves it
-    orbit = Container(MANIFOLDS_INPUT.read_bytes()).view("halo-L1-orbit/positions")
+    orbit = Container(MANIFOLDS_INPUT.read_bytes()).array("halo-L1-orbit/positions")
     for set_id, end in (("halo-L1-stable-left", -1), ("halo-L1-unstable-left", 0)):
-        bounds = container.view(f"{set_id}/offsets")
-        arc = container.view(f"{set_id}/positions")[bounds[0] : bounds[1]]
+        bounds = container.array(f"{set_id}/offsets")
+        arc = container.array(f"{set_id}/positions")[bounds[0] : bounds[1]]
         gap = float(np.min(np.linalg.norm(orbit - arc[end], axis=1)))
         assert build.CLEARANCE <= gap < 1.5 * build.CLEARANCE
     # the repeated orbit covers the clock range with a strictly increasing time
-    orbit_time = container.view("halo-L1-orbit/channels/time")
+    orbit_time = container.array("halo-L1-orbit/channels/time")
     assert orbit_time[0] < clock["range"][0]
     assert orbit_time[-1] > clock["range"][1]
     assert bool(np.all(np.diff(orbit_time) > 0))
 
     # layers 0 to 3 are the four legs, 4 the orbit, 5 and 6 the Earth and the Moon
-    steps = clock["steps"]
-    first, last = evaluate(doc, container, doc["initial"], 0), evaluate(doc, container, doc["initial"], steps - 1)
+    frame_count = clock["frame_count"]
+    first, last = evaluate(doc, container, doc["initial"], 0), evaluate(doc, container, doc["initial"], frame_count - 1)
     # at the start, every unstable arc is hidden and only the stable arc arriving at departure 0 shows, as its first sample
     assert _lines(first, "rotating", 2) == [0, 0, 0]
     assert sorted(_lines(first, "rotating", 0)) == [0, 0, 1]
     # the arcs are complete once 20 of the 24 seconds have passed, and they are held to the end of the loop
-    hold = evaluate(doc, container, doc["initial"], int(steps * 20.2 / 24))
+    hold = evaluate(doc, container, doc["initial"], int(frame_count * 20.2 / 24))
     whole = [int(d) for d in np.diff(offsets)]
     assert _lines(hold, "rotating", 0) == _lines(last, "rotating", 0) == whole
     assert all(x > 0 for x in _lines(last, "rotating", 2))
@@ -143,7 +145,7 @@ def test_manifolds_slide_variant_holds_the_halo_alone_in_two_stacked_panels(tmp_
     build = _example("manifolds")
     build.build(MANIFOLDS_INPUT, tmp_path, 3, False, "light")
     doc = json.loads((tmp_path / "manifolds-slide-light.tys").read_text())
-    assert sorted(doc["track_sets"]) == sorted(["halo-L1-orbit"] + [f"halo-L1-{a}-{b}" for a, b in build.LEGS])
+    assert sorted(doc["trajectory_sets"]) == sorted(["halo-L1-orbit"] + [f"halo-L1-{a}-{b}" for a, b in build.LEGS])
     assert doc["theme"] == build.SLIDE_THEMES["light"]
     assert doc["initial"]["layout"] == {
         "kind": "split",
@@ -153,6 +155,6 @@ def test_manifolds_slide_variant_holds_the_halo_alone_in_two_stacked_panels(tmp_
         "b": {"kind": "panel", "id": "rotating"},
     }
     assert [r["place"] for r in doc["readouts"]] == ["panel"]
-    tracks = [layer for layer in doc["views"]["main"]["layers"] if layer["kind"] == "track"]
-    assert all("highlight" not in layer for layer in tracks)
-    assert {layer["color"] for layer in tracks} == set(build.SLIDE_COLORS["light"].values())
+    trajectory_layers = [layer for layer in doc["panels"]["main"]["layers"] if layer["kind"] == "trajectories"]
+    assert all("highlight" not in layer for layer in trajectory_layers)
+    assert {layer["color"] for layer in trajectory_layers} == set(build.SLIDE_COLORS["light"].values())

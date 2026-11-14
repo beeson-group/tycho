@@ -2,9 +2,9 @@
 
 Both files are embedded base64-encoded as text in ``<script type="application/octet-stream">``
 elements, so that a string of the scene cannot close a script tag. The container is embedded as it
-is, since its views are already compressed. The two blocks are children of the ``<tycho-viewer>``
+is, since its arrays are already compressed. The two blocks are children of the ``<tycho-viewer>``
 element, marked ``data-tycho="scene"`` and ``data-tycho="data"``, hence a page can hold several viewers.
-The browser inflates the container's encoded views with the native ``DecompressionStream``, and parses
+The browser inflates the container's encoded arrays with the native ``DecompressionStream``, and parses
 both with no library. The runtime itself is inlined by :func:`build_html`, so the page works offline,
 from disk, inside an iframe on a reveal.js slide, or anywhere else a single HTML file can go.
 :func:`build_embed` leaves the runtime out, for a page that vendors it once from :func:`runtime_js`.
@@ -54,7 +54,7 @@ def _encoded(document: dict[str, Any] | str, container: bytes) -> tuple[str, str
         if len(encoded) > MAX_STRING:
             raise ValueError(
                 f"the base64 of the {what} is {len(encoded):,} characters, over the {MAX_STRING:,} that Chrome holds in one string, "
-                "and the page would stay empty. Thin the scene's track sets, or store fewer channels or tracks"
+                "and the page would stay empty. Thin the scene's trajectory sets, or store fewer channels or trajectories"
             )
     return scene_b64, data_b64
 
@@ -121,7 +121,7 @@ def build_embed(document: dict[str, Any] | str, container: bytes, **kwargs: Any)
 
 
 def write_html(path: str | os.PathLike[str], document: dict[str, Any] | str, container: bytes, **kwargs: Any) -> dict[str, int]:
-    """Writes the page from :func:`build_html` to ``path``, and returns the stored size in bytes of every view and of the page."""
+    """Writes the page from :func:`build_html` to ``path``, and returns the stored size in bytes of every array and of the page."""
     out = Path(path)
     out.write_text(build_html(document, container, **kwargs), encoding="utf-8")
     stored = Container(container)

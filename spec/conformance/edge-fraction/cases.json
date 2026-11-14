@@ -1,21 +1,21 @@
 [
  {
-  "name": "L2 joint on an open periodic loop, T2 absent periodic, L3 head on reveal none, a body without a trail, F1 origin off the rotation axis, F1 rotation about y",
+  "name": "trail-wrap joint on an open periodic loop, periodic absent periodic, head head on reveal none, a body without a trail, transform origin off the rotation axis, transform rotation about y",
   "source": "analytic",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "@index"
    },
    "panels": {
     "open": {
-     "view": "open"
+     "panel": "open"
     },
     "c": {
-     "view": "c"
+     "panel": "c"
     },
     "y": {
-     "view": "y"
+     "panel": "y"
     }
    },
    "layout": {
@@ -49,7 +49,7 @@
      "frame": "p",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "open",
        "members": [
         {
@@ -80,7 +80,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "nokey",
        "members": [
         {
@@ -101,7 +101,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "off",
        "members": [
         {
@@ -141,7 +141,7 @@
      "frame": "c",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "off",
        "members": [
         {
@@ -167,7 +167,7 @@
      "frame": "y",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "yrot",
        "members": [
         {

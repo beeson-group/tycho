@@ -1,12 +1,12 @@
 """The Scene API, which takes declarations and arrays and writes ``scene.tys`` and ``data.tyd``.
 
-A :class:`Scene` records frames, bodies, track sets, variables, the clock, views, panels,
-controls, and readouts, and writes them as the scene document and the data container of
+A :class:`Scene` records frames, bodies, trajectory sets, inputs, the clock, declared panels, shown
+panels, controls, and readouts, and writes them as the scene document and the data container of
 ``spec/tycho-scene.md``. It does not hold any dynamics or frame formula, and it never interpolates.
 
 Every builder checks what it can at the call and raises :class:`SceneError`, whose message refers to
 the broken rule. The checks that depend on the whole scene, i.e. the cross-references and the rules
-that must hold for every value the variables can take, are made by :meth:`Scene.to_document`,
+that must hold for every value the inputs can take, are made by :meth:`Scene.to_document`,
 which reports every failure at once.
 """
 
@@ -37,45 +37,53 @@ SHAPES = ("disc", "ring", "square", "diamond", "triangle", "star", "cross", "plu
 
 
 class SceneError(ValueError):
-    """A declaration that breaks a rule, with the rule given by its number."""
+    """A declaration that breaks a rule, with a message that opens with the name of the rule and a colon."""
+
+
+RULE = re.compile(r"[a-z][a-z0-9-]*: ")
+
+
+def _error(rule: str, message: str) -> SceneError:
+    """A :class:`SceneError` whose message opens with ``rule``, unless ``message`` already opens with a rule name."""
+    return SceneError(message if RULE.match(message) else f"{rule}: {message}")
 
 
 def _check_id(value: Any, what: str) -> str:
     if not isinstance(value, str) or not ID.fullmatch(value):
-        raise SceneError(f"S3: {what} {value!r} does not match [A-Za-z0-9_.-]+")
+        raise SceneError(f"identifier: {what} {value!r} does not match [A-Za-z0-9_.-]+")
     return value
 
 
 def _finite(value: Any, what: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float, np.integer, np.floating)):
-        raise SceneError(f"{what} is {value!r}, not a number")
+        raise _error("scene", f"{what} is {value!r}, not a number")
     x = float(value)
     if not math.isfinite(x):
-        raise SceneError(f"S4: {what} is {value!r}, not finite")
+        raise SceneError(f"finite-number: {what} is {value!r}, not finite")
     return x
 
 
 def _integer(value: Any, what: str) -> int:
     if isinstance(value, bool) or not isinstance(value, (int, np.integer)):
-        raise SceneError(f"{what} is {value!r}, not an integer")
+        raise _error("scene", f"{what} is {value!r}, not an integer")
     return int(value)
 
 
 def _enum(value: Any, allowed: Sequence[str], what: str) -> str:
     if value not in allowed:
-        raise SceneError(f"{what} is {value!r}, not one of {', '.join(allowed)}")
+        raise _error("scene", f"{what} is {value!r}, not one of {', '.join(allowed)}")
     return value
 
 
 def _text(value: Any, what: str) -> str:
     if not isinstance(value, str):
-        raise SceneError(f"{what} is {value!r}, not text")
+        raise _error("scene", f"{what} is {value!r}, not text")
     return value
 
 
 def _color(value: Any, what: str) -> str:
     if not isinstance(value, str) or not HEX.fullmatch(value):
-        raise SceneError(f"{what} is {value!r}, not a #rrggbb color")
+        raise _error("scene", f"{what} is {value!r}, not a #rrggbb color")
     return value
 
 
@@ -131,7 +139,7 @@ class Rotation:
     """A rotation by ``angle`` radians about ``axis``."""
 
     def __init__(self, axis: str, angle: Any) -> None:
-        self.axis = _enum(axis, ("x", "y", "z"), "F1: a rotation axis")
+        self.axis = _enum(axis, ("x", "y", "z"), "transform: a rotation axis")
         self.angle = _scalar(angle, "a rotation angle")
 
     def to_json(self) -> dict[str, Any]:
@@ -157,9 +165,9 @@ def _scalar(value: Any, what: str, *, constant: bool = False) -> Any:
     """The JSON of a number, an attribute, or a channel (section 2.2)."""
     if isinstance(value, Channel):
         if constant:
-            raise SceneError(f"F2: {what} takes a number or an attribute, not a channel")
+            raise SceneError(f"origin: {what} takes a number or an attribute, not a channel")
         if value.name == INDEX:
-            raise SceneError(f"2.2: {what} reads channel {INDEX}, which is not allowed in a frame edge")
+            raise SceneError(f"context-number: {what} reads channel {INDEX}, which is not allowed in a frame edge")
         return value.to_json()
     if isinstance(value, Attr):
         return value.to_json()
@@ -167,9 +175,9 @@ def _scalar(value: Any, what: str, *, constant: bool = False) -> Any:
 
 
 def _point(values: Any, what: str, *, channels: bool = False) -> list[Any]:
-    """A list of three scalars, which are constant unless ``channels``, as in the origin of a frame (rules F2 and 2.4)."""
+    """A list of three scalars, which are constant unless ``channels``, as in the origin of a frame (rules `origin` and `body`)."""
     if isinstance(values, (str, bytes, Mapping)) or not isinstance(values, (Sequence, np.ndarray)) or len(values) != 3:
-        raise SceneError(f"F2: {what} is {values!r}, not three scalars")
+        raise SceneError(f"origin: {what} is {values!r}, not three scalars")
     return [_scalar(v, what, constant=not channels) for v in values]
 
 
@@ -190,117 +198,118 @@ class Body:
         self.id = bid
 
 
-class Variable:
-    """A declared variable."""
+class Input:
+    """A declared input."""
 
     def __init__(self, vid: str, kind: str) -> None:
         self.id, self.kind = vid, kind
 
     def to_json(self) -> dict[str, Any]:
-        return {"var": self.id}
+        return {"input": self.id}
 
 
 def _id(value: Any) -> str:
-    return value.id if isinstance(value, (Frame, Body, Variable, TrackSet)) else value
+    return value.id if isinstance(value, (Frame, Body, Input, TrajectorySet)) else value
 
 
-def _var(value: Any, what: str, kind: str | None = None) -> dict[str, Any]:
-    """The reference ``{"var": id}`` to a variable given as a handle or an id.
+def _input_ref(value: Any, what: str, kind: str | None = None) -> dict[str, Any]:
+    """The reference ``{"input": id}`` to an input given as a handle or an id.
 
     A handle of the wrong kind fails here, and an id of the wrong kind fails at the write.
     """
-    if isinstance(value, Variable):
+    if isinstance(value, Input):
         if kind is not None and value.kind != kind:
-            raise SceneError(f"{what} names {value.id!r}, which is a {value.kind}, not a {kind}")
+            raise _error("input", f"{what} names {value.id!r}, which is a {value.kind}, not a {kind}")
         return value.to_json()
-    return {"var": _check_id(value, what)}
+    return {"input": _check_id(value, what)}
 
 
 # layers and queries
 
 
-def sets(tags: Mapping[str, Any] | None = None, **kw: Any) -> dict[str, Any]:
-    """A tags query, with values that are strings or choice variables."""
+def by_tags(tags: Mapping[str, Any] | None = None, **kw: Any) -> dict[str, Any]:
+    """A tags query, with values that are strings or choice inputs."""
     merged = {**(tags or {}), **kw}
     out: dict[str, Any] = {}
     for k, v in merged.items():
-        if isinstance(v, Variable):
-            out[_text(k, "a tag name")] = _var(v, "V2: a tag value", "choice")
-        elif isinstance(v, Mapping) and set(v) == {"var"}:
-            out[_text(k, "a tag name")] = _var(v["var"], "V2: a tag value", "choice")
+        if isinstance(v, Input):
+            out[_text(k, "a tag name")] = _input_ref(v, "set-query: a tag value", "choice")
+        elif isinstance(v, Mapping) and set(v) == {"input"}:
+            out[_text(k, "a tag name")] = _input_ref(v["input"], "set-query: a tag value", "choice")
         else:
             out[_text(k, "a tag name")] = _text(v, "a tag value")
     return {"tags": out}
 
 
-def set_id(value: Any) -> dict[str, Any]:
-    """A query for one track set, by id or handle."""
-    return {"set": _check_id(_id(value), "a track set id")}
+def by_id(value: Any) -> dict[str, Any]:
+    """A query for one trajectory set, by id or handle."""
+    return {"set": _check_id(_id(value), "a trajectory set id")}
 
 
 def _query(value: Any) -> dict[str, Any]:
-    if isinstance(value, (str, TrackSet)):
-        return set_id(value)
+    if isinstance(value, (str, TrajectorySet)):
+        return by_id(value)
     if isinstance(value, Mapping) and set(value) == {"set"}:
-        return set_id(value["set"])
+        return by_id(value["set"])
     if isinstance(value, Mapping) and set(value) == {"tags"} and isinstance(value["tags"], Mapping):
         return {
             "tags": {
-                k: (_var(v["var"], "V2: a tag value") if isinstance(v, Mapping) else _text(v, "a tag value"))
+                k: (_input_ref(v["input"], "set-query: a tag value") if isinstance(v, Mapping) else _text(v, "a tag value"))
                 for k, v in value["tags"].items()
             }
         }
-    raise SceneError(f"V2: a set query is a track set id, a handle, or sets(...), not {value!r}")
+    raise SceneError(f"set-query: a set query is a trajectory set id, a handle, or by_tags(...), not {value!r}")
 
 
-def every(n: int) -> dict[str, int]:
-    """A sparse member reference ``{"count": n}``, which selects every ``s``-th track from the first, and the last (rule V3).
+def evenly_spaced(n: int) -> dict[str, int]:
+    """A sparse member reference ``{"evenly_spaced": n}``, which selects every ``s``-th trajectory from the first, and the last (rule
+    `members`).
 
-    The step ``s`` is ``floor(tracks / n + 0.5)``, or 1 when ``n`` is at least the number of tracks.
+    The step ``s`` is ``floor(trajectories / n + 0.5)``, or 1 when ``n`` is at least the number of trajectories.
     """
-    k = _integer(n, "V3: a member count")
+    k = _integer(n, "members: a member count")
     if k < 1:
-        raise SceneError(f"V3: a member count is {k}, fewer than one")
-    return {"count": k}
+        raise SceneError(f"members: a member count is {k}, fewer than one")
+    return {"evenly_spaced": k}
 
 
 def _member(value: Any, what: str, *, one: bool = False) -> Any:
     if isinstance(value, str) and value == "all":
         if one:
-            raise SceneError(f"V3: {what} is 'all', but a driver resolves to one track")
+            raise SceneError(f"members: {what} is 'all', but a reference trajectory resolves to one trajectory")
         return "all"
-    if isinstance(value, (Variable, str)):
-        return _var(value, what, "selector")
-    if isinstance(value, Mapping) and set(value) == {"count"}:
+    if isinstance(value, (Input, str)):
+        return _input_ref(value, what, "parameter")
+    if isinstance(value, Mapping) and set(value) == {"evenly_spaced"}:
         if one:
-            raise SceneError(f"V3: {what} is a count, but a driver resolves to one track")
-        return every(value["count"])
+            raise SceneError(f"members: {what} is a count, but a reference trajectory resolves to one trajectory")
+        return evenly_spaced(value["evenly_spaced"])
     if isinstance(value, Mapping) and set(value) == {"index"}:
         value = value["index"]
-    if isinstance(value, Mapping) and set(value) == {"var"}:
-        return _var(value["var"], what, "selector")
-    k = _integer(value, f"V3: {what}")
+    if isinstance(value, Mapping) and set(value) == {"input"}:
+        return _input_ref(value["input"], what, "parameter")
+    k = _integer(value, f"members: {what}")
     if k < 0:
-        raise SceneError(f"V3: {what} is {k}, a negative track index")
+        raise SceneError(f"members: {what} is {k}, a negative trajectory index")
     return {"index": k}
 
 
-def driver(sets: Any, member: Any) -> dict[str, Any]:
-    """A view's driver, given by a set query and a member, which is a track index or a selector."""
-    return {"sets": _query(sets), "member": _member(member, "the driver's member", one=True)}
+def reference(sets: Any, member: Any) -> dict[str, Any]:
+    """A panel's reference trajectory, given by a set query and a member, which is a trajectory index or a parameter input."""
+    return {"sets": _query(sets), "member": _member(member, "the reference trajectory's member", one=True)}
 
 
 def _fraction(value: Any, what: str) -> dict[str, Any]:
     f = _finite(value, what)
     if not 0.0 < f <= 1.0:
-        raise SceneError(f"2.7: {what} is {f}, not in (0, 1]")
+        raise SceneError(f"panel: {what} is {f}, not in (0, 1]")
     return {"fraction": f}
 
 
 def _unit_interval(value: Any, what: str) -> float:
     x = _finite(value, what)
     if not 0.0 <= x <= 1.0:
-        raise SceneError(f"2.7: {what} is {x}, not in [0, 1]")
+        raise SceneError(f"panel: {what} is {x}, not in [0, 1]")
     return x
 
 
@@ -311,9 +320,9 @@ def _taper(value: Any, what: str) -> dict[str, float]:
     elif isinstance(value, Sequence) and not isinstance(value, str) and len(value) == 2:
         spec = {"width": value[0], "opacity": value[1]}
     else:
-        raise SceneError(f"2.7: the taper of {what} is (width, opacity) or a dict of width and opacity, not {value!r}")
+        raise SceneError(f"panel: the taper of {what} is (width, opacity) or a dict of width and opacity, not {value!r}")
     if extra := set(spec) - {"width", "opacity"}:
-        raise SceneError(f"2.7: the taper of {what} has unknown keys {sorted(extra)}")
+        raise SceneError(f"panel: the taper of {what} has unknown keys {sorted(extra)}")
     return {k: _unit_interval(spec[k], f"the taper {k} of {what}") for k in ("width", "opacity") if k in spec}
 
 
@@ -321,7 +330,7 @@ def _trail(value: Any, what: str) -> dict[str, Any]:
     """A trail from a fraction or a dict of ``fraction`` and an optional ``taper``."""
     spec = dict(value) if isinstance(value, Mapping) else {"fraction": value}
     if "fraction" not in spec or set(spec) - {"fraction", "taper"}:
-        raise SceneError(f"2.7: {what} is a fraction or a dict of fraction and taper, not {value!r}")
+        raise SceneError(f"panel: {what} is a fraction or a dict of fraction and taper, not {value!r}")
     out = _fraction(spec["fraction"], f"{what} fraction")
     if "taper" in spec:
         out["taper"] = _taper(spec["taper"], what)
@@ -329,13 +338,13 @@ def _trail(value: Any, what: str) -> dict[str, Any]:
 
 
 def _head(value: Any) -> bool | dict[str, Any]:
-    """The head of a track layer, as a boolean or a marker dict with an optional ``glow`` (rule L3 and section 2.11)."""
+    """The head of a trajectories layer, as a boolean or a marker dict with an optional ``glow`` (rule `head` and section 2.11)."""
     if isinstance(value, bool):
         return value
     if not isinstance(value, Mapping):
-        raise SceneError(f"L3: a track layer's head is {value!r}, not a boolean or a dict of color and size")
+        raise SceneError(f"head: a trajectories layer's head is {value!r}, not a boolean or a dict of color and size")
     if extra := set(value) - {"color", "size", "shape", "edge", "edge_width", "opacity", "glow"}:
-        raise SceneError(f"L3: a head has unknown keys {sorted(extra)}")
+        raise SceneError(f"head: a head has unknown keys {sorted(extra)}")
     out: dict[str, Any] = {}
     if "color" in value:
         out["color"] = _color(value["color"], "a head color")
@@ -346,16 +355,18 @@ def _head(value: Any) -> bool | dict[str, Any]:
         else:
             out["size"] = _finite(size, "a head size")
             if out["size"] <= 0.0:
-                raise SceneError(f"L3: a head size is {out['size']}, not positive")
+                raise SceneError(f"head: a head size is {out['size']}, not positive")
     rest = _marker({k: v for k, v in value.items() if k in ("shape", "edge", "edge_width", "opacity")}, "a head")
     out.update(rest)
     if "glow" in value:
         g = value["glow"]
         if not isinstance(g, Mapping) or "channel" not in g:
-            raise SceneError(f"2.11: a head's glow is a dict of a channel, color, size, and opacity, not {g!r}")
+            raise SceneError(f"timeline: a head's glow is a dict of a channel, color, size, and opacity, not {g!r}")
         if extra := set(g) - {"channel", "color", "size", "opacity"}:
-            raise SceneError(f"2.11: a head's glow has unknown keys {sorted(extra)}")
+            raise SceneError(f"timeline: a head's glow has unknown keys {sorted(extra)}")
         glow: dict[str, Any] = {"channel": _text(g["channel"], "the channel of a glow")}
+        if glow["channel"] == INDEX:
+            raise SceneError(f"timeline: a head's glow names the built-in channel {INDEX}, which a glow does not read")
         if "color" in g:
             glow["color"] = _color(g["color"], "the color of a glow")
         if "size" in g:
@@ -372,38 +383,38 @@ def _has_head(layer: Mapping[str, Any]) -> bool:
 
 
 def _colormap(value: Any, what: str) -> Any:
-    """A colormap name, or ``{"var": choice, "map": {value: name}}`` (section 2.7)."""
+    """A colormap name, or ``{"input": choice, "map": {value: name}}`` (section 2.7)."""
     if not isinstance(value, Mapping):
-        return _enum(value, COLORMAPS, f"2.7: the colormap of {what}")
-    if set(value) != {"var", "map"} or not isinstance(value["map"], Mapping) or not value["map"]:
-        raise SceneError(f"2.7: the colormap of {what} is a name or a dict of var and a nonempty map, not {value!r}")
+        return _enum(value, COLORMAPS, f"panel: the colormap of {what}")
+    if set(value) != {"input", "map"} or not isinstance(value["map"], Mapping) or not value["map"]:
+        raise SceneError(f"panel: the colormap of {what} is a name or a dict of input and a nonempty map, not {value!r}")
     names = {
-        _text(_id(k), f"a value of the choice keying {what}"): _enum(v, COLORMAPS, f"2.7: the colormap of {what} at {_id(k)!r}")
+        _text(_id(k), f"a value of the choice keying {what}"): _enum(v, COLORMAPS, f"panel: the colormap of {what} at {_id(k)!r}")
         for k, v in value["map"].items()
     }
-    return {"var": _var(value["var"], f"2.7: the colormap of {what}", "choice")["var"], "map": names}
+    return {"input": _input_ref(value["input"], f"panel: the colormap of {what}", "choice")["input"], "map": names}
 
 
-def _pair(value: Any, what: str, rule: str = "2.11") -> list[float]:
+def _pair(value: Any, what: str, rule: str = "timeline") -> list[float]:
     if isinstance(value, (str, bytes, Mapping)) or not isinstance(value, (Sequence, np.ndarray)) or len(value) != 2:
         raise SceneError(f"{rule}: {what} is {value!r}, not two numbers")
     return [_finite(x, what) for x in value]
 
 
-def _bool(value: Any, what: str, rule: str = "2.11") -> bool:
+def _bool(value: Any, what: str, rule: str = "timeline") -> bool:
     if not isinstance(value, bool):
         raise SceneError(f"{rule}: {what} is {value!r}, not a boolean")
     return value
 
 
-def _positive(value: Any, what: str, rule: str = "2.11") -> float:
+def _positive(value: Any, what: str, rule: str = "timeline") -> float:
     x = _finite(value, what)
     if x <= 0.0:
         raise SceneError(f"{rule}: {what} is {x}, not positive")
     return x
 
 
-def _nonnegative(value: Any, what: str, rule: str = "2.11") -> float:
+def _nonnegative(value: Any, what: str, rule: str = "timeline") -> float:
     x = _finite(value, what)
     if x < 0.0:
         raise SceneError(f"{rule}: {what} is {x}, not a nonnegative length")
@@ -413,110 +424,116 @@ def _nonnegative(value: Any, what: str, rule: str = "2.11") -> float:
 # the timeline (section 2.11)
 
 
-def _key_list(value: Any, what: str, *, low: float | None = None, high: float | None = None, positive: bool = False) -> list[list[Any]]:
-    """The keys of a tween (rules K1 and K2), from ``{"keys": [...]}`` or a list of ``(t, v)`` and ``(t, v, ease)``."""
+def _keyframe_list(
+    value: Any, what: str, *, low: float | None = None, high: float | None = None, positive: bool = False
+) -> list[list[Any]]:
+    """A list of keyframes (rules `keyframes` and `ease`), from ``{"keyframes": [...]}`` or a list of ``(t, v)`` and ``(t, v, ease)``."""
     if isinstance(value, Mapping):
-        if set(value) != {"keys"}:
-            raise SceneError(f"K1: {what} is a tween {{'keys': [...]}}, not {dict(value)!r}")
-        value = value["keys"]
+        if set(value) != {"keyframes"}:
+            raise SceneError(f"keyframes: {what} is {{'keyframes': [...]}}, not {dict(value)!r}")
+        value = value["keyframes"]
     if isinstance(value, (str, bytes)) or not isinstance(value, (Sequence, np.ndarray)) or len(value) == 0:
-        raise SceneError(f"K1: {what} has keys {value!r}, not a nonempty list of (t, v) or (t, v, ease)")
+        raise SceneError(f"keyframes: {what} has keyframes {value!r}, not a nonempty list of (t, v) or (t, v, ease)")
     out: list[list[Any]] = []
     for key in value:
         if isinstance(key, (str, bytes, Mapping)) or not isinstance(key, (Sequence, np.ndarray)) or len(key) not in (2, 3):
-            raise SceneError(f"K1: a key of {what} is {key!r}, not (t, v) or (t, v, ease)")
-        t = _finite(key[0], f"K1: the time of a key of {what}")
-        v = _finite(key[1], f"K1: the value of a key of {what}")
+            raise SceneError(f"keyframes: a keyframe of {what} is {key!r}, not (t, v) or (t, v, ease)")
+        t = _finite(key[0], f"keyframes: the time of a keyframe of {what}")
+        v = _finite(key[1], f"keyframes: the value of a keyframe of {what}")
         if (low is not None and v < low) or (high is not None and v > high):
-            raise SceneError(f"K1: a key of {what} has the value {v}, not in [{low}, {high}]")
+            raise SceneError(f"keyframes: a keyframe of {what} has the value {v}, not in [{low}, {high}]")
         if positive and v <= 0.0:
-            raise SceneError(f"K1: a key of {what} has the value {v}, not positive")
+            raise SceneError(f"keyframes: a keyframe of {what} has the value {v}, not positive")
         entry: list[Any] = [t, v]
         if len(key) == 3:
-            entry.append(_enum(key[2], EASES, f"K2: the ease of a key of {what}"))
+            entry.append(_enum(key[2], EASES, f"ease: the ease of a keyframe of {what}"))
         if out and t < out[-1][0]:
-            raise SceneError(f"K1: the key times of {what} decrease from {out[-1][0]} to {t}")
+            raise SceneError(f"keyframes: the keyframe times of {what} decrease from {out[-1][0]} to {t}")
         out.append(entry)
     return out
 
 
-def _tween(value: Any, what: str, **bounds: Any) -> dict[str, Any]:
-    return {"keys": _key_list(value, what, **bounds)}
+def _keyframed(value: Any, what: str, **bounds: Any) -> dict[str, Any]:
+    return {"keyframes": _keyframe_list(value, what, **bounds)}
 
 
 def _opacity(value: Any, what: str) -> Any:
-    """An opacity in [0, 1], or a tween of opacities (section 2.11)."""
+    """An opacity in [0, 1], or keyframes of opacities (section 2.11)."""
     if isinstance(value, (Mapping, list, tuple)):
-        return _tween(value, what, low=0.0, high=1.0)
+        return _keyframed(value, what, low=0.0, high=1.0)
     return _unit_interval(value, what)
 
 
 def _size(value: Any, what: str) -> Any:
-    """A positive size in CSS pixels, or a tween of positive sizes (section 2.11)."""
+    """A positive size in CSS pixels, or keyframes of positive sizes (section 2.11)."""
     if isinstance(value, (Mapping, list, tuple)):
-        return _tween(value, what, positive=True)
+        return _keyframed(value, what, positive=True)
     return _positive(value, what)
 
 
-def tween(*keys: Any) -> dict[str, Any]:
-    """A tween ``{"keys": [...]}`` from keys ``(t, v)`` or ``(t, v, ease)``, with times in seconds of the timeline (rule K1).
+def keyframes(*items: Any) -> dict[str, Any]:
+    """A value given as ``{"keyframes": [...]}``, from keyframes ``(t, v)`` or ``(t, v, ease)`` with times in seconds of the timeline
+    (rule `keyframes`).
 
-    The ease of a key, ``linear`` by default, ``smooth``, ``in``, ``out``, ``in-out``, or ``hold``, says how the value travels to it from
-    the key before (rule K2). Two keys at the same time make a jump.
+    The ease of a keyframe, ``linear`` by default, ``smooth``, ``in``, ``out``, ``in-out``, or ``hold``, says how the value travels to
+    it from the keyframe before (rule `ease`). Two keyframes at the same time make a jump.
     """
-    return _tween(list(keys), "a tween")
+    return _keyframed(list(items), "keyframes")
 
 
 def fade(
     on: float, off: float | None = None, *, duration: float = 0.5, ease: str = "smooth", low: float = 0.0, high: float = 1.0
 ) -> dict[str, Any]:
-    """An opacity tween that fades in from ``low`` to ``high`` over ``duration`` seconds from ``on``, and back out from ``off``
+    """Keyframes of an opacity that fades in from ``low`` to ``high`` over ``duration`` seconds from ``on``, and back out from ``off``
     when given."""
     d = _finite(duration, "a fade duration")
-    keys: list[Any] = [(on, low), (on + d, high, ease)]
+    items: list[Any] = [(on, low), (on + d, high, ease)]
     if off is not None:
-        keys += [(off, high), (off + d, low, ease)]
-    return _tween(keys, "a fade", low=0.0, high=1.0)
+        items += [(off, high), (off + d, low, ease)]
+    return _keyframed(items, "a fade", low=0.0, high=1.0)
 
 
 def _layer_clock(value: Any, what: str) -> dict[str, Any]:
-    """The clock of a layer, ``{"channel": name}`` with a ``range`` or ``keys`` (rule K4)."""
+    """The clock of a layer, ``{"channel": name}`` with a ``range`` or ``keyframes`` (rule `layer-clock`)."""
     if not isinstance(value, Mapping) or "channel" not in value:
-        raise SceneError(f"K4: the clock of {what} is a dict of a channel and a range or keys, not {value!r}")
-    if extra := set(value) - {"channel", "range", "keys"}:
-        raise SceneError(f"K4: the clock of {what} has unknown keys {sorted(extra)}")
-    if ("range" in value) == ("keys" in value):
-        raise SceneError(f"K4: the clock of {what} gives {'both' if 'range' in value else 'neither'} of a range and keys, not one")
+        raise SceneError(f"layer-clock: the clock of {what} is a dict of a channel and a range or keyframes, not {value!r}")
+    if extra := set(value) - {"channel", "range", "keyframes"}:
+        raise SceneError(f"layer-clock: the clock of {what} has unknown keys {sorted(extra)}")
+    if ("range" in value) == ("keyframes" in value):
+        raise SceneError(
+            f"layer-clock: the clock of {what} gives {'both' if 'range' in value else 'neither'} of a range and keyframes, not one"
+        )
     out: dict[str, Any] = {"channel": _text(value["channel"], f"the clock channel of {what}")}
     if "range" in value:
-        out["range"] = _pair(value["range"], f"the clock range of {what}", "K4")
+        out["range"] = _pair(value["range"], f"the clock range of {what}", "layer-clock")
     else:
-        out["keys"] = _key_list(value["keys"], f"the clock of {what}")
+        out["keyframes"] = _keyframe_list(value["keyframes"], f"the clock of {what}")
     return out
 
 
-def layer_clock(channel: str, *, range: Sequence[float] | None = None, keys: Any = None) -> dict[str, Any]:
-    """The clock of a layer (rule K4), which reads ``channel`` in value mode at the value that ``range`` or ``keys`` gives at the progress.
+def layer_clock(channel: str, *, range: Sequence[float] | None = None, keyframes: Any = None) -> dict[str, Any]:
+    """The clock of a layer (rule `layer-clock`), which reads ``channel`` in epoch mode at the value that ``range`` or ``keyframes``
+    gives at the progress.
 
-    ``keys`` is a tween or a list of keys ``(t, v)`` and ``(t, v, ease)`` with times in seconds of the timeline.
+    ``keyframes`` is :func:`keyframes` or a list of ``(t, v)`` and ``(t, v, ease)`` with times in seconds of the timeline.
     """
     spec: dict[str, Any] = {"channel": channel}
     if range is not None:
         spec["range"] = range
-    if keys is not None:
-        spec["keys"] = keys
+    if keyframes is not None:
+        spec["keyframes"] = keyframes
     return _layer_clock(spec, "a layer")
 
 
 def _marker(value: Any, what: str, *, extra: Sequence[str] = ()) -> dict[str, Any]:
     """A marker ``{"shape", "size", "color", "edge", "edge_width", "opacity"}`` (section 2.11), all keys optional."""
     if not isinstance(value, Mapping):
-        raise SceneError(f"2.11: {what} is a dict of shape, size, color, edge, edge_width, and opacity, not {value!r}")
+        raise SceneError(f"timeline: {what} is a dict of shape, size, color, edge, edge_width, and opacity, not {value!r}")
     if unknown := set(value) - {"shape", "size", "color", "edge", "edge_width", "opacity", *extra}:
-        raise SceneError(f"2.11: {what} has unknown keys {sorted(unknown)}")
+        raise SceneError(f"timeline: {what} has unknown keys {sorted(unknown)}")
     out: dict[str, Any] = {}
     if "shape" in value:
-        out["shape"] = _enum(value["shape"], SHAPES, f"2.11: the shape of {what}")
+        out["shape"] = _enum(value["shape"], SHAPES, f"timeline: the shape of {what}")
     if "size" in value:
         out["size"] = _size(value["size"], f"the size of {what}")
     if "color" in value:
@@ -527,7 +544,7 @@ def _marker(value: Any, what: str, *, extra: Sequence[str] = ()) -> dict[str, An
         w = value["edge_width"]
         # an edge width may thin as the marker grows, e.g. a pulse
         out["edge_width"] = (
-            _tween(w, f"the edge width of {what}", low=0.0)
+            _keyframed(w, f"the edge width of {what}", low=0.0)
             if isinstance(w, (Mapping, list, tuple))
             else _nonnegative(w, f"the edge width of {what}")
         )
@@ -544,16 +561,16 @@ def marker(
     edge_width: Any = None,
     opacity: Any = None,
 ) -> dict[str, Any]:
-    """A marker for a points layer, a head, or a legend entry. ``size`` and ``opacity`` may be tweens (section 2.11)."""
+    """A marker for a points layer, a head, or a legend entry. ``size`` and ``opacity`` may be keyframes (section 2.11)."""
     spec = (("shape", shape), ("size", size), ("color", color), ("edge", edge), ("edge_width", edge_width), ("opacity", opacity))
     return _marker({k: v for k, v in spec if v is not None}, "a marker")
 
 
 def _box(value: Any, what: str) -> dict[str, Any]:
     if not isinstance(value, Mapping):
-        raise SceneError(f"2.11: the box of {what} is a dict of fill, edge, edge_width, pad, radius, and opacity, not {value!r}")
+        raise SceneError(f"timeline: the box of {what} is a dict of fill, edge, edge_width, pad, radius, and opacity, not {value!r}")
     if unknown := set(value) - {"fill", "edge", "edge_width", "pad", "radius", "opacity"}:
-        raise SceneError(f"2.11: the box of {what} has unknown keys {sorted(unknown)}")
+        raise SceneError(f"timeline: the box of {what} has unknown keys {sorted(unknown)}")
     out: dict[str, Any] = {}
     for k in ("fill", "edge"):
         if k in value:
@@ -569,15 +586,15 @@ def _box(value: Any, what: str) -> dict[str, Any]:
 def _text_style(value: Mapping[str, Any], what: str, out: dict[str, Any]) -> None:
     """The keys that a label and a text overlay share: align, baseline, size, color, weight, linespacing, box, and opacity."""
     if "align" in value:
-        out["align"] = _enum(value["align"], ("start", "center", "end"), f"2.11: the align of {what}")
+        out["align"] = _enum(value["align"], ("start", "center", "end"), f"timeline: the align of {what}")
     if "baseline" in value:
-        out["baseline"] = _enum(value["baseline"], ("top", "middle", "bottom", "alphabetic"), f"2.11: the baseline of {what}")
+        out["baseline"] = _enum(value["baseline"], ("top", "middle", "bottom", "alphabetic"), f"timeline: the baseline of {what}")
     if "size" in value:
         out["size"] = _positive(value["size"], f"the size of {what}")
     if "color" in value:
         out["color"] = _color(value["color"], f"the color of {what}")
     if "weight" in value:
-        out["weight"] = _enum(value["weight"], ("normal", "bold"), f"2.11: the weight of {what}")
+        out["weight"] = _enum(value["weight"], ("normal", "bold"), f"timeline: the weight of {what}")
     if "linespacing" in value:
         out["linespacing"] = _positive(value["linespacing"], f"the linespacing of {what}")
     if "box" in value:
@@ -590,161 +607,165 @@ FORMAT_KEYS = ("width", "digits", "decimals", "grouping", "factor", "offset")
 
 
 def _format(p: Mapping[str, Any], out: dict[str, Any]) -> None:
-    """The number format of a part: digits or decimals, grouping, factor, and offset (rule K7)."""
+    """The number format of a part: digits or decimals, grouping, factor, and offset (rule `timeline-parts`)."""
     if "digits" in p and "decimals" in p:
-        raise SceneError("K7: a part gives both digits and decimals, not one")
+        raise SceneError("timeline-parts: a part gives both digits and decimals, not one")
     if "digits" in p:
-        out["digits"] = _integer(p["digits"], "2.9: readout digits")
+        out["digits"] = _integer(p["digits"], "control: readout digits")
         if not 1 <= out["digits"] <= 17:
-            raise SceneError(f"2.9: readout digits is {out['digits']}, not in 1 to 17")
+            raise SceneError(f"control: readout digits is {out['digits']}, not in 1 to 17")
     if "decimals" in p:
-        out["decimals"] = _integer(p["decimals"], "K7: the decimals of a part")
+        out["decimals"] = _integer(p["decimals"], "timeline-parts: the decimals of a part")
         if not 0 <= out["decimals"] <= 17:
-            raise SceneError(f"K7: the decimals of a part is {out['decimals']}, not in 0 to 17")
+            raise SceneError(f"timeline-parts: the decimals of a part is {out['decimals']}, not in 0 to 17")
     if "grouping" in p:
-        out["grouping"] = _bool(p["grouping"], "the grouping of a part", "K7")
+        out["grouping"] = _bool(p["grouping"], "the grouping of a part", "timeline-parts")
     if "width" in p:
-        out["width"] = _integer(p["width"], "K7: the width of a part")
+        out["width"] = _integer(p["width"], "timeline-parts: the width of a part")
         if not 0 <= out["width"] <= 40:
-            raise SceneError(f"K7: the width of a part is {out['width']}, not in 0 to 40")
+            raise SceneError(f"timeline-parts: the width of a part is {out['width']}, not in 0 to 40")
     for k in ("factor", "offset"):
         if k in p:
             out[k] = _finite(p[k], f"the {k} of a part")
 
 
 def _text_part(p: Any) -> Any:
-    """One part of a readout, a label, or a text overlay (section 2.9 and rule K7)."""
+    """One part of a readout, a label, or a text overlay (section 2.9 and rule `timeline-parts`)."""
     if isinstance(p, str):
         return p
-    if isinstance(p, Variable):
+    if isinstance(p, Input):
         return p.to_json()
     if isinstance(p, Channel):
         if p.name == INDEX:
-            raise SceneError(f"2.9: a readout channel part names {INDEX}, which is not allowed in a readout")
+            raise SceneError(f"control: a readout channel part names {INDEX}, which is not allowed in a readout")
         return p.to_json()
     if isinstance(p, Attr):
         return p.to_json()
     if not isinstance(p, Mapping):
-        raise SceneError(f"2.9: a part is text, a variable, a channel, an attribute, or a dict, not {p!r}")
-    kinds = [k for k in ("var", "member", "attr", "channel", "clock", "keys", "steps", "sub", "sup") if k in p]
+        raise SceneError(f"control: a part is text, an input, a channel, an attribute, or a dict, not {p!r}")
+    kinds = [k for k in ("input", "parameter", "attr", "channel", "clock", "keyframes", "timed_text", "sub", "sup") if k in p]
     if len(kinds) != 1:
         raise SceneError(
-            f"2.9: the part {dict(p)!r} names {len(kinds)} of var, member, attr, channel, clock, keys, steps, sub, and sup, not one"
+            f"control: the part {dict(p)!r} names {len(kinds)} of input, parameter, attr, channel, clock, keyframes, timed_text, "
+            "sub, and sup, not one"
         )
     kind = kinds[0]
     if kind in ("sub", "sup"):
         if extra := set(p) - {kind}:
-            raise SceneError(f"K7: a {kind} part has unknown keys {sorted(extra)}")
+            raise SceneError(f"timeline-parts: a {kind} part has unknown keys {sorted(extra)}")
         return {kind: _text(p[kind], f"the text of a {kind} part")}
-    allowed = {kind} if kind == "steps" else {kind, *FORMAT_KEYS}
+    allowed = {kind} if kind == "timed_text" else {kind, *FORMAT_KEYS}
     if extra := set(p) - allowed:
-        raise SceneError(f"2.9: a {kind} part has unknown keys {sorted(extra)}")
+        raise SceneError(f"control: a {kind} part has unknown keys {sorted(extra)}")
     out: dict[str, Any] = {}
-    if kind == "var":
-        out = _var(p["var"], "2.9: a readout")
+    if kind == "input":
+        out = _input_ref(p["input"], "control: a readout")
     elif kind == "clock":
-        out["clock"] = _enum(p["clock"], ("index", "steps", "value", "time"), "2.9: a clock part")
-    elif kind == "keys":
-        out["keys"] = _key_list(p["keys"], "a keys part")
-    elif kind == "steps":
-        pairs = p["steps"]
+        out["clock"] = _enum(p["clock"], ("frame_index", "frame_count", "value", "time"), "control: a clock part")
+    elif kind == "keyframes":
+        out["keyframes"] = _keyframe_list(p["keyframes"], "a keyframes part")
+    elif kind == "timed_text":
+        pairs = p["timed_text"]
         if isinstance(pairs, (str, bytes, Mapping)) or not isinstance(pairs, Sequence):
-            raise SceneError(f"K7: a steps part is a list of (t, text), not {pairs!r}")
-        steps_out: list[list[Any]] = []
+            raise SceneError(f"timeline-parts: a timed_text part is a list of (t, text), not {pairs!r}")
+        timed: list[list[Any]] = []
         for pair in pairs:
             if isinstance(pair, (str, bytes, Mapping)) or not isinstance(pair, Sequence) or len(pair) != 2:
-                raise SceneError(f"K7: a step of a steps part is (t, text), not {pair!r}")
-            t = _finite(pair[0], "K7: the time of a step")
-            if steps_out and t < steps_out[-1][0]:
-                raise SceneError(f"K7: the times of a steps part decrease from {steps_out[-1][0]} to {t}")
-            steps_out.append([t, _text(pair[1], "the text of a step")])
-        out["steps"] = steps_out
+                raise SceneError(f"timeline-parts: a pair of a timed_text part is (t, text), not {pair!r}")
+            t = _finite(pair[0], "timeline-parts: the time of a timed text")
+            if timed and t < timed[-1][0]:
+                raise SceneError(f"timeline-parts: the times of a timed_text part decrease from {timed[-1][0]} to {t}")
+            timed.append([t, _text(pair[1], "the text of a timed text")])
+        out["timed_text"] = timed
     else:
         out[kind] = _text(p[kind], f"a readout {kind} name")
         if kind == "channel" and out[kind] == INDEX:
-            raise SceneError(f"2.9: a readout channel part names {INDEX}, which is not allowed in a readout")
+            raise SceneError(f"control: a readout channel part names {INDEX}, which is not allowed in a readout")
     _format(p, out)
     return out
 
 
 def _text_parts(value: Any, what: str) -> Any:
-    """A text, as a string or a list of parts (rule K6)."""
+    """A text, as a string or a list of parts (rule `label`)."""
     if isinstance(value, str):
         return value
-    if isinstance(value, (Variable, Channel, Attr, Mapping)):
+    if isinstance(value, (Input, Channel, Attr, Mapping)):
         return [_text_part(value)]
     if not isinstance(value, Sequence):
-        raise SceneError(f"2.11: the text of {what} is a string or a list of parts, not {value!r}")
+        raise SceneError(f"timeline: the text of {what} is a string or a list of parts, not {value!r}")
     return [_text_part(p) for p in value]
 
 
 def _fmt(kw: Mapping[str, Any]) -> dict[str, Any]:
     if extra := set(kw) - set(FORMAT_KEYS):
-        raise SceneError(f"K7: a part has unknown format keys {sorted(extra)}")
+        raise SceneError(f"timeline-parts: a part has unknown format keys {sorted(extra)}")
     return {k: v for k, v in kw.items() if v is not None}
 
 
 def clock_value(**fmt: Any) -> dict[str, Any]:
-    """The part ``{"clock": "value"}``, the shared value of the clock's active channel (rule K7). ``fmt`` takes digits or decimals,
+    """The part ``{"clock": "value"}``, the shared value of the clock channel (rule `timeline-parts`). ``fmt`` takes digits or decimals,
     grouping, factor, and offset, e.g. ``clock_value(factor=4.3426, decimals=1)`` for a time in days."""
     return _text_part({"clock": "value", **_fmt(fmt)})
 
 
 def clock_time(**fmt: Any) -> dict[str, Any]:
-    """The part ``{"clock": "time"}``, the time of the timeline in seconds (rule K7)."""
+    """The part ``{"clock": "time"}``, the time of the timeline in seconds (rule `timeline-parts`)."""
     return _text_part({"clock": "time", **_fmt(fmt)})
 
 
-def keyed(*keys: Any, **fmt: Any) -> dict[str, Any]:
-    """The part ``{"keys": [...]}``, the value of a tween at the time of the timeline (rule K7), e.g. a counter."""
-    return _text_part({"keys": list(keys), **_fmt(fmt)})
+def keyframed_number(*items: Any, **fmt: Any) -> dict[str, Any]:
+    """The part ``{"keyframes": [...]}``, the value of keyframes at the time of the timeline (rule `timeline-parts`), e.g. a counter."""
+    return _text_part({"keyframes": list(items), **_fmt(fmt)})
 
 
 def sub(text: str) -> dict[str, Any]:
-    """The part ``{"sub": text}``, a subscript, e.g. the ``f`` of ``t_f`` in ``["Δt = t", ty.sub("f"), " / 100"]`` (rule K7)."""
+    """The part ``{"sub": text}``, a subscript, e.g. the ``f`` of ``t_f`` in ``["Δt = t", ty.sub("f"), " / 100"]`` (rule
+    `timeline-parts`)."""
     return _text_part({"sub": text})
 
 
 def sup(text: str) -> dict[str, Any]:
-    """The part ``{"sup": text}``, a superscript (rule K7)."""
+    """The part ``{"sup": text}``, a superscript (rule `timeline-parts`)."""
     return _text_part({"sup": text})
 
 
-def steps(*pairs: Any) -> dict[str, Any]:
-    """The part ``{"steps": [[t, text], ...]}``, the text of the last pair whose time has passed (rule K7), e.g. a staged caption."""
-    return _text_part({"steps": [list(p) for p in pairs]})
+def timed_text(*pairs: Any) -> dict[str, Any]:
+    """The part ``{"timed_text": [[t, text], ...]}``, the text of the last pair whose time has passed (rule `timeline-parts`), e.g. a
+    caption that changes at each step."""
+    return _text_part({"timed_text": [list(p) for p in pairs]})
 
 
 def _anchor(value: Any) -> dict[str, Any]:
-    """The anchor of a label (rule K6)."""
+    """The anchor of a label (rule `label`)."""
     if not isinstance(value, Mapping):
-        raise SceneError(f"K6: a label's anchor is at_point, at_member, or at_screen, not {value!r}")
+        raise SceneError(f"label: a label's anchor is at_point, at_member, or at_screen, not {value!r}")
     if "point" in value:
         if extra := set(value) - {"point", "frame"}:
-            raise SceneError(f"K6: a point anchor has unknown keys {sorted(extra)}")
+            raise SceneError(f"label: a point anchor has unknown keys {sorted(extra)}")
         p = value["point"]
         if isinstance(p, (str, bytes, Mapping)) or not isinstance(p, (Sequence, np.ndarray)) or len(p) not in (2, 3):
-            raise SceneError(f"K6: a label's point is {p!r}, not three numbers")
-        out: dict[str, Any] = {"point": [_finite(x, "K6: a label's point") for x in p] + ([0.0] if len(p) == 2 else [])}
+            raise SceneError(f"label: a label's point is {p!r}, not three numbers")
+        out: dict[str, Any] = {"point": [_finite(x, "label: a label's point") for x in p] + ([0.0] if len(p) == 2 else [])}
         if "frame" in value:
-            out["frame"] = _check_id(_id(value["frame"]), "K6: the frame of a label's point")
+            out["frame"] = _check_id(_id(value["frame"]), "label: the frame of a label's point")
         return out
     if "sets" in value:
         if set(value) != {"sets", "member"}:
-            raise SceneError(f"K6: a member anchor is a dict of sets and member, not {dict(value)!r}")
-        k = _integer(value["member"], "K6: a label's member")
+            raise SceneError(f"label: a member anchor is a dict of sets and member, not {dict(value)!r}")
+        k = _integer(value["member"], "label: a label's member")
         if k < 0:
-            raise SceneError(f"K6: a label's member is {k}, a negative track index")
+            raise SceneError(f"label: a label's member is {k}, a negative trajectory index")
         return {"sets": _query(value["sets"]), "member": k}
     if "screen" in value:
         if set(value) != {"screen"}:
-            raise SceneError(f"K6: a screen anchor has unknown keys {sorted(set(value) - {'screen'})}")
-        return {"screen": _pair(value["screen"], "a label's screen place", "K6")}
-    raise SceneError(f"K6: a label's anchor is a point, a member, or a screen place, not {dict(value)!r}")
+            raise SceneError(f"label: a screen anchor has unknown keys {sorted(set(value) - {'screen'})}")
+        return {"screen": _pair(value["screen"], "a label's screen place", "label")}
+    raise SceneError(f"label: a label's anchor is a point, a member, or a screen place, not {dict(value)!r}")
 
 
 def at_point(x: float, y: float, z: float = 0.0, frame: Any = None) -> dict[str, Any]:
-    """A label anchor at a point of the display frame, or of ``frame`` taken into the display frame at the driver's reading (rule K6)."""
+    """A label anchor at a point of the display frame, or of ``frame`` taken into the display frame at the reference trajectory's reading
+    (rule `label`)."""
     spec: dict[str, Any] = {"point": [x, y, z]}
     if frame is not None:
         spec["frame"] = _id(frame)
@@ -752,71 +773,73 @@ def at_point(x: float, y: float, z: float = 0.0, frame: Any = None) -> dict[str,
 
 
 def at_member(sets: Any, member: int) -> dict[str, Any]:
-    """A label anchor at the point at the reading of track ``member`` of ``sets``, clamped to the track (rule K6)."""
+    """A label anchor at the point at the reading of trajectory ``member`` of ``sets``, clamped to the trajectory (rule `label`)."""
     return _anchor({"sets": sets, "member": member})
 
 
 def at_screen(fx: float, fy: float) -> dict[str, Any]:
-    """A label anchor at a fixed place of the panel, ``fx`` of its width from the left and ``fy`` of its height from the top (rule K6)."""
+    """A label anchor at a fixed place of the panel, ``fx`` of its width from the left and ``fy`` of its height from the top (rule
+    `label`)."""
     return _anchor({"screen": [fx, fy]})
 
 
 def _color_spec(value: Any, what: str) -> Any:
     if isinstance(value, str):
         return _color(value, what)
-    if isinstance(value, Mapping) and "steps" in value:
-        # a color in steps of a channel (section 2.11)
-        if set(value) != {"channel", "steps", "colors"}:
-            raise SceneError(f"2.11: {what} in steps is a dict of channel, steps, and colors, not {dict(value)!r}")
-        cuts = value["steps"]
+    if isinstance(value, Mapping) and "thresholds" in value:
+        # a color by thresholds of a channel (section 2.11)
+        if set(value) != {"channel", "thresholds", "colors"}:
+            raise SceneError(f"timeline: {what} by thresholds is a dict of channel, thresholds, and colors, not {dict(value)!r}")
+        cuts = value["thresholds"]
         if isinstance(cuts, (str, bytes, Mapping)) or not isinstance(cuts, (Sequence, np.ndarray)) or len(cuts) == 0:
-            raise SceneError(f"2.11: the steps of {what} are {cuts!r}, not a nonempty list of numbers")
-        steps_out = [_finite(x, f"a step of {what}") for x in cuts]
-        if any(b <= a for a, b in itertools.pairwise(steps_out)):
-            raise SceneError(f"2.11: the steps of {what} are {steps_out}, not increasing")
+            raise SceneError(f"timeline: the thresholds of {what} are {cuts!r}, not a nonempty list of numbers")
+        thresholds = [_finite(x, f"a threshold of {what}") for x in cuts]
+        if any(b <= a for a, b in itertools.pairwise(thresholds)):
+            raise SceneError(f"timeline: the thresholds of {what} are {thresholds}, not increasing")
         colors = value["colors"]
-        if isinstance(colors, (str, bytes, Mapping)) or not isinstance(colors, Sequence) or len(colors) != len(steps_out) + 1:
-            raise SceneError(f"2.11: {what} gives {colors!r} for {len(steps_out)} steps, not one color more than steps")
+        if isinstance(colors, (str, bytes, Mapping)) or not isinstance(colors, Sequence) or len(colors) != len(thresholds) + 1:
+            raise SceneError(f"timeline: {what} gives {colors!r} for {len(thresholds)} thresholds, not one color more than thresholds")
         return {
             "channel": _text(value["channel"], f"the channel of {what}"),
-            "steps": steps_out,
+            "thresholds": thresholds,
             "colors": [_color(c, f"a color of {what}") for c in colors],
         }
     if not isinstance(value, Mapping) or ("parameter" in value) == ("channel" in value):
-        raise SceneError(f"2.7: {what} is a #rrggbb color or a colormap over one parameter or channel, not {value!r}")
+        raise SceneError(f"panel: {what} is a #rrggbb color or a colormap over one parameter or channel, not {value!r}")
     out: dict[str, Any] = {"colormap": _colormap(value.get("colormap"), what)}
     key = "parameter" if "parameter" in value else "channel"
     out[key] = _text(value[key], f"the {key} of {what}")
-    for k in ("range", "clip"):
+    for k in ("range", "truncate"):
         if k in value:
             pair = value[k]
             if not isinstance(pair, Sequence) or isinstance(pair, str) or len(pair) != 2:
-                raise SceneError(f"2.7: the {k} of {what} is {pair!r}, not two numbers")
+                raise SceneError(f"panel: the {k} of {what} is {pair!r}, not two numbers")
             out[k] = [_finite(x, f"the {k} of {what}") for x in pair]
-            if k == "clip" and not all(0.0 <= x <= 1.0 for x in out[k]):
-                raise SceneError(f"2.7: the clip of {what} is outside [0, 1]")
-    if extra := set(value) - {"colormap", key, "range", "clip"}:
-        raise SceneError(f"2.7: {what} has unknown keys {sorted(extra)}")
+            if k == "truncate" and not all(0.0 <= x <= 1.0 for x in out[k]):
+                raise SceneError(f"panel: the truncate of {what} is outside [0, 1]")
+    if extra := set(value) - {"colormap", key, "range", "truncate"}:
+        raise SceneError(f"panel: {what} has unknown keys {sorted(extra)}")
     return out
 
 
-def steps_color(channel: str, steps: Sequence[float], colors: Sequence[str]) -> dict[str, Any]:
-    """A color in steps of a channel (section 2.11). A sample whose channel is ``x`` takes ``colors[j]``, where ``j`` counts the steps
-    below ``x``, e.g. ``steps_color("S", [0.0], ["#000000", "#d62728"])`` for coast and thrust by the sign of a switching function."""
-    return _color_spec({"channel": channel, "steps": list(steps), "colors": list(colors)}, "a color in steps")
+def threshold_color(channel: str, thresholds: Sequence[float], colors: Sequence[str]) -> dict[str, Any]:
+    """A color by thresholds of a channel (section 2.11). A sample whose channel is ``x`` takes ``colors[j]``, where ``j`` counts the
+    thresholds below ``x``, e.g. ``threshold_color("S", [0.0], ["#000000", "#d62728"])`` for coast and thrust by the sign of a
+    switching function."""
+    return _color_spec({"channel": channel, "thresholds": list(thresholds), "colors": list(colors)}, "a color by thresholds")
 
 
 def _check_layer(layer: Any) -> dict[str, Any]:
     """A layer dict in the form that the schema and section 2.7 define, with every value checked."""
     if not isinstance(layer, Mapping) or "kind" not in layer:
-        raise SceneError(f"2.7: a layer is a dict with a kind, not {layer!r}")
-    kind = _enum(layer["kind"], ("track", "arrow", "outline", "body", "axes", "grid", "label", "points"), "2.7: a layer kind")
+        raise SceneError(f"panel: a layer is a dict with a kind, not {layer!r}")
+    kind = _enum(layer["kind"], ("trajectories", "arrow", "inset_box", "body", "axes", "grid", "label", "points"), "panel: a layer kind")
     out: dict[str, Any] = {"kind": kind}
     allowed = {"kind", "visible"}
     if "visible" in layer:
         v = layer["visible"]
-        out["visible"] = v if isinstance(v, Mapping) and set(v) == {"var"} else _var(v, "L5: a layer's visible", "toggle")
-    if kind == "track":
+        out["visible"] = v if isinstance(v, Mapping) and set(v) == {"input"} else _input_ref(v, "visible: a layer's visible", "toggle")
+    if kind == "trajectories":
         allowed |= {
             "sets",
             "members",
@@ -825,7 +848,7 @@ def _check_layer(layer: Any) -> dict[str, Any]:
             "head",
             "before",
             "after",
-            "context",
+            "read_from",
             "fit",
             "color",
             "opacity",
@@ -833,52 +856,52 @@ def _check_layer(layer: Any) -> dict[str, Any]:
             "highlight",
             "clock",
             "line",
-            "flat",
+            "group_opacity",
             "dash",
             "fill",
         }
         out["sets"] = _query(layer.get("sets"))
-        out["members"] = _member(layer.get("members", "all"), "a track layer's members")
-        out["reveal"] = _enum(layer.get("reveal", "none"), ("none", "grow", "trail"), "2.7: a track layer's reveal")
+        out["members"] = _member(layer.get("members", "all"), "a trajectories layer's members")
+        out["reveal"] = _enum(layer.get("reveal", "none"), ("none", "grow", "trail"), "panel: a trajectories layer's reveal")
         if "trail" in layer:
             out["trail"] = _trail(layer["trail"], "a trail")
         if out["reveal"] == "trail" and "trail" not in out:
-            raise SceneError('2.7: a track layer has reveal "trail" but lacks a trail')
+            raise SceneError('panel: a trajectories layer has reveal "trail" but lacks a trail')
         if "head" in layer:
             out["head"] = _head(layer["head"])
         for key in ("before", "after"):
             if key in layer:
-                out[key] = _enum(layer[key], ("clamp", "hidden"), f"C3: a track layer's {key}")
-        if "context" in layer:
-            out["context"] = _enum(layer["context"], ("own", "driver"), "L6: a track layer's context")
+                out[key] = _enum(layer[key], ("clamp", "hidden"), f"before-after: a trajectories layer's {key}")
+        if "read_from" in layer:
+            out["read_from"] = _enum(layer["read_from"], ("own", "reference"), "read-from: a trajectories layer's read_from")
         if "fit" in layer:
             if not isinstance(layer["fit"], bool):
-                raise SceneError(f"2.7: a track layer's fit is {layer['fit']!r}, not a boolean")
+                raise SceneError(f"panel: a trajectories layer's fit is {layer['fit']!r}, not a boolean")
             out["fit"] = layer["fit"]
         if "color" in layer:
-            out["color"] = _color_spec(layer["color"], "a track layer's color")
+            out["color"] = _color_spec(layer["color"], "a trajectories layer's color")
         if "opacity" in layer:
             if isinstance(layer["opacity"], (Mapping, list, tuple)):
-                out["opacity"] = _opacity(layer["opacity"], "a track layer's opacity")
+                out["opacity"] = _opacity(layer["opacity"], "a trajectories layer's opacity")
             else:
-                out["opacity"] = _finite(layer["opacity"], "a track layer's opacity")
+                out["opacity"] = _finite(layer["opacity"], "a trajectories layer's opacity")
                 if not 0.0 <= out["opacity"] <= 1.0:
-                    raise SceneError(f"2.7: a track layer's opacity is {out['opacity']}, not in [0, 1]")
+                    raise SceneError(f"panel: a trajectories layer's opacity is {out['opacity']}, not in [0, 1]")
         if "clock" in layer:
-            out["clock"] = _layer_clock(layer["clock"], "a track layer")
+            out["clock"] = _layer_clock(layer["clock"], "a trajectories layer")
         if "line" in layer:
-            out["line"] = _bool(layer["line"], "a track layer's line")
-        if "flat" in layer:
-            out["flat"] = _bool(layer["flat"], "a track layer's flat")
+            out["line"] = _bool(layer["line"], "a trajectories layer's line")
+        if "group_opacity" in layer:
+            out["group_opacity"] = _bool(layer["group_opacity"], "a trajectories layer's group_opacity")
         if "dash" in layer:
-            dash = _pair(layer["dash"], "a track layer's dash")
+            dash = _pair(layer["dash"], "a trajectories layer's dash")
             if min(dash) <= 0.0:
-                raise SceneError(f"2.11: a track layer's dash is {dash}, not two positive lengths")
+                raise SceneError(f"timeline: a trajectories layer's dash is {dash}, not two positive lengths")
             out["dash"] = dash
         if "fill" in layer:
             f = layer["fill"]
             if not isinstance(f, Mapping) or set(f) - {"base", "color", "opacity"}:
-                raise SceneError(f"2.11: a track layer's fill is a dict of base, color, and opacity, not {f!r}")
+                raise SceneError(f"timeline: a trajectories layer's fill is a dict of base, color, and opacity, not {f!r}")
             fill: dict[str, Any] = {}
             if "base" in f:
                 fill["base"] = _finite(f["base"], "the base of a fill")
@@ -888,30 +911,30 @@ def _check_layer(layer: Any) -> dict[str, Any]:
                 fill["opacity"] = _unit_interval(f["opacity"], "the opacity of a fill")
             out["fill"] = fill
         if "width" in layer:
-            out["width"] = _finite(layer["width"], "a track layer's width")
+            out["width"] = _finite(layer["width"], "a trajectories layer's width")
             if out["width"] <= 0.0:
-                raise SceneError(f"2.7: a track layer's width is {out['width']}, not positive")
+                raise SceneError(f"panel: a trajectories layer's width is {out['width']}, not positive")
         if "highlight" in layer:
             h = layer["highlight"]
-            spec = dict(h) if isinstance(h, Mapping) else {"var": h}
-            if extra := set(spec) - {"var", "width", "opacity", "kernel"}:
-                raise SceneError(f"2.7: a highlight has unknown keys {sorted(extra)}")
-            hl: dict[str, Any] = _var(spec.get("var"), "2.7: a highlight", "selector")
+            spec = dict(h) if isinstance(h, Mapping) else {"input": h}
+            if extra := set(spec) - {"input", "width", "opacity", "kernel"}:
+                raise SceneError(f"panel: a highlight has unknown keys {sorted(extra)}")
+            hl: dict[str, Any] = _input_ref(spec.get("input"), "panel: a highlight", "parameter")
             if "width" in spec:
                 hl["width"] = _finite(spec["width"], "a highlight width")
                 if hl["width"] <= 0.0:
-                    raise SceneError(f"2.7: a highlight width is {hl['width']}, not positive")
+                    raise SceneError(f"panel: a highlight width is {hl['width']}, not positive")
             if "opacity" in spec:
                 hl["opacity"] = _finite(spec["opacity"], "a highlight opacity")
                 if not 0.0 <= hl["opacity"] <= 1.0:
-                    raise SceneError(f"2.7: a highlight opacity is {hl['opacity']}, not in [0, 1]")
+                    raise SceneError(f"panel: a highlight opacity is {hl['opacity']}, not in [0, 1]")
             if "kernel" in spec:
                 k = spec["kernel"]
                 if not isinstance(k, Mapping) or set(k) != {"width", "opacity"}:
-                    raise SceneError(f"2.7: a highlight kernel is a dict of width and opacity, not {k!r}")
+                    raise SceneError(f"panel: a highlight kernel is a dict of width and opacity, not {k!r}")
                 w = _finite(k["width"], "a highlight kernel's width")
                 if not 0.0 < w <= 1.0:
-                    raise SceneError(f"2.7: a highlight kernel's width is {w}, not in (0, 1]")
+                    raise SceneError(f"panel: a highlight kernel's width is {w}, not in (0, 1]")
                 hl["kernel"] = {"width": w, "opacity": _unit_interval(k["opacity"], "a highlight kernel's opacity")}
             out["highlight"] = hl
     elif kind == "arrow":
@@ -920,22 +943,22 @@ def _check_layer(layer: Any) -> dict[str, Any]:
         out["members"] = _member(layer.get("members", "all"), "an arrow layer's members")
         vector = layer.get("vector")
         if isinstance(vector, str) or not isinstance(vector, Sequence) or len(vector) not in (2, 3):
-            raise SceneError(f"L7: an arrow layer's vector is {vector!r}, not two or three channel names")
-        out["vector"] = [_check_id(_id(c), "L7: a vector channel") if c != INDEX else c for c in vector]
+            raise SceneError(f"arrow: an arrow layer's vector is {vector!r}, not two or three channel names")
+        out["vector"] = [_check_id(_id(c), "arrow: a vector channel") if c != INDEX else c for c in vector]
         if INDEX in out["vector"]:
-            raise SceneError(f"L7: {INDEX} is not allowed in the vector of an arrow layer")
+            raise SceneError(f"arrow: {INDEX} is not allowed in the vector of an arrow layer")
         if "scale" in layer:
             if isinstance(layer["scale"], Channel) or (isinstance(layer["scale"], Mapping) and "channel" in layer["scale"]):
-                raise SceneError("L7: the scale of an arrow layer takes a number or an attribute, not a channel")
+                raise SceneError("arrow: the scale of an arrow layer takes a number or an attribute, not a channel")
             scale = layer["scale"]
             if isinstance(scale, Mapping) and ("attr" not in scale or set(scale) - {"attr", "factor", "offset"}):
-                raise SceneError(f"L7: the scale of an arrow layer is {scale!r}, not a number or an attribute")
+                raise SceneError(f"arrow: the scale of an arrow layer is {scale!r}, not a number or an attribute")
             out["scale"] = dict(scale) if isinstance(scale, Mapping) else _scalar(scale, "an arrow layer's scale", constant=True)
         for key in ("before", "after"):
             if key in layer:
-                out[key] = _enum(layer[key], ("clamp", "hidden"), f"C3: an arrow layer's {key}")
+                out[key] = _enum(layer[key], ("clamp", "hidden"), f"before-after: an arrow layer's {key}")
         if "color" in layer:
-            out["color"] = _color(layer["color"], "L7: an arrow layer's color")
+            out["color"] = _color(layer["color"], "arrow: an arrow layer's color")
         if "opacity" in layer:
             out["opacity"] = _opacity(layer["opacity"], "an arrow layer's opacity")
         if "clock" in layer:
@@ -943,63 +966,63 @@ def _check_layer(layer: Any) -> dict[str, Any]:
         if "width" in layer:
             out["width"] = _finite(layer["width"], "an arrow layer's width")
             if out["width"] <= 0.0:
-                raise SceneError(f"2.7: an arrow layer's width is {out['width']}, not positive")
+                raise SceneError(f"panel: an arrow layer's width is {out['width']}, not positive")
         if "head" in layer:
             head = layer["head"]
             if not isinstance(head, Mapping) or set(head) - {"size"}:
-                raise SceneError(f"L7: an arrowhead is a dict of size, not {head!r}")
+                raise SceneError(f"arrow: an arrowhead is a dict of size, not {head!r}")
             out["head"] = {}
             if "size" in head:
                 out["head"]["size"] = _finite(head["size"], "an arrowhead size")
                 if out["head"]["size"] <= 0.0:
-                    raise SceneError(f"L7: an arrowhead size is {out['head']['size']}, not positive")
-    elif kind == "outline":
-        allowed |= {"view", "color", "opacity", "width", "dash", "min_size"}
-        out["view"] = _check_id(_id(layer.get("view")), "L8: an outline layer's view")
+                    raise SceneError(f"arrow: an arrowhead size is {out['head']['size']}, not positive")
+    elif kind == "inset_box":
+        allowed |= {"panel", "color", "opacity", "width", "dash", "min_size"}
+        out["panel"] = _check_id(_id(layer.get("panel")), "inset-box: an inset box layer's panel")
         if "color" in layer:
-            out["color"] = _color(layer["color"], "L8: an outline layer's color")
+            out["color"] = _color(layer["color"], "inset-box: an inset box layer's color")
         if "opacity" in layer:
-            out["opacity"] = _opacity(layer["opacity"], "an outline layer's opacity")
+            out["opacity"] = _opacity(layer["opacity"], "an inset box layer's opacity")
         if "width" in layer:
-            out["width"] = _finite(layer["width"], "an outline layer's width")
+            out["width"] = _finite(layer["width"], "an inset box layer's width")
             if out["width"] <= 0.0:
-                raise SceneError(f"2.7: an outline layer's width is {out['width']}, not positive")
+                raise SceneError(f"panel: an inset box layer's width is {out['width']}, not positive")
         if "dash" in layer:
             dash = layer["dash"]
             if isinstance(dash, (str, bytes, Mapping)) or not isinstance(dash, (Sequence, np.ndarray)) or len(dash) != 2:
-                raise SceneError(f"L8: an outline layer's dash is {dash!r}, not two lengths")
-            out["dash"] = [_finite(d, "an outline layer's dash") for d in dash]
+                raise SceneError(f"inset-box: an inset box layer's dash is {dash!r}, not two lengths")
+            out["dash"] = [_finite(d, "an inset box layer's dash") for d in dash]
             if min(out["dash"]) <= 0.0:
-                raise SceneError(f"L8: an outline layer's dash is {out['dash']}, not two positive lengths")
+                raise SceneError(f"inset-box: an inset box layer's dash is {out['dash']}, not two positive lengths")
         if "min_size" in layer:
-            out["min_size"] = _finite(layer["min_size"], "an outline layer's min_size")
+            out["min_size"] = _finite(layer["min_size"], "an inset box layer's min_size")
             if out["min_size"] < 0.0:
-                raise SceneError(f"L8: an outline layer's min_size is {out['min_size']}, not a nonnegative length")
+                raise SceneError(f"inset-box: an inset box layer's min_size is {out['min_size']}, not a nonnegative length")
     elif kind == "body":
         allowed |= {"body", "trail", "size", "opacity"}
         if "opacity" in layer:
             out["opacity"] = _opacity(layer["opacity"], "a body layer's opacity")
-        out["body"] = _check_id(_id(layer.get("body")), "L4: a body layer's body")
+        out["body"] = _check_id(_id(layer.get("body")), "body-layer: a body layer's body")
         if "trail" in layer:
             out["trail"] = _trail(layer["trail"], "a body trail")
         if "size" in layer:
             out["size"] = _finite(layer["size"], "a body layer's size")
             if out["size"] <= 0.0:
-                raise SceneError(f"2.7: a body layer's size is {out['size']}, not positive")
+                raise SceneError(f"panel: a body layer's size is {out['size']}, not positive")
     elif kind == "axes":
         allowed |= {"span", "ticks", "size", "opacity", "titles"}
         if "titles" in layer:
             titles = layer["titles"]
             if isinstance(titles, (str, bytes, Mapping)) or not isinstance(titles, Sequence) or len(titles) != 2:
-                raise SceneError(f"2.11: an axes layer's titles are {titles!r}, not two texts")
+                raise SceneError(f"timeline: an axes layer's titles are {titles!r}, not two texts")
             out["titles"] = [_text_parts(t, "an axis title") for t in titles]
         if "span" in layer:
-            out["span"] = _enum(layer["span"], ("positive", "full", "box"), "2.7: an axes layer's span")
+            out["span"] = _enum(layer["span"], ("positive", "full", "box"), "panel: an axes layer's span")
         if "ticks" in layer:
             ticks = layer["ticks"]
             if isinstance(ticks, (str, bytes, Mapping)) or not isinstance(ticks, Sequence) or len(set(ticks)) != len(ticks):
-                raise SceneError(f"2.11: an axes layer's ticks are {ticks!r}, not a list of distinct axes x and y")
-            out["ticks"] = [_enum(t, ("x", "y"), "2.11: an axis of an axes layer's ticks") for t in ticks]
+                raise SceneError(f"timeline: an axes layer's ticks are {ticks!r}, not a list of distinct axes x and y")
+            out["ticks"] = [_enum(t, ("x", "y"), "timeline: an axis of an axes layer's ticks") for t in ticks]
         if "size" in layer:
             out["size"] = _positive(layer["size"], "an axes layer's size")
         if "opacity" in layer:
@@ -1008,7 +1031,7 @@ def _check_layer(layer: Any) -> dict[str, Any]:
         allowed |= {"labels", "opacity"}
         if "labels" in layer:
             if not isinstance(layer["labels"], bool):
-                raise SceneError(f"2.7: a grid layer's labels is {layer['labels']!r}, not a boolean")
+                raise SceneError(f"panel: a grid layer's labels is {layer['labels']!r}, not a boolean")
             out["labels"] = layer["labels"]
         if "opacity" in layer:
             out["opacity"] = _opacity(layer["opacity"], "a grid layer's opacity")
@@ -1029,11 +1052,11 @@ def _check_layer(layer: Any) -> dict[str, Any]:
             "clock",
         }
         if "text" not in layer or "at" not in layer:
-            raise SceneError("K6: a label layer lacks a text or an anchor")
+            raise SceneError("label: a label layer lacks a text or an anchor")
         out["text"] = _text_parts(layer["text"], "a label")
         out["at"] = _anchor(layer["at"])
         if "offset" in layer:
-            out["offset"] = _pair(layer["offset"], "a label's offset", "K6")
+            out["offset"] = _pair(layer["offset"], "a label's offset", "label")
         _text_style(layer, "a label", out)
         if "leader" in layer:
             leader = layer["leader"]
@@ -1044,10 +1067,10 @@ def _check_layer(layer: Any) -> dict[str, Any]:
                 if "color" in leader:
                     spec["color"] = _color(leader["color"], "the color of a leader")
                 if "width" in leader:
-                    spec["width"] = _positive(leader["width"], "the width of a leader", "K6")
+                    spec["width"] = _positive(leader["width"], "the width of a leader", "label")
                 out["leader"] = spec
             else:
-                raise SceneError(f"K6: a label's leader is a boolean or a dict of color and width, not {leader!r}")
+                raise SceneError(f"label: a label's leader is a boolean or a dict of color and width, not {leader!r}")
         if "clock" in layer:
             out["clock"] = _layer_clock(layer["clock"], "a label layer")
     else:
@@ -1057,22 +1080,22 @@ def _check_layer(layer: Any) -> dict[str, Any]:
         if "marker" in layer:
             out["marker"] = _marker(layer["marker"], "a points layer's marker")
         if "reveal" in layer:
-            out["reveal"] = _enum(layer["reveal"], ("none", "grow"), "K8: a points layer's reveal")
+            out["reveal"] = _enum(layer["reveal"], ("none", "grow"), "points: a points layer's reveal")
         for key in ("before", "after"):
             if key in layer:
-                out[key] = _enum(layer[key], ("clamp", "hidden"), f"C3: a points layer's {key}")
+                out[key] = _enum(layer[key], ("clamp", "hidden"), f"before-after: a points layer's {key}")
         if "clock" in layer:
             out["clock"] = _layer_clock(layer["clock"], "a points layer")
         if "fit" in layer:
-            out["fit"] = _bool(layer["fit"], "a points layer's fit", "2.7")
+            out["fit"] = _bool(layer["fit"], "a points layer's fit", "panel")
         if "opacity" in layer:
             out["opacity"] = _opacity(layer["opacity"], "a points layer's opacity")
     if extra := set(layer) - allowed:
-        raise SceneError(f"2.7: a {kind} layer has unknown keys {sorted(extra)}")
+        raise SceneError(f"panel: a {kind} layer has unknown keys {sorted(extra)}")
     return out
 
 
-def track(
+def trajectories(
     sets: Any,
     members: Any = "all",
     *,
@@ -1082,7 +1105,7 @@ def track(
     head: bool | Mapping[str, Any] = False,
     before: str | None = None,
     after: str | None = None,
-    context: str | None = None,
+    read_from: str | None = None,
     fit: bool | None = None,
     color: Any = None,
     opacity: Any = None,
@@ -1091,35 +1114,35 @@ def track(
     visible: Any = None,
     clock: Any = None,
     line: bool | None = None,
-    flat: bool | None = None,
+    group_opacity: bool | None = None,
     dash: Sequence[float] | None = None,
     fill: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """A track layer. A ``trail`` fraction implies ``reveal="trail"``.
+    """A trajectories layer. A ``trail`` fraction implies ``reveal="trail"``.
 
     ``taper`` gives the fractions of the layer's width and opacity left at the tail of the trail, as
     ``(width, opacity)`` or as a dict. ``head`` is True or a dict of ``color`` and ``size``.
-    ``context="driver"`` transforms every sample in the context of the driver's reading rather than in
-    its own (rule L6), so that a static polyline of one frame, e.g. a grid line, follows this frame
-    in the display frame. Its set then does not need the channels of the frame edges. ``fit=False`` leaves the layer out of the camera
-    fit, e.g. for a whole curve drawn on a close-up whose camera is fitted to a window given by another layer.
+    ``read_from="reference"`` transforms every sample in the context of the reading of the panel's reference trajectory rather than
+    in its own (rule `read-from`), so that a static polyline of one frame, e.g. a grid line, follows this frame in the display frame.
+    Its set then does not need the channels of the frame edges. ``fit=False`` leaves the layer out of the camera fit, e.g. for a
+    whole curve drawn on a close-up whose camera is fitted to a window given by another layer.
 
-    Section 2.11 adds ``clock``, a :func:`layer_clock` on which the layer takes its readings (rule K4), ``line=False``, which draws the
-    heads alone, ``flat=True``, which blends each pixel that the layer's lines cover once, as one translucent path of a plot,
-    rather than once per segment over it, ``dash=(on, off)`` in CSS pixels, ``fill={"base": b, "color": c, "opacity": o}``,
-    which shades the area between the line and the value ``b`` of the plane's second axis where the line lies above it, a head
-    with a ``shape``, ``edge``, ``edge_width``, ``opacity``, and ``glow``, an ``opacity`` tween, and a color in steps of a channel
-    (:func:`steps_color`).
+    Section 2.11 adds ``clock``, a :func:`layer_clock` on which the layer takes its readings (rule `layer-clock`), ``line=False``,
+    which draws the heads alone, ``group_opacity=True``, which blends each pixel that the layer's lines cover once, as one
+    translucent path of a plot, rather than once per segment over it, ``dash=(on, off)`` in CSS pixels,
+    ``fill={"base": b, "color": c, "opacity": o}``, which shades the area between the line and the value ``b`` of the plane's
+    second axis where the line lies above it, a head with a ``shape``, ``edge``, ``edge_width``, ``opacity``, and ``glow``, keyframes
+    of the ``opacity``, and a color by thresholds of a channel (:func:`threshold_color`).
     """
     if taper is not None:
         if trail is None:
-            raise SceneError("2.7: a taper is given without a trail")
+            raise SceneError("panel: a taper is given without a trail")
         spec = dict(trail) if isinstance(trail, Mapping) else {"fraction": trail}
         if "taper" in spec:
-            raise SceneError("2.7: the taper is given twice, in the trail and as taper")
+            raise SceneError("panel: the taper is given twice, in the trail and as taper")
         trail = {**spec, "taper": taper}
     layer: dict[str, Any] = {
-        "kind": "track",
+        "kind": "trajectories",
         "sets": sets,
         "members": members,
         "reveal": reveal or ("trail" if trail is not None else "none"),
@@ -1130,7 +1153,7 @@ def track(
         ("trail", trail),
         ("before", before),
         ("after", after),
-        ("context", context),
+        ("read_from", read_from),
         ("fit", fit),
         ("color", color),
         ("opacity", opacity),
@@ -1139,7 +1162,7 @@ def track(
         ("visible", visible),
         ("clock", clock),
         ("line", line),
-        ("flat", flat),
+        ("group_opacity", group_opacity),
         ("dash", None if dash is None else list(dash)),
         ("fill", fill),
     ):
@@ -1163,11 +1186,14 @@ def arrow(
     visible: Any = None,
     clock: Any = None,
 ) -> dict[str, Any]:
-    """An arrow layer (rule L7), drawn on each member at the reading from the point to the point displaced by ``scale`` times the vector.
+    """An arrow layer (rule `arrow`), drawn on each member at the reading from the point to the point displaced by ``scale`` times the
+    vector.
 
-    ``vector`` names two or three channels of the set, e.g. ``("vx", "vy")``, which are read without the lap's raise. ``scale`` is a number
-    or an attribute, by default 1. ``head`` is the arrowhead's length in CSS pixels, by default 10. A member is hidden before or after its
-    range of clock values when ``before`` or ``after`` is ``"hidden"``, which shows a track of two samples for a window of the clock.
+    ``vector`` names two or three channels of the set, e.g. ``("vx", "vy")``, which are read without the raise of the revolution. ``scale``
+    is a
+    number or an attribute, by default 1. ``head`` is the arrowhead's length in CSS pixels, by default 10. A member is hidden before or
+    after its
+    range of clock values when ``before`` or ``after`` is ``"hidden"``, which shows a trajectory of two samples for a window of the clock.
     """
     layer: dict[str, Any] = {"kind": "arrow", "sets": sets, "members": members, "vector": list(vector)}
     for key, value in (
@@ -1186,8 +1212,8 @@ def arrow(
     return _check_layer(layer)
 
 
-def outline(
-    view: Any,
+def inset_box(
+    panel: Any,
     *,
     color: str | None = None,
     opacity: Any = None,
@@ -1196,15 +1222,16 @@ def outline(
     min_size: float | None = None,
     visible: Any = None,
 ) -> dict[str, Any]:
-    """An outline layer (rule L8), which draws the rectangle that the first panel showing ``view`` shows, as the viewer pans and zooms it.
+    """An inset box layer (rule `inset-box`), which draws the rectangle that the first shown panel of the declared panel ``panel``
+    shows, as the person at the page pans and zooms it.
 
-    ``view`` is the id of another view with a plane camera. The rectangle is mapped from the display frame of that panel into the
-    display frame of the panel that holds the layer, at the reading of the holder's driver, hence the driver's set carries the channels
-    of the frames between them. ``width`` is in CSS pixels, by default 1, ``dash`` is ``(on, off)`` in CSS pixels, and ``min_size`` is
-    the least width and height of the outline on the screen, by default 8 CSS pixels. The outline is not part of the camera fit, and it
-    is not drawn while the layout does not show ``view``.
+    ``panel`` is the id of another declared panel with a 2d camera. The rectangle is mapped from the display frame of that panel into
+    the display frame of the panel that holds the layer, at the reading of the holder's reference trajectory, hence the set of the
+    reference trajectory carries the channels of the frames between them. ``width`` is in CSS pixels, by default 1, ``dash`` is
+    ``(on, off)`` in CSS pixels, and ``min_size`` is the least width and height of the inset box on the screen, by default 8 CSS
+    pixels. The inset box is not part of the camera fit, and it is not drawn while the layout does not show ``panel``.
     """
-    layer: dict[str, Any] = {"kind": "outline", "view": view}
+    layer: dict[str, Any] = {"kind": "inset_box", "panel": panel}
     for key, value in (
         ("color", color),
         ("opacity", opacity),
@@ -1236,7 +1263,7 @@ def axes(
     opacity: Any = None,
     titles: Sequence[Any] | None = None,
 ) -> dict[str, Any]:
-    """An axes layer. ``span`` is ``"full"`` or ``"positive"``, by default full under a plane camera, or ``"box"``, a plot box with
+    """An axes layer. ``span`` is ``"full"`` or ``"positive"``, by default full under a 2d camera, or ``"box"``, a plot box with
     ticks outside and tick numbers on the axes of ``ticks`` (``"x"`` and ``"y"``, by default both), ``size`` CSS pixels high (section 2.11).
     ``titles``, two texts of parts, replace the titles of the frame's axes, e.g. ``(["Time [days]"], ["λ", ty.sub("r")])``.
     """
@@ -1255,7 +1282,7 @@ def axes(
 
 
 def grid(labels: bool | None = None, visible: Any = None, *, opacity: Any = None) -> dict[str, Any]:
-    """A grid layer. ``labels`` numbers its lines, by default under a plane camera."""
+    """A grid layer. ``labels`` numbers its lines, by default under a 2d camera."""
     layer: dict[str, Any] = {"kind": "grid"}
     for key, value in (("labels", labels), ("visible", visible), ("opacity", opacity)):
         if value is not None:
@@ -1280,13 +1307,13 @@ def label(
     clock: Any = None,
     visible: Any = None,
 ) -> dict[str, Any]:
-    """A label layer (rule K6), which writes ``text`` at the anchor ``at`` (:func:`at_point`, :func:`at_member`, or :func:`at_screen`).
+    """A label layer (rule `label`), which writes ``text`` at the anchor ``at`` (:func:`at_point`, :func:`at_member`, or :func:`at_screen`).
 
     ``text`` is a string or a list of parts, e.g. ``["t = ", clock_value(factor=4.34, decimals=1), " days"]``. It is drawn ``offset``
     CSS pixels from the anchor, ``(dx, dy)`` with ``dy`` down the screen, aligned by ``align`` (start, center, end) and ``baseline``
     (top, middle, bottom), ``size`` CSS pixels high, with a ``leader`` line from the anchor and a ``box`` behind it when given.
-    ``opacity`` may be a tween, e.g. :func:`fade`, and ``clock`` is the clock of a member anchor (rule K4). ``linespacing`` spaces
-    the lines of a text as matplotlib's does, 1.2 by default.
+    ``opacity`` may be keyframes, e.g. :func:`fade`, and ``clock`` is the clock of a member anchor (rule `layer-clock`).
+    ``linespacing`` spaces the lines of a text as matplotlib's does, 1.2 by default.
     """
     layer: dict[str, Any] = {"kind": "label", "text": text, "at": at}
     for key, value in (
@@ -1321,10 +1348,10 @@ def points(
     opacity: Any = None,
     visible: Any = None,
 ) -> dict[str, Any]:
-    """A points layer (rule K8), which draws the stored samples of its members as markers.
+    """A points layer (rule `points`), which draws the stored samples of its members as markers.
 
     With ``reveal="grow"``, a sample is drawn once the reading passes it, so that points appear one after another. ``before`` and
-    ``after`` hide a member outside its range of clock values, as on a track layer, and ``clock`` is a :func:`layer_clock`.
+    ``after`` hide a member outside its range of clock values, as on a trajectories layer, and ``clock`` is a :func:`layer_clock`.
     """
     layer: dict[str, Any] = {"kind": "points", "sets": sets, "members": members}
     for key, value in (
@@ -1342,81 +1369,88 @@ def points(
     return _check_layer(layer)
 
 
-def split(dir: str, ratio: float, a: Any, b: Any, keys: Any = None) -> dict[str, Any]:
-    """A layout split. A leaf is a panel id. ``keys`` is a tween of the ratio, with values in [0, 1] (section 2.11)."""
+def split(dir: str, ratio: float, a: Any, b: Any, keyframes: Any = None) -> dict[str, Any]:
+    """A layout split. A leaf is the id of a shown panel. ``keyframes`` are keyframes of the ratio, with values in [0, 1]
+    (section 2.11)."""
     node: dict[str, Any] = {"kind": "split", "dir": dir, "ratio": ratio, "a": a, "b": b}
-    if keys is not None:
-        node["keys"] = keys
+    if keyframes is not None:
+        node["keyframes"] = keyframes
     return _node(node)
 
 
 def _node(value: Any) -> dict[str, Any]:
     if isinstance(value, str):
-        return {"kind": "panel", "id": _check_id(value, "2.8: a panel id")}
+        return {"kind": "panel", "id": _check_id(value, "state: a panel id")}
     if isinstance(value, Mapping) and value.get("kind") == "panel" and set(value) == {"kind", "id"}:
         return _node(value["id"])
     split_keys = {"kind", "dir", "ratio", "a", "b"}
-    if isinstance(value, Mapping) and value.get("kind") == "split" and split_keys <= set(value) <= split_keys | {"keys"}:
-        ratio = _finite(value["ratio"], "2.8: a split ratio")
+    if isinstance(value, Mapping) and value.get("kind") == "split" and split_keys <= set(value) <= split_keys | {"keyframes"}:
+        ratio = _finite(value["ratio"], "state: a split ratio")
         if not 0.0 < ratio < 1.0:
-            raise SceneError(f"2.8: a split ratio is {ratio}, not in (0, 1)")
+            raise SceneError(f"state: a split ratio is {ratio}, not in (0, 1)")
         out: dict[str, Any] = {
             "kind": "split",
-            "dir": _enum(value["dir"], ("row", "col"), "2.8: a split direction"),
+            "dir": _enum(value["dir"], ("row", "col"), "state: a split direction"),
             "ratio": ratio,
             "a": _node(value["a"]),
             "b": _node(value["b"]),
         }
-        if "keys" in value:
-            out["keys"] = _key_list(value["keys"], "a split's ratio", low=0.0, high=1.0)
+        if "keyframes" in value:
+            out["keyframes"] = _keyframe_list(value["keyframes"], "a split's ratio", low=0.0, high=1.0)
         return out
-    raise SceneError(f"2.8: a layout node is a panel id or a split, not {value!r}")
+    raise SceneError(f"state: a layout node is a panel id or a split, not {value!r}")
+
+
+def _leaves(node: Mapping[str, Any]) -> list[str]:
+    """The ids of the shown panels that a layout names, in order."""
+    return [node["id"]] if node["kind"] == "panel" else _leaves(node["a"]) + _leaves(node["b"])
 
 
 def _camera(value: Mapping[str, Any]) -> dict[str, Any]:
     if not isinstance(value, Mapping):
-        raise SceneError(f"2.7: a camera is a dict, not {value!r}")
-    kind = _enum(value.get("kind"), ("plane", "orbit"), "2.7: a camera kind")
+        raise SceneError(f"panel: a camera is a dict, not {value!r}")
+    kind = _enum(value.get("kind"), ("2d", "3d"), "panel: a camera kind")
     out: dict[str, Any] = {"kind": kind}
-    if kind == "plane":
-        allowed = {"kind", "plane", "aspect", "keys"}
+    if kind == "2d":
+        allowed = {"kind", "plane", "aspect", "keyframes"}
         if "plane" in value:
-            out["plane"] = _enum(value["plane"], ("xy", "xz", "yz"), "2.7: a camera plane")
+            out["plane"] = _enum(value["plane"], ("xy", "xz", "yz"), "panel: a camera plane")
         if "aspect" in value:
-            out["aspect"] = _enum(value["aspect"], ("equal", "free"), "2.7: a camera aspect")
-        if "keys" in value:
-            out["keys"] = _camera_keys(value["keys"], out.get("aspect", "equal"))
+            out["aspect"] = _enum(value["aspect"], ("equal", "free"), "panel: a camera aspect")
+        if "keyframes" in value:
+            out["keyframes"] = _camera_keyframes(value["keyframes"], out.get("aspect", "equal"))
     else:
-        allowed = {"kind", "projection", "up", "stretch", "turn"}
+        allowed = {"kind", "projection", "up", "stretch", "auto_rotate"}
         if "projection" in value:
-            out["projection"] = _enum(value["projection"], ("orthographic", "perspective"), "2.7: a camera projection")
+            out["projection"] = _enum(value["projection"], ("orthographic", "perspective"), "panel: a camera projection")
         if "up" in value:
-            out["up"] = _enum(value["up"], ("x", "y", "z"), "2.7: a camera up axis")
+            out["up"] = _enum(value["up"], ("x", "y", "z"), "panel: a camera up axis")
         if "stretch" in value:
             k = value["stretch"]
             if isinstance(k, (str, Mapping)) or not isinstance(k, Sequence) or len(k) != 3:
-                raise SceneError(f"2.7: a camera stretch is three factors along x, y, and z, not {k!r}")
-            out["stretch"] = [_finite(x, "2.7: a camera stretch factor") for x in k]
+                raise SceneError(f"panel: a camera stretch is three factors along x, y, and z, not {k!r}")
+            out["stretch"] = [_finite(x, "panel: a camera stretch factor") for x in k]
             if any(x <= 0 for x in out["stretch"]):
-                raise SceneError(f"2.7: a camera stretch is {out['stretch']}, not three positive factors")
-        if "turn" in value:
-            out["turn"] = _finite(value["turn"], "2.7: a camera turn")
+                raise SceneError(f"panel: a camera stretch is {out['stretch']}, not three positive factors")
+        if "auto_rotate" in value:
+            out["auto_rotate"] = _finite(value["auto_rotate"], "panel: a camera auto_rotate")
     if extra := set(value) - allowed:
-        raise SceneError(f"2.7: a {kind} camera has unknown keys {sorted(extra)}")
+        raise SceneError(f"panel: a {kind} camera has unknown keys {sorted(extra)}")
     return out
 
 
 def follow(layer: int, member: int) -> dict[str, int]:
-    """A target of a camera key: the point at the reading of track ``member`` of the track layer at index ``layer`` of the view
-    (rule K5)."""
-    i = _integer(layer, "K5: the layer of a camera target")
-    k = _integer(member, "K5: the member of a camera target")
+    """A target of a camera keyframe: the point at the reading of trajectory ``member`` of the trajectories layer at index ``layer`` of the
+    panel
+    (rule `camera-keyframes`)."""
+    i = _integer(layer, "camera-keyframes: the layer of a camera target")
+    k = _integer(member, "camera-keyframes: the member of a camera target")
     if i < 0 or k < 0:
-        raise SceneError(f"K5: a camera target is layer {i}, member {k}, not two nonnegative indices")
+        raise SceneError(f"camera-keyframes: a camera target is layer {i}, member {k}, not two nonnegative indices")
     return {"layer": i, "member": k}
 
 
-def shot(
+def camera_keyframe(
     at: float,
     *,
     width: float,
@@ -1426,11 +1460,12 @@ def shot(
     height: float | None = None,
     ease: str = "smooth",
 ) -> dict[str, Any]:
-    """A camera key of a plane camera (rule K5): at time ``at`` of the timeline, the panel shows a window ``width`` units wide (and
-    ``height`` units tall under a free aspect), centered on ``center`` or on the mean of the points of ``follow`` plus ``offset``.
+    """A camera keyframe of a 2d camera (rule `camera-keyframes`): at time ``at`` of the timeline, the panel shows a window ``width``
+    units wide (and ``height`` units tall under a free aspect), centered on ``center`` or on the mean of the points of ``follow`` plus
+    ``offset``.
 
-    ``follow`` is a :func:`follow` target or a list of them, and ``ease`` says how the camera travels to this key from the key before.
-    A key with both ``center`` and ``follow`` takes ``center`` while none of its targets resolves.
+    ``follow`` is a :func:`follow` target or a list of them, and ``ease`` says how the camera travels to this keyframe from the
+    keyframe before. A keyframe with both ``center`` and ``follow`` takes ``center`` while none of its targets resolves.
     """
     key: dict[str, Any] = {"at": at, "width": width, "ease": ease}
     if center is not None:
@@ -1441,77 +1476,77 @@ def shot(
         key["offset"] = list(offset)
     if height is not None:
         key["height"] = height
-    return _camera_key(key)
+    return _camera_keyframe(key)
 
 
-def _camera_key(value: Any) -> dict[str, Any]:
+def _camera_keyframe(value: Any) -> dict[str, Any]:
     if not isinstance(value, Mapping) or "at" not in value or "width" not in value:
-        raise SceneError(f"K5: a camera key is a dict with at and width, not {value!r}")
+        raise SceneError(f"camera-keyframes: a camera keyframe is a dict with at and width, not {value!r}")
     if extra := set(value) - {"at", "width", "height", "center", "follow", "offset", "ease"}:
-        raise SceneError(f"K5: a camera key has unknown keys {sorted(extra)}")
+        raise SceneError(f"camera-keyframes: a camera keyframe has unknown keys {sorted(extra)}")
     out: dict[str, Any] = {
-        "at": _finite(value["at"], "K5: the time of a camera key"),
-        "width": _positive(value["width"], "the width of a camera key", "K5"),
+        "at": _finite(value["at"], "camera-keyframes: the time of a camera keyframe"),
+        "width": _positive(value["width"], "the width of a camera keyframe", "camera-keyframes"),
     }
     if "height" in value:
-        out["height"] = _positive(value["height"], "the height of a camera key", "K5")
+        out["height"] = _positive(value["height"], "the height of a camera keyframe", "camera-keyframes")
     if "center" in value:
-        out["center"] = _pair(value["center"], "the center of a camera key", "K5")
+        out["center"] = _pair(value["center"], "the center of a camera keyframe", "camera-keyframes")
     if "follow" in value:
         targets = value["follow"]
         if isinstance(targets, (str, bytes, Mapping)) or not isinstance(targets, Sequence) or len(targets) == 0:
-            raise SceneError(f"K5: the follow of a camera key is a nonempty list of targets, not {targets!r}")
+            raise SceneError(f"camera-keyframes: the follow of a camera keyframe is a nonempty list of targets, not {targets!r}")
         chosen = []
         for t in targets:
             if not isinstance(t, Mapping) or set(t) != {"layer", "member"}:
-                raise SceneError(f"K5: a camera target is a dict of layer and member, not {t!r}")
+                raise SceneError(f"camera-keyframes: a camera target is a dict of layer and member, not {t!r}")
             chosen.append(follow(t["layer"], t["member"]))
         out["follow"] = chosen
     if "center" not in out and "follow" not in out:
-        raise SceneError("K5: a camera key has neither a center nor a follow")
+        raise SceneError("camera-keyframes: a camera keyframe has neither a center nor a follow")
     if "offset" in value:
-        out["offset"] = _pair(value["offset"], "the offset of a camera key", "K5")
+        out["offset"] = _pair(value["offset"], "the offset of a camera keyframe", "camera-keyframes")
     if "ease" in value:
-        out["ease"] = _enum(value["ease"], EASES, "K2: the ease of a camera key")
+        out["ease"] = _enum(value["ease"], EASES, "ease: the ease of a camera keyframe")
     return out
 
 
-def _camera_keys(value: Any, aspect: str) -> list[dict[str, Any]]:
+def _camera_keyframes(value: Any, aspect: str) -> list[dict[str, Any]]:
     if isinstance(value, (str, bytes, Mapping)) or not isinstance(value, Sequence) or len(value) == 0:
-        raise SceneError(f"K5: the keys of a camera are a nonempty list of camera keys, not {value!r}")
-    keys = [_camera_key(k) for k in value]
+        raise SceneError(f"camera-keyframes: the keyframes of a camera are a nonempty list of camera keyframes, not {value!r}")
+    keys = [_camera_keyframe(k) for k in value]
     for a, b in itertools.pairwise(keys):
         if b["at"] < a["at"]:
-            raise SceneError(f"K5: the times of the camera keys decrease from {a['at']} to {b['at']}")
+            raise SceneError(f"camera-keyframes: the times of the camera keyframes decrease from {a['at']} to {b['at']}")
     heights = [("height" in k) for k in keys]
     if any(heights) and not all(heights):
-        raise SceneError("K5: some keys of a camera give a height and others do not")
+        raise SceneError("camera-keyframes: some keyframes of a camera give a height and others do not")
     if any(heights) and aspect != "free":
-        raise SceneError('K5: a camera key gives a height, which only a camera with "aspect": "free" takes')
+        raise SceneError('camera-keyframes: a camera keyframe gives a height, which only a camera with "aspect": "free" takes')
     return keys
 
 
 def _entry(value: Any) -> dict[str, Any]:
     """A legend entry, ``{"label"}`` with a ``line``, a ``marker``, or ``colors`` (section 2.11)."""
     if not isinstance(value, Mapping) or "label" not in value:
-        raise SceneError(f"2.11: a legend entry is a dict with a label, not {value!r}")
+        raise SceneError(f"timeline: a legend entry is a dict with a label, not {value!r}")
     if extra := set(value) - {"label", "line", "marker", "colors"}:
-        raise SceneError(f"2.11: a legend entry has unknown keys {sorted(extra)}")
+        raise SceneError(f"timeline: a legend entry has unknown keys {sorted(extra)}")
     label = value["label"]
     if isinstance(label, str):
         out: dict[str, Any] = {"label": label}
     else:
         # a label may hold subscripts and superscripts, e.g. ["λ", ty.sub("r1")]
         if isinstance(label, (bytes, Mapping)) or not isinstance(label, Sequence):
-            raise SceneError(f"2.11: the label of a legend entry is text or a list of text, sub, and sup parts, not {label!r}")
+            raise SceneError(f"timeline: the label of a legend entry is text or a list of text, sub, and sup parts, not {label!r}")
         parts = [_text_part(p) for p in label]
         if any(not isinstance(p, str) and set(p) - {"sub", "sup"} for p in parts):
-            raise SceneError(f"2.11: the label of a legend entry takes text, sub, and sup parts only, not {label!r}")
+            raise SceneError(f"timeline: the label of a legend entry takes text, sub, and sup parts only, not {label!r}")
         out = {"label": parts}
     if "line" in value:
         line = value["line"]
         if not isinstance(line, Mapping) or set(line) - {"color", "width", "dash", "opacity"}:
-            raise SceneError(f"2.11: the line of a legend entry is a dict of color, width, dash, and opacity, not {line!r}")
+            raise SceneError(f"timeline: the line of a legend entry is a dict of color, width, dash, and opacity, not {line!r}")
         spec: dict[str, Any] = {}
         if "color" in line:
             spec["color"] = _color(line["color"], "the color of a legend line")
@@ -1520,7 +1555,7 @@ def _entry(value: Any) -> dict[str, Any]:
         if "dash" in line:
             spec["dash"] = _pair(line["dash"], "the dash of a legend line")
             if min(spec["dash"]) <= 0.0:
-                raise SceneError(f"2.11: the dash of a legend line is {spec['dash']}, not two positive lengths")
+                raise SceneError(f"timeline: the dash of a legend line is {spec['dash']}, not two positive lengths")
         if "opacity" in line:
             spec["opacity"] = _unit_interval(line["opacity"], "the opacity of a legend line")
         out["line"] = spec
@@ -1529,7 +1564,7 @@ def _entry(value: Any) -> dict[str, Any]:
     if "colors" in value:
         colors = value["colors"]
         if isinstance(colors, (str, bytes, Mapping)) or not isinstance(colors, Sequence) or len(colors) == 0:
-            raise SceneError(f"2.11: the colors of a legend entry are a nonempty list of colors, not {colors!r}")
+            raise SceneError(f"timeline: the colors of a legend entry are a nonempty list of colors, not {colors!r}")
         out["colors"] = [_color(c, "a color of a legend entry") for c in colors]
     return out
 
@@ -1546,11 +1581,11 @@ def entry(
     return _entry(spec)
 
 
-# track sets
+# trajectory sets
 
 
-class TrackSet:
-    """A collection of tracks that share a frame. Each :meth:`add` gives one track."""
+class TrajectorySet:
+    """A collection of trajectories that share a frame. Each :meth:`add` gives one trajectory."""
 
     def __init__(
         self,
@@ -1565,10 +1600,10 @@ class TrackSet:
         channel_dtypes: Mapping[str, str],
     ) -> None:
         self.scene, self.id, self.frame = scene, sid, frame
-        self.tags = {_text(k, "a tag name"): _text(v, f"tag {k!r} of track set {sid!r}") for k, v in tags.items()}
-        self.attrs = {_text(k, "an attribute name"): _finite(v, f"attribute {k!r} of track set {sid!r}") for k, v in attrs.items()}
+        self.tags = {_text(k, "a tag name"): _text(v, f"tag {k!r} of trajectory set {sid!r}") for k, v in tags.items()}
+        self.attrs = {_text(k, "an attribute name"): _finite(v, f"attribute {k!r} of trajectory set {sid!r}") for k, v in attrs.items()}
         if not isinstance(periodic, bool):
-            raise SceneError(f"T2: track set {sid!r} has periodic {periodic!r}, not a boolean")
+            raise SceneError(f"periodic: trajectory set {sid!r} has periodic {periodic!r}, not a boolean")
         self.periodic, self.dtype, self.label = periodic, dtype, label
         self.channel_dtypes = dict(channel_dtypes)
         self.positions: list[np.ndarray] = []
@@ -1579,41 +1614,50 @@ class TrackSet:
         self.kept: list[np.ndarray] | None = None
 
     @property
-    def tracks(self) -> int:
-        """The number of tracks added so far."""
+    def trajectories(self) -> int:
+        """The number of trajectories added so far."""
         return len(self.positions)
 
     def add(self, positions: Any, *, channels: Mapping[str, Any] | None = None, parameters: Mapping[str, float] | None = None) -> int:
-        """Adds one track, copying its arrays, and returns its index. Every track must give the same channel and parameter names."""
+        """Adds one trajectory, copying its arrays, and returns its index. Every trajectory must give the same channel and parameter
+        names."""
         if self.kept is not None:
-            raise SceneError(f"track set {self.id!r} is already thinned")
+            raise SceneError(f"trajectory-set: trajectory set {self.id!r} is already thinned")
         p = np.array(positions, dtype=np.float64, copy=True)
         if p.ndim != 2 or p.shape[1] not in (2, 3):
-            raise SceneError(f"2.1: track set {self.id!r}: positions have shape {p.shape}, not (m, 2) or (m, 3)")
+            raise SceneError(f"trajectory-set: trajectory set {self.id!r}: positions have shape {p.shape}, not (m, 2) or (m, 3)")
         if len(p) < 2:
-            raise SceneError(f"T1: track set {self.id!r}: the sample count of the added track is {len(p)}, fewer than two")
+            raise SceneError(
+                f"two-samples: trajectory set {self.id!r}: the sample count of the added trajectory is {len(p)}, fewer than two"
+            )
         if not np.all(np.isfinite(p)):
-            raise SceneError(f"2.1: track set {self.id!r}: positions are not all finite")
+            raise SceneError(f"trajectory-set: trajectory set {self.id!r}: positions are not all finite")
         if self.positions and p.shape[1] != self.positions[0].shape[1]:
-            raise SceneError(f"2.1: track set {self.id!r} mixes 2D and 3D positions")
+            raise SceneError(f"trajectory-set: trajectory set {self.id!r} mixes 2D and 3D positions")
         chans = {}
         for k, v in (channels or {}).items():
             if _text(k, "a channel name") == INDEX:
-                raise SceneError(f"S3: the channel name {INDEX} is reserved")
+                raise SceneError(f"identifier: the channel name {INDEX} is reserved")
             c = np.array(v, dtype=np.float64, copy=True)
             if c.shape != (len(p),):
-                raise SceneError(f"2.1: track set {self.id!r}: channel {k!r} has shape {c.shape}, not ({len(p)},)")
+                raise SceneError(f"trajectory-set: trajectory set {self.id!r}: channel {k!r} has shape {c.shape}, not ({len(p)},)")
             if not np.all(np.isfinite(c)):
-                raise SceneError(f"2.1: track set {self.id!r}: channel {k!r} is not all finite")
+                raise SceneError(f"trajectory-set: trajectory set {self.id!r}: channel {k!r} is not all finite")
             chans[k] = c
         if not self.positions and (missing := sorted(set(self.channel_dtypes) - set(chans))):
-            raise SceneError(f"D1: channel_dtypes of track set {self.id!r} names channels {missing}, which the track set lacks")
+            raise SceneError(
+                f"array-dtype: channel_dtypes of trajectory set {self.id!r} names channels {missing}, which the trajectory set lacks"
+            )
         params = {
-            _text(k, "a parameter name"): _finite(v, f"2.1: parameter {k!r} of track set {self.id!r}")
+            _text(k, "a parameter name"): _finite(v, f"trajectory-set: parameter {k!r} of trajectory set {self.id!r}")
             for k, v in (parameters or {}).items()
         }
+        if INDEX in params:
+            raise SceneError(f"identifier: the parameter name {INDEX} is built in, hence trajectory set {self.id!r} cannot declare it")
         if self.positions and (set(chans) != set(self.channels[0]) or set(params) != set(self.parameters[0])):
-            raise SceneError(f"2.1: track set {self.id!r}: the added track gives other channel or parameter names than the first")
+            raise SceneError(
+                f"trajectory-set: trajectory set {self.id!r}: the added trajectory gives other channel or parameter names than the first"
+            )
         self.positions.append(p)
         self.channels.append(chans)
         self.parameters.append(params)
@@ -1622,21 +1666,29 @@ class TrackSet:
     def describe(self, name: str, *, interp: str | None = None, unit: str | None = None, label: str | None = None) -> None:
         """Sets the ``interp`` and ``unit`` of a channel, or the ``label`` and ``unit`` of a parameter, after the first :meth:`add`."""
         if not self.positions:
-            raise SceneError(f"track set {self.id!r} does not have a track yet, hence {name!r} cannot be described")
+            raise SceneError(
+                f"trajectory-set: trajectory set {self.id!r} does not have a trajectory yet, hence {name!r} cannot be described"
+            )
         is_channel, is_parameter = name in self.channels[0], name in self.parameters[0]
         if is_channel and is_parameter:
-            raise SceneError(f"2.1: {name!r} is both a channel and a parameter of track set {self.id!r}. Describe it under one name")
+            raise SceneError(
+                f"trajectory-set: {name!r} is both a channel and a parameter of trajectory set {self.id!r}. Describe it under one name"
+            )
         if not (is_channel or is_parameter):
-            raise SceneError(f"2.1: track set {self.id!r} lacks a channel or a parameter named {name!r}")
+            raise SceneError(f"trajectory-set: trajectory set {self.id!r} lacks a channel or a parameter named {name!r}")
         info = self.channel_info if is_channel else self.parameter_info
         entry = info.setdefault(name, {})
         if interp is not None:
             if is_parameter:
-                raise SceneError(f"2.1: an interp is given for parameter {name!r} of track set {self.id!r}, and only a channel takes one")
-            entry["interp"] = _enum(interp, ("linear", "hold"), f"2.1: the interp of channel {name!r}")
+                raise SceneError(
+                    f"trajectory-set: an interp is given for parameter {name!r} of trajectory set {self.id!r}, and only a channel takes one"
+                )
+            entry["interp"] = _enum(interp, ("linear", "hold"), f"trajectory-set: the interp of channel {name!r}")
         if label is not None:
             if is_channel:
-                raise SceneError(f"2.1: a label is given for channel {name!r} of track set {self.id!r}, and only a parameter takes one")
+                raise SceneError(
+                    f"trajectory-set: a label is given for channel {name!r} of trajectory set {self.id!r}, and only a parameter takes one"
+                )
             entry["label"] = _text(label, "a label")
         if unit is not None:
             entry["unit"] = _text(unit, "a unit")
@@ -1655,35 +1707,37 @@ class TrackSet:
         keep: Sequence[Sequence[int]] | Callable[[int], Sequence[int]] | None = None,
         frames: Sequence[Any] | None = None,
     ) -> list[np.ndarray]:
-        """Selects a subset of the stored samples of each track, and does not create new samples. Returns a copy of the kept indices.
+        """Selects a subset of the stored samples of each trajectory, and does not create new samples. Returns a copy of the kept indices.
 
-        In count mode, ``n`` samples are kept per track at equal steps of blended arclength. The arclength is measured
-        in every frame of ``frames`` (by default the track set's frame), relative to the track set's extent in the same frame.
+        In count mode, ``n`` samples are kept per trajectory at equal steps of blended arclength. The arclength is measured
+        in every frame of ``frames`` (by default the trajectory set's frame), relative to the trajectory set's extent in the same frame.
         In tolerance mode, the samples are chosen by the Douglas-Peucker algorithm, relative to the same extent. Both
         endpoints and every index in ``keep`` are always kept, even when they number more than ``n``.
         """
         if not self.positions:
-            raise SceneError(f"track set {self.id!r} does not have a track to thin")
+            raise SceneError(f"trajectory-set: trajectory set {self.id!r} does not have a trajectory to thin")
         if self.kept is not None:
-            raise SceneError(f"track set {self.id!r} is already thinned")
+            raise SceneError(f"trajectory-set: trajectory set {self.id!r} is already thinned")
         frame_ids = [_check_id(_id(f), "a frame id") for f in (frames or [self.frame])]
         for fid in frame_ids:
             if fid not in self.scene._frames:
-                raise SceneError(f"2.3: thin measures in {fid!r}, which is not a declared frame")
+                raise SceneError(f"frame: thin measures in {fid!r}, which is not a declared frame")
         if keep is not None and not callable(keep) and len(keep) != len(self.positions):
-            raise SceneError(f"keep has {len(keep)} entries for the {len(self.positions)} tracks of track set {self.id!r}")
+            raise SceneError(
+                f"trajectory-set: keep has {len(keep)} entries for the {len(self.positions)} trajectories of trajectory set {self.id!r}"
+            )
         try:
             tree = FrameTree(self.scene._frames, self.scene._bodies)
             in_frames = []
             for fid in frame_ids:
-                per_track = []
+                per_trajectory = []
                 for i, p in enumerate(self.positions):
                     p3 = np.hstack([p, np.zeros((len(p), 1))]) if p.shape[1] == 2 else p
-                    per_track.append(tree.transform(p3, self.frame, fid, self._context(i)))
-                in_frames.append(per_track)
+                    per_trajectory.append(tree.transform(p3, self.frame, fid, self._context(i)))
+                in_frames.append(per_trajectory)
             kept = select(in_frames, n=n, tolerance=tolerance, keep=keep)
         except ValueError as exc:
-            raise SceneError(f"track set {self.id!r} cannot be thinned: {exc}") from None
+            raise SceneError(f"trajectory-set: trajectory set {self.id!r} cannot be thinned: {exc}") from None
         self.kept = [np.array(k, dtype=np.int64) for k in kept]
         for k in self.kept:
             k.flags.writeable = False
@@ -1709,26 +1763,26 @@ class Scene:
         self.theme: dict[str, str] | None = None
         if theme is not None:
             if extra := set(theme) - {"background", "foreground", "grid", "font", "gutter"}:
-                raise SceneError(f"a theme has unknown keys {sorted(extra)}")
+                raise SceneError(f"scene: a theme has unknown keys {sorted(extra)}")
             self.theme = {k: (_text(v, "the theme font") if k == "font" else _color(v, f"theme {k}")) for k, v in theme.items()}
         self._frames: dict[str, dict[str, Any]] = {}
         self._bodies: dict[str, dict[str, Any]] = {}
-        self._sets: dict[str, TrackSet] = {}
-        self._variables: dict[str, dict[str, Any]] = {}
+        self._sets: dict[str, TrajectorySet] = {}
+        self._inputs: dict[str, dict[str, Any]] = {}
         self._clock: dict[str, Any] | None = None
-        self._views: dict[str, dict[str, Any]] = {}
+        self._panels: dict[str, dict[str, Any]] = {}
         self._controls: list[dict[str, Any]] = []
         self._readouts: list[dict[str, Any]] = []
-        self._panels: dict[str, dict[str, Any]] = {}
+        self._shown: dict[str, dict[str, Any]] = {}
         self._layout: dict[str, Any] | None = None
-        self._stages: list[dict[str, Any]] = []
+        self._steps: list[dict[str, Any]] = []
         self._overlays: list[dict[str, Any]] = []
         self._images: dict[str, bytes] = {}
 
     def _new(self, table: Mapping[str, Any], value: str, what: str) -> str:
         _check_id(value, what)
         if value in table:
-            raise SceneError(f"{what} {value!r} is declared twice")
+            raise SceneError(f"identifier: {what} {value!r} is declared twice")
         return value
 
     def frame(
@@ -1743,7 +1797,7 @@ class Scene:
         rotation: Rotation | None = None,
         scale: Any = None,
     ) -> Frame:
-        """Declares a frame, defined against ``parent`` by ``origin``, ``rotation``, and ``scale`` (rule F1)."""
+        """Declares a frame, defined against ``parent`` by ``origin``, ``rotation``, and ``scale`` (rule `transform`)."""
         self._new(self._frames, id, "frame")
         out: dict[str, Any] = {}
         if label is not None:
@@ -1751,34 +1805,34 @@ class Scene:
         if axes is not None:
             names = [_text(a, "an axis label") for a in axes]
             if len(names) > 3:
-                raise SceneError(f"2.3: frame {id!r} has {len(names)} axis labels, more than three")
+                raise SceneError(f"frame: frame {id!r} has {len(names)} axis labels, more than three")
             out["axes"] = names + [""] * (3 - len(names))
         if unit is not None:
             out["unit"] = _text(unit, "a unit")
         if parent is None:
             if any(x is not None for x in (origin, rotation, scale)):
-                raise SceneError(f"2.3: frame {id!r} has an edge but does not have a parent")
+                raise SceneError(f"frame: frame {id!r} has an edge but does not have a parent")
             if any("parent" not in f for f in self._frames.values()):
-                raise SceneError(f"2.3: frame {id!r} would be a second root")
+                raise SceneError(f"frame: frame {id!r} would be a second root")
         else:
             if _id(parent) not in self._frames:
-                raise SceneError(f"2.3: the parent {_id(parent)!r} of frame {id!r} is not declared")
+                raise SceneError(f"frame: the parent {_id(parent)!r} of frame {id!r} is not declared")
             out["parent"] = _id(parent)
         if isinstance(origin, Body) or (isinstance(origin, Mapping) and set(origin) == {"body"}):
             bid = _id(origin) if isinstance(origin, Body) else origin["body"]
             if bid not in self._bodies:
-                raise SceneError(f"F2: the origin of frame {id!r} is at {bid!r}, which is not a declared body")
+                raise SceneError(f"origin: the origin of frame {id!r} is at {bid!r}, which is not a declared body")
             out["origin"] = {"body": bid}
         elif origin is not None:
             out["origin"] = _point(origin, f"the origin of frame {id!r}", channels=True)
         if rotation is not None:
             if not isinstance(rotation, Rotation):
-                raise SceneError(f"F1: the rotation of frame {id!r} is {rotation!r}, not rotation(axis, angle)")
+                raise SceneError(f"transform: the rotation of frame {id!r} is {rotation!r}, not rotation(axis, angle)")
             out["rotation"] = rotation.to_json()
         if scale is not None:
             s = _scalar(scale, f"the scale of frame {id!r}")
             if s == 0.0 or (isinstance(s, Mapping) and "attr" in s and s.get("factor", 1.0) == 0.0 and s.get("offset", 0.0) == 0.0):
-                raise SceneError(f"F2: the scale of frame {id!r} is zero")
+                raise SceneError(f"origin: the scale of frame {id!r} is zero")
             out["scale"] = s
         self._frames[id] = out
         return Frame(id)
@@ -1800,7 +1854,7 @@ class Scene:
         """
         self._new(self._bodies, id, "body")
         if _id(frame) not in self._frames:
-            raise SceneError(f"2.4: the frame {_id(frame)!r} of body {id!r} is not declared")
+            raise SceneError(f"body: the frame {_id(frame)!r} of body {id!r} is not declared")
         out: dict[str, Any] = {"frame": _id(frame), "position": _point(position, f"the position of body {id!r}")}
         if label is not None:
             out["label"] = _text(label, "a body label")
@@ -1813,14 +1867,14 @@ class Scene:
                 with open(image, "rb") as fh:
                     raw = fh.read()
             if not (raw.startswith((b"\x89PNG\r\n\x1a\n", b"\xff\xd8\xff")) or (raw[:4] == b"RIFF" and raw[8:12] == b"WEBP")):
-                raise SceneError(f"2.11: the image of body {id!r} is not a PNG, JPEG, or WebP file")
+                raise SceneError(f"timeline: the image of body {id!r} is not a PNG, JPEG, or WebP file")
             name = f"bodies/{id}/image"
             self._images[name] = raw
             out["image"] = name
         self._bodies[id] = out
         return Body(id)
 
-    def track_set(
+    def trajectory_set(
         self,
         id: str,
         *,
@@ -1831,30 +1885,34 @@ class Scene:
         dtype: str = "float32",
         label: str | None = None,
         channel_dtypes: Mapping[str, str] | None = None,
-    ) -> TrackSet:
-        """Declares a track set. ``dtype`` is the stored dtype of its positions and channels (rule D1).
+    ) -> TrajectorySet:
+        """Declares a trajectory set. ``dtype`` is the stored dtype of its positions and channels (rule `array-dtype`).
 
         The default is float32, and the cast is recorded in the ``meta`` of the data container. A clock channel is stored as
-        float64 instead when, on some track, float32 would make the channel nonmonotone or would round either end of a step
+        float64 instead when, on some trajectory, float32 would make the channel nonmonotone or would round either end of a step
         between consecutive samples by more than 1% of the step. ``channel_dtypes`` maps a channel name to float32 or float64,
         and a dtype given there overrides both ``dtype`` and the switch of a clock channel to float64. Parameters are stored
-        as float64, since each is one number per track and a selector compares against it.
+        as float64, since each is one number per trajectory and a parameter input compares against it.
         """
         if dtype not in ("float32", "float64"):
-            raise SceneError(f"D1: positions and channels of track set {id!r} are stored as float32 or float64, not {dtype!r}")
+            raise SceneError(
+                f"array-dtype: positions and channels of trajectory set {id!r} are stored as float32 or float64, not {dtype!r}"
+            )
         if channel_dtypes is None:
             channel_dtypes = {}
         if not isinstance(channel_dtypes, Mapping):
-            raise SceneError(f"D1: channel_dtypes of track set {id!r} is a dict of channel names to dtypes, not {channel_dtypes!r}")
+            raise SceneError(
+                f"array-dtype: channel_dtypes of trajectory set {id!r} is a dict of channel names to dtypes, not {channel_dtypes!r}"
+            )
         for name, cd in channel_dtypes.items():
             if _text(name, "a channel name") == INDEX:
-                raise SceneError(f"D1: channel_dtypes of track set {id!r} names {INDEX}, which is not stored")
+                raise SceneError(f"array-dtype: channel_dtypes of trajectory set {id!r} names {INDEX}, which is not stored")
             if cd not in ("float32", "float64"):
-                raise SceneError(f"D1: channel {name!r} of track set {id!r} is stored as float32 or float64, not {cd!r}")
-        self._new(self._sets, id, "track set")
+                raise SceneError(f"array-dtype: channel {name!r} of trajectory set {id!r} is stored as float32 or float64, not {cd!r}")
+        self._new(self._sets, id, "trajectory set")
         if _id(frame) not in self._frames:
-            raise SceneError(f"2.1: the frame {_id(frame)!r} of track set {id!r} is not declared")
-        ts = TrackSet(
+            raise SceneError(f"trajectory-set: the frame {_id(frame)!r} of trajectory set {id!r} is not declared")
+        ts = TrajectorySet(
             self,
             id,
             _id(frame),
@@ -1862,42 +1920,40 @@ class Scene:
             attrs or {},
             periodic,
             dtype,
-            _text(label, "a track set label") if label is not None else None,
+            _text(label, "a trajectory set label") if label is not None else None,
             channel_dtypes,
         )
         self._sets[id] = ts
         return ts
 
-    def _variable(self, id: str, spec: dict[str, Any]) -> Variable:
-        self._new(self._variables, id, "variable")
-        spec["scope"] = _enum(spec["scope"], ("scene", "panel"), f"2.5: the scope of variable {id!r}")
-        self._variables[id] = spec
-        return Variable(id, spec["kind"])
+    def _declare_input(self, id: str, spec: dict[str, Any]) -> Input:
+        self._new(self._inputs, id, "input")
+        spec["scope"] = _enum(spec["scope"], ("shared", "per_panel"), f"input: the scope of input {id!r}")
+        self._inputs[id] = spec
+        return Input(id, spec["kind"])
 
-    def selector(
-        self, id: str, *, parameter: str | None = None, by: str = "nearest", default: float = 0.0, scope: str = "scene"
-    ) -> Variable:
-        """A selector, whose value is either a parameter value, resolved to the nearest track, or a track index."""
-        _enum(by, ("nearest", "index"), f"2.5: selector {id!r} is by")
-        if by == "nearest" and parameter is None:
-            raise SceneError(f"2.5: selector {id!r} is by nearest but does not name a parameter")
+    def parameter(self, id: str, *, parameter: str, default: float = 0.0, scope: str = "shared") -> Input:
+        """A parameter input, whose value is a value of ``parameter``, and which selects the member whose value is nearest.
+
+        The built-in parameter ``"@index"`` is the number of the member in its set, starting at 0.
+        """
+        if not _text(parameter, "input: a parameter name"):
+            raise SceneError(f"input: parameter input {id!r} names an empty parameter")
         spec: dict[str, Any] = {
-            "kind": "selector",
-            "by": by,
-            "default": _finite(default, f"2.5: the default of selector {id!r}"),
+            "kind": "parameter",
+            "parameter": parameter,
+            "default": _finite(default, f"input: the default of parameter input {id!r}"),
             "scope": scope,
         }
-        if parameter is not None:
-            spec["parameter"] = _text(parameter, "a parameter name")
-        return self._variable(id, spec)
+        return self._declare_input(id, spec)
 
     def choice(
-        self, id: str, values: Sequence[Any], *, default: Any = None, labels: Sequence[str] | None = None, scope: str = "scene"
-    ) -> Variable:
+        self, id: str, values: Sequence[Any], *, default: Any = None, labels: Sequence[str] | None = None, scope: str = "shared"
+    ) -> Input:
         """A choice among strings, or among frames given as handles."""
         vals = [_id(v) for v in values]
         if not vals or len(set(vals)) != len(vals) or not all(isinstance(v, str) for v in vals):
-            raise SceneError(f"2.5: the values of choice {id!r} are not distinct strings: {vals!r}")
+            raise SceneError(f"input: the values of choice {id!r} are not distinct strings: {vals!r}")
         spec: dict[str, Any] = {
             "kind": "choice",
             "values": vals,
@@ -1905,199 +1961,210 @@ class Scene:
             "scope": scope,
         }
         if spec["default"] not in vals:
-            raise SceneError(f"2.5: choice {id!r} defaults to {spec['default']!r}, which is not one of its values")
+            raise SceneError(f"input: choice {id!r} defaults to {spec['default']!r}, which is not one of its values")
         if labels is not None:
             spec["labels"] = [_text(x, "a choice label") for x in labels]
             if len(spec["labels"]) != len(vals):
-                raise SceneError(f"2.5: choice {id!r} has {len(spec['labels'])} labels for {len(vals)} values")
-        return self._variable(id, spec)
+                raise SceneError(f"input: choice {id!r} has {len(spec['labels'])} labels for {len(vals)} values")
+        return self._declare_input(id, spec)
 
-    def toggle(self, id: str, *, default: bool = False, scope: str = "scene") -> Variable:
-        """A boolean variable."""
+    def toggle(self, id: str, *, default: bool = False, scope: str = "shared") -> Input:
+        """A boolean input."""
         if not isinstance(default, bool):
-            raise SceneError(f"2.5: toggle {id!r} defaults to {default!r}, not a boolean")
-        return self._variable(id, {"kind": "toggle", "default": default, "scope": scope})
+            raise SceneError(f"input: toggle {id!r} defaults to {default!r}, not a boolean")
+        return self._declare_input(id, {"kind": "toggle", "default": default, "scope": scope})
 
     def clock(
         self,
         mode: str = "fraction",
         *,
         channels: Sequence[str],
-        steps: int,
+        frame_count: int,
         range: Sequence[float] | None = None,
         labels: Sequence[str] | None = None,
-        laps: int | None = None,
+        revolutions: int | None = None,
         seconds: float | None = None,
-        keys: Any = None,
+        keyframes: Any = None,
         end: str | None = None,
     ) -> None:
         """The clock (section 2.6). The first channel is the initial one.
 
-        ``laps``, in fraction mode only, is the number of periods that one loop of ``steps`` frames covers (rule C6).
-        ``seconds`` is how long one loop lasts at speed 1, in either mode, in place of 8 seconds for each lap.
-        In value mode, ``keys`` gives the shared value of the channel at the times of the timeline in place of ``range`` (rule K3),
-        so that the clock can pause and change pace. ``end="stop"`` stops playback at the end of the loop (rule K9).
+        ``revolutions``, in fraction mode only, is the number of revolutions of every periodic trajectory that one loop of
+        ``frame_count`` frame indices covers (rule `revolutions`). ``seconds`` is how long one loop lasts at speed 1, in either
+        mode, in place of 8 seconds for each revolution. In epoch mode, ``keyframes`` give the shared value of the channel at the
+        times of the timeline in place of ``range`` (rule `clock-keyframes`), so that the clock can pause and change pace.
+        ``end="stop"`` stops playback at the end of the loop (rule `steps`).
         """
-        _enum(mode, ("fraction", "value"), "2.6: the clock mode")
+        _enum(mode, ("fraction", "epoch"), "clock: the clock mode")
         if isinstance(channels, str) or not channels:
-            raise SceneError(f"2.6: the clock channels are a list of names, not {channels!r}")
+            raise SceneError(f"clock: the clock channels are a list of names, not {channels!r}")
         names = [_text(c, "a clock channel") for c in channels]
         if len(set(names)) != len(names):
-            raise SceneError(f"2.6: the clock channels repeat a name: {names!r}")
-        n = _integer(steps, "2.6: the clock steps")
+            raise SceneError(f"clock: the clock channels repeat a name: {names!r}")
+        n = _integer(frame_count, "clock: the frame count of the clock")
         if n < 1:
-            raise SceneError(f"2.6: the clock has {n} steps, fewer than one")
-        out: dict[str, Any] = {"mode": mode, "channels": names, "steps": n}
-        if laps is not None:
-            if mode == "value":
-                raise SceneError("C6: the clock is in value mode but has laps")
-            out["laps"] = _integer(laps, "C6: the clock laps")
-            if out["laps"] < 1:
-                raise SceneError(f"C6: the clock has {out['laps']} laps, fewer than one")
+            raise SceneError(f"clock: the frame count of the clock is {n}, less than one")
+        out: dict[str, Any] = {"mode": mode, "channels": names, "frame_count": n}
+        if revolutions is not None:
+            if mode == "epoch":
+                raise SceneError("revolutions: the clock is in epoch mode but has revolutions")
+            out["revolutions"] = _integer(revolutions, "revolutions: the clock revolutions")
+            if out["revolutions"] < 1:
+                raise SceneError(f"revolutions: the clock has {out['revolutions']} revolutions, fewer than one")
         if seconds is not None:
-            out["seconds"] = _finite(seconds, "2.6: the clock seconds")
+            out["seconds"] = _finite(seconds, "clock: the clock seconds")
             if out["seconds"] <= 0:
-                raise SceneError(f"2.6: the clock seconds are {out['seconds']}, not positive")
-        if mode == "value":
-            if range is not None and keys is not None:
-                raise SceneError("K3: the clock is in value mode and has both a range and keys, not one")
-            if keys is not None:
-                out["keys"] = _key_list(keys, "the clock")
+                raise SceneError(f"clock: the clock seconds are {out['seconds']}, not positive")
+        if mode == "epoch":
+            if range is not None and keyframes is not None:
+                raise SceneError("clock-keyframes: the clock is in epoch mode and has both a range and keyframes, not one")
+            if keyframes is not None:
+                out["keyframes"] = _keyframe_list(keyframes, "the clock")
             else:
                 if range is None or isinstance(range, str) or len(range) != 2:
-                    raise SceneError("C2: the clock is in value mode but does not have a range of two numbers")
-                out["range"] = [_finite(x, "C2: a clock range value") for x in range]
-        elif keys is not None:
-            raise SceneError("K3: the clock is in fraction mode and has keys, which only a value clock takes")
+                    raise SceneError("clock-mode: the clock is in epoch mode but does not have a range of two numbers")
+                out["range"] = [_finite(x, "clock-mode: a clock range value") for x in range]
+        elif keyframes is not None:
+            raise SceneError("clock-keyframes: the clock is in fraction mode and has keyframes, which only an epoch clock takes")
         if end is not None:
-            out["end"] = _enum(end, ("loop", "stop"), "K9: the clock's end")
+            out["end"] = _enum(end, ("loop", "stop"), "steps: the clock's end")
         if labels is not None:
             out["labels"] = [_text(x, "a clock label") for x in labels]
             if len(out["labels"]) != len(names):
-                raise SceneError(f"2.6: the clock has {len(out['labels'])} labels for {len(names)} channels")
+                raise SceneError(f"clock: the clock has {len(out['labels'])} labels for {len(names)} channels")
         self._clock = out
 
-    def view(
+    def panel(
         self,
         id: str,
         *,
         frame: Any,
-        driver: Mapping[str, Any],
+        reference: Mapping[str, Any],
         layers: Sequence[Mapping[str, Any]],
         camera: Mapping[str, Any] | None = None,
         label: str | None = None,
-        margin: Mapping[str, float] | None = None,
         opacity: Any = None,
+        margin: Mapping[str, float] | None = None,
     ) -> str:
-        """A view, given by a frame or a choice variable over frames, a driver, and layers.
+        """Declares a panel, given by a frame or a choice input over frames, a reference trajectory, and layers.
 
-        ``margin`` holds the fractions ``top``, ``right``, ``bottom``, and ``left`` of the panel that the camera does not draw into, and
-        ``opacity``, a number or a tween, fades every panel of the view (section 2.11).
+        ``margin`` holds the fractions ``top``, ``right``, ``bottom``, and ``left`` of the panel that the camera does not draw into,
+        and ``opacity``, a number or keyframes, fades every shown copy of the panel (section 2.11). A declared panel is put on the
+        page by :meth:`show`, or by naming its id in the :meth:`layout`.
         """
-        self._new(self._views, id, "view")
-        if not isinstance(driver, Mapping) or set(driver) != {"sets", "member"}:
-            raise SceneError(f"2.7: the driver of view {id!r} is {driver!r}, not driver(sets, member)")
+        self._new(self._panels, id, "panel")
+        if not isinstance(reference, Mapping) or set(reference) != {"sets", "member"}:
+            raise SceneError(f"panel: the reference trajectory of panel {id!r} is {reference!r}, not reference(sets, member)")
         out: dict[str, Any] = {
-            "frame": _var(frame, f"2.7: the frame of view {id!r}", "choice")
-            if isinstance(frame, Variable)
-            else _check_id(_id(frame), f"2.7: the frame of view {id!r}"),
-            "driver": {"sets": _query(driver["sets"]), "member": _member(driver["member"], "the driver's member", one=True)},
+            "frame": _input_ref(frame, f"panel: the frame of panel {id!r}", "choice")
+            if isinstance(frame, Input)
+            else _check_id(_id(frame), f"panel: the frame of panel {id!r}"),
+            "reference": {
+                "sets": _query(reference["sets"]),
+                "member": _member(reference["member"], "the reference trajectory's member", one=True),
+            },
             "layers": [_check_layer(x) for x in layers],
         }
         if camera is not None:
             out["camera"] = _camera(camera)
         if label is not None:
-            out["label"] = _text(label, "a view label")
+            out["label"] = _text(label, "a panel label")
         if margin is not None:
             if not isinstance(margin, Mapping) or set(margin) - {"top", "right", "bottom", "left"}:
-                raise SceneError(f"2.11: the margin of view {id!r} is a dict of top, right, bottom, and left, not {margin!r}")
+                raise SceneError(f"timeline: the margin of panel {id!r} is a dict of top, right, bottom, and left, not {margin!r}")
             out["margin"] = {}
             for k, v in margin.items():
-                x = _finite(v, f"the {k} margin of view {id!r}")
+                x = _finite(v, f"the {k} margin of panel {id!r}")
                 if not 0.0 <= x < 1.0:
-                    raise SceneError(f"2.11: the {k} margin of view {id!r} is {x}, not in [0, 1)")
+                    raise SceneError(f"timeline: the {k} margin of panel {id!r} is {x}, not in [0, 1)")
                 out["margin"][k] = x
         if opacity is not None:
-            out["opacity"] = _opacity(opacity, f"the opacity of view {id!r}")
-        self._views[id] = out
+            out["opacity"] = _opacity(opacity, f"the opacity of panel {id!r}")
+        self._panels[id] = out
         return id
 
-    def panel(self, id: str, view: str, variables: Mapping[str | Variable, Any] | None = None) -> str:
-        """A panel of the initial state that shows ``view``, with the values that it gives to panel-scoped variables."""
-        self._new(self._panels, id, "panel")
-        out: dict[str, Any] = {"view": _check_id(_id(view), f"2.8: the view of panel {id!r}")}
-        if variables:
-            out["variables"] = {
-                _check_id(_id(k), "a variable id"): self._value(v, f"2.5: the value of {_id(k)!r} in panel {id!r}")
-                for k, v in variables.items()
+    def show(self, id: str, *, panel: str | None = None, inputs: Mapping[str | Input, Any] | None = None) -> str:
+        """Adds a shown panel ``id`` to the initial state, which shows the declared ``panel`` (by default ``id``) with the values
+        that it gives to its per-panel inputs."""
+        self._new(self._shown, id, "shown panel")
+        out: dict[str, Any] = {
+            "panel": _check_id(_id(panel if panel is not None else id), f"state: the declared panel of shown panel {id!r}")
+        }
+        if inputs:
+            out["inputs"] = {
+                _check_id(_id(k), "an input id"): self._value(v, f"input: the value of {_id(k)!r} in shown panel {id!r}")
+                for k, v in inputs.items()
             }
-        self._panels[id] = out
+        self._shown[id] = out
         return id
 
     def _value(self, value: Any, what: str) -> Any:
         if isinstance(value, bool):
             return value
-        if isinstance(value, (Frame, Body, TrackSet, Variable)):
+        if isinstance(value, (Frame, Body, TrajectorySet, Input)):
             return value.id
         if isinstance(value, str):
             return value
         return _finite(value, what)
 
     def layout(self, node: Any) -> None:
-        """The initial layout, given as a panel id or a :func:`split`."""
+        """The initial layout, given as the id of a shown panel or a :func:`split`. A leaf that names a declared panel that has
+        not been passed to :meth:`show` shows this declared panel under its own id."""
         self._layout = _node(node)
 
-    def slider(self, variable: Any, *, label: str, domain: Any) -> None:
-        """A slider over a selector by nearest, with its stops taken from the track sets of ``domain``."""
+    def slider(self, input: Any, *, label: str, domain: Any) -> None:
+        """A slider over a parameter input, with its stops taken from the trajectory sets of ``domain``."""
         self._controls.append(
             {
                 "kind": "slider",
-                "variable": _var(variable, "2.9: a slider", "selector")["var"],
+                "input": _input_ref(input, "control: a slider", "parameter")["input"],
                 "label": _text(label, "a label"),
                 "domain": _query(domain),
             }
         )
 
-    def tabs(self, variable: Any, *, label: str) -> None:
+    def tabs(self, input: Any, *, label: str) -> None:
         """Tabs over a choice."""
-        self._controls.append({"kind": "tabs", "variable": _var(variable, "2.9: tabs", "choice")["var"], "label": _text(label, "a label")})
-
-    def toggle_control(self, variable: Any, *, label: str) -> None:
-        """A toggle control over a toggle variable."""
         self._controls.append(
-            {"kind": "toggle", "variable": _var(variable, "2.9: a toggle control", "toggle")["var"], "label": _text(label, "a label")}
+            {"kind": "tabs", "input": _input_ref(input, "control: tabs", "choice")["input"], "label": _text(label, "a label")}
         )
 
-    def transport(self) -> None:
-        """The transport, bound to the clock."""
-        self._controls.append({"kind": "transport"})
+    def toggle_control(self, input: Any, *, label: str) -> None:
+        """A toggle control over a toggle input."""
+        self._controls.append(
+            {"kind": "toggle", "input": _input_ref(input, "control: a toggle control", "toggle")["input"], "label": _text(label, "a label")}
+        )
+
+    def playback(self) -> None:
+        """The playback, bound to the clock."""
+        self._controls.append({"kind": "playback"})
 
     def readout(self, place: str, *parts: Any) -> None:
-        """A readout made of strings, variables, channels, attributes, or part dicts (section 2.9 and rule K7)."""
-        _enum(place, ("caption", "panel"), "2.9: a readout place")
+        """A readout made of strings, inputs, channels, attributes, or part dicts (section 2.9 and rule `timeline-parts`)."""
+        _enum(place, ("caption", "panel"), "control: a readout place")
         self._readouts.append({"place": place, "parts": [_text_part(p) for p in parts]})
 
-    def stage(self, id: str, at: float, *, label: str | None = None) -> str:
-        """A stage, a named time ``at`` of the timeline at which a presentation stops (rule K9)."""
-        _check_id(id, "a stage id")
-        if any(st["id"] == id for st in self._stages):
-            raise SceneError(f"K9: stage {id!r} is declared twice")
-        spec: dict[str, Any] = {"id": id, "at": _finite(at, f"K9: the time of stage {id!r}")}
-        if self._stages and spec["at"] < self._stages[-1]["at"]:
-            raise SceneError(f"K9: stage {id!r} at {spec['at']} comes before stage {self._stages[-1]['id']!r} at {self._stages[-1]['at']}")
+    def step(self, id: str, at: float, *, label: str | None = None) -> str:
+        """A step, a named time ``at`` of the timeline at which a presentation stops (rule `steps`)."""
+        _check_id(id, "a step id")
+        if any(st["id"] == id for st in self._steps):
+            raise SceneError(f"steps: step {id!r} is declared twice")
+        spec: dict[str, Any] = {"id": id, "at": _finite(at, f"steps: the time of step {id!r}")}
+        if self._steps and spec["at"] < self._steps[-1]["at"]:
+            raise SceneError(f"steps: step {id!r} at {spec['at']} comes before step {self._steps[-1]['id']!r} at {self._steps[-1]['at']}")
         if label is not None:
-            spec["label"] = _text(label, "a stage label")
-        self._stages.append(spec)
+            spec["label"] = _text(label, "a step label")
+        self._steps.append(spec)
         return id
 
     def text(self, text: Any, at: Sequence[float], **style: Any) -> None:
-        """A text overlay over the whole stage at the fractions ``at = (fx, fy)`` of its width and height (section 2.11).
+        """A text overlay over the whole panel area at the fractions ``at = (fx, fy)`` of its width and height (section 2.11).
 
         ``style`` takes the ``align``, ``baseline``, ``size``, ``color``, ``weight``, ``linespacing``, ``box``, and ``opacity`` of a
         label.
         """
         if extra := set(style) - {"align", "baseline", "size", "color", "weight", "linespacing", "box", "opacity"}:
-            raise SceneError(f"2.11: a text overlay has unknown keys {sorted(extra)}")
+            raise SceneError(f"timeline: a text overlay has unknown keys {sorted(extra)}")
         out: dict[str, Any] = {"kind": "text", "text": _text_parts(text, "a text overlay"), "at": _pair(at, "the place of a text overlay")}
         _text_style(style, "a text overlay", out)
         self._overlays.append(out)
@@ -2117,19 +2184,19 @@ class Scene:
         handle_pad: float | None = None,
         column_spacing: float | None = None,
     ) -> None:
-        """A legend overlay of :func:`entry` items at the fractions ``at = (fx, fy)`` of the stage, ``columns`` entries a row
+        """A legend overlay of :func:`entry` items at the fractions ``at = (fx, fy)`` of the panel area, ``columns`` entries a row
         (section 2.11). ``handle_length``, ``handle_pad``, and ``column_spacing`` are matplotlib's ``handlelength``,
         ``handletextpad``, and ``columnspacing``, in units of the text size, by default 2, 0.8, and 2."""
         out: dict[str, Any] = {"kind": "legend", "at": _pair(at, "the place of a legend"), "entries": [_entry(e) for e in entries]}
         if columns is not None:
-            out["columns"] = _integer(columns, "2.11: the columns of a legend")
+            out["columns"] = _integer(columns, "timeline: the columns of a legend")
             if out["columns"] < 1:
-                raise SceneError(f"2.11: a legend has {out['columns']} columns, fewer than one")
+                raise SceneError(f"timeline: a legend has {out['columns']} columns, fewer than one")
         for key, value in (("handle_length", handle_length), ("handle_pad", handle_pad), ("column_spacing", column_spacing)):
             if value is not None:
-                out[key] = _finite(value, f"2.11: the {key} of a legend")
+                out[key] = _finite(value, f"timeline: the {key} of a legend")
                 if out[key] < 0:
-                    raise SceneError(f"2.11: the {key} of a legend is {out[key]}, not a nonnegative length")
+                    raise SceneError(f"timeline: the {key} of a legend is {out[key]}, not a nonnegative length")
         _text_style(
             {k: v for k, v in (("size", size), ("color", color), ("align", align), ("baseline", baseline)) if v is not None},
             "a legend",
@@ -2144,18 +2211,18 @@ class Scene:
     def to_document(self) -> dict[str, Any]:
         """The scene document, ``scene.tys``, as a plain dict that does not share any object with the scene."""
         if self._clock is None:
-            raise SceneError("2.6: the scene does not have a clock")
+            raise SceneError("clock: the scene does not have a clock")
         if not self._panels:
-            raise SceneError("2.8: the scene does not have a panel")
-        doc: dict[str, Any] = {"format": "tycho-scene", "version": "0.4"}
-        # a reader that does not implement a feature of section 4 then rejects the scene (rule S1)
-        layers = [layer for view in self._views.values() for layer in view["layers"]]
+            raise SceneError("panel: the scene does not have a panel")
+        doc: dict[str, Any] = {"format": "tycho-scene", "version": "0.5"}
+        # a reader that does not implement a feature of section 4 then rejects the scene (rule `version`)
+        layers = [layer for panel in self._panels.values() for layer in panel["layers"]]
         requires = [
             f
             for f, used in (
                 ("layers.arrows", any(layer["kind"] == "arrow" for layer in layers)),
-                ("layers.driver_context", any(layer.get("context") == "driver" for layer in layers)),
-                ("layers.outline", any(layer["kind"] == "outline" for layer in layers)),
+                ("layers.read_from", any(layer.get("read_from") == "reference" for layer in layers)),
+                ("layers.inset_box", any(layer["kind"] == "inset_box" for layer in layers)),
                 (
                     "frames.origin_channel",
                     any(
@@ -2165,9 +2232,9 @@ class Scene:
                         for x in f["origin"]
                     ),
                 ),
-                ("clock.keys", "keys" in self._clock),
+                ("clock.keyframes", "keyframes" in self._clock),
                 ("layers.clock", any("clock" in layer for layer in layers)),
-                ("camera.keys", any("keys" in (view.get("camera") or {}) for view in self._views.values())),
+                ("camera.keyframes", any("keyframes" in (panel.get("camera") or {}) for panel in self._panels.values())),
                 ("layers.label", any(layer["kind"] == "label" for layer in layers)),
                 ("layers.points", any(layer["kind"] == "points" for layer in layers)),
             )
@@ -2183,7 +2250,7 @@ class Scene:
         doc["frames"] = self._frames
         if self._bodies:
             doc["bodies"] = self._bodies
-        doc["track_sets"] = {}
+        doc["trajectory_sets"] = {}
         for ts in self._sets.values():
             spec: dict[str, Any] = {}
             if ts.label is not None:
@@ -2193,35 +2260,42 @@ class Scene:
                 spec["tags"] = ts.tags
             if ts.attrs:
                 spec["attrs"] = ts.attrs
-            spec.update({"tracks": len(ts.positions), "offsets": f"{ts.id}/offsets", "positions": f"{ts.id}/positions"})
+            spec.update({"trajectories": len(ts.positions), "offsets": f"{ts.id}/offsets", "positions": f"{ts.id}/positions"})
             if ts.positions and ts.channels[0]:
-                spec["channels"] = {n: {"view": f"{ts.id}/channels/{n}", **ts.channel_info.get(n, {})} for n in ts.channels[0]}
+                spec["channels"] = {n: {"array": f"{ts.id}/channels/{n}", **ts.channel_info.get(n, {})} for n in ts.channels[0]}
             if ts.positions and ts.parameters[0]:
-                spec["parameters"] = {n: {"view": f"{ts.id}/parameters/{n}", **ts.parameter_info.get(n, {})} for n in ts.parameters[0]}
+                spec["parameters"] = {n: {"array": f"{ts.id}/parameters/{n}", **ts.parameter_info.get(n, {})} for n in ts.parameters[0]}
             spec["periodic"] = ts.periodic
-            doc["track_sets"][ts.id] = spec
-        if self._variables:
-            doc["variables"] = self._variables
+            doc["trajectory_sets"][ts.id] = spec
+        if self._inputs:
+            doc["inputs"] = self._inputs
         doc["clock"] = self._clock
-        doc["views"] = self._views
+        doc["panels"] = self._panels
         if self._controls:
             doc["controls"] = self._controls
         if self._readouts:
             doc["readouts"] = self._readouts
+        shown = dict(self._shown)
         layout = self._layout
         if layout is None:
-            ids = list(self._panels)
+            if not shown:
+                shown = {pid: {"panel": pid} for pid in self._panels}
+            ids = list(shown)
             layout = _node(ids[-1])
             for j in range(len(ids) - 2, -1, -1):
                 layout = split("row", 1.0 / (len(ids) - j), ids[j], layout)
-        doc["initial"] = {"variables": {}, "clock": {"channel": self._clock["channels"][0]}, "panels": self._panels, "layout": layout}
-        if self._stages:
-            doc["stages"] = self._stages
+        else:
+            for leaf in _leaves(layout):
+                if leaf not in shown and leaf in self._panels:
+                    shown[leaf] = {"panel": leaf}
+        doc["initial"] = {"inputs": {}, "clock": {"channel": self._clock["channels"][0]}, "panels": shown, "layout": layout}
+        if self._steps:
+            doc["steps"] = self._steps
         if self._overlays:
             doc["overlays"] = self._overlays
         failures = self._check(doc)
         if failures:
-            raise SceneError("the scene breaks these rules:\n" + "\n".join(f"  {f}" for f in failures))
+            raise SceneError("scene: the scene breaks these rules:\n" + "\n".join(f"  {f}" for f in failures))
         return copy.deepcopy(doc)
 
     # the write-time check
@@ -2229,14 +2303,14 @@ class Scene:
     def _check(self, doc: dict[str, Any]) -> list[str]:
         """Every failure of the cross-references and of the rules that hold for the whole scene.
 
-        The rules that depend on a variable are checked for every combination of choice values.
+        The rules that depend on an input are checked for every combination of choice values.
         """
         failures: list[str] = []
         if not self._sets:
-            failures.append("2.1: the scene does not have a track set")
+            failures.append("trajectory-set: the scene does not have a trajectory set")
         for ts in self._sets.values():
             if not ts.positions:
-                failures.append(f"T1: track set {ts.id!r} does not have a track")
+                failures.append(f"two-samples: trajectory set {ts.id!r} does not have a trajectory")
             elif ts.kept is not None:
                 failures += self._check_kept(ts)
         failures += self._check_clock_channels(doc["clock"])
@@ -2248,7 +2322,7 @@ class Scene:
         except ValueError as exc:
             failures.append(str(exc))
             tree = None
-        choices = {k: v["values"] for k, v in self._variables.items() if v["kind"] == "choice"}
+        choices = {k: v["values"] for k, v in self._inputs.items() if v["kind"] == "choice"}
 
         def combos(used: set[str]) -> list[dict[str, str]]:
             keys = sorted(used)
@@ -2258,43 +2332,47 @@ class Scene:
                 else [{}]
             )
 
-        view_ok: dict[str, bool] = {}
-        for vid, view in self._views.items():
-            broken = self._check_references(vid, view)
+        panel_ok: dict[str, bool] = {}
+        for pid, panel in self._panels.items():
+            broken = self._check_references(pid, panel)
             failures += broken
-            view_ok[vid] = not broken
+            panel_ok[pid] = not broken
             if broken:
                 continue
-            for values in combos(self._choices_of(view)):
-                failures += self._check_view(vid, view, values, tree, doc["clock"])
+            for values in combos(self._choices_of(panel)):
+                failures += self._check_panel(pid, panel, values, tree, doc["clock"])
         failures += self._check_state(doc["initial"])
         for control in self._controls:
             failures += self._check_control(control, combos)
         for readout in self._readouts:
-            failures += self._check_readout(readout, doc["initial"], view_ok, combos)
-        # the parts of a text overlay are read through the first panel in layout order, as a caption is (rule K7)
+            failures += self._check_readout(readout, doc["initial"], panel_ok, combos)
+        # the parts of a text overlay are read through the first panel in layout order, as a caption is (rule `timeline-parts`)
         for overlay in self._overlays:
             if overlay["kind"] == "text" and isinstance(overlay["text"], list):
-                failures += self._check_readout({"place": "caption", "parts": overlay["text"]}, doc["initial"], view_ok, combos)
+                failures += self._check_readout({"place": "caption", "parts": overlay["text"]}, doc["initial"], panel_ok, combos)
         clock = doc["clock"]
-        length = clock.get("seconds", 8.0 * clock.get("laps", 1))
-        for st in self._stages:
+        length = clock.get("seconds", 8.0 * clock.get("revolutions", 1))
+        for st in self._steps:
             if not 0.0 <= st["at"] <= length:
-                failures.append(f"K9: stage {st['id']!r} is at {st['at']} s, outside the loop of [0, {length}] s")
+                failures.append(f"steps: step {st['id']!r} is at {st['at']} s, outside the loop of [0, {length}] s")
         return sorted(set(failures))
 
-    def _check_kept(self, ts: TrackSet) -> list[str]:
+    def _check_kept(self, ts: TrajectorySet) -> list[str]:
         kept = ts.kept or []
         if len(kept) != len(ts.positions):
-            return [f"T1: track set {ts.id!r} has kept indices for {len(kept)} tracks, not {len(ts.positions)}"]
+            return [f"two-samples: trajectory set {ts.id!r} has kept indices for {len(kept)} trajectories, not {len(ts.positions)}"]
         out = []
         for i, (k, p) in enumerate(zip(kept, ts.positions, strict=True)):
             if len(k) < 2 or k[0] != 0 or k[-1] != len(p) - 1 or np.any(np.diff(k) <= 0) or np.any(k < 0):
-                out.append(f"T1: track set {ts.id!r}: the kept indices of track {i} are not strictly increasing from 0 to {len(p) - 1}")
+                out.append(
+                    f"two-samples: trajectory set {ts.id!r}: the kept indices of trajectory {i} are not strictly increasing from 0 "
+                    f"to {len(p) - 1}"
+                )
         return out
 
     def _check_clock_channels(self, clock: Mapping[str, Any]) -> list[str]:
-        """Checks that each clock channel, as stored, is strictly monotone and finite along every track, with a finite span (rule T3)."""
+        """Checks that each clock channel, as stored, is strictly monotone and finite along every trajectory, with a finite span (rule
+        `monotone-clock-channel`)."""
         out = []
         for name in clock["channels"]:
             if name == INDEX:
@@ -2307,14 +2385,20 @@ class Scene:
                     stored = c[name].astype(dtype).astype(np.float64)
                     d = np.diff(stored)
                     if not (np.all(d > 0) or np.all(d < 0)):
-                        out.append(f"T3: clock channel {name!r} of track set {ts.id!r} is not strictly monotone along track {i}")
+                        out.append(
+                            f"monotone-clock-channel: clock channel {name!r} of trajectory set {ts.id!r} is not strictly monotone "
+                            f"along trajectory {i}"
+                        )
                     elif not np.isfinite(stored[-1] - stored[0]):
-                        out.append(f"T3: clock channel {name!r} of track set {ts.id!r} has an infinite span along track {i}")
+                        out.append(
+                            f"monotone-clock-channel: clock channel {name!r} of trajectory set {ts.id!r} has an infinite span along "
+                            f"trajectory {i}"
+                        )
         return out
 
-    def _channel_dtype(self, ts: TrackSet, name: str) -> str:
+    def _channel_dtype(self, ts: TrajectorySet, name: str) -> str:
         """The stored dtype of a channel. It is the dtype given in ``channel_dtypes``, else float64 for a clock
-        channel that float32 would spoil (see :meth:`track_set`), else the track set's dtype."""
+        channel that float32 would spoil (see :meth:`trajectory_set`), else the trajectory set's dtype."""
         if name in ts.channel_dtypes:
             return ts.channel_dtypes[name]
         if ts.dtype == "float64" or self._clock is None or name not in self._clock_names():
@@ -2332,226 +2416,231 @@ class Scene:
         return ts.dtype
 
     def _clock_names(self) -> set[str]:
-        """The channels that a clock reads: those of the scene's clock and those of every layer clock (rules C1 and K4)."""
+        """The channels that a clock reads: those of the scene's clock and those of every layer clock (rules `sample-fraction` and
+        `layer-clock`)."""
         names = set(self._clock["channels"]) if self._clock is not None else set()
-        for view in self._views.values():
-            for layer in view["layers"]:
+        for panel in self._panels.values():
+            for layer in panel["layers"]:
                 if "clock" in layer:
                     names.add(layer["clock"]["channel"])
         return names
 
-    def _check_var(self, vid: Any, kind: str | None, what: str) -> list[str]:
-        spec = self._variables.get(vid)
+    def _check_input(self, iid: Any, kind: str | None, what: str) -> list[str]:
+        spec = self._inputs.get(iid)
         if spec is None:
-            return [f"{what} names {vid!r}, which is not a variable"]
+            return [f"{what} names {iid!r}, which is not an input"]
         if kind is not None and spec["kind"] != kind:
-            return [f"{what} names {vid!r}, which is a {spec['kind']}, not a {kind}"]
+            return [f"{what} names {iid!r}, which is a {spec['kind']}, not a {kind}"]
         return []
 
     def _check_query(self, query: Mapping[str, Any], what: str) -> list[str]:
         if "set" in query:
-            return [] if query["set"] in self._sets else [f"{what} names {query['set']!r}, which is not a track set"]
+            return [] if query["set"] in self._sets else [f"{what} names {query['set']!r}, which is not a trajectory set"]
         out = []
         for value in query["tags"].values():
             if isinstance(value, Mapping):
-                out += self._check_var(value["var"], "choice", what)
+                out += self._check_input(value["input"], "choice", what)
         return out
 
-    def _check_references(self, vid: str, view: Mapping[str, Any]) -> list[str]:
-        """Checks that every name in a view refers to a declared frame, body, track set, or variable of the right kind."""
+    def _check_references(self, pid: str, panel: Mapping[str, Any]) -> list[str]:
+        """Checks that every name in a panel refers to a declared frame, body, trajectory set, or input of the right kind."""
         out = []
-        where = f"view {vid!r}"
-        if isinstance(view["frame"], Mapping):
-            out += self._check_var(view["frame"]["var"], "choice", f"2.7: the frame of {where}")
-            for value in self._variables.get(view["frame"]["var"], {}).get("values", []):
+        where = f"panel {pid!r}"
+        if isinstance(panel["frame"], Mapping):
+            out += self._check_input(panel["frame"]["input"], "choice", f"panel: the frame of {where}")
+            for value in self._inputs.get(panel["frame"]["input"], {}).get("values", []):
                 if value not in self._frames:
-                    out.append(f"2.7: the frame of {where} can be {value!r}, which is not a frame")
-        elif view["frame"] not in self._frames:
-            out.append(f"2.7: {where} displays {view['frame']!r}, which is not a frame")
-        out += self._check_query(view["driver"]["sets"], f"V2: the driver of {where}")
-        if "var" in view["driver"]["member"]:
-            out += self._check_var(view["driver"]["member"]["var"], "selector", f"V3: the driver of {where}")
-        for layer in view["layers"]:
+                    out.append(f"panel: the frame of {where} can be {value!r}, which is not a frame")
+        elif panel["frame"] not in self._frames:
+            out.append(f"panel: {where} displays {panel['frame']!r}, which is not a frame")
+        out += self._check_query(panel["reference"]["sets"], f"set-query: the reference trajectory of {where}")
+        if "input" in panel["reference"]["member"]:
+            out += self._check_input(panel["reference"]["member"]["input"], "parameter", f"members: the reference trajectory of {where}")
+        for layer in panel["layers"]:
             if "visible" in layer:
-                out += self._check_var(layer["visible"]["var"], "toggle", f"L5: a layer of {where}")
-            if layer["kind"] == "track":
-                out += self._check_query(layer["sets"], f"V2: a track layer of {where}")
-                if isinstance(layer["members"], Mapping) and "var" in layer["members"]:
-                    out += self._check_var(layer["members"]["var"], "selector", f"V3: a track layer of {where}")
+                out += self._check_input(layer["visible"]["input"], "toggle", f"visible: a layer of {where}")
+            if layer["kind"] == "trajectories":
+                out += self._check_query(layer["sets"], f"set-query: a trajectories layer of {where}")
+                if isinstance(layer["members"], Mapping) and "input" in layer["members"]:
+                    out += self._check_input(layer["members"]["input"], "parameter", f"members: a trajectories layer of {where}")
                 if "highlight" in layer:
-                    broken = self._check_var(layer["highlight"]["var"], "selector", f"2.7: a highlight of {where}")
+                    broken = self._check_input(layer["highlight"]["input"], "parameter", f"panel: a highlight of {where}")
                     out += broken
-                    if not broken and "kernel" in layer["highlight"] and self._variables[layer["highlight"]["var"]].get("by") == "index":
-                        out.append(
-                            f"2.7: a highlight kernel of {where} needs a selector by nearest, and {layer['highlight']['var']!r} is by index"
-                        )
                 color = layer.get("color")
                 if isinstance(color, Mapping) and isinstance(color.get("colormap"), Mapping):
                     out += self._check_colormap(color["colormap"], where)
             elif layer["kind"] == "arrow":
-                out += self._check_query(layer["sets"], f"V2: an arrow layer of {where}")
-                if isinstance(layer["members"], Mapping) and "var" in layer["members"]:
-                    out += self._check_var(layer["members"]["var"], "selector", f"V3: an arrow layer of {where}")
-            elif layer["kind"] == "outline":
-                target = self._views.get(layer["view"])
+                out += self._check_query(layer["sets"], f"set-query: an arrow layer of {where}")
+                if isinstance(layer["members"], Mapping) and "input" in layer["members"]:
+                    out += self._check_input(layer["members"]["input"], "parameter", f"members: an arrow layer of {where}")
+            elif layer["kind"] == "inset_box":
+                target = self._panels.get(layer["panel"])
                 if target is None:
-                    out.append(f"L8: an outline layer of {where} names {layer['view']!r}, which is not a view")
-                elif layer["view"] == vid:
-                    out.append(f"L8: an outline layer of {where} names its own view")
-                elif (target.get("camera") or {"kind": "plane"})["kind"] != "plane":
-                    out.append(f"L8: an outline layer of {where} names view {layer['view']!r}, whose camera is not a plane camera")
+                    out.append(f"inset-box: an inset box layer of {where} names {layer['panel']!r}, which is not a declared panel")
+                elif layer["panel"] == pid:
+                    out.append(f"inset-box: an inset box layer of {where} names its own panel")
+                elif (target.get("camera") or {"kind": "2d"})["kind"] != "2d":
+                    out.append(f"inset-box: an inset box layer of {where} names panel {layer['panel']!r}, whose camera is not a 2d camera")
             elif layer["kind"] == "body" and layer["body"] not in self._bodies:
-                out.append(f"L4: {where} draws {layer['body']!r}, which is not a body")
+                out.append(f"body-layer: {where} draws {layer['body']!r}, which is not a body")
             elif layer["kind"] == "points":
-                out += self._check_query(layer["sets"], f"V2: a points layer of {where}")
-                if isinstance(layer["members"], Mapping) and "var" in layer["members"]:
-                    out += self._check_var(layer["members"]["var"], "selector", f"V3: a points layer of {where}")
+                out += self._check_query(layer["sets"], f"set-query: a points layer of {where}")
+                if isinstance(layer["members"], Mapping) and "input" in layer["members"]:
+                    out += self._check_input(layer["members"]["input"], "parameter", f"members: a points layer of {where}")
             elif layer["kind"] == "label":
                 at = layer["at"]
                 if "sets" in at:
-                    out += self._check_query(at["sets"], f"V2: a label of {where}")
+                    out += self._check_query(at["sets"], f"set-query: a label of {where}")
                 if "frame" in at and at["frame"] not in self._frames:
-                    out.append(f"K6: a label of {where} has a point in {at['frame']!r}, which is not a frame")
+                    out.append(f"label: a label of {where} has a point in {at['frame']!r}, which is not a frame")
                 for part in layer["text"] if isinstance(layer["text"], list) else []:
-                    if isinstance(part, Mapping) and "var" in part:
-                        out += self._check_var(part["var"], None, f"2.9: a label of {where}")
-        for key in (view.get("camera") or {}).get("keys", []):
+                    if isinstance(part, Mapping) and "input" in part:
+                        out += self._check_input(part["input"], None, f"control: a label of {where}")
+        for key in (panel.get("camera") or {}).get("keyframes", []):
             for target in key.get("follow", []):
                 i = target["layer"]
-                if i >= len(view["layers"]):
-                    out.append(f"K5: a camera key of {where} follows layer {i}, past its {len(view['layers'])} layers")
-                elif view["layers"][i]["kind"] != "track":
+                if i >= len(panel["layers"]):
+                    out.append(f"camera-keyframes: a camera keyframe of {where} follows layer {i}, past its {len(panel['layers'])} layers")
+                elif panel["layers"][i]["kind"] != "trajectories":
                     out.append(
-                        f"K5: a camera key of {where} follows layer {i}, which is a {view['layers'][i]['kind']} layer, not a track layer"
+                        f"camera-keyframes: a camera keyframe of {where} follows layer {i}, which is a {panel['layers'][i]['kind']} "
+                        "layer, not a trajectories layer"
                     )
         return out
 
     def _check_colormap(self, cmap: Mapping[str, Any], where: str) -> list[str]:
-        """Checks that a colormap keyed on a variable refers to a choice, and that its map gives a colormap for every value
+        """Checks that a colormap keyed on an input refers to a choice, and that its map gives a colormap for every value
         of the choice and only for these values (section 2.7)."""
-        what = f"2.7: a colormap of {where}"
-        broken = self._check_var(cmap["var"], "choice", what)
+        what = f"panel: a colormap of {where}"
+        broken = self._check_input(cmap["input"], "choice", what)
         if broken:
             return broken
-        values = self._variables[cmap["var"]]["values"]
+        values = self._inputs[cmap["input"]]["values"]
         out = []
         if missing := [v for v in values if v not in cmap["map"]]:
-            out.append(f"{what} keyed on {cmap['var']!r} does not name a colormap for {missing}")
+            out.append(f"{what} keyed on {cmap['input']!r} does not name a colormap for {missing}")
         if extra := [k for k in cmap["map"] if k not in values]:
-            out.append(f"{what} keyed on {cmap['var']!r} maps {extra}, which are not its values")
+            out.append(f"{what} keyed on {cmap['input']!r} maps {extra}, which are not its values")
         return out
 
-    def _choices_of(self, view: Mapping[str, Any]) -> set[str]:
-        """The choice variables on which the frame of a view and the track sets of its driver and layers depend."""
+    def _choices_of(self, panel: Mapping[str, Any]) -> set[str]:
+        """The choice inputs on which the frame of a panel and the trajectory sets of its reference trajectory and layers depend."""
         used = set()
-        if isinstance(view["frame"], Mapping):
-            used.add(view["frame"]["var"])
-        # the frame of an outline's target view, which may be a choice too (rule L8)
-        for layer in view["layers"]:
-            target = self._views.get(layer["view"]) if layer["kind"] == "outline" else None
+        if isinstance(panel["frame"], Mapping):
+            used.add(panel["frame"]["input"])
+        # the frame of an inset box's target panel, which may be a choice too (rule `inset-box`)
+        for layer in panel["layers"]:
+            target = self._panels.get(layer["panel"]) if layer["kind"] == "inset_box" else None
             if target is not None and isinstance(target["frame"], Mapping):
-                used.add(target["frame"]["var"])
-        queries = [layer["sets"] for layer in view["layers"] if layer["kind"] in ("track", "arrow", "points")]
-        queries += [layer["at"]["sets"] for layer in view["layers"] if layer["kind"] == "label" and "sets" in layer["at"]]
-        for query in [view["driver"]["sets"], *queries]:
+                used.add(target["frame"]["input"])
+        queries = [layer["sets"] for layer in panel["layers"] if layer["kind"] in ("trajectories", "arrow", "points")]
+        queries += [layer["at"]["sets"] for layer in panel["layers"] if layer["kind"] == "label" and "sets" in layer["at"]]
+        for query in [panel["reference"]["sets"], *queries]:
             used |= self._choices_in(query)
         return used
 
     def _choices_in(self, query: Mapping[str, Any]) -> set[str]:
-        return {v["var"] for v in query.get("tags", {}).values() if isinstance(v, Mapping)}
+        return {v["input"] for v in query.get("tags", {}).values() if isinstance(v, Mapping)}
 
     def _check_state(self, state: Mapping[str, Any]) -> list[str]:
-        """Checks section 2.8 and rule V1 on the initial state."""
+        """Checks section 2.8 and rule `input-scope` on the initial state."""
         out = []
 
         def held(values: Mapping[str, Any], where: str, scope: str) -> None:
-            for vid, value in values.items():
-                spec = self._variables.get(vid)
+            for iid, value in values.items():
+                spec = self._inputs.get(iid)
                 if spec is None:
-                    out.append(f"2.8: {where} sets {vid!r}, which is not a variable")
+                    out.append(f"state: {where} sets {iid!r}, which is not an input")
                     continue
-                if scope == "panel" and spec["scope"] == "scene":
-                    out.append(f"V1: {where} sets {vid!r}, which is scene-scoped and never read there")
+                if scope == "per_panel" and spec["scope"] == "shared":
+                    out.append(f"input-scope: {where} sets {iid!r}, which is shared and never read there")
                 if spec["kind"] == "choice" and value not in spec["values"]:
-                    out.append(f"2.5: {where} sets choice {vid!r} to {value!r}, which is not one of its values")
-                elif spec["kind"] == "selector" and (isinstance(value, bool) or not isinstance(value, (int, float))):
-                    out.append(f"2.5: {where} sets selector {vid!r} to {value!r}, which is not a number")
+                    out.append(f"input: {where} sets choice {iid!r} to {value!r}, which is not one of its values")
+                elif spec["kind"] == "parameter" and (isinstance(value, bool) or not isinstance(value, (int, float))):
+                    out.append(f"input: {where} sets parameter input {iid!r} to {value!r}, which is not a number")
                 elif spec["kind"] == "toggle" and not isinstance(value, bool):
-                    out.append(f"2.5: {where} sets toggle {vid!r} to {value!r}, which is not a boolean")
+                    out.append(f"input: {where} sets toggle {iid!r} to {value!r}, which is not a boolean")
 
-        held(state.get("variables", {}), "the initial state", "scene")
-        for pid, panel in state["panels"].items():
-            if panel["view"] not in self._views:
-                out.append(f"2.8: panel {pid!r} shows {panel['view']!r}, which is not a view")
-            held(panel.get("variables", {}), f"panel {pid!r}", "panel")
+        held(state.get("inputs", {}), "the initial state", "shared")
+        for sid, shown_panel in state["panels"].items():
+            if shown_panel["panel"] not in self._panels:
+                out.append(f"state: shown panel {sid!r} shows {shown_panel['panel']!r}, which is not a declared panel")
+            held(shown_panel.get("inputs", {}), f"shown panel {sid!r}", "per_panel")
 
-        def leaves(node: Mapping[str, Any]) -> list[str]:
-            return [node["id"]] if node["kind"] == "panel" else leaves(node["a"]) + leaves(node["b"])
-
-        shown = leaves(state["layout"])
-        for pid in shown:
-            if pid not in state["panels"]:
-                out.append(f"2.8: the layout shows {pid!r}, which is not a panel")
-        for pid in state["panels"]:
-            if pid not in shown:
-                out.append(f"2.8: the layout does not show panel {pid!r}")
+        shown = _leaves(state["layout"])
+        for sid in shown:
+            if sid not in state["panels"]:
+                out.append(f"state: the layout shows {sid!r}, which is not a shown panel")
+        for sid in state["panels"]:
+            if sid not in shown:
+                out.append(f"state: the layout does not show panel {sid!r}")
         if len(set(shown)) != len(shown):
-            out.append("2.8: the layout shows a panel twice")
+            out.append("state: the layout shows a panel twice")
         return out
 
-    def _match(self, query: Mapping[str, Any], values: Mapping[str, str]) -> list[TrackSet]:
+    def _match(self, query: Mapping[str, Any], values: Mapping[str, str]) -> list[TrajectorySet]:
         if "set" in query:
             return [self._sets[query["set"]]] if query["set"] in self._sets else []
-        want = {k: values[v["var"]] if isinstance(v, Mapping) else v for k, v in query["tags"].items()}
+        want = {k: values[v["input"]] if isinstance(v, Mapping) else v for k, v in query["tags"].items()}
         return [ts for ts in self._sets.values() if ts.positions and all(ts.tags.get(k) == v for k, v in want.items())]
 
-    def _driver_of(self, view: Mapping[str, Any], values: Mapping[str, str], where: str) -> tuple[list[TrackSet], list[str]]:
-        drivers = self._match(view["driver"]["sets"], values)
-        if len(drivers) > 1:
-            return drivers, [f"V2: {where}: the driver's set query matches the track sets {[t.id for t in drivers]}, where one is needed"]
-        return drivers, []
+    def _reference_of(self, panel: Mapping[str, Any], values: Mapping[str, str], where: str) -> tuple[list[TrajectorySet], list[str]]:
+        references = self._match(panel["reference"]["sets"], values)
+        if len(references) > 1:
+            return references, [
+                (
+                    f"set-query: {where}: the reference trajectory's set query matches the trajectory sets {[t.id for t in references]}, "
+                    "where one is needed"
+                )
+            ]
+        return references, []
 
-    def _check_view(
-        self, vid: str, view: Mapping[str, Any], values: Mapping[str, str], tree: FrameTree | None, clock: Mapping[str, Any]
+    def _check_panel(
+        self, pid: str, panel: Mapping[str, Any], values: Mapping[str, str], tree: FrameTree | None, clock: Mapping[str, Any]
     ) -> list[str]:
-        """Checks rules F2, F5, V2, V3, C5, C6, and the drawing references for one view, at one combination of choice values."""
+        """Checks rules `origin`, `transform-channels`, `set-query`, `members`, `clock-channel-carried`, `revolutions`, and the drawing
+        references for one panel, at one combination of choice values."""
         out = []
-        frame = values[view["frame"]["var"]] if isinstance(view["frame"], Mapping) else view["frame"]
-        where = f"view {vid!r} with {dict(values)}" if values else f"view {vid!r}"
+        frame = values[panel["frame"]["input"]] if isinstance(panel["frame"], Mapping) else panel["frame"]
+        where = f"panel {pid!r} with {dict(values)}" if values else f"panel {pid!r}"
 
-        def through(ts: TrackSet, src: str, what: str, body: str | None = None) -> None:
-            """Checks rules F5 and F2 for a track set evaluated from src, or from the position of body, to the display frame."""
+        def through(ts: TrajectorySet, src: str, what: str, body: str | None = None) -> None:
+            """Checks rules `transform-channels` and `origin` for a trajectory set evaluated from src, or from the position of body, to the
+            display frame."""
             if tree is None:
                 return
             channels, attrs = tree.requirements(src, frame) if body is None else tree.body_requirements(body, frame)
             missing = sorted(channels - set(ts.channels[0]) - {INDEX}) + sorted(attrs - set(ts.attrs))
             if missing:
-                out.append(f"F5: {where}: track set {ts.id!r} lacks {missing} for {what} in frame {frame!r}")
+                out.append(f"transform-channels: {where}: trajectory set {ts.id!r} lacks {missing} for {what} in frame {frame!r}")
                 return
             for fid in _edges_used(tree, src, frame):
                 scale = self._frames[fid].get("scale")
                 if isinstance(scale, Mapping) and "attr" in scale:
                     if scale.get("factor", 1.0) * ts.attrs[scale["attr"]] + scale.get("offset", 0.0) == 0.0:
-                        out.append(f"F2: {where}: the scale of frame {fid!r} is zero for track set {ts.id!r}")
+                        out.append(f"origin: {where}: the scale of frame {fid!r} is zero for trajectory set {ts.id!r}")
                 elif isinstance(scale, Mapping) and "channel" in scale:
-                    # check every lap that a trail or a reveal can reach, from -n to n - 1 for a clock of n laps (rules L2 and C6)
-                    laps = range(-clock.get("laps", 1), clock.get("laps", 1)) if ts.periodic else range(1)
+                    # check every revolution that a trail or a reveal can reach, from -n to n - 1 for a clock of n revolutions (rules
+                    # `trail-wrap` and `revolutions`)
+                    revolutions = range(-clock.get("revolutions", 1), clock.get("revolutions", 1)) if ts.periodic else range(1)
                     for i, c in enumerate(ts._stored()[1]):
                         stored = c[scale["channel"]].astype(ts.dtype).astype(np.float64)
                         advance = stored[-1] - stored[0]
-                        if any(np.any((stored + j * advance if j else stored) == 0.0) for j in laps):
-                            out.append(f"F2: {where}: the scale of frame {fid!r} is zero on track {i} of track set {ts.id!r}")
+                        if any(np.any((stored + j * advance if j else stored) == 0.0) for j in revolutions):
+                            out.append(f"origin: {where}: the scale of frame {fid!r} is zero on trajectory {i} of trajectory set {ts.id!r}")
                             break
 
-        def clocked(ts: TrackSet, what: str, layer: Mapping[str, Any] | None = None) -> None:
+        def clocked(ts: TrajectorySet, what: str, layer: Mapping[str, Any] | None = None) -> None:
             own = layer.get("clock") if layer is not None else None
             if own is not None:
-                # a layer with a clock of its own reads its channel, in one lap (rule K4)
+                # a layer with a clock of its own reads its channel, in one revolution (rule `layer-clock`)
                 name = own["channel"]
                 if name == INDEX:
                     return
                 if name not in ts.channels[0]:
-                    out.append(f"C5: {where}: track set {ts.id!r}, {what}, lacks channel {name!r} of its layer's clock")
+                    out.append(
+                        f"clock-channel-carried: {where}: trajectory set {ts.id!r}, {what}, lacks channel {name!r} of its layer's clock"
+                    )
                     return
                 dtype = self._channel_dtype(ts, name)
                 for i, c in enumerate(ts._stored()[1]):
@@ -2559,73 +2648,84 @@ class Scene:
                     d = np.diff(stored)
                     if not (np.all(d > 0) or np.all(d < 0)):
                         out.append(
-                            f"T3: {where}: the layer clock channel {name!r} of track set {ts.id!r} is not strictly monotone along track {i}"
+                            f"monotone-clock-channel: {where}: the layer clock channel {name!r} of trajectory set {ts.id!r} is not "
+                            f"strictly monotone along trajectory {i}"
                         )
                         break
                 return
             missing = [c for c in clock["channels"] if c != INDEX and c not in ts.channels[0]]
             if missing:
-                out.append(f"C5: {where}: track set {ts.id!r}, {what}, lacks clock channels {missing}")
-            if clock.get("laps", 1) > 1 and not ts.periodic:
-                out.append(f"C6: {where}: track set {ts.id!r}, {what}, is not periodic, and the clock has {clock['laps']} laps")
+                out.append(f"clock-channel-carried: {where}: trajectory set {ts.id!r}, {what}, lacks clock channels {missing}")
+            if clock.get("revolutions", 1) > 1 and not ts.periodic:
+                out.append(
+                    f"revolutions: {where}: trajectory set {ts.id!r}, {what}, is not periodic, and the clock has "
+                    f"{clock['revolutions']} revolutions"
+                )
 
-        def member(ts: TrackSet, ref: Any, what: str) -> None:
-            if ref == "all" or "count" in ref:
+        def member(ts: TrajectorySet, ref: Any, what: str) -> None:
+            if ref == "all" or "evenly_spaced" in ref:
                 return
             if "index" in ref:
                 if ref["index"] >= len(ts.positions):
                     out.append(
-                        f"V3: {where}: member index {ref['index']} of {what} is not below the track count {len(ts.positions)} "
-                        f"of track set {ts.id!r}"
+                        f"members: {where}: member index {ref['index']} of {what} is not below the trajectory count {len(ts.positions)} "
+                        f"of trajectory set {ts.id!r}"
                     )
                 return
-            spec = self._variables[ref["var"]]
-            if spec.get("by", "nearest") == "nearest" and spec.get("parameter") not in ts.parameters[0]:
-                out.append(f"V3: {where}: track set {ts.id!r} lacks parameter {spec.get('parameter')!r} for selector {ref['var']!r}")
+            spec = self._inputs[ref["input"]]
+            if spec["parameter"] != INDEX and spec["parameter"] not in ts.parameters[0]:
+                out.append(
+                    f"members: {where}: trajectory set {ts.id!r} lacks parameter {spec['parameter']!r} for parameter input {ref['input']!r}"
+                )
 
-        drivers, broken = self._driver_of(view, values, where)
+        references, broken = self._reference_of(panel, values, where)
         out += broken
-        if len(drivers) == 1:
-            d = drivers[0]
-            through(d, d.frame, "the driver")
-            clocked(d, "the driver")
-            member(d, view["driver"]["member"], "the driver")
-        for layer in view["layers"]:
-            if layer["kind"] == "track":
+        if len(references) == 1:
+            d = references[0]
+            through(d, d.frame, "the reference trajectory")
+            clocked(d, "the reference trajectory")
+            member(d, panel["reference"]["member"], "the reference trajectory")
+        for layer in panel["layers"]:
+            if layer["kind"] == "trajectories":
                 matched = self._match(layer["sets"], values)
                 if len(matched) > 1:
                     out.append(
-                        f"V2: {where}: a track layer's set query matches the track sets {[t.id for t in matched]}, where one is needed"
+                        f"set-query: {where}: a trajectories layer's set query matches the trajectory sets "
+                        f"{[t.id for t in matched]}, where one is needed"
                     )
                 elif matched:
                     ts = matched[0]
-                    # a layer in the driver's context reads the edges from the frame of its set on the driver's set (rule L6)
-                    if layer.get("context") != "driver":
-                        through(ts, ts.frame, "its tracks")
-                    elif len(drivers) == 1:
-                        through(drivers[0], ts.frame, f"a layer of track set {ts.id!r} in the driver's context")
-                    member(ts, layer["members"], "a track layer")
+                    # a layer in the reference trajectory's context reads the edges from the frame of its set on the reference trajectory's
+                    # set (rule `read-from`)
+                    if layer.get("read_from") != "reference":
+                        through(ts, ts.frame, "its trajectories")
+                    elif len(references) == 1:
+                        through(references[0], ts.frame, f"a layer of trajectory set {ts.id!r} in the reference trajectory's context")
+                    member(ts, layer["members"], "a trajectories layer")
                     if "highlight" in layer:
                         member(ts, layer["highlight"], "a highlight")
-                    hides = (clock["mode"] == "value" or "clock" in layer) and "hidden" in (layer.get("before"), layer.get("after"))
+                    hides = (clock["mode"] == "epoch" or "clock" in layer) and "hidden" in (layer.get("before"), layer.get("after"))
                     if layer.get("reveal", "none") != "none" or _has_head(layer) or hides:
                         clocked(ts, "on which a reading is taken", layer)
                     head = layer.get("head")
                     if isinstance(head, Mapping) and "glow" in head:
                         name = head["glow"]["channel"]
                         if name != INDEX and name not in ts.channels[0]:
-                            out.append(f"2.11: {where}: track set {ts.id!r} lacks channel {name!r} for a head's glow")
+                            out.append(f"timeline: {where}: trajectory set {ts.id!r} lacks channel {name!r} for a head's glow")
                     color = layer.get("color")
                     if isinstance(color, Mapping):
                         if "channel" in color and color["channel"] not in ts.channels[0]:
-                            out.append(f"2.7: {where}: track set {ts.id!r} lacks channel {color['channel']!r} for a layer's color")
+                            out.append(f"panel: {where}: trajectory set {ts.id!r} lacks channel {color['channel']!r} for a layer's color")
                         if "parameter" in color and color["parameter"] not in ts.parameters[0]:
-                            out.append(f"2.7: {where}: track set {ts.id!r} lacks parameter {color['parameter']!r} for a layer's color")
+                            out.append(
+                                f"panel: {where}: trajectory set {ts.id!r} lacks parameter {color['parameter']!r} for a layer's color"
+                            )
             elif layer["kind"] == "arrow":
                 matched = self._match(layer["sets"], values)
                 if len(matched) > 1:
                     out.append(
-                        f"V2: {where}: an arrow layer's set query matches the track sets {[t.id for t in matched]}, where one is needed"
+                        f"set-query: {where}: an arrow layer's set query matches the trajectory sets {[t.id for t in matched]}, "
+                        "where one is needed"
                     )
                 elif matched:
                     ts = matched[0]
@@ -2633,29 +2733,33 @@ class Scene:
                     member(ts, layer["members"], "an arrow layer")
                     clocked(ts, "on which a reading is taken", layer)
                     if missing := [c for c in layer["vector"] if c not in ts.channels[0]]:
-                        out.append(f"L7: {where}: track set {ts.id!r} lacks channels {missing} of an arrow layer's vector")
+                        out.append(f"arrow: {where}: trajectory set {ts.id!r} lacks channels {missing} of an arrow layer's vector")
                     scale = layer.get("scale")
                     if isinstance(scale, Mapping) and scale["attr"] not in ts.attrs:
-                        out.append(f"F5: {where}: track set {ts.id!r} lacks attribute {scale['attr']!r} for an arrow layer's scale")
-            elif layer["kind"] == "outline" and len(drivers) == 1:
-                target = self._views[layer["view"]]["frame"]
-                target = values[target["var"]] if isinstance(target, Mapping) else target
-                through(drivers[0], target, f"the outline of view {layer['view']!r}")
-            elif layer["kind"] == "body" and len(drivers) == 1:
-                d = drivers[0]
+                        out.append(
+                            f"transform-channels: {where}: trajectory set {ts.id!r} lacks attribute {scale['attr']!r} for an arrow "
+                            "layer's scale"
+                        )
+            elif layer["kind"] == "inset_box" and len(references) == 1:
+                target = self._panels[layer["panel"]]["frame"]
+                target = values[target["input"]] if isinstance(target, Mapping) else target
+                through(references[0], target, f"the inset box of panel {layer['panel']!r}")
+            elif layer["kind"] == "body" and len(references) == 1:
+                d = references[0]
                 body = self._bodies[layer["body"]]
                 through(d, body["frame"], f"body {layer['body']!r}", layer["body"])
             elif layer["kind"] == "points":
                 matched = self._match(layer["sets"], values)
                 if len(matched) > 1:
                     out.append(
-                        f"V2: {where}: a points layer's set query matches the track sets {[t.id for t in matched]}, where one is needed"
+                        f"set-query: {where}: a points layer's set query matches the trajectory sets {[t.id for t in matched]}, "
+                        "where one is needed"
                     )
                 elif matched:
                     ts = matched[0]
                     through(ts, ts.frame, "its points")
                     member(ts, layer["members"], "a points layer")
-                    hides = (clock["mode"] == "value" or "clock" in layer) and "hidden" in (layer.get("before"), layer.get("after"))
+                    hides = (clock["mode"] == "epoch" or "clock" in layer) and "hidden" in (layer.get("before"), layer.get("after"))
                     if layer.get("reveal", "none") == "grow" or hides:
                         clocked(ts, "on which a reading is taken", layer)
             elif layer["kind"] == "label":
@@ -2664,64 +2768,67 @@ class Scene:
                     matched = self._match(at["sets"], values)
                     if len(matched) > 1:
                         out.append(
-                            f"V2: {where}: a label's set query matches the track sets {[t.id for t in matched]}, where one is needed"
+                            f"set-query: {where}: a label's set query matches the trajectory sets {[t.id for t in matched]}, where "
+                            "one is needed"
                         )
                     elif matched:
                         ts = matched[0]
                         if at["member"] >= len(ts.positions):
                             out.append(
-                                f"K6: {where}: a label's member {at['member']} is not below the track count {len(ts.positions)} "
-                                f"of track set {ts.id!r}"
+                                f"label: {where}: a label's member {at['member']} is not below the trajectory count {len(ts.positions)} "
+                                f"of trajectory set {ts.id!r}"
                             )
                         through(ts, ts.frame, "a label's anchor")
                         clocked(ts, "on which a label takes a reading", layer)
-                elif "frame" in at and len(drivers) == 1:
-                    through(drivers[0], at["frame"], "a label's point")
+                elif "frame" in at and len(references) == 1:
+                    through(references[0], at["frame"], "a label's point")
                 parts = [x for x in layer["text"] if isinstance(x, Mapping)] if isinstance(layer["text"], list) else []
-                if len(drivers) == 1:
-                    d = drivers[0]
+                if len(references) == 1:
+                    d = references[0]
                     for part in parts:
-                        if "member" in part and part["member"] not in d.parameters[0]:
-                            out.append(f"2.9: {where}: a label names parameter {part['member']!r}, which track set {d.id!r} lacks")
+                        if "parameter" in part and part["parameter"] not in (*d.parameters[0], INDEX):
+                            out.append(
+                                f"control: {where}: a label names parameter {part['parameter']!r}, which trajectory set {d.id!r} lacks"
+                            )
                         if "attr" in part and part["attr"] not in d.attrs:
-                            out.append(f"2.9: {where}: a label names attribute {part['attr']!r}, which track set {d.id!r} lacks")
+                            out.append(f"control: {where}: a label names attribute {part['attr']!r}, which trajectory set {d.id!r} lacks")
                         if "channel" in part and part["channel"] not in d.channels[0]:
-                            out.append(f"2.9: {where}: a label names channel {part['channel']!r}, which track set {d.id!r} lacks")
-        # a camera key's targets take a reading on the member of a track layer (rules K5 and C5)
-        for key in (view.get("camera") or {}).get("keys", []):
+                            out.append(f"control: {where}: a label names channel {part['channel']!r}, which trajectory set {d.id!r} lacks")
+        # a camera keyframe's targets take a reading on the member of a trajectories layer (rules `camera-keyframes` and
+        # `clock-channel-carried`)
+        for key in (panel.get("camera") or {}).get("keyframes", []):
             for target in key.get("follow", []):
-                layer = view["layers"][target["layer"]]
+                layer = panel["layers"][target["layer"]]
                 matched = self._match(layer["sets"], values)
                 if len(matched) != 1:
                     continue
                 ts = matched[0]
                 if target["member"] >= len(ts.positions):
                     out.append(
-                        f"K5: {where}: a camera key follows member {target['member']} of layer {target['layer']}, which is not below "
-                        f"the track count {len(ts.positions)} of track set {ts.id!r}"
+                        f"camera-keyframes: {where}: a camera keyframe follows member {target['member']} of layer {target['layer']}, "
+                        "which is not below "
+                        f"the trajectory count {len(ts.positions)} of trajectory set {ts.id!r}"
                     )
                 else:
-                    clocked(ts, "which a camera key follows", layer)
+                    clocked(ts, "which a camera keyframe follows", layer)
         return out
 
     def _check_control(self, control: Mapping[str, Any], combos: Callable[[set[str]], list[dict[str, str]]]) -> list[str]:
-        kind = {"slider": "selector", "tabs": "choice", "toggle": "toggle"}.get(control["kind"])
+        kind = {"slider": "parameter", "tabs": "choice", "toggle": "toggle"}.get(control["kind"])
         if kind is None:
             return []
-        out = self._check_var(control["variable"], kind, f"2.9: a {control['kind']} control")
+        out = self._check_input(control["input"], kind, f"control: a {control['kind']} control")
         if out or control["kind"] != "slider":
             return out
-        spec = self._variables[control["variable"]]
-        if spec.get("by", "nearest") != "nearest":
-            return [f"2.9: the slider over {control['variable']!r} needs a selector by nearest, and the selector is by index"]
-        out += self._check_query(control["domain"], "2.9: a slider's domain")
+        spec = self._inputs[control["input"]]
+        out += self._check_query(control["domain"], "control: a slider's domain")
         if out:
             return out
         for values in combos(self._choices_in(control["domain"])):
             for ts in self._match(control["domain"], values):
-                if spec["parameter"] not in ts.parameters[0]:
+                if spec["parameter"] not in (*ts.parameters[0], INDEX):
                     out.append(
-                        f"2.9: the slider over {control['variable']!r} has track set {ts.id!r} in its domain, "
+                        f"control: the slider over {control['input']!r} has trajectory set {ts.id!r} in its domain, "
                         f"which lacks parameter {spec['parameter']!r}"
                     )
         return out
@@ -2730,41 +2837,38 @@ class Scene:
         self,
         readout: Mapping[str, Any],
         state: Mapping[str, Any],
-        view_ok: Mapping[str, bool],
+        panel_ok: Mapping[str, bool],
         combos: Callable[[set[str]], list[dict[str, str]]],
     ) -> list[str]:
-        """Checks section 2.9: a var part refers to a variable, and every possible driver's track set carries each driver-relative part."""
+        """Checks section 2.9: an input part names an input, and the trajectory set of every possible reference trajectory carries
+        each part that is read on the reference trajectory."""
         out = []
         parts = [p for p in readout["parts"] if isinstance(p, Mapping)]
         for part in parts:
-            if "var" in part:
-                out += self._check_var(part["var"], None, "2.9: a readout")
-        relative = [p for p in parts if any(k in p for k in ("member", "attr", "channel"))]
+            if "input" in part:
+                out += self._check_input(part["input"], None, "control: a readout")
+        relative = [p for p in parts if any(k in p for k in ("parameter", "attr", "channel"))]
         if not relative:
             return out
-
-        def leaves(node: Mapping[str, Any]) -> list[str]:
-            return [node["id"]] if node["kind"] == "panel" else leaves(node["a"]) + leaves(node["b"])
-
-        panel_ids = list(state["panels"]) if readout["place"] == "panel" else leaves(state["layout"])[:1]
-        for pid in panel_ids:
-            panel = state["panels"].get(pid)
-            if panel is None or not view_ok.get(panel["view"], False):
+        shown_ids = list(state["panels"]) if readout["place"] == "panel" else _leaves(state["layout"])[:1]
+        for sid in shown_ids:
+            shown = state["panels"].get(sid)
+            if shown is None or not panel_ok.get(shown["panel"], False):
                 continue
-            view = self._views[panel["view"]]
-            for values in combos(self._choices_in(view["driver"]["sets"])):
-                drivers, _ = self._driver_of(view, values, "")
-                if len(drivers) != 1:
+            panel = self._panels[shown["panel"]]
+            for values in combos(self._choices_in(panel["reference"]["sets"])):
+                references, _ = self._reference_of(panel, values, "")
+                if len(references) != 1:
                     continue
-                ts = drivers[0]
-                where = f"the {readout['place']} readout through panel {pid!r}" + (f" with {values}" if values else "")
+                ts = references[0]
+                where = f"the {readout['place']} readout through panel {sid!r}" + (f" with {values}" if values else "")
                 for part in relative:
-                    if "member" in part and part["member"] not in ts.parameters[0]:
-                        out.append(f"2.9: {where} names parameter {part['member']!r}, which track set {ts.id!r} lacks")
+                    if "parameter" in part and part["parameter"] not in (*ts.parameters[0], INDEX):
+                        out.append(f"control: {where} names parameter {part['parameter']!r}, which trajectory set {ts.id!r} lacks")
                     if "attr" in part and part["attr"] not in ts.attrs:
-                        out.append(f"2.9: {where} names attribute {part['attr']!r}, which track set {ts.id!r} lacks")
+                        out.append(f"control: {where} names attribute {part['attr']!r}, which trajectory set {ts.id!r} lacks")
                     if "channel" in part and part["channel"] not in ts.channels[0]:
-                        out.append(f"2.9: {where} names channel {part['channel']!r}, which track set {ts.id!r} lacks")
+                        out.append(f"control: {where} names channel {part['channel']!r}, which trajectory set {ts.id!r} lacks")
         return out
 
     def to_container(self) -> bytes:
@@ -2772,19 +2876,19 @@ class Scene:
         w = ContainerWriter(generator=f"pytycho {__version__}")
         for ts in self._sets.values():
             if not ts.positions:
-                raise SceneError(f"T1: track set {ts.id!r} does not have a track")
+                raise SceneError(f"two-samples: trajectory set {ts.id!r} does not have a trajectory")
             if ts.kept is not None and (bad := self._check_kept(ts)):
                 raise SceneError(bad[0])
             positions, channels = ts._stored()
             offsets = np.concatenate([[0], np.cumsum([len(p) for p in positions])])
-            w.add_view(f"{ts.id}/offsets", offsets, dtype="uint32")
-            w.add_view(f"{ts.id}/positions", np.vstack(positions), dtype=ts.dtype)
+            w.add_array(f"{ts.id}/offsets", offsets, dtype="uint32")
+            w.add_array(f"{ts.id}/positions", np.vstack(positions), dtype=ts.dtype)
             for n in channels[0]:
-                w.add_view(f"{ts.id}/channels/{n}", np.concatenate([c[n] for c in channels]), dtype=self._channel_dtype(ts, n))
+                w.add_array(f"{ts.id}/channels/{n}", np.concatenate([c[n] for c in channels]), dtype=self._channel_dtype(ts, n))
             for n in ts.parameters[0]:
-                w.add_view(f"{ts.id}/parameters/{n}", np.array([p[n] for p in ts.parameters]), dtype="float64")
+                w.add_array(f"{ts.id}/parameters/{n}", np.array([p[n] for p in ts.parameters]), dtype="float64")
         for name, raw in self._images.items():
-            w.add_view(name, np.frombuffer(raw, dtype=np.uint8), dtype="uint8")
+            w.add_array(name, np.frombuffer(raw, dtype=np.uint8), dtype="uint8")
         return w.to_bytes()
 
     def write(self, tys_path: str | os.PathLike[str], tyd_path: str | os.PathLike[str]) -> None:
@@ -2792,7 +2896,7 @@ class Scene:
         try:
             text = json.dumps(self.to_document(), indent=1, ensure_ascii=False, allow_nan=False) + "\n"
         except ValueError as exc:
-            raise SceneError(f"S4: {exc}") from None
+            raise SceneError(f"finite-number: {exc}") from None
         data = self.to_container()
         with open(tys_path, "w", encoding="utf-8") as fh:
             fh.write(text)
@@ -2800,7 +2904,7 @@ class Scene:
             fh.write(data)
 
     def write_html(self, path: str | os.PathLike[str], *, kiosk: bool = False, runtime: str | None = None) -> dict[str, int]:
-        """Writes the scene as one self-contained page, and returns the stored size in bytes of every view and of the page."""
+        """Writes the scene as one self-contained page, and returns the stored size in bytes of every array and of the page."""
         from .html import write_html
 
         return write_html(path, self.to_document(), self.to_container(), kiosk=kiosk, runtime=runtime)

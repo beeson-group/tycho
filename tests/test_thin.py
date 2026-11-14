@@ -18,17 +18,17 @@ def circle(m, r=1.0):
     return np.column_stack([r * np.cos(a), r * np.sin(a), 0 * a])
 
 
-def test_count_mode_contract_on_ragged_tracks():
-    tracks = [circle(200), circle(57, 3.0), circle(5)]
-    kept = select([tracks], n=20, keep=[[3, 150], [], []])
-    for k, t in zip(kept, tracks, strict=True):
+def test_count_mode_contract_on_ragged_trajectories():
+    trajectories = [circle(200), circle(57, 3.0), circle(5)]
+    kept = select([trajectories], n=20, keep=[[3, 150], [], []])
+    for k, t in zip(kept, trajectories, strict=True):
         assert np.all(np.diff(k) > 0)
         assert k[0] == 0
         assert k[-1] == len(t) - 1
     assert {3, 150} <= set(kept[0].tolist())
     assert len(kept[0]) <= 20
     assert len(kept[1]) <= 20
-    np.testing.assert_array_equal(kept[2], np.arange(5))  # a track shorter than n is left whole
+    np.testing.assert_array_equal(kept[2], np.arange(5))  # a trajectory shorter than n is left whole
 
 
 def test_keep_may_force_more_than_n():

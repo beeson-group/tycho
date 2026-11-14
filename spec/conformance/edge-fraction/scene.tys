@@ -1,7 +1,7 @@
 {
  "format": "tycho-scene",
- "version": "0.4",
- "generator": "pytycho 0.2.0",
+ "version": "0.5",
+ "generator": "pytycho 0.3.0",
  "title": "edge cases, fraction mode",
  "frames": {
   "p": {},
@@ -35,30 +35,30 @@
    ]
   }
  },
- "track_sets": {
+ "trajectory_sets": {
   "open": {
    "frame": "p",
-   "tracks": 1,
+   "trajectories": 1,
    "offsets": "open/offsets",
    "positions": "open/positions",
    "periodic": true
   },
   "nokey": {
    "frame": "p",
-   "tracks": 1,
+   "trajectories": 1,
    "offsets": "nokey/offsets",
    "positions": "nokey/positions"
   },
   "off": {
    "frame": "p",
-   "tracks": 1,
+   "trajectories": 1,
    "offsets": "off/offsets",
    "positions": "off/positions",
    "periodic": false
   },
   "yrot": {
    "frame": "p",
-   "tracks": 1,
+   "trajectories": 1,
    "offsets": "yrot/offsets",
    "positions": "yrot/positions",
    "periodic": false
@@ -69,12 +69,12 @@
   "channels": [
    "@index"
   ],
-  "steps": 4
+  "frame_count": 4
  },
- "views": {
+ "panels": {
   "open": {
    "frame": "p",
-   "driver": {
+   "reference": {
     "sets": {
      "set": "open"
     },
@@ -84,7 +84,7 @@
    },
    "layers": [
     {
-     "kind": "track",
+     "kind": "trajectories",
      "sets": {
       "set": "open"
      },
@@ -96,7 +96,7 @@
      "head": true
     },
     {
-     "kind": "track",
+     "kind": "trajectories",
      "sets": {
       "set": "nokey"
      },
@@ -107,7 +107,7 @@
      }
     },
     {
-     "kind": "track",
+     "kind": "trajectories",
      "sets": {
       "set": "off"
      },
@@ -123,7 +123,7 @@
   },
   "c": {
    "frame": "c",
-   "driver": {
+   "reference": {
     "sets": {
      "set": "off"
     },
@@ -133,7 +133,7 @@
    },
    "layers": [
     {
-     "kind": "track",
+     "kind": "trajectories",
      "sets": {
       "set": "off"
      },
@@ -144,7 +144,7 @@
   },
   "y": {
    "frame": "y",
-   "driver": {
+   "reference": {
     "sets": {
      "set": "yrot"
     },
@@ -154,7 +154,7 @@
    },
    "layers": [
     {
-     "kind": "track",
+     "kind": "trajectories",
      "sets": {
       "set": "yrot"
      },
@@ -165,19 +165,19 @@
   }
  },
  "initial": {
-  "variables": {},
+  "inputs": {},
   "clock": {
    "channel": "@index"
   },
   "panels": {
    "open": {
-    "view": "open"
+    "panel": "open"
    },
    "c": {
-    "view": "c"
+    "panel": "c"
    },
    "y": {
-    "view": "y"
+    "panel": "y"
    }
   },
   "layout": {

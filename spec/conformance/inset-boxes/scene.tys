@@ -1,0 +1,232 @@
+{
+ "format": "tycho-scene",
+ "version": "0.5",
+ "requires": [
+  "layers.inset_box",
+  "frames.origin_channel"
+ ],
+ "generator": "pytycho 0.3.0, spec/conformance/generate.py",
+ "frames": {
+  "rot": {},
+  "zoom": {
+   "parent": "rot",
+   "origin": [
+    {
+     "channel": "mx"
+    },
+    {
+     "channel": "my"
+    },
+    0.0
+   ],
+   "scale": {
+    "channel": "k"
+   }
+  },
+  "inertial": {
+   "parent": "rot",
+   "rotation": {
+    "axis": "z",
+    "angle": {
+     "channel": "th"
+    }
+   }
+  }
+ },
+ "trajectory_sets": {
+  "drv": {
+   "frame": "rot",
+   "tags": {
+    "g": "drv"
+   },
+   "trajectories": 1,
+   "offsets": "drv/offsets",
+   "positions": "drv/positions",
+   "channels": {
+    "t": {
+     "array": "drv/t"
+    },
+    "mx": {
+     "array": "drv/mx"
+    },
+    "my": {
+     "array": "drv/my"
+    },
+    "k": {
+     "array": "drv/k"
+    },
+    "th": {
+     "array": "drv/th"
+    }
+   },
+   "periodic": false
+  }
+ },
+ "clock": {
+  "mode": "epoch",
+  "channels": [
+   "t"
+  ],
+  "frame_count": 8,
+  "range": [
+   0.0,
+   2.0
+  ]
+ },
+ "panels": {
+  "rot": {
+   "frame": "rot",
+   "reference": {
+    "sets": {
+     "set": "drv"
+    },
+    "member": {
+     "index": 0
+    }
+   },
+   "layers": [
+    {
+     "kind": "trajectories",
+     "sets": {
+      "set": "drv"
+     },
+     "members": "all"
+    },
+    {
+     "kind": "inset_box",
+     "panel": "closeup",
+     "color": "#ffffff",
+     "opacity": 0.5,
+     "width": 1.5,
+     "dash": [
+      4,
+      3
+     ],
+     "min_size": 12
+    }
+   ]
+  },
+  "inertial": {
+   "frame": "inertial",
+   "reference": {
+    "sets": {
+     "set": "drv"
+    },
+    "member": {
+     "index": 0
+    }
+   },
+   "layers": [
+    {
+     "kind": "trajectories",
+     "sets": {
+      "set": "drv"
+     },
+     "members": "all"
+    },
+    {
+     "kind": "inset_box",
+     "panel": "closeup",
+     "color": "#ffffff",
+     "opacity": 0.5,
+     "width": 1.5,
+     "dash": [
+      4,
+      3
+     ],
+     "min_size": 12
+    }
+   ]
+  },
+  "closeup": {
+   "frame": "zoom",
+   "reference": {
+    "sets": {
+     "set": "drv"
+    },
+    "member": {
+     "index": 0
+    }
+   },
+   "layers": [
+    {
+     "kind": "trajectories",
+     "sets": {
+      "set": "drv"
+     },
+     "members": "all"
+    }
+   ],
+   "camera": {
+    "kind": "2d",
+    "plane": "xy"
+   }
+  },
+  "lost": {
+   "frame": "rot",
+   "reference": {
+    "sets": {
+     "tags": {
+      "g": "none"
+     }
+    },
+    "member": {
+     "index": 0
+    }
+   },
+   "layers": [
+    {
+     "kind": "inset_box",
+     "panel": "closeup",
+     "color": "#ffffff",
+     "opacity": 0.5,
+     "width": 1.5,
+     "dash": [
+      4,
+      3
+     ],
+     "min_size": 12
+    }
+   ]
+  }
+ },
+ "initial": {
+  "inputs": {},
+  "clock": {
+   "channel": "t"
+  },
+  "panels": {
+   "rot": {
+    "panel": "rot"
+   },
+   "inertial": {
+    "panel": "inertial"
+   },
+   "closeup": {
+    "panel": "closeup"
+   }
+  },
+  "layout": {
+   "kind": "split",
+   "dir": "row",
+   "ratio": 0.5,
+   "a": {
+    "kind": "panel",
+    "id": "rot"
+   },
+   "b": {
+    "kind": "split",
+    "dir": "row",
+    "ratio": 0.5,
+    "a": {
+     "kind": "panel",
+     "id": "inertial"
+    },
+    "b": {
+     "kind": "panel",
+     "id": "closeup"
+    }
+   }
+  }
+ }
+}

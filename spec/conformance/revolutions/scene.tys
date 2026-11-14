@@ -1,0 +1,250 @@
+{
+ "format": "tycho-scene",
+ "version": "0.5",
+ "generator": "pytycho 0.3.0",
+ "title": "three revolutions of the rotating loop",
+ "frames": {
+  "rot": {
+   "label": "rotating",
+   "axes": [
+    "x",
+    "y",
+    "z"
+   ],
+   "unit": "DU"
+  },
+  "inertial": {
+   "label": "inertial",
+   "axes": [
+    "X",
+    "Y",
+    "Z"
+   ],
+   "unit": "DU",
+   "parent": "rot",
+   "rotation": {
+    "axis": "z",
+    "angle": {
+     "channel": "a"
+    }
+   }
+  }
+ },
+ "bodies": {
+  "b1": {
+   "frame": "rot",
+   "position": [
+    {
+     "attr": "d"
+    },
+    0.0,
+    0.0
+   ]
+  }
+ },
+ "trajectory_sets": {
+  "loop": {
+   "frame": "rot",
+   "attrs": {
+    "d": 0.5
+   },
+   "trajectories": 1,
+   "offsets": "loop/offsets",
+   "positions": "loop/positions",
+   "channels": {
+    "a": {
+     "array": "loop/channels/a"
+    }
+   },
+   "periodic": true
+  },
+  "fan": {
+   "frame": "rot",
+   "trajectories": 5,
+   "offsets": "fan/offsets",
+   "positions": "fan/positions",
+   "channels": {
+    "a": {
+     "array": "fan/channels/a"
+    }
+   },
+   "parameters": {
+    "e": {
+     "array": "fan/parameters/e"
+    }
+   },
+   "periodic": false
+  }
+ },
+ "inputs": {
+  "frame": {
+   "kind": "choice",
+   "values": [
+    "rot",
+    "inertial"
+   ],
+   "default": "inertial",
+   "scope": "per_panel"
+  },
+  "e": {
+   "kind": "parameter",
+   "parameter": "e",
+   "default": 0.2,
+   "scope": "shared"
+  }
+ },
+ "clock": {
+  "mode": "fraction",
+  "channels": [
+   "@index",
+   "a"
+  ],
+  "frame_count": 24,
+  "revolutions": 3
+ },
+ "panels": {
+  "v": {
+   "frame": {
+    "input": "frame"
+   },
+   "reference": {
+    "sets": {
+     "set": "loop"
+    },
+    "member": {
+     "index": 0
+    }
+   },
+   "layers": [
+    {
+     "kind": "trajectories",
+     "sets": {
+      "set": "loop"
+     },
+     "members": "all",
+     "reveal": "none"
+    },
+    {
+     "kind": "trajectories",
+     "sets": {
+      "set": "loop"
+     },
+     "members": "all",
+     "reveal": "trail",
+     "trail": {
+      "fraction": 0.25,
+      "taper": {
+       "width": 0.0,
+       "opacity": 0.0
+      }
+     },
+     "head": {
+      "color": "#f0e442",
+      "size": 9.0
+     }
+    },
+    {
+     "kind": "trajectories",
+     "sets": {
+      "set": "loop"
+     },
+     "members": "all",
+     "reveal": "grow"
+    },
+    {
+     "kind": "trajectories",
+     "sets": {
+      "set": "loop"
+     },
+     "members": "all",
+     "reveal": "trail",
+     "trail": {
+      "fraction": 0.5
+     }
+    },
+    {
+     "kind": "body",
+     "body": "b1",
+     "trail": {
+      "fraction": 0.25
+     }
+    },
+    {
+     "kind": "trajectories",
+     "sets": {
+      "set": "fan"
+     },
+     "members": {
+      "evenly_spaced": 2
+     },
+     "reveal": "none",
+     "color": {
+      "colormap": {
+       "input": "frame",
+       "map": {
+        "rot": "viridis",
+        "inertial": "plasma"
+       }
+      },
+      "parameter": "e"
+     },
+     "opacity": 0.4
+    },
+    {
+     "kind": "trajectories",
+     "sets": {
+      "set": "fan"
+     },
+     "members": "all",
+     "reveal": "none",
+     "color": {
+      "colormap": {
+       "input": "frame",
+       "map": {
+        "rot": "viridis",
+        "inertial": "plasma"
+       }
+      },
+      "parameter": "e"
+     },
+     "opacity": 0.05,
+     "highlight": {
+      "input": "e",
+      "width": 2.5,
+      "kernel": {
+       "width": 0.05,
+       "opacity": 0.55
+      }
+     }
+    },
+    {
+     "kind": "axes",
+     "span": "full"
+    },
+    {
+     "kind": "grid",
+     "labels": true
+    }
+   ],
+   "camera": {
+    "kind": "2d",
+    "plane": "xy"
+   }
+  }
+ },
+ "initial": {
+  "inputs": {},
+  "clock": {
+   "channel": "@index"
+  },
+  "panels": {
+   "p1": {
+    "panel": "v"
+   }
+  },
+  "layout": {
+   "kind": "panel",
+   "id": "p1"
+  }
+ }
+}

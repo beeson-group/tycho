@@ -1,10 +1,10 @@
 {
  "format": "tycho-scene",
- "version": "0.3",
+ "version": "0.5",
  "requires": [
   "layers.arrows"
  ],
- "generator": "pytycho 0.2.0, spec/conformance/generate.py",
+ "generator": "pytycho 0.3.0, spec/conformance/generate.py",
  "frames": {
   "rot": {},
   "inertial": {
@@ -17,27 +17,27 @@
    }
   }
  },
- "track_sets": {
+ "trajectory_sets": {
   "vel": {
    "frame": "rot",
    "tags": {
     "g": "vel"
    },
-   "tracks": 1,
+   "trajectories": 1,
    "offsets": "vel/offsets",
    "positions": "vel/positions",
    "channels": {
     "t": {
-     "view": "vel/t"
+     "array": "vel/t"
     },
     "th": {
-     "view": "vel/th"
+     "array": "vel/th"
     },
     "vx": {
-     "view": "vel/vx"
+     "array": "vel/vx"
     },
     "vy": {
-     "view": "vel/vy"
+     "array": "vel/vy"
     }
    },
    "periodic": false,
@@ -50,44 +50,44 @@
    "tags": {
     "g": "sticks"
    },
-   "tracks": 2,
+   "trajectories": 2,
    "offsets": "sticks/offsets",
    "positions": "sticks/positions",
    "channels": {
     "t": {
-     "view": "sticks/t"
+     "array": "sticks/t"
     },
     "th": {
-     "view": "sticks/th"
+     "array": "sticks/th"
     },
     "vx": {
-     "view": "sticks/vx"
+     "array": "sticks/vx"
     },
     "vy": {
-     "view": "sticks/vy"
+     "array": "sticks/vy"
     },
     "vz": {
-     "view": "sticks/vz"
+     "array": "sticks/vz"
     }
    },
    "periodic": false
   }
  },
  "clock": {
-  "mode": "value",
+  "mode": "epoch",
   "channels": [
    "t"
   ],
-  "steps": 8,
+  "frame_count": 8,
   "range": [
    0.0,
    2.0
   ]
  },
- "views": {
+ "panels": {
   "rot": {
    "frame": "rot",
-   "driver": {
+   "reference": {
     "sets": {
      "set": "vel"
     },
@@ -147,7 +147,7 @@
   },
   "inertial": {
    "frame": "inertial",
-   "driver": {
+   "reference": {
     "sets": {
      "set": "vel"
     },
@@ -207,16 +207,16 @@
   }
  },
  "initial": {
-  "variables": {},
+  "inputs": {},
   "clock": {
    "channel": "t"
   },
   "panels": {
    "rot": {
-    "view": "rot"
+    "panel": "rot"
    },
    "inertial": {
-    "view": "inertial"
+    "panel": "inertial"
    }
   },
   "layout": {

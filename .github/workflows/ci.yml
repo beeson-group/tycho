@@ -134,12 +134,11 @@ jobs:
 
           scene = ty.Scene(title="smoke")
           frame = scene.frame("f", axes=("x", "y", "z"))
-          loop = scene.track_set("loop", frame=frame, periodic=True)
+          loop = scene.trajectory_set("loop", frame=frame, periodic=True)
           t = np.linspace(0.0, 2.0 * np.pi, 50)
           loop.add(np.column_stack([np.cos(t), np.sin(t)]))
-          scene.clock(channels=["@index"], steps=50)
-          scene.view("main", frame=frame, driver=ty.driver(loop, 0), layers=[ty.track(loop)])
-          scene.panel("p", "main")
+          scene.clock(channels=["@index"], frame_count=50)
+          scene.panel("main", frame=frame, reference=ty.reference(loop, 0), layers=[ty.trajectories(loop)])
           scene.write_html("smoke.html")
           page = open("smoke.html", encoding="utf-8").read()
           assert "This bundle contains" in page and "three 0." in page, "the page has no notice banner"

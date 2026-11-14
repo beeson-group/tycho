@@ -1,0 +1,146 @@
+{
+ "format": "tycho-scene",
+ "version": "0.5",
+ "requires": [
+  "layers.read_from"
+ ],
+ "generator": "pytycho 0.3.0",
+ "title": "a grid and a grown ring in the reference trajectory's context under an epoch clock",
+ "frames": {
+  "rot": {
+   "label": "rotating",
+   "axes": [
+    "x",
+    "y",
+    "z"
+   ],
+   "unit": "DU"
+  },
+  "inertial": {
+   "label": "inertial",
+   "axes": [
+    "X",
+    "Y",
+    "Z"
+   ],
+   "parent": "rot",
+   "rotation": {
+    "axis": "z",
+    "angle": {
+     "channel": "th"
+    }
+   }
+  }
+ },
+ "trajectory_sets": {
+  "drv": {
+   "frame": "rot",
+   "trajectories": 1,
+   "offsets": "drv/offsets",
+   "positions": "drv/positions",
+   "channels": {
+    "t": {
+     "array": "drv/channels/t"
+    },
+    "th": {
+     "array": "drv/channels/th"
+    }
+   },
+   "periodic": false
+  },
+  "grid": {
+   "frame": "rot",
+   "trajectories": 2,
+   "offsets": "grid/offsets",
+   "positions": "grid/positions",
+   "periodic": false
+  },
+  "ring": {
+   "frame": "rot",
+   "trajectories": 1,
+   "offsets": "ring/offsets",
+   "positions": "ring/positions",
+   "channels": {
+    "t": {
+     "array": "ring/channels/t"
+    }
+   },
+   "periodic": false
+  }
+ },
+ "clock": {
+  "mode": "epoch",
+  "channels": [
+   "t",
+   "@index"
+  ],
+  "frame_count": 8,
+  "range": [
+   -1.0,
+   3.0
+  ]
+ },
+ "panels": {
+  "v": {
+   "frame": "inertial",
+   "reference": {
+    "sets": {
+     "set": "drv"
+    },
+    "member": {
+     "index": 0
+    }
+   },
+   "layers": [
+    {
+     "kind": "trajectories",
+     "sets": {
+      "set": "grid"
+     },
+     "members": "all",
+     "reveal": "none",
+     "read_from": "reference"
+    },
+    {
+     "kind": "trajectories",
+     "sets": {
+      "set": "ring"
+     },
+     "members": "all",
+     "reveal": "grow",
+     "head": true,
+     "before": "hidden",
+     "read_from": "reference"
+    },
+    {
+     "kind": "trajectories",
+     "sets": {
+      "set": "drv"
+     },
+     "members": "all",
+     "reveal": "none",
+     "head": true
+    }
+   ],
+   "camera": {
+    "kind": "2d",
+    "plane": "xy"
+   }
+  }
+ },
+ "initial": {
+  "inputs": {},
+  "clock": {
+   "channel": "t"
+  },
+  "panels": {
+   "p1": {
+    "panel": "v"
+   }
+  },
+  "layout": {
+   "kind": "panel",
+   "id": "p1"
+  }
+ }
+}

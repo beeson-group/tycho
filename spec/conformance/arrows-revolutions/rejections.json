@@ -1,0 +1,66 @@
+[
+ {
+  "name": "revolutions: an arrow layer on a set that is not periodic, under two revolutions",
+  "rule": "revolutions",
+  "scene": {
+   "trajectory_sets": {
+    "open": {
+     "frame": "rot",
+     "trajectories": 1,
+     "offsets": "loop/offsets",
+     "positions": "loop/positions",
+     "channels": {
+      "th": {
+       "array": "loop/th"
+      },
+      "vx": {
+       "array": "loop/vx"
+      },
+      "vy": {
+       "array": "loop/vy"
+      }
+     },
+     "periodic": false
+    }
+   },
+   "panels": {
+    "rot": {
+     "layers": [
+      {
+       "kind": "arrow",
+       "sets": {
+        "set": "open"
+       },
+       "members": {
+        "index": 0
+       },
+       "vector": [
+        "vx",
+        "vy"
+       ],
+       "scale": 0.5
+      }
+     ]
+    },
+    "inertial": {
+     "layers": [
+      {
+       "kind": "arrow",
+       "sets": {
+        "set": "open"
+       },
+       "members": {
+        "index": 0
+       },
+       "vector": [
+        "vx",
+        "vy"
+       ],
+       "scale": 0.5
+      }
+     ]
+    }
+   }
+  }
+ }
+]

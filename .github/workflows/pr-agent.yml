@@ -75,15 +75,14 @@ jobs:
         uses: docker://pragent/pr-agent:0.50.0-github_action
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # GLM-5.3 on the NRP gateway, with Qwen3.8-Flash-Next as the fallback. The gateway
-          # separates a model's reasoning from its answer, so the commands receive clean JSON.
-          # A call gets ten minutes, since the model can reason for many minutes before its
-          # answer, and a timed-out call is not retried on the same model. The repository knobs
-          # are in .pr_agent.toml
+          # use low reasoning for GLM and disable Qwen thinking to leave time for an answer
+          # bound reasoning and the answer together with max_output_tokens
           config.model: "openai/glm-5"
           config.fallback_models: '["openai/qwen3"]'
           config.custom_model_max_tokens: "1000000"
           config.max_model_tokens: "64000"
+          config.max_output_tokens: "8192"
+          LITELLM.EXTRA_BODY: '{"chat_template_kwargs": {"reasoning_effort": "low", "enable_thinking": false}}'
           config.ai_timeout: "600"
           config.retry_same_model_on_timeout: "false"
           OPENAI.API_BASE: "https://ellm.nrp-nautilus.io/v1"

@@ -19,7 +19,7 @@
     "directory": "web"
   },
   "author": "Claudio Vestini",
-  "contributors": ["Nina Karampela", "Jack Sydney Schwartz"],
+  "contributors": ["Jannik Graebner", "Nina Karampela", "Jack Sydney Schwartz"],
   "license": "Apache-2.0 AND MIT",
   "type": "module",
   "main": "./dist/tycho.esm.js",

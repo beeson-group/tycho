@@ -223,8 +223,8 @@ input[type=range]:disabled { opacity: 0.4; cursor: default; }
 .labels, .preadout, .perror, .drop, .cbars { pointer-events: none; }
 .labels { position: absolute; inset: 0; z-index: 1; overflow: hidden; }
 .labels span { position: absolute; left: 0; top: 0; white-space: nowrap; color: var(--fg); font-size: 12px; text-shadow: 0 0 3px var(--bg), 0 0 3px var(--bg); }
-/* the colorbars sit between the head, whose height the viewer writes as --head, and the row of x tick numbers, and shrink to fit */
-.cbars { position: absolute; right: 10px; top: calc(var(--head, 30px) + 10px); bottom: 40px; z-index: 1; display: flex; align-items: flex-start; gap: 12px; }
+/* the colorbars sit between the head, whose height the viewer writes as --head-height, and the row of x tick numbers, and shrink to fit */
+.cbars { position: absolute; right: 10px; top: calc(var(--head-height, 30px) + 10px); bottom: 40px; z-index: 1; display: flex; align-items: flex-start; gap: 12px; }
 .cbars.tight > .cbar { display: none; }
 .cbar { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; max-height: 100%; font-size: 11px; color: var(--dim); }
 .cbar-t { flex: none; max-width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2047,14 +2047,14 @@ export class TychoViewerElement extends Base {
   }
 
   /**
-   * Measures the head of a panel and writes its height as --head, which places the colorbars under it, hides the colorbars when
+   * Measures the head of a panel and writes its height as --head-height, which places the colorbars under it, hides the colorbars when
    * they do not have room, and gives the renderer both boxes, which the labels are kept clear of. It reads the layout, hence it
    * runs when the observer reports a change of size, or before a frame of an export, but not in the draw loop.
    */
   private measureOverlay(pid: string, dom: PanelDom): void {
     const head = dom.head.offsetHeight;
     const value = `${head}px`;
-    if (dom.host.style.getPropertyValue('--head') !== value) dom.host.style.setProperty('--head', value);
+    if (dom.host.style.getPropertyValue('--head-height') !== value) dom.host.style.setProperty('--head-height', value);
     const bars = dom.bars;
     bars.classList.toggle('tight', bars.clientHeight < BAR_ROOM);
     let height = 0;

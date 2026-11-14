@@ -25,6 +25,12 @@ The core idea is:
 2. Call `pytycho`, our python package that takes your data and efficiently compresses it into a binary container, `data.tyd`, and a JSON scene document with metadata, `scene.tys`;
 3. Draw the scene in the browser with our runtime renderer (built on [three.js](https://threejs.org/)).
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/_static/architecture-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/_static/architecture-light.svg">
+  <img alt="Architecture for TyCHO" src="docs/_static/architecture-light.svg">
+</picture>
+
 ## Installing and using TyCHO
 
 Install `pytycho` with the command below. The only requirements are Python and NumPy.

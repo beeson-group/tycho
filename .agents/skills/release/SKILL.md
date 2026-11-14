@@ -32,8 +32,8 @@ Run the steps below from the repository root of a checkout of the tag, with the 
    ```
 3. Convert the screen recording of the Broucke page to the GIF of the README. Claudio Vestini records this video for each release, while he uses the page in a full-screen browser, hence ask him for the file. The picture of the README is loaded from `https://github.com/beeson-group/tycho/releases/latest/download/broucke.gif`, hence it is broken whenever this file is missing from the latest release. Add `-t SECONDS` before each `-i recording.mov` to cut the end of the recording, where the browser bar or the recording controls come into view.
    ```sh
-   ffmpeg -v error -y -i recording.mov -vf "setpts=PTS/1.5,fps=10,scale=960:-2:flags=lanczos,palettegen=max_colors=256:stats_mode=full" broucke-palette.png
-   ffmpeg -v error -y -i recording.mov -i broucke-palette.png -lavfi "setpts=PTS/1.5,fps=10,scale=960:-2:flags=lanczos[x];[x][1:v]paletteuse=dither=none:diff_mode=rectangle" -loop 0 broucke.gif
+   ffmpeg -v error -y -i recording.mov -vf "setpts=PTS/1.5,fps=15,scale=960:-2:flags=lanczos,palettegen=max_colors=256:stats_mode=full" broucke-palette.png
+   ffmpeg -v error -y -i recording.mov -i broucke-palette.png -lavfi "setpts=PTS/1.5,fps=15,scale=960:-2:flags=lanczos[x];[x][1:v]paletteuse=dither=none:diff_mode=rectangle" -loop 0 broucke.gif
    ```
 4. Upload the pages, the posters, the inputs, and the GIF to the release.
    ```sh

@@ -5,7 +5,7 @@ The builders are the methods of `Scene` that declare the parts of a scene.
 Those that declare a frame, a body, a trajectory set, or an input return a handle, i.e. a small object that stands for a reference in the written document.
 Where a handle is passed to another declaration, the document holds the reference in its place, i.e. the id of a frame or a body, `{"set": id}` for a trajectory set, or `{"input": id}` for an input.
 The handles are documented under {mod}`pytycho.scene`, apart from `TrajectorySet`, which is documented with the package.
-The [guide](../guide/index.md) explains each concept with examples.
+The keys that each builder writes are described in the [scene reference](../reference.md), and the words are defined in the [glossary](../glossary.md).
 
 ## pytycho
 
@@ -20,7 +20,7 @@ The top-level package exports the `Scene` builder, the functions that build the 
 ## Handles and scalars
 
 Besides the handles `Frame`, `Body`, and `Input`, this module documents `Channel` and `Attr`, the scalars that `ty.channel` and `ty.attr` return.
-Either scalar gives a number that depends on context, i.e. it is read from the trajectory set or from the sample being evaluated (section 2.2 of the spec).
+Either scalar gives a number that depends on context, i.e. it is read from the trajectory set or from the sample being evaluated (rule `sample-context` of the [spec](../spec.md)).
 The class `Rotation`, which `ty.rotation` returns, turns a frame against its parent about one axis.
 
 ```{eval-rst}

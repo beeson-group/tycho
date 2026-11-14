@@ -5,10 +5,10 @@ A propagated orbit often holds thousands of samples, and most of them do not cha
 The method {meth}`TrajectorySet.thin <pytycho.TrajectorySet.thin>` keeps a subset of each trajectory's stored samples and never creates a sample, e.g. by interpolation.
 Every sample on the page is therefore still one that the producing library computed, i.e. the library that propagated the orbit.
 The method returns the kept indices of every trajectory, i.e. for each trajectory the array of the indices of the samples it keeps.
-The call below keeps at most 480 samples per trajectory, measured in three frames.
+The call below keeps at most 480 samples per trajectory, measured in three of the frames that the Broucke example declares.
 
 ```python
-kept = family.thin(480, frames=["rotating", "barycentric-inertial", "inertial-moon"])
+kept = family.thin(480, frames=["rotating", "barycentric-inertial", "inertial-m2"])
 ```
 
 ## Count mode

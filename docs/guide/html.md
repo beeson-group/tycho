@@ -18,7 +18,7 @@ The first returns the page as a string, and the second writes the page to a file
 
 The page embeds both files as text in two `<script type="application/octet-stream">` elements.
 Each file is base64-encoded, i.e. written with letters, digits, `+`, `/`, and `=` only, hence a string of the scene cannot close a script tag.
-The container goes in as it is, since it already stores each array compressed ([section 1](../spec.md#1-the-data-container-datatyd)).
+The container goes in as it is, since it already stores each array compressed (rule `shuffle-delta-deflate` of the [spec](../spec.md)).
 An array is compressed in three steps as it is written into the container.
 
 1. The bit patterns of each column are delta-coded down the rows, i.e. each row is replaced by its difference from the row before it.
@@ -29,7 +29,7 @@ Along a smooth trajectory consecutive rows are close, and their differences thus
 The three steps roughly halve the size of smooth trajectories.
 The `<tycho-viewer>` element is the HTML element of the runtime that draws the scene.
 It finds the two script elements through its `scene` and `data` attributes, inflates the container's chunks with the browser's native `DecompressionStream`, and parses both files without any library.
-The runtime itself is inlined, at about 700 KB.
+The runtime itself is inlined, at about 850 KB.
 The page thus works offline, from disk, inside an iframe on a website or a reveal.js slide, or anywhere else a single HTML file can go.
 
 Every string in a scene is plain text.
@@ -52,7 +52,7 @@ A page embeds in another page, on a website or on a reveal.js slide, through an 
 
 The call `write_html(path, kiosk=True)` writes a kiosk page, i.e. a page meant for a slide.
 A kiosk page hides the top bar, the panel headers, the caption's tiles, and the footer, and it plays at once.
-The keys still play, step, and reset the views ([keys](panels.md#keys)).
+The keys still play, step, and reset the views, e.g. Space plays and pauses, and the key `f` resets the view of every panel.
 A kiosk page starts from the scene's initial state every time and does not store anything.
 
 To put a scene on a slide without an iframe, paste the output of {func}`pytycho.build_embed` into the deck, and load the runtime from {func}`pytycho.html.runtime_js` once per deck.
@@ -61,7 +61,7 @@ To put the viewer element in a page you write yourself, use the npm package ([Ja
 
 ## The video export
 
-The Export video button in the footer records the current state as an MP4 video ([section 2.10](../spec.md#210-export)).
+The Export video button in the footer records the current state as an MP4 video.
 The button opens a row of options, i.e. the size, the frame rate, and the number of loops, from one to four.
 The row shows the number of frames and the length of the video that these options give.
 The Start button records the video, showing a progress bar and a Cancel button, and then downloads the MP4, named after the scene's title.

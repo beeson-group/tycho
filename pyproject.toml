@@ -11,7 +11,7 @@ readme = "README.md"
 license = "Apache-2.0 AND MIT"
 license-files = ["LICENSE", "NOTICE", "AUTHORS", "THIRD_PARTY_NOTICES.md"]
 requires-python = ">=3.10"
-authors = [{ name = "Claudio Vestini" }, { name = "Nina Karampela" }, { name = "Jack Sydney Schwartz" }]
+authors = [{ name = "Claudio Vestini" }, { name = "Jannik Graebner" }, { name = "Nina Karampela" }, { name = "Jack Sydney Schwartz" }]
 keywords = ["astrodynamics", "visualization", "three-body", "periodic orbits", "webgl"]
 classifiers = [
   "Development Status :: 3 - Alpha",

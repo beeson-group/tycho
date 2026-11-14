@@ -39,7 +39,7 @@ Scene format 0.4 is written and read at this version, and scenes of formats 0.2 
 - The clock can be given `seconds`, the length of one loop at speed 1, in either mode, with `scene.clock(..., seconds=24)`. Without it, a loop lasts 8 seconds for each lap, as before.
 - The viewer element takes the attribute `lean`, under which the Add panel group, the icons of the panel heads, the frame and rate readouts, the View group, and Export are hidden, while the title, the controls of the scene, play, the scrubber, and the speed menu stay. It is meant for a slide on which the controls of the scene are worked by hand, where `kiosk` hides too much. With the value `panels`, the Add panel group and the icons of the panel heads stay, for a slide on which panels are added by hand.
 - The options `limits`, `keyFrameInterval`, `hardwareAcceleration`, `kiosk`, and `onFrame` of `exportVideo` raise the ceiling of an export, e.g. to one loop of 72 s at 60 fps, set the interval of the key frames, down to a single key frame, choose the encoder, record a kiosk picture from any viewer, and hand each frame to the caller. The type `ExportLimits` is exported.
-- In a panel with an orbit camera, the keys `x`, `y`, and `z` show the view from the positive side of that axis, and from the negative side with Shift, and `]` and `[` turn the view about the camera's up axis by 15 degrees, or 90 with Shift, as in ParaView (#7). They act on the panel under the pointer, or on every panel with an orbit camera, and a line at the foot of such a panel lists its moves and keys while the pointer is over it.
+- In a panel with an orbit camera, the keys `x`, `y`, and `z` show the view from the positive side of that axis, and from the negative side with Shift, and `.` and `,` turn the view about the camera's up axis by 15 degrees, or 90 with Shift (#7). They act on the panel under the pointer, or on every panel with an orbit camera, and a line at the foot of such a panel lists its moves and keys while the pointer is over it.
 
 ### Changed
 
@@ -47,6 +47,7 @@ Scene format 0.4 is written and read at this version, and scenes of formats 0.2 
 - A key pressed while a tab, a switch, or a button of the viewer has the focus acts on the viewer, unless the control takes the key itself, as a button takes Space and Enter. Hence `0` rewinds the loop right after a click on a tab, where the key was swallowed before.
 - The panels of the Broucke example draw each plot in a box, with the tick numbers and the axis titles outside it, and leave a margin around the box for the panel's head and the colorbar, so that neither the text nor the colorbar is drawn over the orbits.
 - The ends of a colorbar are written as integers when both are integers, as for an iterate count, so that a bar from 0 to 10 is ticked 0 and 10 rather than 0.00 and 10.0.
+- The keys `.` and `,` no longer step one frame, and `>` and `<` no longer step ten frames, since they now turn the view of an orbit camera (#7). The right and left arrows step one frame as before, and ten frames with Shift.
 
 ### Fixed
 

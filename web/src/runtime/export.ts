@@ -9,7 +9,7 @@
  */
 import { ArrayBufferTarget, Muxer } from 'mp4-muxer';
 import type { Clock } from '../scene.js';
-import { LAP_SECONDS, loopPosition, loopSeconds, positionIndex, positionProgress } from './readouts.js';
+import { REVOLUTION_SECONDS, loopPosition, loopSeconds, positionIndex, positionProgress } from './readouts.js';
 
 export interface ExportLimits {
   frames: number;
@@ -33,20 +33,20 @@ export interface Schedule {
 }
 
 /**
- * Every output frame, as live playback would draw it at the time of the frame. A loop of `steps` lasts
+ * Every output frame, as live playback would draw it at the time of the frame. A loop of `frameCount` frames lasts
  * `seconds / speed`, where `seconds` is the clock's loopSeconds. Output frame `k` is drawn at time
  * `k / fps`, at the progress reached then, with the integer part of the loop position as its index.
  */
-export function frameSchedule(steps: number, fps: number, loops: number, speed = 1, start = 0, seconds = LAP_SECONDS): Schedule {
+export function frameSchedule(frameCount: number, fps: number, loops: number, speed = 1, start = 0, seconds = REVOLUTION_SECONDS): Schedule {
   const count = Math.round((loops * seconds * fps) / speed);
-  // exact while k * steps * speed stays an integer below 2^53, which a ceiling of a few thousand
+  // exact while k * frameCount * speed stays an integer below 2^53, which a ceiling of a few thousand
   // frames and the speeds of a binary fraction keep
-  const at = (k: number) => loopPosition(start, k, fps, steps, speed, seconds);
+  const at = (k: number) => loopPosition(start, k, fps, frameCount, speed, seconds);
   return {
     count,
     duration: count / fps,
-    index: (k: number) => positionIndex(at(k), steps),
-    progress: (k: number) => positionProgress(at(k), steps),
+    index: (k: number) => positionIndex(at(k), frameCount),
+    progress: (k: number) => positionProgress(at(k), frameCount),
   };
 }
 
@@ -66,12 +66,12 @@ export function checkExport(count: number, fps: number, limits: ExportLimits = E
  * The frame rate an export row starts at, i.e. the highest of EXPORT_FPS at which one loop at
  * `speed` stays within EXPORT_LIMITS, or null when every rate in EXPORT_FPS exceeds them.
  */
-export function defaultExportFps(steps: number, speed: number, seconds = LAP_SECONDS): number | null {
-  for (const fps of [...EXPORT_FPS].reverse()) if (checkExport(frameSchedule(steps, fps, 1, speed, 0, seconds).count, fps) === null) return fps;
+export function defaultExportFps(frameCount: number, speed: number, seconds = REVOLUTION_SECONDS): number | null {
+  for (const fps of [...EXPORT_FPS].reverse()) if (checkExport(frameSchedule(frameCount, fps, 1, speed, 0, seconds).count, fps) === null) return fps;
   return null;
 }
 
-export type SizePreset = '720p' | '1080p' | 'stage';
+export type SizePreset = '720p' | '1080p' | 'panels';
 
 export interface ExportSize {
   /** The size of the video in pixels, as `width` and `height`. */
@@ -83,16 +83,16 @@ export interface ExportSize {
 
 /**
  * A preset's size at `fps`. The presets 720p and 1080p share one layout of 1280 by 720 CSS pixels,
- * at pixel ratios of 1 and 1.5. The preset `stage` is the stage's size rounded down to even pixels,
+ * at pixel ratios of 1 and 1.5. The preset `panels` is the size of the panel area rounded down to even pixels,
  * at the whole pixel ratio nearest the screen's, at most 2. Where H.264 cannot hold the size and the
  * rate there, the ratio is lowered in eighths to the largest at which it can. Both sides are kept even, as required by H.264.
  */
-export function sizePreset(preset: SizePreset, stage = { w: 1280, h: 720 }, devicePixelRatio = 1, fps = 30): ExportSize {
+export function sizePreset(preset: SizePreset, panelArea = { w: 1280, h: 720 }, devicePixelRatio = 1, fps = 30): ExportSize {
   if (preset === '720p') return { width: 1280, height: 720, pixelRatio: 1 };
   if (preset === '1080p') return { width: 1920, height: 1080, pixelRatio: 1.5 };
   const even = (x: number) => Math.max(2, 2 * Math.floor(x / 2));
-  const w = even(stage.w);
-  const h = even(stage.h);
+  const w = even(panelArea.w);
+  const h = even(panelArea.h);
   let size: ExportSize = { width: w, height: h, pixelRatio: 1 };
   for (let eighths = 8 * Math.min(2, Math.max(1, Math.round(devicePixelRatio))); eighths >= 1; eighths--) {
     const ratio = eighths / 8;
@@ -177,13 +177,13 @@ export interface ExportOptions {
   size?: SizePreset | ExportSize;
   fps?: number;
   loops?: number;
-  /** The playback speed, at which a lap of the clock lasts 8 s divided by the speed. Defaults to 1. */
+  /** The playback speed, at which a revolution of the clock lasts 8 s divided by the speed. Defaults to 1. */
   speed?: number;
   /** The frame index of the first frame. Defaults to 0. */
   start?: number;
   /**
-   * Whether each frame is the picture of a kiosk viewer of the video's size in CSS pixels, i.e. the stage alone. Otherwise a frame
-   * holds the stage over the caption readouts. Defaults to whether the viewer has the attribute `kiosk`.
+   * Whether each frame is the picture of a kiosk viewer of the video's size in CSS pixels, i.e. the panel area alone. Otherwise a frame
+   * holds the panel area over the caption readouts. Defaults to whether the viewer has the attribute `kiosk`.
    */
   kiosk?: boolean;
   /** The longest export allowed, by default EXPORT_LIMITS. */
@@ -211,8 +211,8 @@ export interface Picture {
 /** What an export draws, as the viewer gives it. */
 export interface ExportSource {
   clock: Clock;
-  /** The size of the picture on the page in CSS pixels, which the `stage` preset starts from. */
-  stage: { w: number; h: number };
+  /** The size of the picture on the page in CSS pixels, which the `panels` preset starts from. */
+  panelArea: { w: number; h: number };
   /** Lays out the picture at w by h CSS pixels, to be drawn at `ratio` video pixels per CSS pixel, and resolves once it can be drawn. */
   open(w: number, h: number, ratio: number): Promise<Picture>;
 }
@@ -258,9 +258,9 @@ export async function exportVideo(source: ExportSource, options: ExportOptions =
   const size =
     typeof options.size === 'object'
       ? options.size
-      : sizePreset(options.size ?? '720p', source.stage, typeof window === 'undefined' ? 1 : window.devicePixelRatio, fps);
+      : sizePreset(options.size ?? '720p', source.panelArea, typeof window === 'undefined' ? 1 : window.devicePixelRatio, fps);
   const clock = source.clock;
-  const schedule = frameSchedule(clock.steps, fps, options.loops ?? 1, options.speed ?? 1, options.start ?? 0, loopSeconds(clock));
+  const schedule = frameSchedule(clock.frame_count, fps, options.loops ?? 1, options.speed ?? 1, options.start ?? 0, loopSeconds(clock));
   const refused = checkExport(schedule.count, fps, options.limits);
   if (refused !== null) throw new Error(refused);
   const keyEvery = options.keyFrameInterval ?? 2 * fps;

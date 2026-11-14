@@ -6,10 +6,10 @@
 // light (the viewer's palette, by default the scene's theme), --font file.woff2 (a font for the text on the video, by default
 // the viewer's), --poster file.png (by default the MP4's path with .png), and --poster-at S (the time of the poster in seconds,
 // by default the last frame). Chrome is $CHROME, else the default macOS install, else google-chrome on the PATH.
-// With --page full or --page lean, the whole page is recorded in place of the panels, i.e. the title, the controls, the readouts,
-// and the transport as they are shown while the page plays, with the viewer's lean attribute under lean. The page is played on a
+// With --page full or --page minimal, the whole page is recorded in place of the panels, i.e. the title, the controls, the readouts,
+// and the playback control as they are shown while the page plays, with the viewer's minimal attribute under minimal. The page is played on a
 // clock that is set to the time of each frame, and a screenshot of each frame is encoded by ffmpeg, which must be on the PATH.
-//   node web/scripts/video.mjs examples/broucke/broucke.html broucke.mp4 --size 2400x1350 --dpr 2 --fps 60 --page lean
+//   node web/scripts/video.mjs examples/broucke/broucke.html broucke.mp4 --size 2400x1350 --dpr 2 --fps 60 --page minimal
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -20,7 +20,7 @@ const args = process.argv.slice(2);
 const [page, out] = args.filter((a, i) => !a.startsWith('--') && !args[i - 1]?.startsWith('--'));
 if (page === undefined || out === undefined) {
   console.error(
-    'usage: node web/scripts/video.mjs <page.html> <video.mp4> [--size WxH] [--dpr D] [--fps N] [--loops N] [--theme dark|light] [--font file.woff2] [--font-bold file.woff2] [--font-fallback family] [--poster file.png] [--poster-at S] [--page full|lean]',
+    'usage: node web/scripts/video.mjs <page.html> <video.mp4> [--size WxH] [--dpr D] [--fps N] [--loops N] [--theme dark|light] [--font file.woff2] [--font-bold file.woff2] [--font-fallback family] [--poster file.png] [--poster-at S] [--page full|minimal]',
   );
   process.exit(2);
 }
@@ -41,8 +41,8 @@ const fallback = option('--font-fallback', null);
 const poster = option('--poster', out.replace(/\.mp4$/i, '') + '.png');
 const posterAt = option('--poster-at', null);
 const whole = option('--page', null);
-if (whole !== null && whole !== 'full' && whole !== 'lean') {
-  console.error(`--page is full or lean, not ${whole}`);
+if (whole !== null && whole !== 'full' && whole !== 'minimal') {
+  console.error(`--page is full or minimal, not ${whole}`);
   process.exit(2);
 }
 if (whole !== null && spawnSync('ffmpeg', ['-version']).error !== undefined) {
@@ -134,10 +134,10 @@ try {
     let v = document.querySelector('tycho-viewer');
     for (let i = 0; i < 600 && !v?.state; i++) await sleep(100);
     if (!v?.state) throw new Error('the viewer did not load a scene');
-    if (${whole === 'lean'}) {
-      // the viewer reads lean once, when it builds its controls, hence a copy that carries the attribute replaces it
+    if (${whole === 'minimal'}) {
+      // the viewer reads minimal once, when it builds its controls, hence a copy that carries the attribute replaces it
       const copy = v.cloneNode(true);
-      copy.setAttribute('lean', '');
+      copy.setAttribute('minimal', '');
       v.replaceWith(copy);
       v = copy;
       for (let i = 0; i < 600 && !v.state; i++) await sleep(100);

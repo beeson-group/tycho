@@ -3,8 +3,8 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { sceneTheme } from '../src/runtime/colors';
 import { GeometryCache } from '../src/runtime/geometry';
-import { overlaps, Shared, StageRenderer } from '../src/runtime/renderer';
-import type { Keys, Layout, State } from '../src/scene';
+import { overlaps, Shared, PanelAreaRenderer } from '../src/runtime/renderer';
+import type { Keyframes, Layout, State } from '../src/scene';
 import { baseScene, MemoryStore } from './helpers';
 
 /** Copies a panel's region `r` into a target of 782 by 600 px, and returns where the copy ends. */
@@ -18,7 +18,7 @@ function copyEnd(r: THREE.Vector4): { x: number; y: number } {
       end = { x: corner.x + region.max.x - region.min.x, y: corner.y + region.max.y - region.min.y };
     },
   };
-  const stage = Object.assign(Object.create(StageRenderer.prototype), { gl, scratch: null, region: new THREE.Box2(), corner: new THREE.Vector2() });
+  const stage = Object.assign(Object.create(PanelAreaRenderer.prototype), { gl, scratch: null, region: new THREE.Box2(), corner: new THREE.Vector2() });
   stage.drawFine({ staticScene: new THREE.Scene(), camera: new THREE.Camera() }, new THREE.WebGLRenderTarget(782, 600), r);
   return end;
 }
@@ -118,10 +118,10 @@ class PixelGl {
   }
 }
 
-/** A stage of 100 by 40 CSS pixels whose panels p1 and p2 draw one static track each, without WebGL, laid out by `layout`. */
+/** A stage of 100 by 40 CSS pixels whose panels p1 and p2 draw one static trajectory each, without WebGL, laid out by `layout`. */
 function pixelStage(layout: Layout) {
   const scene = baseScene({ version: '0.4' });
-  scene.views.main!.layers = [{ kind: 'track', sets: { set: 's' }, members: 'all', reveal: 'none' }];
+  scene.panels.main!.layers = [{ kind: 'trajectories', sets: { set: 's' }, members: 'all', reveal: 'none' }];
   const data = new MemoryStore()
     .add('off', [0, 2], 'uint32')
     .add('pos', [
@@ -137,7 +137,7 @@ function pixelStage(layout: Layout) {
     for (const [pid, p] of panels) if (p.staticScene === s) return Number(pid.slice(1));
     return null;
   }, blit.scene);
-  const stage = Object.assign(Object.create(StageRenderer.prototype), {
+  const stage = Object.assign(Object.create(PanelAreaRenderer.prototype), {
     gl,
     ctx,
     panels,
@@ -158,7 +158,7 @@ function pixelStage(layout: Layout) {
     corner: new THREE.Vector2(),
     onChange: () => undefined,
   });
-  const state: State = { clock: { channel: 'time' }, panels: { p1: { view: 'main' }, p2: { view: 'main' } }, layout };
+  const state: State = { clock: { channel: 'time' }, panels: { p1: { panel: 'main' }, p2: { panel: 'main' } }, layout };
   // the timeline of the default clock lasts 8 s
   const at = (s: number) => stage.renderAt(state, s / 8, 100, 40, 1);
   /** The numbers of the panels that the canvas shows in panel `pid`'s region. */
@@ -171,7 +171,7 @@ describe('the underlay shared by the panels', () => {
     kind: 'split',
     dir: 'row',
     ratio: 0.5,
-    keys: keys.map((k) => [...k]) as Keys,
+    keyframes: keys.map((k) => [...k]) as Keyframes,
     a: { kind: 'panel', id: 'p1' },
     b: { kind: 'panel', id: 'p2' },
   });

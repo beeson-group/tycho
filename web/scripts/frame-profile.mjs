@@ -3,12 +3,12 @@
 // alone and with a 1x1 readPixels that waits for the GPU.
 //   node web/scripts/frame-profile.mjs examples/broucke/broucke.html --set family=11 --set branch=apoapsis
 // The options are --frames N (600 by default), --size WxH (1600x1000 CSS px by default), --dpr D (2 by default),
-// and the repeatable --set var=value for a scene-scoped variable. The option --no-cache draws every layer every
+// and the repeatable --set input=value for a shared input. The option --no-cache draws every layer every
 // frame, i.e. the reference path of the renderer. With --compare-cache, the script compares frames drawn with
 // and without the static-layer cache pixel by pixel, instead of timing. With --drag id:from:to, it instead times
-// 240 paused frames that each move selector id across [from, to], as a slider drag does, with and without coarse
+// 240 paused frames that each move the parameter input id across [from, to], as a slider drag does, with and without coarse
 // drags. It then checks the frames drawn after the drag stops against frames drawn without the cache. The option
-// --switch var=value, which can be repeated and goes with --drag, sets the variables after the drag and checks
+// --switch input=value, which can be repeated and goes with --drag, sets the inputs after the drag and checks
 // the frames drawn after the change. The option --json prints machine-readable output. Chrome is $CHROME, else
 // the default macOS install, else google-chrome on the PATH. The numbers leave out the headed compositor, hence
 // they rank costs and show regressions rather than predict the frame rate of a display.
@@ -21,7 +21,7 @@ import { extname, join, resolve, sep } from 'node:path';
 const args = process.argv.slice(2);
 const page = args.find((a) => !a.startsWith('--') && extname(a) === '.html');
 if (page === undefined) {
-  console.error('usage: node web/scripts/frame-profile.mjs <page.html> [--frames N] [--size WxH] [--dpr D] [--set var=value]... [--json]');
+  console.error('usage: node web/scripts/frame-profile.mjs <page.html> [--frames N] [--size WxH] [--dpr D] [--set input=value]... [--json]');
   process.exit(2);
 }
 const option = (name, fallback) => {
@@ -123,19 +123,19 @@ async function openTab() {
 const MEASURE = `(async (frames, sets, cache) => {
   const v = document.querySelector('tycho-viewer');
   v.renderer.cacheStatic = cache;
-  const steps = v.scene.clock.steps;
+  const frameCount = v.scene.clock.frame_count;
   for (const [id, value] of sets) {
-    const variable = v.scene.variables[id];
-    const parsed = variable.kind === 'selector' ? Number(value) : variable.kind === 'toggle' ? value === 'true' : value;
-    v.store.update((s) => ({ ...s, variables: { ...s.variables, [id]: parsed } }));
+    const input = v.scene.inputs[id];
+    const parsed = input.kind === 'parameter' ? Number(value) : input.kind === 'toggle' ? value === 'true' : value;
+    v.store.update((s) => ({ ...s, inputs: { ...s.inputs, [id]: parsed } }));
   }
   const glc = v.renderer.gl.getContext();
   const pixel = new Uint8Array(4);
-  const laps = v.scene.clock.laps ?? 1;
+  const revolutions = v.scene.clock.revolutions ?? 1;
   v.store.setPlaying(true);
   v.anchor = { index: 0, time: 0 };
-  // at(q) is the time at which the tick lands at progress q, from the position x = now * steps * speed / (1000 * 8 * laps)
-  const at = (q) => (q * 1000 * 8 * laps) / v.speed;
+  // at(q) is the time at which the tick lands at progress q, from the position x = now * frameCount * speed / (1000 * 8 * revolutions)
+  const at = (q) => (q * 1000 * 8 * revolutions) / v.speed;
   const run = (n, wait) => {
     const out = new Float64Array(n);
     for (let i = 0; i < n; i++) {
@@ -157,17 +157,17 @@ const MEASURE = `(async (frames, sets, cache) => {
     const ext = glc.getExtension('WEBGL_debug_renderer_info');
     return ext ? glc.getParameter(ext.UNMASKED_RENDERER_WEBGL) : 'unknown';
   })();
-  return { steps, panels: v.renderer.panels.size, cpu, gpu, renderer };
+  return { frameCount, panels: v.renderer.panels.size, cpu, gpu, renderer };
 })(${frames}, ${JSON.stringify(sets)}, ${cache})`;
 
-// DRAG runs in the page. It simulates a slider drag with one new selector value per frame, then draws the frames after it stops.
+// DRAG runs in the page. It simulates a slider drag with one new parameter value per frame, then draws the frames after it stops.
 const DRAG = `(async (spec, switches) => {
   const [id, from, to] = spec.split(':');
   const v = document.querySelector('tycho-viewer');
   const R = v.renderer;
   const glc = R.gl.getContext();
   const pixel = new Uint8Array(4);
-  const set = (x) => v.store.update((s) => ({ ...s, variables: { ...s.variables, [id]: x } }));
+  const set = (x) => v.store.update((s) => ({ ...s, inputs: { ...s.inputs, [id]: x } }));
   // a paused viewer draws only after a change, hence frame() forces a draw for the comparison
   const frame = () => {
     v.dirty = true;
@@ -214,7 +214,7 @@ const DRAG = `(async (spec, switches) => {
   checks.push(check('the refine after the drag', 1));
   checks.push(check('two frames after the refine', 2));
   if (switches.length > 0) {
-    for (const [k, value] of switches) v.store.update((s) => ({ ...s, variables: { ...s.variables, [k]: value } }));
+    for (const [k, value] of switches) v.store.update((s) => ({ ...s, inputs: { ...s.inputs, [k]: value } }));
     checks.push(check('the frame of the change', 1));
     checks.push(check('three frames after the change', 3));
   }
@@ -226,17 +226,17 @@ const DRAG = `(async (spec, switches) => {
 const COMPARE = `(async (sets) => {
   const v = document.querySelector('tycho-viewer');
   for (const [id, value] of sets) {
-    const variable = v.scene.variables[id];
-    const parsed = variable.kind === 'selector' ? Number(value) : variable.kind === 'toggle' ? value === 'true' : value;
-    v.store.update((s) => ({ ...s, variables: { ...s.variables, [id]: parsed } }));
+    const input = v.scene.inputs[id];
+    const parsed = input.kind === 'parameter' ? Number(value) : input.kind === 'toggle' ? value === 'true' : value;
+    v.store.update((s) => ({ ...s, inputs: { ...s.inputs, [id]: parsed } }));
   }
   const glc = v.renderer.gl.getContext();
   const w = glc.drawingBufferWidth;
   const h = glc.drawingBufferHeight;
-  const laps = v.scene.clock.laps ?? 1;
+  const revolutions = v.scene.clock.revolutions ?? 1;
   v.store.setPlaying(true);
   v.anchor = { index: 0, time: 0 };
-  const at = (q) => (q * 1000 * 8 * laps) / v.speed;
+  const at = (q) => (q * 1000 * 8 * revolutions) / v.speed;
   const shot = (q) => {
     v.tick(at(q));
     if (v.raf) cancelAnimationFrame(v.raf);
@@ -316,13 +316,24 @@ try {
   const ms = (x) => x.toFixed(2);
   if (json) {
     console.log(
-      JSON.stringify({ page, frames, size: [width, height], dpr, sets, renderer: result.renderer, panels: result.panels, steps: result.steps, cpu, gpu }),
+      JSON.stringify({
+        page,
+        frames,
+        size: [width, height],
+        dpr,
+        sets,
+        renderer: result.renderer,
+        panels: result.panels,
+        frame_count: result.frameCount,
+        cpu,
+        gpu,
+      }),
     );
   } else {
     console.log(
-      `${page}: ${result.panels} panels, ${result.steps} steps, ${frames} frames at ${width}x${height} css px, pixel ratio ${dpr}, ${result.renderer}`,
+      `${page}: ${result.panels} panels, ${result.frameCount} frame indices, ${frames} frames at ${width}x${height} css px, pixel ratio ${dpr}, ${result.renderer}`,
     );
-    if (sets.length) console.log(`variables: ${sets.map(([k, v]) => `${k}=${v}`).join(', ')}`);
+    if (sets.length) console.log(`inputs: ${sets.map(([k, v]) => `${k}=${v}`).join(', ')}`);
     console.log('| per frame, ms | median | p90 | p99 | max | over 8.3 ms |');
     console.log('|---|---|---|---|---|---|');
     console.log(`| CPU only | ${ms(cpu.median)} | ${ms(cpu.p90)} | ${ms(cpu.p99)} | ${ms(cpu.max)} | ${cpu.over8} |`);

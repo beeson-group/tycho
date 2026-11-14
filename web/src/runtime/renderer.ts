@@ -1,58 +1,58 @@
 /**
- * One WebGL renderer for the whole stage. Every panel is a scissor rectangle of the one canvas,
+ * One WebGL renderer for the whole panel area. Every panel is a scissor rectangle of the one canvas,
  * with a camera and a three.js scene per panel, and one redraw draws them all. A frame is a
- * function of the state snapshot, the frame index, the stage size, and the pixel scale, plus
+ * function of the state snapshot, the frame index, the panel area size, and the pixel scale, plus
  * whatever the user did to a camera after it was fitted.
  *
- * A track layer draws from the static buffers of geometry.ts, one pass per lap (rule C6 of
+ * A trajectory layer draws from the static buffers of geometry.ts, one pass per revolution (rule `revolutions` of
  * spec/tycho-scene.md). Its shader compares each segment's two readings with the revealed range of
- * its track. Each range is read from a small float texture with one texel per track, so that the
- * reveals `none`, `grow`, and `trail` differ only in this range (rules L1, L2 and C6). The ranges
- * are per track rather than uniforms because in `value` mode every track has a separate reading
- * (rule C2). A second texel per track holds the opacity a highlight's kernel gives it. A line of
+ * its trajectory. Each range is read from a small float texture with one texel per trajectory, so that the
+ * reveals `none`, `grow`, and `trail` differ only in this range (rules `polyline`, `trail-wrap` and `revolutions`). The ranges
+ * are per trajectory rather than uniforms because in `value` mode every trajectory has a separate reading
+ * (rule `clock-mode`). A second texel per trajectory holds the opacity a highlight's kernel gives it. A line of
  * width 1 is a GL line. A wider one is a quad per segment, offset in screen space by half the width
  * in CSS pixels on each side, and along a trail the width and the opacity taper from the head to
- * the tail. The CPU draws the pieces at the ends of the range, the heads (rule L3), and the bodies
- * and their trails (rule L4) with the evaluator's functions. A layer in the driver's context (rule L6)
+ * the tail. The CPU draws the pieces at the ends of the range, the heads (rule `head`), and the bodies
+ * and their trails (rule `body-layer`) with the evaluator's functions. A layer in the reference trajectory's context (rule `read-from`)
  * keeps its buffers in the frame of its set, and its group's matrix is the affine map into the display
- * frame at the driver's reading, i.e. the blend of the maps in the contexts of two driver samples.
- * Under a plane camera the axes and the grid follow the visible rectangle and give their tick
+ * frame at the reference trajectory's reading, i.e. the blend of the maps in the contexts of two reference samples.
+ * Under a 2d camera the axes and the grid follow the visible rectangle and give their tick
  * numbers and titles as panel labels.
  */
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { fail, TychoError } from '../errors.js';
-import { bound, clockLaps, lapOf, layerClock, type TrackClock } from '../evaluate/clock.js';
+import { bound, clockRevolutions, revolutionOf, layerClock, type TrajectoryClock } from '../evaluate/clock.js';
 import {
   arrowLayer,
-  driverContexts,
-  driverPoint,
+  referenceContexts,
+  referencePoint,
   hasHead,
   labelLayer,
   layerEnv,
   loopPolyline,
-  outlineLayer,
+  insetBoxLayer,
   point,
   pointsLayer,
   trail as trailVertices,
   whole,
-  type Driver,
+  type Reference,
   type LayerEnv,
   type Vertex,
 } from '../evaluate/layers.js';
 import { cameraAt } from '../evaluate/index.js';
-import { numberAt, opacityAt, planeAxes, sizeAt, timeAt, tweenValue, type CameraWindow, type Key } from '../evaluate/timeline.js';
-import type { OutlineLayerResult, Vec3 } from '../evaluate/types.js';
+import { numberAt, opacityAt, planeAxes, sizeAt, timeAt, keyframesValue, type CameraWindow, type Keyframe } from '../evaluate/timeline.js';
+import type { InsetBoxLayerResult, Vec3 } from '../evaluate/types.js';
 import type { Context, Frames } from '../evaluate/frames.js';
 import {
   displayFrame,
-  driverMember,
+  referenceMember,
   layerVisible,
   members as resolveMembers,
   oneSet,
-  selectorTrack,
-  variableDef,
-  variableValue,
+  parameterMember,
+  inputDef,
+  inputValue,
   type PanelScope,
 } from '../evaluate/resolve.js';
 import type { SetData } from '../evaluate/sets.js';
@@ -66,12 +66,12 @@ import type {
   Layout,
   Marker,
   MarkLayer,
-  OutlineLayer,
+  InsetBoxLayer,
   PointsLayer,
   Scene,
   State,
-  TrackLayer,
-  View,
+  TrajectoriesLayer,
+  Panel,
 } from '../scene.js';
 import { INDEX_CHANNEL } from '../scene.js';
 import {
@@ -80,7 +80,7 @@ import {
   gradientCss,
   gradientStops,
   hexRgb,
-  isStepped,
+  isThreshold,
   mixHex,
   sceneTheme,
   themed,
@@ -94,21 +94,21 @@ import { markerCanvas, markerStroke, TICK_SIZE, type BoxPaint } from './paint.js
 import {
   EMPTY_RANGE,
   GeometryCache,
-  lapPairs,
+  revolutionPairs,
   pairs,
   needsReading,
   pairReadings,
-  pairTracks,
+  pairTrajectories,
   readingPairs,
   revealSpec,
-  revealTrack,
+  revealTrajectory,
   slicePairs,
-  trackLapPairs,
+  trajectoryRevolutionPairs,
   trailCapacity,
   vertexReading,
   type RevealSpec,
-  type TrackGeometry,
-  type TrackReadings,
+  type TrajectoryGeometry,
+  type TrajectoryReadings,
 } from './geometry.js';
 import { outlineTriangles } from './outline.js';
 import { mergeColorbars, type Colorbar, type PanelLabel } from './overlay.js';
@@ -130,18 +130,18 @@ const TAPER_OPACITY = 0.35;
 const HIDDEN = 'vec4(2.0, 2.0, 2.0, 1.0)';
 
 /**
- * The comparison of rules L1, L2 and C6. A segment of lap uLap is shown when both its readings
- * lie inside its track's range, whose texel holds the lap and the within-lap reading of each end.
+ * The comparison of rules `polyline`, `trail-wrap` and `revolutions`. A segment of revolution uRevolution is shown when both its readings
+ * lie inside its trajectory's range, whose texel holds the revolution and the within-revolution reading of each end.
  * Along a trail, `along` is 1 at the head and falls to 0 one trail behind it, in loop readings.
  */
 const REVEAL_GLSL = /* glsl */ `
 attribute vec2 useg;
-attribute float track;
+attribute float trajectory;
 uniform highp sampler2D uRanges;
 uniform highp sampler2D uAlphas;
 uniform int uRangesWidth;
 uniform int uKernel;
-uniform float uLap;
+uniform float uRevolution;
 uniform float uSkip;
 uniform float uOpacity;
 uniform float uFraction;
@@ -152,13 +152,13 @@ ivec2 texelOf(float tr) {
   return ivec2(t % uRangesWidth, t / uRangesWidth);
 }
 bool revealed(vec4 r) {
-  bool lo = uLap > r.x || (uLap == r.x && r.y < useg.x);
-  bool hi = uLap < r.z || (uLap == r.z && useg.y < r.w);
-  return lo && hi && !(uSkip >= 0.0 && abs(track - uSkip) < 0.5);
+  bool lo = uRevolution > r.x || (uRevolution == r.x && r.y < useg.x);
+  bool hi = uRevolution < r.z || (uRevolution == r.z && useg.y < r.w);
+  return lo && hi && !(uSkip >= 0.0 && abs(trajectory - uSkip) < 0.5);
 }
 float along(vec4 r, float u) {
   if (uFraction <= 0.0) return 1.0;
-  return clamp(1.0 - (r.z + r.w - (uLap + u)) / uFraction, 0.0, 1.0);
+  return clamp(1.0 - (r.z + r.w - (uRevolution + u)) / uFraction, 0.0, 1.0);
 }
 float alphaOf(float tr) {
   return uKernel == 1 ? texelFetch(uAlphas, texelOf(tr), 0).x : uOpacity;
@@ -202,7 +202,7 @@ vec4 corner(vec3 a, vec3 b, float w) {
 const NARROW_VERTEX =
   REVEAL_GLSL +
   /* glsl */ `
-#ifdef USE_TRACK_COLOR
+#ifdef USE_TRAJECTORY_COLOR
 attribute vec3 tcolor;
 #endif
 #ifdef DASH
@@ -219,23 +219,23 @@ varying float vDist;
 uniform vec3 uColor;
 varying vec4 vColor;
 void main() {
-  vec4 r = texelFetch(uRanges, texelOf(track), 0);
+  vec4 r = texelFetch(uRanges, texelOf(trajectory), 0);
   if (!revealed(r)) {
     vColor = vec4(0.0);
     gl_Position = ${HIDDEN};
     return;
   }
   float s = along(r, gl_VertexID % 2 == 1 ? useg.y : useg.x);
-#ifdef USE_TRACK_COLOR
+#ifdef USE_TRAJECTORY_COLOR
   vec3 rgb = tcolor;
 #else
   vec3 rgb = uColor;
 #endif
 #ifdef DASH
-  // the pattern starts again where the track last entered the stage
+  // the pattern starts again where the trajectory last entered the panel area
   vDist = dist - restartAt(float(gl_VertexID / 2));
 #endif
-  vColor = vec4(rgb, uFade * alphaOf(track) * mix(uTaperOpacity, 1.0, s));
+  vColor = vec4(rgb, uFade * alphaOf(trajectory) * mix(uTaperOpacity, 1.0, s));
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 }
 `;
@@ -246,7 +246,7 @@ const WIDE_VERTEX =
   /* glsl */ `
 attribute vec3 instanceStart;
 attribute vec3 instanceEnd;
-#ifdef USE_TRACK_COLOR
+#ifdef USE_TRAJECTORY_COLOR
 attribute vec3 colorStart;
 attribute vec3 colorEnd;
 #endif
@@ -267,7 +267,7 @@ uniform float uWidth;
 uniform float uTaperWidth;
 varying vec4 vColor;
 void main() {
-  vec4 r = texelFetch(uRanges, texelOf(track), 0);
+  vec4 r = texelFetch(uRanges, texelOf(trajectory), 0);
   if (!revealed(r)) {
     vColor = vec4(0.0);
     gl_Position = ${HIDDEN};
@@ -275,7 +275,7 @@ void main() {
   }
   bool atEnd = position.y > 0.5;
   float s = along(r, atEnd ? useg.y : useg.x);
-#ifdef USE_TRACK_COLOR
+#ifdef USE_TRAJECTORY_COLOR
   vec3 rgb = atEnd ? colorEnd : colorStart;
 #else
   vec3 rgb = uColor;
@@ -283,7 +283,7 @@ void main() {
 #ifdef DASH
   vDist = (atEnd ? distEnd : distStart) - restartAt(float(gl_InstanceID));
 #endif
-  vColor = vec4(rgb, uFade * alphaOf(track) * mix(uTaperOpacity, 1.0, s));
+  vColor = vec4(rgb, uFade * alphaOf(trajectory) * mix(uTaperOpacity, 1.0, s));
   gl_Position = corner(instanceStart, instanceEnd, uWidth * mix(uTaperWidth, 1.0, s));
 }
 `;
@@ -403,7 +403,7 @@ export function niceStep(range: number, target = 6): number {
 /** The screen axes of a camera (right, up, and toward the user) in the display frame. */
 function cameraBasis(cam: Camera): { right: THREE.Vector3; up: THREE.Vector3; normal: THREE.Vector3 } {
   const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
-  if (cam.kind === 'plane') {
+  if (cam.kind === '2d') {
     if (cam.plane === 'xz') return { right: v(1, 0, 0), up: v(0, 0, 1), normal: v(0, -1, 0) };
     if (cam.plane === 'yz') return { right: v(0, 1, 0), up: v(0, 0, 1), normal: v(1, 0, 0) };
     return { right: v(1, 0, 0), up: v(0, 1, 0), normal: v(0, 0, 1) };
@@ -416,9 +416,9 @@ function cameraBasis(cam: Camera): { right: THREE.Vector3; up: THREE.Vector3; no
   return { right, up: e3, normal };
 }
 
-/** The factors by which an orbit camera stretches what it shows along x, y, and z, or 1 along each. */
+/** The factors by which a 3d camera stretches what it shows along x, y, and z, or 1 along each. */
 function stretchOf(cam: Camera): THREE.Vector3 {
-  return cam.kind === 'orbit' && cam.stretch !== undefined ? new THREE.Vector3(...cam.stretch) : new THREE.Vector3(1, 1, 1);
+  return cam.kind === '3d' && cam.stretch !== undefined ? new THREE.Vector3(...cam.stretch) : new THREE.Vector3(1, 1, 1);
 }
 
 /** The quad of a segment, with four corners and two triangles, drawn once per instance. */
@@ -483,24 +483,24 @@ interface DrawContext {
 
 // what a panel draws, resolved from the state
 
-export interface TrackPlan {
-  kind: 'track';
+export interface TrajectoryPlan {
+  kind: 'trajectories';
   index: number;
-  layer: TrackLayer;
+  layer: TrajectoriesLayer;
   set: SetData | null;
-  /** The members of rule V3, in increasing order. */
+  /** The members of rule `members`, in increasing order. */
   members: number[];
-  /** The highlighted member, when the highlight's selector resolves to one of the members. */
+  /** The highlighted member, when the highlight's parameter input resolves to one of the members. */
   highlight: number | null;
-  /** The track that the highlight's selector resolves to in the set, a member or not, which is the center of its kernel. */
+  /** The trajectory that the highlight's parameter input resolves to in the set, a member or not, which is the center of its kernel. */
   selected: number | null;
   /** The clock channel the layer reads, or null when it does not take a reading. */
   channel: string | null;
   /** The layer's color, where a colormap keyed on a choice is resolved to the colormap that the panel's value of the choice maps to (section 2.7). */
   color: ColorSpec | undefined;
-  /** The context its samples are transformed in (rule L6). */
-  context: 'own' | 'driver';
-  /** The clock the layer reads, the scene's or its own (rule K4). */
+  /** The context its samples are transformed in (rule `read-from`). */
+  readFrom: 'own' | 'reference';
+  /** The clock the layer reads, the scene's or its own (rule `layer-clock`). */
   clock: Clock;
 }
 
@@ -520,11 +520,11 @@ export interface ArrowPlan {
   kind: 'arrow';
   index: number;
   layer: ArrowLayer;
-  /** Null when the set query does not match any track set. */
+  /** Null when the set query does not match any trajectory set. */
   set: SetData | null;
   /** The clock channel the layer reads. */
   channel: string;
-  /** The clock the layer reads, the scene's or its own (rule K4). */
+  /** The clock the layer reads, the scene's or its own (rule `layer-clock`). */
   clock: Clock;
 }
 
@@ -532,7 +532,7 @@ export interface PointsPlan {
   kind: 'points';
   index: number;
   layer: PointsLayer;
-  /** Null when the set query does not match any track set. */
+  /** Null when the set query does not match any trajectory set. */
   set: SetData | null;
 }
 
@@ -544,75 +544,77 @@ export interface LabelPlan {
   set: SetData | null;
 }
 
-export interface OutlinePlan {
-  kind: 'outline';
+export interface InsetBoxPlan {
+  kind: 'inset_box';
   index: number;
-  layer: OutlineLayer;
+  layer: InsetBoxLayer;
 }
 
-export type LayerPlan = TrackPlan | ArrowPlan | OutlinePlan | BodyPlan | MarkPlan | PointsPlan | LabelPlan;
+export type LayerPlan = TrajectoryPlan | ArrowPlan | InsetBoxPlan | BodyPlan | MarkPlan | PointsPlan | LabelPlan;
 
 export interface PanelPlan {
-  viewId: string;
-  view: View;
+  /** The id of the declared panel that the shown panel shows. */
+  declaredId: string;
+  declared: Panel;
   display: string;
   scope: PanelScope;
-  driver: Driver;
+  reference: Reference;
   layers: LayerPlan[];
 }
 
-/** A layer's color with a colormap keyed on a choice (section 2.7) resolved by the panel's value of the choice (rule V1). */
+/** A layer's color with a colormap keyed on a choice (section 2.7) resolved by the panel's value of the choice (rule `input-scope`). */
 export function resolveColor(scope: PanelScope, spec: ColorSpec | undefined): ColorSpec | undefined {
-  if (spec === undefined || typeof spec === 'string' || isStepped(spec) || typeof spec.colormap === 'string') return spec;
+  if (spec === undefined || typeof spec === 'string' || isThreshold(spec) || typeof spec.colormap === 'string') return spec;
   const by = spec.colormap;
-  if (variableDef(scope.scene, by.var)?.kind !== 'choice') fail('2.7', `the colormap is keyed on ${by.var}, which is not a choice`);
-  const value = variableValue(scope, by.var);
+  if (inputDef(scope.scene, by.input)?.kind !== 'choice') fail('panel', `the colormap is keyed on ${by.input}, which is not a choice`);
+  const value = inputValue(scope, by.input);
   const name = typeof value === 'string' && Object.hasOwn(by.map, value) ? by.map[value] : undefined;
-  if (name === undefined) fail('2.7', `the colormap keyed on ${by.var} does not name a colormap for ${JSON.stringify(value)}`);
+  if (name === undefined) fail('panel', `the colormap keyed on ${by.input} does not name a colormap for ${JSON.stringify(value)}`);
   return { ...spec, colormap: name };
 }
 
-/** What a panel of a state draws: its display frame, its driver, and its visible layers resolved. */
+/** What a panel of a state draws: its display frame, its reference, and its visible layers resolved. */
 export function planPanel(scene: Scene, geometry: GeometryCache, state: State, pid: string): PanelPlan {
   const panel = state.panels[pid]!;
-  const view = scene.views[panel.view]!;
+  const declared = scene.panels[panel.panel]!;
   const scope: PanelScope = { scene, state, panel };
-  const display = displayFrame(scope, view);
-  const laps = clockLaps(scene.clock);
-  const driverId = oneSet(scope, view.driver.sets);
-  const driver = driverId === null ? null : { set: geometry.sets.get(driverId), track: 0 };
-  if (driver) {
-    driver.track = driverMember(scope, view.driver.member, driver.set);
-    if (laps > 1 && !driver.set.periodic) fail('C6', `the driver's track set ${driver.set.id} is not periodic, and the clock has ${laps} laps`);
+  const display = displayFrame(scope, declared);
+  const revolutions = clockRevolutions(scene.clock);
+  const referenceId = oneSet(scope, declared.reference.sets);
+  const reference = referenceId === null ? null : { set: geometry.sets.get(referenceId), trajectory: 0 };
+  if (reference) {
+    reference.trajectory = referenceMember(scope, declared.reference.member, reference.set);
+    if (revolutions > 1 && !reference.set.periodic)
+      fail('revolutions', `the reference trajectory's trajectory set ${reference.set.id} is not periodic, and the clock has ${revolutions} revolutions`);
   }
   const layers: LayerPlan[] = [];
-  view.layers.forEach((layer, index) => {
+  declared.layers.forEach((layer, index) => {
     if (!layerVisible(scope, layer)) return;
-    if (layer.kind === 'track') {
+    if (layer.kind === 'trajectories') {
       const id = oneSet(scope, layer.sets);
       const set = id === null ? null : geometry.sets.get(id);
       const members = set === null ? [] : resolveMembers(scope, layer.members, set);
       const clock = layer.clock === undefined ? scene.clock : layerClock(scene.clock, layer.clock);
       const channel = needsReading(layer, clock) ? (layer.clock === undefined ? state.clock.channel : clock.channels[0]!) : null;
-      const context = layer.context ?? 'own';
-      if (context !== 'own' && context !== 'driver') fail('L6', `a track layer's context is ${JSON.stringify(context)}, not own or driver`);
-      if (set !== null && channel !== null && layer.clock === undefined && laps > 1 && !set.periodic)
-        fail('C6', `a reading is taken on track set ${set.id}, which is not periodic, and the clock has ${laps} laps`);
+      const readFrom = layer.read_from ?? 'own';
+      if (readFrom !== 'own' && readFrom !== 'reference')
+        fail('read-from', `a trajectories layer reads from ${JSON.stringify(readFrom)}, not own or reference`);
+      if (set !== null && channel !== null && layer.clock === undefined && revolutions > 1 && !set.periodic)
+        fail('revolutions', `a reading is taken on trajectory set ${set.id}, which is not periodic, and the clock has ${revolutions} revolutions`);
       const hl = layer.highlight;
       if (hl?.kernel !== undefined) {
-        const sel = variableDef(scene, hl.var);
-        if (sel?.kind !== 'selector' || (sel.by ?? 'nearest') !== 'nearest' || sel.parameter === undefined)
-          fail('2.7', `a highlight kernel needs a selector by nearest, and ${hl.var} is not one`);
+        const sel = inputDef(scene, hl.input);
+        if (sel?.kind !== 'parameter') fail('panel', `a highlight kernel needs a parameter input, and ${hl.input} is not one`);
       }
-      const selected = set !== null && hl !== undefined ? selectorTrack(scope, { var: hl.var }, set) : null;
+      const selected = set !== null && hl !== undefined ? parameterMember(scope, { input: hl.input }, set) : null;
       const highlight = selected !== null && members.includes(selected) ? selected : null;
-      layers.push({ kind: 'track', index, layer, set, members, highlight, selected, channel, color: resolveColor(scope, layer.color), context, clock });
+      layers.push({ kind: 'trajectories', index, layer, set, members, highlight, selected, channel, color: resolveColor(scope, layer.color), readFrom, clock });
     } else if (layer.kind === 'arrow') {
       const id = oneSet(scope, layer.sets);
       const clock = layer.clock === undefined ? scene.clock : layerClock(scene.clock, layer.clock);
       const channel = layer.clock === undefined ? state.clock.channel : clock.channels[0]!;
       layers.push({ kind: 'arrow', index, layer, set: id === null ? null : geometry.sets.get(id), channel, clock });
-    } else if (layer.kind === 'outline') layers.push({ kind: 'outline', index, layer });
+    } else if (layer.kind === 'inset_box') layers.push({ kind: 'inset_box', index, layer });
     else if (layer.kind === 'body') layers.push({ kind: 'body', index, layer });
     else if (layer.kind === 'points') {
       const id = oneSet(scope, layer.sets);
@@ -623,16 +625,16 @@ export function planPanel(scene: Scene, geometry: GeometryCache, state: State, p
       layers.push({ kind: 'label', index, layer, set: id === null ? null : geometry.sets.get(id) });
     } else layers.push({ kind: layer.kind, index, layer });
   });
-  return { viewId: panel.view, view, display, scope, driver, layers };
+  return { declaredId: panel.panel, declared, display, scope, reference, layers };
 }
 
-/** What the camera fit depends on: the view, the display frame, the driver's track set, and the track sets of the track layers. */
+/** What the camera fit depends on: the declared panel, the display frame, the reference trajectory's trajectory set, and the trajectory sets of the trajectory layers. */
 export function contentKey(plan: PanelPlan): string {
   return [
-    plan.viewId,
+    plan.declaredId,
     plan.display,
-    plan.driver?.set.id ?? '',
-    ...plan.layers.map((l) => (l.kind === 'track' || l.kind === 'points' ? (l.set?.id ?? '') : '')),
+    plan.reference?.set.id ?? '',
+    ...plan.layers.map((l) => (l.kind === 'trajectories' || l.kind === 'points' ? (l.set?.id ?? '') : '')),
   ].join('\0');
 }
 
@@ -641,7 +643,7 @@ type Box6 = [number, number, number, number, number, number];
 /** An affine map p -> A p + b, as the rows of A followed by b. */
 type Affine = Float64Array;
 
-/** The affine map of rule F3 from frame `from` to frame `to` in one context, read off the images of the origin and the three unit points. */
+/** The affine map of rule `frame-path` from frame `from` to frame `to` in one context, read off the images of the origin and the three unit points. */
 export function affineAt(frames: Frames, from: string, to: string, ctx: Context): Affine {
   const o = frames.transform([0, 0, 0], from, to, ctx);
   const m = new Float64Array(12);
@@ -654,44 +656,56 @@ export function affineAt(frames: Frames, from: string, to: string, ctx: Context)
 }
 
 /**
- * The affine map from frame `from` into the display frame at the driver's reading (rule L6), i.e. the maps in the
- * contexts of the driver's samples k and k + 1 blended by the weight w, as a matrix of three.js.
+ * The affine map from frame `from` into the display frame at the reference trajectory's reading (rule `read-from`), i.e. the maps in the
+ * contexts of the reference trajectory's samples k and k + 1 blended by the weight w, as a matrix of three.js.
  */
-export function driverMatrix(env: LayerEnv, from: string, driver: NonNullable<Driver>, out = new THREE.Matrix4(), clock?: TrackClock): THREE.Matrix4 {
-  const { a, b, w } = driverContexts(driver, driverPoint(env, driver, clock).at);
+export function referenceMatrix(
+  env: LayerEnv,
+  from: string,
+  reference: NonNullable<Reference>,
+  out = new THREE.Matrix4(),
+  clock?: TrajectoryClock,
+): THREE.Matrix4 {
+  const { a, b, w } = referenceContexts(reference, referencePoint(env, reference, clock).at);
   const ma = affineAt(env.frames, from, env.display, a);
   const mb = affineAt(env.frames, from, env.display, b);
   const m = ma.map((x, i) => (1 - w) * x + w * mb[i]!);
   return out.set(m[0]!, m[1]!, m[2]!, m[9]!, m[3]!, m[4]!, m[5]!, m[10]!, m[6]!, m[7]!, m[8]!, m[11]!, 0, 0, 0, 1);
 }
 
-/** Above this many products of a sample and a driver context, the fit of a layer in the driver's context maps the corners of its box. */
-const DRIVER_FIT_BUDGET = 4_000_000;
+/** Above this many products of a sample and a reference context, the fit of a layer in the reference trajectory's context maps the corners of its box. */
+const REFERENCE_FIT_BUDGET = 4_000_000;
 
 /**
- * The box of a layer in the driver's context, which holds its members as they are drawn at every sample of the
- * driver's track in every lap (rule L6). A point between two driver samples is a blend of the two images, and
+ * The box of a layer in the reference trajectory's context, which holds its members as they are drawn at every sample of the
+ * reference's trajectory in every revolution (rule `read-from`). A point between two reference samples is a blend of the two images, and
  * the box holds it too. For a layer of more than 8 points over the budget, the 8 corners of its box in its own frame are mapped instead,
  * and their images bound it.
  */
-function driverFitBox(l: TrackPlan & { set: SetData }, driver: NonNullable<Driver>, display: string, geometry: GeometryCache, budget: number): Box6 {
+function referenceFitBox(
+  l: TrajectoryPlan & { set: SetData },
+  reference: NonNullable<Reference>,
+  display: string,
+  geometry: GeometryCache,
+  budget: number,
+): Box6 {
   const frames = geometry.frames;
   const from = l.set.def.frame;
   const own = geometry.geometry(l.set.id, from);
-  const laps = driver.set.periodic ? clockLaps(geometry.scene.clock) : 1;
-  // without a channel on the path, every context of the driver's track gives the same map
+  const revolutions = reference.set.periodic ? clockRevolutions(geometry.scene.clock) : 1;
+  // without a channel on the path, every context of the reference trajectory's trajectory gives the same map
   const varies = frames.requirements(from, display).channels.size > 0;
-  const m = varies ? driver.set.count(driver.track) : 1;
-  let points = l.members.length === l.set.tracks ? own.positions : Float64Array.from(l.members.flatMap((t) => [...own.track(t, 0)]));
+  const m = varies ? reference.set.count(reference.trajectory) : 1;
+  let points = l.members.length === l.set.trajectories ? own.positions : Float64Array.from(l.members.flatMap((t) => [...own.trajectory(t, 0)]));
   // points holds 3 numbers per point, and the 8 corners save work only on a layer of more than 8 points
-  if (points.length > 24 && (points.length / 3) * m * (varies ? laps : 1) > budget) {
+  if (points.length > 24 && (points.length / 3) * m * (varies ? revolutions : 1) > budget) {
     const [x0, y0, z0, x1, y1, z1] = own.bounds();
     points = Float64Array.from([x0, y0, z0, x1, y0, z0, x0, y1, z0, x1, y1, z0, x0, y0, z1, x1, y0, z1, x0, y1, z1, x1, y1, z1]);
   }
   const box: Box6 = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
-  for (let lap = 0; lap < (varies ? laps : 1); lap++) {
+  for (let revolution = 0; revolution < (varies ? revolutions : 1); revolution++) {
     for (let i = 0; i < m; i++) {
-      const a = affineAt(frames, from, display, { set: driver.set, track: driver.track, sample: i, shifted: false, lap });
+      const a = affineAt(frames, from, display, { set: reference.set, trajectory: reference.trajectory, sample: i, shifted: false, revolution });
       for (let j = 0; j < points.length; j += 3) {
         const x = points[j]!;
         const y = points[j + 1]!;
@@ -708,21 +722,21 @@ function driverFitBox(l: TrackPlan & { set: SetData }, driver: NonNullable<Drive
 }
 
 /**
- * The box a panel's camera fits, which holds every member of every track layer without `fit: false`, whole, in every lap
- * from 0 to the top, in the display frame. A layer in the driver's context is held at every sample of
- * the driver's track. The box is given as minimum then maximum x, y, z, and is null when the track
- * layers do not draw anything. A test passes a small `budget` in place of DRIVER_FIT_BUDGET, to force the fit by the corners.
+ * The box a panel's camera fits, which holds every member of every trajectory layer without `fit: false`, whole, in every revolution
+ * from 0 to the top, in the display frame. A layer in the reference trajectory's context is held at every sample of
+ * the reference trajectory's trajectory. The box is given as minimum then maximum x, y, z, and is null when the trajectory
+ * layers do not draw anything. A test passes a small `budget` in place of REFERENCE_FIT_BUDGET, to force the fit by the corners.
  */
-export function fitBox(plan: PanelPlan, geometry: GeometryCache, budget = DRIVER_FIT_BUDGET): Box6 | null {
+export function fitBox(plan: PanelPlan, geometry: GeometryCache, budget = REFERENCE_FIT_BUDGET): Box6 | null {
   let box: Box6 | null = null;
   for (const l of plan.layers) {
-    if (l.kind !== 'track' || l.set === null || l.members.length === 0 || l.layer.fit === false) continue;
-    if (l.context === 'driver' && plan.driver === null) continue;
+    if (l.kind !== 'trajectories' || l.set === null || l.members.length === 0 || l.layer.fit === false) continue;
+    if (l.readFrom === 'reference' && plan.reference === null) continue;
     let parts: Box6[];
-    if (l.context === 'driver') parts = [driverFitBox(l as TrackPlan & { set: SetData }, plan.driver!, plan.display, geometry, budget)];
+    if (l.readFrom === 'reference') parts = [referenceFitBox(l as TrajectoryPlan & { set: SetData }, plan.reference!, plan.display, geometry, budget)];
     else {
       const g = geometry.geometry(l.set.id, plan.display);
-      parts = l.members.length === l.set.tracks ? [g.bounds()] : l.members.map((t) => g.bounds(t));
+      parts = l.members.length === l.set.trajectories ? [g.bounds()] : l.members.map((t) => g.bounds(t));
     }
     for (const b of parts) {
       if (box === null) box = [...b];
@@ -732,8 +746,8 @@ export function fitBox(plan: PanelPlan, geometry: GeometryCache, budget = DRIVER
   return box;
 }
 
-/** Whether a camera is a plane camera with a free aspect, under which the two axes of its plane are scaled separately in the fit (section 2.7). */
-const freeAspect = (cam: Camera): boolean => cam.kind === 'plane' && cam.aspect === 'free';
+/** Whether a camera is a 2d camera with a free aspect, under which the two axes of its plane are scaled separately in the fit (section 2.7). */
+const freeAspect = (cam: Camera): boolean => cam.kind === '2d' && cam.aspect === 'free';
 
 /**
  * An orthographic fit, given as the center of the box and half the view's width and height, for a viewport
@@ -747,8 +761,8 @@ export function orthoFit(box: THREE.Box3, cam: Camera, aspect: number): { center
   const radius = Math.max(size.length() / 2, 1e-9);
   const { right, up } = cameraBasis(cam);
   const abs = (v: THREE.Vector3) => new THREE.Vector3(Math.abs(v.x), Math.abs(v.y), Math.abs(v.z));
-  const hw = cam.kind === 'plane' ? size.dot(abs(right)) / 2 : radius;
-  const hh = cam.kind === 'plane' ? size.dot(abs(up)) / 2 : radius;
+  const hw = cam.kind === '2d' ? size.dot(abs(right)) / 2 : radius;
+  const hh = cam.kind === '2d' ? size.dot(abs(up)) / 2 : radius;
   const half = Math.max(hh, hw / aspect) * 1.1;
   const halfHeight = half > 1e-12 ? half : Math.max(radius, 1);
   if (!freeAspect(cam)) return { center, halfWidth: halfHeight * aspect, halfHeight };
@@ -765,7 +779,7 @@ export function kernelOpacity(floor: number, kernel: { width: number; opacity: n
   return Math.max(floor, kernel.opacity * Math.exp(-ratio * ratio));
 }
 
-/** The part of the display plane a plane camera shows, and the steps of its ticks. */
+/** The part of the display plane a 2d camera shows, and the steps of its ticks. */
 export interface PlaneView {
   /** The visible rectangle along the camera's right and up axes, in display-frame units. */
   x0: number;
@@ -779,8 +793,8 @@ export interface PlaneView {
   stepY: number;
 }
 
-/** What an orthographic camera under a plane camera shows, with a tick about every 110 pixels across and 70 up. */
-export function planeView(camera: THREE.OrthographicCamera, cam: Camera & { kind: 'plane' }, w: number, h: number): PlaneView {
+/** What an orthographic camera under a 2d camera shows, with a tick about every 110 pixels across and 70 up. */
+export function planeView(camera: THREE.OrthographicCamera, cam: Camera & { kind: '2d' }, w: number, h: number): PlaneView {
   const { right, up } = cameraBasis(cam);
   const cx = camera.position.dot(right);
   const cy = camera.position.dot(up);
@@ -843,11 +857,11 @@ const TITLE_ROOM = 160;
 const HALF_LINE = 9;
 
 /**
- * What covers a panel's drawing besides its labels, measured by the viewer: the height of the panel's head, and the box of its
+ * What covers a panel's drawing besides its labels, measured by the viewer: the height of the panel's header, and the box of its
  * colorbars, given by its distance from the panel's right edge, its top, its width, and its height, in CSS pixels.
  */
 export interface Clearance {
-  head: number;
+  header: number;
   bars: { right: number; top: number; width: number; height: number } | null;
 }
 
@@ -866,7 +880,7 @@ export function labelOver(l: PanelLabel, box: [number, number, number, number]):
 
 /**
  * The labels of a plane view. Tick numbers run along the bottom and the left edges, clear of the corners
- * and below `top`, the bottom of the panel's head. The two axis titles sit at the bottom center and the left center, the second reading upward, each in a
+ * and below `top`, the bottom of the panel's header. The two axis titles sit at the bottom center and the left center, the second reading upward, each in a
  * separate row outside the tick numbers. The tick row is centered 28 px above the bottom edge and the x
  * title 10 px above it. The y title sits 10 px from the left edge, and the y tick column is right-aligned
  * clear of it at its widest number. A panel too short or too narrow for a title keeps its ticks.
@@ -904,52 +918,52 @@ interface Draw {
   dispose(): void;
 }
 
-// track layers
+// trajectory layers
 
 interface PassSpec {
-  lap: number;
+  revolution: number;
   highlight: boolean;
   width: number;
   opacity: number;
 }
 
-/** The arrays a track layer draws from, shared by its passes. */
-interface TrackSource {
+/** The arrays a trajectory layer draws from, shared by its passes. */
+interface TrajectorySource {
   ctx: DrawContext;
   set: SetData;
-  geo: TrackGeometry;
+  geo: TrajectoryGeometry;
   display: string;
   /** The readings for the comparison, on the layer's channel, or on @index when the layer does not take a reading. */
-  readings: TrackReadings;
+  readings: TrajectoryReadings;
   colorKey: string;
   coloring: Coloring;
-  /** The base passes read each track's opacity from the kernel's texel. */
+  /** The base passes read each trajectory's opacity from the kernel's texel. */
   kernel: boolean;
-  /** For a dashed layer, the arclength of every sample from the first of its track in the frame of the buffers, else null. */
+  /** For a dashed layer, the arclength of every sample from the first of its trajectory in the frame of the buffers, else null. */
   dist: Float32Array | null;
 }
 
 /**
- * One pass of a track layer in one lap. It draws the whole set from buffers that every panel shares, or
- * one track from small per-track buffers, as GL lines when the width is 1 and as quads when it is wider.
+ * One pass of a trajectory layer in one revolution. It draws the whole set from buffers that every panel shares, or
+ * one trajectory from small per-trajectory buffers, as GL lines when the width is 1 and as quads when it is wider.
  */
 class Pass {
   readonly holder = new THREE.Object3D();
   readonly mat: THREE.ShaderMaterial;
   readonly spec: PassSpec;
-  private readonly src: TrackSource;
+  private readonly src: TrajectorySource;
   private readonly wide: boolean;
   private obj: THREE.Mesh | THREE.LineSegments | null = null;
   private sharedNames: string[] = [];
   private shown = '';
 
-  constructor(src: TrackSource, spec: PassSpec, uniforms: Record<string, THREE.IUniform>) {
+  constructor(src: TrajectorySource, spec: PassSpec, uniforms: Record<string, THREE.IUniform>) {
     this.src = src;
     this.spec = spec;
     this.wide = spec.width > 1;
     const own: Record<string, THREE.IUniform> = {
       ...uniforms,
-      uLap: { value: spec.lap },
+      uRevolution: { value: spec.revolution },
       uSkip: { value: -1 },
       uSegBase: { value: 0 },
       uOpacity: { value: spec.opacity },
@@ -957,14 +971,14 @@ class Pass {
       uKernel: { value: src.kernel && !spec.highlight ? 1 : 0 },
     };
     const defines: Record<string, string> = {};
-    if (src.coloring.kind === 'sample') defines.USE_TRACK_COLOR = '';
+    if (src.coloring.kind === 'sample') defines.USE_TRAJECTORY_COLOR = '';
     if (src.dist !== null) defines.DASH = '';
     this.mat = material(this.wide ? WIDE_VERTEX : NARROW_VERTEX, own, defines);
   }
 
-  /** Shows the whole set or one track, or clears the pass when `what` is null. */
+  /** Shows the whole set or one trajectory, or clears the pass when `what` is null. */
   show(what: 'set' | number | null): void {
-    // a pass of one track reads its segments' dash starts from the track's first segment on
+    // a pass of one trajectory reads its segments' dash starts from the trajectory's first segment on
     this.mat.uniforms.uSegBase!.value = typeof what === 'number' ? this.src.set.start(what) - what : 0;
     const key = what === null ? '' : String(what);
     if (key === this.shown) return;
@@ -978,15 +992,15 @@ class Pass {
     this.holder.add(this.obj);
   }
 
-  /** The four arrays in pair layout, for the whole set (shared) or for one track. */
+  /** The four arrays in pair layout, for the whole set (shared) or for one trajectory. */
   private arrays(what: 'set' | number): { pos: Float32Array; u: Float32Array; tr: Float32Array; col: Float32Array | null; dist: Float32Array | null } {
     const { ctx, set, geo, display, readings, coloring: c, colorKey, dist } = this.src;
-    const lap = this.spec.lap;
+    const revolution = this.spec.revolution;
     if (what === 'set') {
       return {
-        pos: ctx.shared.get(`pos\0${set.id}\0${display}\0${geo.lapKey(lap)}`, () => lapPairs(geo, lap)),
+        pos: ctx.shared.get(`pos\0${set.id}\0${display}\0${geo.revolutionKey(revolution)}`, () => revolutionPairs(geo, revolution)),
         u: ctx.shared.get(`u\0${set.id}\0${readings.channel}`, () => pairReadings(set, readings.u)),
-        tr: ctx.shared.get(`t\0${set.id}`, () => pairTracks(set)),
+        tr: ctx.shared.get(`t\0${set.id}`, () => pairTrajectories(set)),
         col: c.kind === 'sample' ? ctx.shared.get(`c\0${set.id}\0${colorKey}`, () => pairs(set, c.rgb, 3)) : null,
         dist: dist === null ? null : ctx.shared.get(`d\0${set.id}\0${display}\0${keyOf(dist)}`, () => pairs(set, dist, 1)),
       };
@@ -994,7 +1008,7 @@ class Pass {
     const s = set.start(what);
     const m = set.count(what);
     return {
-      pos: trackLapPairs(geo, what, lap),
+      pos: trajectoryRevolutionPairs(geo, what, revolution),
       u: readingPairs(readings.u, s, m),
       tr: new Float32Array(2 * (m - 1)).fill(what),
       col: c.kind === 'sample' ? slicePairs(c.rgb, 3, s, m) : null,
@@ -1011,7 +1025,7 @@ class Pass {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', attr('position', a.pos, 3));
     g.setAttribute('useg', attr('useg', a.u, 2));
-    g.setAttribute('track', attr('track', a.tr, 1));
+    g.setAttribute('trajectory', attr('trajectory', a.tr, 1));
     if (a.col) g.setAttribute('tcolor', attr('tcolor', a.col, 3));
     if (a.dist) g.setAttribute('dist', attr('dist', a.dist, 1));
     this.sharedNames = what === 'set' ? Object.keys(g.attributes) : [];
@@ -1029,7 +1043,7 @@ class Pass {
     g.setAttribute('instanceStart', new THREE.InterleavedBufferAttribute(pos, 3, 0));
     g.setAttribute('instanceEnd', new THREE.InterleavedBufferAttribute(pos, 3, 3));
     g.setAttribute('useg', new THREE.InterleavedBufferAttribute(buffer('u', a.u, 4), 2, 0));
-    g.setAttribute('track', new THREE.InterleavedBufferAttribute(buffer('t', a.tr, 2), 1, 0));
+    g.setAttribute('trajectory', new THREE.InterleavedBufferAttribute(buffer('t', a.tr, 2), 1, 0));
     if (a.col) {
       const col = buffer('c', a.col, 6);
       g.setAttribute('colorStart', new THREE.InterleavedBufferAttribute(col, 3, 0));
@@ -1076,7 +1090,7 @@ function keyOf(a: Float32Array): number {
 /** The floats of one end piece: its two ends, their colors with opacity, their widths, and their arclengths for a dash. */
 const PIECE = 18;
 
-/** The end pieces of every drawn track, computed on the CPU, as quads with a color, an opacity, and a width at each end. */
+/** The end pieces of every drawn trajectory, computed on the CPU, as quads with a color, an opacity, and a width at each end. */
 class Pieces {
   readonly mesh: THREE.Mesh;
   private buffer: THREE.InstancedInterleavedBuffer;
@@ -1136,7 +1150,7 @@ class Pieces {
   }
 }
 
-/** A highlight's kernel over a layer's set, with the selector's parameter, its values, and their extent. */
+/** A highlight's kernel over a layer's set, with the parameter input's parameter, its values, and their extent. */
 interface Kernel {
   parameter: string;
   width: number;
@@ -1145,12 +1159,12 @@ interface Kernel {
   extent: number;
 }
 
-function kernelOf(ctx: DrawContext, layer: TrackLayer, set: SetData): Kernel | null {
+function kernelOf(ctx: DrawContext, layer: TrajectoriesLayer, set: SetData): Kernel | null {
   const k = layer.highlight?.kernel;
   if (k === undefined) return null;
-  const sel = variableDef(ctx.scene, layer.highlight!.var);
-  if (sel?.kind !== 'selector' || sel.parameter === undefined) return null;
-  const values = set.parameter(sel.parameter, '2.7');
+  const sel = inputDef(ctx.scene, layer.highlight!.input);
+  if (sel?.kind !== 'parameter' || sel.parameter === undefined) return null;
+  const values = set.parameter(sel.parameter, 'panel');
   let lo = Infinity;
   let hi = -Infinity;
   for (let i = 0; i < values.length; i++) ((lo = Math.min(lo, values[i]!)), (hi = Math.max(hi, values[i]!)));
@@ -1158,11 +1172,11 @@ function kernelOf(ctx: DrawContext, layer: TrackLayer, set: SetData): Kernel | n
 }
 
 /**
- * Where the dash pattern of each segment of a track starts (section 2.11), as an arclength along the track, written to `out` from
- * `at` on, one value per segment: where the track last entered the rectangle `[x0, x1] x [y0, y1]` at or before the segment, or its
+ * Where the dash pattern of each segment of a trajectory starts (section 2.11), as an arclength along the trajectory, written to `out` from
+ * `at` on, one value per segment: where the trajectory last entered the rectangle `[x0, x1] x [y0, y1]` at or before the segment, or its
  * first sample when that lies in the rectangle, as matplotlib clips a line to its figure before it dashes it, which starts the
  * pattern again at each entry. `xy` holds the screen position of each of the `count` samples from `from`, two numbers per sample,
- * and `dist` the arclength of each. Before the track first enters the rectangle, its segments start at its first sample.
+ * and `dist` the arclength of each. Before the trajectory first enters the rectangle, its segments start at its first sample.
  */
 export function dashRestarts(
   xy: ArrayLike<number>,
@@ -1212,10 +1226,10 @@ export function dashRestarts(
   }
 }
 
-/** A float texture with one RGBA texel per track, in rows of at most 2048. */
-function trackTexture(tracks: number): { data: Float32Array; texture: THREE.DataTexture; width: number } {
-  const width = Math.min(Math.max(tracks, 1), 2048);
-  const height = Math.ceil(Math.max(tracks, 1) / width);
+/** A float texture with one RGBA texel per trajectory, in rows of at most 2048. */
+function trajectoryTexture(trajectories: number): { data: Float32Array; texture: THREE.DataTexture; width: number } {
+  const width = Math.min(Math.max(trajectories, 1), 2048);
+  const height = Math.ceil(Math.max(trajectories, 1) / width);
   const data = new Float32Array(4 * width * height);
   const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat, THREE.FloatType);
   texture.minFilter = texture.magFilter = THREE.NearestFilter;
@@ -1225,14 +1239,14 @@ function trackTexture(tracks: number): { data: Float32Array; texture: THREE.Data
 }
 
 /**
- * The arclength of every sample from the first of its track, along the positions `pos` of x, y, z per sample, with the
+ * The arclength of every sample from the first of its trajectory, along the positions `pos` of x, y, z per sample, with the
  * component along axis `up` scaled by `ratio`, so that a free aspect, which scales the two axes of the plane apart, dashes evenly.
  */
 function arclengths(set: SetData, pos: ArrayLike<number>, up = 1, ratio = 1): Float32Array {
   const out = new Float32Array(set.samples);
   const k = [1, 1, 1];
   k[up] = ratio;
-  for (let t = 0; t < set.tracks; t++) {
+  for (let t = 0; t < set.trajectories; t++) {
     const s = set.start(t);
     let d = 0;
     out[s] = 0;
@@ -1335,20 +1349,20 @@ export class MarkerSprites {
   }
 }
 
-/** A head's marker, from the layer's `head` (rule L3 and section 2.11). */
-function headMarker(layer: TrackLayer): Marker & { glow?: { channel: string; color?: string; size?: number; opacity?: number } } {
+/** A head's marker, from the layer's `head` (rule `head` and section 2.11). */
+function headMarker(layer: TrajectoriesLayer): Marker & { glow?: { channel: string; color?: string; size?: number; opacity?: number } } {
   const head = layer.head;
   return typeof head === 'object' && head !== null ? (head as Marker) : {};
 }
 
-export class TrackDraw implements Draw {
+export class TrajectoryDraw implements Draw {
   readonly key: string;
   readonly group = new THREE.Group();
-  private readonly src: TrackSource;
-  private readonly layer: TrackLayer;
+  private readonly src: TrajectorySource;
+  private readonly layer: TrajectoriesLayer;
   private readonly set: SetData;
-  private readonly geo: TrackGeometry;
-  private readonly clocks: TrackReadings | null;
+  private readonly geo: TrajectoryGeometry;
+  private readonly clocks: TrajectoryReadings | null;
   private readonly clock: Clock;
   private readonly spec: RevealSpec;
   private readonly color: ColorSpec | undefined;
@@ -1361,17 +1375,17 @@ export class TrackDraw implements Draw {
   private readonly taperWidth: number;
   private readonly taperOpacity: number;
   private readonly kernel: Kernel | null;
-  private readonly ranges: ReturnType<typeof trackTexture>;
-  private readonly alphas: ReturnType<typeof trackTexture> | null;
-  /** For a dashed layer, the arclength at which each segment's dash pattern starts on the stage (section 2.11), else null. */
-  private readonly dashFrom: ReturnType<typeof trackTexture> | null;
+  private readonly ranges: ReturnType<typeof trajectoryTexture>;
+  private readonly alphas: ReturnType<typeof trajectoryTexture> | null;
+  /** For a dashed layer, the arclength at which each segment's dash pattern starts on the panel area (section 2.11), else null. */
+  private readonly dashFrom: ReturnType<typeof trajectoryTexture> | null;
   private dashScreen = new Float64Array(0);
   private restartOut: number[] = [];
   private readonly resolution: THREE.IUniform<THREE.Vector2> = { value: new THREE.Vector2(1, 1) };
   private readonly uniforms: Record<string, THREE.IUniform>;
   private readonly baseHolder = new THREE.Object3D();
   private readonly hiHolder = new THREE.Object3D();
-  /** The passes built so far, by lap and kind, each built the first time its lap shows anything. */
+  /** The passes built so far, by revolution and kind, each built the first time its revolution shows anything. */
   private readonly passes = new Map<string, Pass>();
   private readonly pieces: Pieces;
   private heads: MarkerSprites | null = null;
@@ -1385,18 +1399,18 @@ export class TrackDraw implements Draw {
   /** The stencil mark of a flat layer, whose lines blend each pixel once (section 2.11), else 0. */
   private readonly flatMark: number;
   /** True when the layer's opacity or its head's size or opacity moves with the timeline, hence it is drawn every frame. */
-  private readonly tweened: boolean;
+  private readonly keyframed: boolean;
   private members: number[] = [];
   private highlight: number | null = null;
   private selected: number | null = null;
   private baseWhat: 'set' | number | null = null;
   private skip = -1;
   private filled = false;
-  /** True for a layer in the driver's context (rule L6), whose buffers are in the frame of its set and whose group's matrix moves them. */
-  readonly driverContext: boolean;
+  /** True for a layer in the reference trajectory's context (rule `read-from`), whose buffers are in the frame of its set and whose group's matrix moves them. */
+  readonly referenceContext: boolean;
   private readonly geometry: GeometryCache;
 
-  constructor(ctx: DrawContext, plan: TrackPlan & { set: SetData }, display: string, key: string) {
+  constructor(ctx: DrawContext, plan: TrajectoryPlan & { set: SetData }, display: string, key: string) {
     this.key = key;
     this.geometry = ctx.geometry;
     const set = plan.set;
@@ -1404,17 +1418,17 @@ export class TrackDraw implements Draw {
     this.set = set;
     this.layer = layer;
     this.clock = plan.clock;
-    this.driverContext = plan.context === 'driver';
-    if (this.driverContext) this.group.matrixAutoUpdate = false;
-    this.geo = ctx.geometry.geometry(set.id, this.driverContext ? set.def.frame : display);
+    this.referenceContext = plan.readFrom === 'reference';
+    if (this.referenceContext) this.group.matrixAutoUpdate = false;
+    this.geo = ctx.geometry.geometry(set.id, this.referenceContext ? set.def.frame : display);
     this.clocks = plan.channel === null ? null : ctx.geometry.readings(set.id, plan.channel);
     const readings = this.clocks ?? ctx.geometry.readings(set.id, INDEX_CHANNEL);
-    this.spec = revealSpec(layer, set.periodic, clockLaps(plan.clock));
+    this.spec = revealSpec(layer, set.periodic, clockRevolutions(plan.clock));
     this.color = plan.color;
     const color = coloring(themedSpec(plan.color, ctx.theme), set, hexRgb(ctx.theme.foreground));
     this.kernel = kernelOf(ctx, layer, set);
     this.line = layer.line !== false;
-    this.flatMark = layer.flat === true ? (plan.index % 255) + 1 : 0;
+    this.flatMark = layer.group_opacity === true ? (plan.index % 255) + 1 : 0;
     const dashed = layer.dash !== undefined && this.line;
     this.src = {
       ctx,
@@ -1431,18 +1445,18 @@ export class TrackDraw implements Draw {
     this.hiWidth = layer.highlight?.width ?? this.width;
     this.opacity = typeof layer.opacity === 'number' ? layer.opacity : 1;
     this.hiOpacity = layer.highlight?.opacity ?? 1;
-    this.fraction = this.spec.reveal === 'trail' ? this.spec.laps * this.spec.fraction : 0;
+    this.fraction = this.spec.reveal === 'trail' ? this.spec.revolutions * this.spec.fraction : 0;
     this.taperWidth = layer.trail?.taper?.width ?? TAPER_WIDTH;
     this.taperOpacity = layer.trail?.taper?.opacity ?? TAPER_OPACITY;
     const marker = themedMarker(headMarker(layer), ctx.theme);
-    this.tweened =
+    this.keyframed =
       typeof layer.opacity === 'object' || typeof marker.size === 'object' || typeof marker.opacity === 'object' || typeof marker.edge_width === 'object';
 
-    this.ranges = trackTexture(set.tracks);
-    for (let t = 0; t < set.tracks; t++) this.ranges.data.set(EMPTY_RANGE, 4 * t);
-    this.alphas = this.kernel === null ? null : trackTexture(set.tracks);
+    this.ranges = trajectoryTexture(set.trajectories);
+    for (let t = 0; t < set.trajectories; t++) this.ranges.data.set(EMPTY_RANGE, 4 * t);
+    this.alphas = this.kernel === null ? null : trajectoryTexture(set.trajectories);
     const dash = dashed ? { uPixels: { value: 1 }, uDash: { value: new THREE.Vector2(layer.dash![0], layer.dash![1]) } } : null;
-    this.dashFrom = dashed ? trackTexture(Math.max(1, set.samples - set.tracks)) : null;
+    this.dashFrom = dashed ? trajectoryTexture(Math.max(1, set.samples - set.trajectories)) : null;
     this.uniforms = {
       uRanges: { value: this.ranges.texture },
       uAlphas: { value: (this.alphas ?? this.ranges).texture },
@@ -1480,8 +1494,8 @@ export class TrackDraw implements Draw {
     // the fill lies under the line, as it does in matplotlib
     this.group.add(this.baseHolder, this.hiHolder);
 
-    // the end pieces computed on the CPU, at most two per track
-    this.pieces = new Pieces(2 * Math.min(set.tracks, 64), this.resolution, dash);
+    // the end pieces computed on the CPU, at most two per trajectory
+    this.pieces = new Pieces(2 * Math.min(set.trajectories, 64), this.resolution, dash);
     if (this.flatMark > 0) flatten(this.pieces.mesh.material as THREE.Material, this.flatMark);
     this.group.add(this.pieces.mesh);
 
@@ -1525,7 +1539,7 @@ export class TrackDraw implements Draw {
     this.filled = false;
   }
 
-  /** The color of a vertex of track `t`, which is the layer's color or a blend of the colors of two samples. */
+  /** The color of a vertex of trajectory `t`, which is the layer's color or a blend of the colors of two samples. */
   private colorAt(t: number, v: Vertex, out: Float32Array, o: number): void {
     const c = this.src.coloring;
     if (c.kind === 'constant') {
@@ -1540,7 +1554,7 @@ export class TrackDraw implements Draw {
     for (let k = 0; k < 3; k++) out[o + k] = (1 - v.w) * c.rgb[3 * (s + v.k) + k]! + v.w * c.rgb[3 * (s + v.k + 1) + k]!;
   }
 
-  /** The arclength of a vertex of track `t` for a dash, from where the track's pattern starts. */
+  /** The arclength of a vertex of trajectory `t` for a dash, from where the trajectory's pattern starts. */
   private distAt(t: number, v: Vertex): number {
     const d = this.src.dist;
     if (d === null) return 0;
@@ -1552,8 +1566,8 @@ export class TrackDraw implements Draw {
   }
 
   /**
-   * Starts the dash pattern of each track where it enters the stage, of `width` by `height` CSS pixels widened by `margin`, as
-   * matplotlib clips a line to its figure before it dashes it (section 2.11). The panel draws with `camera` in `rect` of the stage.
+   * Starts the dash pattern of each trajectory where it enters the panel area, of `width` by `height` CSS pixels widened by `margin`, as
+   * matplotlib clips a line to its figure before it dashes it (section 2.11). The panel draws with `camera` in `rect` of the panel area.
    * The dashes of a line that the camera follows then stay where they are on the screen rather than crawl along it.
    */
   placeDash(camera: THREE.Camera, rect: { x: number; y: number; w: number; h: number }, width: number, height: number, margin: number): void {
@@ -1594,12 +1608,12 @@ export class TrackDraw implements Draw {
     if (changed) from.texture.needsUpdate = true;
   }
 
-  /** Each track's opacity under the highlight's kernel, around the selected track's parameter value. */
+  /** Each trajectory's opacity under the highlight's kernel, around the selected trajectory's parameter value. */
   private fillKernel(): void {
     const k = this.kernel;
     if (k === null || this.alphas === null) return;
     const centre = this.selected === null ? null : k.values[this.selected]!;
-    for (let t = 0; t < this.set.tracks; t++) {
+    for (let t = 0; t < this.set.trajectories; t++) {
       this.alphas.data[4 * t] = centre === null ? this.opacity : kernelOpacity(this.opacity, k, k.extent, Math.abs(k.values[t]! - centre));
     }
     this.alphas.texture.needsUpdate = true;
@@ -1610,13 +1624,13 @@ export class TrackDraw implements Draw {
     p.mat.uniforms.uSkip!.value = p.spec.highlight ? -1 : this.skip;
   }
 
-  private pass(lap: number, highlight: boolean): Pass {
-    const key = `${highlight ? 'h' : 'b'}${lap}`;
+  private pass(revolution: number, highlight: boolean): Pass {
+    const key = `${highlight ? 'h' : 'b'}${revolution}`;
     let p = this.passes.get(key);
     if (p === undefined) {
       p = new Pass(
         this.src,
-        { lap, highlight, width: highlight ? this.hiWidth : this.width, opacity: highlight ? this.hiOpacity : this.opacity },
+        { revolution, highlight, width: highlight ? this.hiWidth : this.width, opacity: highlight ? this.hiOpacity : this.opacity },
         this.uniforms,
       );
       // the highlight is drawn over a flat layer as over any other
@@ -1628,31 +1642,31 @@ export class TrackDraw implements Draw {
     return p;
   }
 
-  /** Shows the passes of the laps that draw a segment, building the ones not built yet, and hides the others. */
+  /** Shows the passes of the revolutions that draw a segment, building the ones not built yet, and hides the others. */
   private syncPasses(base: [number, number], hi: [number, number]): void {
     for (const p of this.passes.values()) p.holder.visible = false;
     if (!this.line) return;
-    if (this.baseWhat !== null) for (let lap = base[0]; lap <= base[1]; lap++) this.pass(lap, false).holder.visible = true;
-    if (this.highlight !== null) for (let lap = hi[0]; lap <= hi[1]; lap++) this.pass(lap, true).holder.visible = true;
+    if (this.baseWhat !== null) for (let revolution = base[0]; revolution <= base[1]; revolution++) this.pass(revolution, false).holder.visible = true;
+    if (this.highlight !== null) for (let revolution = hi[0]; revolution <= hi[1]; revolution++) this.pass(revolution, true).holder.visible = true;
   }
 
   /**
-   * True when the layer does not take a reading, is not in the driver's context, and does not move with the timeline, so that
+   * True when the layer does not take a reading, is not in the reference trajectory's context, and does not move with the timeline, so that
    * what it draws changes only with its members, its highlight, and its selection.
    */
   get isStatic(): boolean {
-    return this.clocks === null && !this.driverContext && !this.tweened;
+    return this.clocks === null && !this.referenceContext && !this.keyframed;
   }
 
-  /** Moves a layer in the driver's context into the display frame at the driver's reading, or hides it when the driver does not match a set (rule L6). */
-  place(env: LayerEnv, driver: Driver): void {
-    this.group.visible = driver !== null;
-    if (driver === null) return;
-    driverMatrix(env, this.set.def.frame, driver, this.group.matrix, this.geometry.readings(driver.set.id, env.channel).clocks[driver.track]);
+  /** Moves a layer in the reference trajectory's context into the display frame at the reference trajectory's reading, or hides it when the reference does not match a set (rule `read-from`). */
+  place(env: LayerEnv, reference: Reference): void {
+    this.group.visible = reference !== null;
+    if (reference === null) return;
+    referenceMatrix(env, this.set.def.frame, reference, this.group.matrix, this.geometry.readings(reference.set.id, env.channel).clocks[reference.trajectory]);
     this.group.matrixWorldNeedsUpdate = true;
   }
 
-  /** Fades the layer as a whole by the tween of its opacity at time `s` (section 2.11), and returns the factor, 1 for an opacity that is a number. */
+  /** Fades the layer as a whole by the keyframes of its opacity at time `s` (section 2.11), and returns the factor, 1 for an opacity that is a number. */
   private fade(s: number): number {
     const layer = this.layer;
     const fade = typeof layer.opacity === 'object' ? opacityAt(layer.opacity, s) : 1;
@@ -1667,7 +1681,7 @@ export class TrackDraw implements Draw {
   }
 
   /** Returns whether the picture changed through new members, a new highlight or selection, or a first fill. */
-  update(plan: TrackPlan, scene: Scene, q: number): boolean {
+  update(plan: TrajectoryPlan, scene: Scene, q: number): boolean {
     const s = timeAt(scene.clock, q);
     const fadeNow = this.fade(s);
     const h = plan.highlight;
@@ -1684,7 +1698,7 @@ export class TrackDraw implements Draw {
       this.baseWhat = single >= 0 ? (single === h ? null : single) : plan.members.length > 0 ? 'set' : null;
       this.skip = single < 0 && h !== null ? h : -1;
       for (const p of this.passes.values()) this.showPass(p);
-      for (let t = 0; t < this.set.tracks; t++) this.ranges.data.set(EMPTY_RANGE, 4 * t);
+      for (let t = 0; t < this.set.trajectories; t++) this.ranges.data.set(EMPTY_RANGE, 4 * t);
       this.fillKernel();
       this.heads?.grow(plan.members.length);
       this.glow?.grow(plan.members.length);
@@ -1696,7 +1710,7 @@ export class TrackDraw implements Draw {
     const hc = this.heads?.color;
     const gp = this.glow?.position;
     const glowChannel = headMarker(this.layer).glow?.channel;
-    const glowValues = glowChannel === undefined ? null : this.set.channel(glowChannel, '2.7');
+    const glowValues = glowChannel === undefined ? null : this.set.channel(glowChannel, 'panel');
     let heads = 0;
     let glows = 0;
     const base: [number, number] = [Infinity, -Infinity];
@@ -1704,15 +1718,15 @@ export class TrackDraw implements Draw {
     const fillVerts: number[] = [];
     for (const t of plan.members) {
       const tc = this.clocks?.clocks[t] ?? null;
-      const rev = revealTrack(tc, this.clock, q, this.spec, Math.fround);
+      const rev = revealTrajectory(tc, this.clock, q, this.spec, Math.fround);
       this.ranges.data.set(rev.range, 4 * t);
       const isHi = t === h;
-      // every lap draws, also where all laps have the same positions and coincide, as the
-      // line that the evaluator returns holds every lap (rule C6)
-      if (rev.laps !== null) {
+      // every revolution draws, also where all revolutions have the same positions and coincide, as the
+      // line that the evaluator returns holds every revolution (rule `revolutions`)
+      if (rev.revolutions !== null) {
         const r = isHi ? hi : base;
-        r[0] = Math.min(r[0], rev.laps[0]);
-        r[1] = Math.max(r[1], rev.laps[1]);
+        r[0] = Math.min(r[0], rev.revolutions[0]);
+        r[1] = Math.max(r[1], rev.revolutions[1]);
       }
       const width = isHi ? this.hiWidth : this.width;
       const alpha = fadeNow * (isHi ? this.hiOpacity : this.alphas !== null ? this.alphas.data[4 * t]! : this.opacity);
@@ -1737,12 +1751,12 @@ export class TrackDraw implements Draw {
         heads++;
         if (gp !== undefined && glowValues !== null) {
           const v = rev.head;
-          // the head sits on sample k, or on k + 1 at the end of its segment, e.g. at the end of the track
+          // the head sits on sample k, or on k + 1 at the end of its segment, e.g. at the end of the trajectory
           const k = 'sample' in v ? v.sample : v.w >= 1 ? v.k + 1 : v.k;
           if (glowValues[this.set.start(t) + k]! > 0) this.geo.vertex(t, v, gp.array as Float32Array, 3 * glows++);
         }
       }
-      if (this.fill !== null && !rev.hidden) this.fillTrack(t, tc, rev.loop, fillVerts);
+      if (this.fill !== null && !rev.hidden) this.fillTrajectory(t, tc, rev.loop, fillVerts);
     }
     this.pieces.end();
     this.heads?.show(heads);
@@ -1754,10 +1768,10 @@ export class TrackDraw implements Draw {
     return true;
   }
 
-  /** The vertices of the drawn polyline of track `t`, as rules L1, L2, and C6 give them, for a fill. */
-  private fillTrack(t: number, tc: TrackClock | null, loop: number | null, out: number[]): void {
+  /** The vertices of the drawn polyline of trajectory `t`, as rules `polyline`, `trail-wrap`, and `revolutions` give them, for a fill. */
+  private fillTrajectory(t: number, tc: TrajectoryClock | null, loop: number | null, out: number[]): void {
     const spec = this.spec;
-    const n = spec.laps;
+    const n = spec.revolutions;
     let verts: Vertex[];
     if (tc === null || loop === null || spec.reveal === 'none') verts = whole(this.set.count(t), n, spec.periodic);
     else if (spec.reveal === 'grow') verts = loopPolyline(tc, 0, loop, n);
@@ -1807,18 +1821,18 @@ export class TrackDraw implements Draw {
   /** The colorbar of a colormapped layer, with the highlighted or single member marked on it, and the kernel's band. */
   colorbar(): Colorbar | null {
     const spec = this.color;
-    if (spec === undefined || typeof spec === 'string' || isStepped(spec)) return null;
+    if (spec === undefined || typeof spec === 'string' || isThreshold(spec)) return null;
     const scale = colorScale(spec, this.set);
     const params = this.set.def.parameters ?? {};
-    const def = scale.perTrack && Object.hasOwn(params, scale.name) ? params[scale.name] : undefined;
+    const def = scale.perTrajectory && Object.hasOwn(params, scale.name) ? params[scale.name] : undefined;
     const label = def?.label ?? scale.name;
     const [lo, hi] = scale.range;
     const at = (v: number) => (hi === lo ? 0.5 : clamp01((v - lo) / (hi - lo)));
     const member = this.highlight ?? (this.layer.members !== 'all' && this.members.length === 1 ? this.members[0]! : null);
-    const marker = scale.perTrack && member !== null ? at(scale.values[member]!) : null;
+    const marker = scale.perTrajectory && member !== null ? at(scale.values[member]!) : null;
     const k = this.kernel;
     let band: [number, number] | null = null;
-    if (k !== null && scale.perTrack && scale.name === k.parameter && this.selected !== null) {
+    if (k !== null && scale.perTrajectory && scale.name === k.parameter && this.selected !== null) {
       const v = scale.values[this.selected]!;
       const half = 1.5 * k.width * k.extent;
       band = [at(v - half), at(v + half)];
@@ -1860,7 +1874,7 @@ export function fillSegment(a: [number, number], b: [number, number], base: numb
 
 // points layers
 
-/** A points layer (rule K8): the drawn samples of its members as markers, from the evaluator's answer at each frame. */
+/** A points layer (rule `points`): the drawn samples of its members as markers, from the evaluator's answer at each frame. */
 class PointsDraw implements Draw {
   readonly key: string;
   readonly group = new THREE.Group();
@@ -1926,7 +1940,7 @@ class PointsDraw implements Draw {
 
 // label layers
 
-/** A label layer (rule K6). It does not draw anything in GL, and the stage paints its text at the anchor that `update` finds. */
+/** A label layer (rule `label`). It does not draw anything in GL, and the panel area paints its text at the anchor that `update` finds. */
 class LabelDraw implements Draw {
   readonly key: string;
   readonly group = new THREE.Group();
@@ -1939,8 +1953,8 @@ class LabelDraw implements Draw {
     this.layer = layer;
   }
 
-  update(env: LayerEnv, plan: LabelPlan, driver: Driver): void {
-    const r = labelLayer(env, this.layer, plan.set, driver);
+  update(env: LayerEnv, plan: LabelPlan, reference: Reference): void {
+    const r = labelLayer(env, this.layer, plan.set, reference);
     this.at = r.position === null ? null : new THREE.Vector3(...r.position);
   }
 
@@ -1951,17 +1965,17 @@ class LabelDraw implements Draw {
 
 // body layers
 
-/** The textures of body images, decoded once per view of the data container and kept for the page's life. */
+/** The textures of body images, decoded once per array of the data container and kept for the page's life. */
 const images = new WeakMap<GeometryCache, Map<string, Promise<THREE.Texture>>>();
 
-/** Decodes the image file held by a view of `uint8` bytes (section 2.11) into a texture. */
-function imageTexture(geometry: GeometryCache, view: string): Promise<THREE.Texture> {
-  let byView = images.get(geometry);
-  if (byView === undefined) images.set(geometry, (byView = new Map()));
-  let t = byView.get(view);
+/** Decodes the image file held by an array of `uint8` bytes (section 2.11) into a texture. */
+function imageTexture(geometry: GeometryCache, array: string): Promise<THREE.Texture> {
+  let byArray = images.get(geometry);
+  if (byArray === undefined) images.set(geometry, (byArray = new Map()));
+  let t = byArray.get(array);
   if (t === undefined) {
     t = (async () => {
-      const bytes = geometry.bytes(view);
+      const bytes = geometry.bytes(array);
       const type = bytes[0] === 0xff ? 'image/jpeg' : bytes[0] === 0x52 ? 'image/webp' : 'image/png';
       const bitmap = await createImageBitmap(new Blob([bytes as Uint8Array<ArrayBuffer>], { type }), { imageOrientation: 'flipY' });
       const texture = new THREE.Texture(bitmap as unknown as HTMLImageElement);
@@ -1975,7 +1989,7 @@ function imageTexture(geometry: GeometryCache, view: string): Promise<THREE.Text
       texture.needsUpdate = true;
       return texture;
     })();
-    byView.set(view, t);
+    byArray.set(array, t);
   }
   return t;
 }
@@ -1985,7 +1999,7 @@ class BodyDraw implements Draw {
   readonly group = new THREE.Group();
   readonly label: string | null;
   readonly size: number;
-  /** The body's position at the last frame, for its label, or null when the driver does not match any set. */
+  /** The body's position at the last frame, for its label, or null when the reference does not match any set. */
   at: THREE.Vector3 | null = null;
   private readonly point: THREE.Points;
   private readonly trail: THREE.Line;
@@ -2040,7 +2054,7 @@ class BodyDraw implements Draw {
         },
         (e: unknown) => {
           const decoded = `body ${layer.body} has image ${image}, which cannot be decoded as a PNG, JPEG, or WebP file`;
-          this.imageError = e instanceof TychoError ? e : new TychoError('2.11', decoded);
+          this.imageError = e instanceof TychoError ? e : new TychoError('timeline', decoded);
           onImage();
         },
       );
@@ -2054,29 +2068,29 @@ class BodyDraw implements Draw {
   }
 
   /**
-   * Rule L4 as `bodyLayer` in evaluate/layers.ts evaluates it, from the positions kept per lap by the
+   * Rule L4 as `bodyLayer` in evaluate/layers.ts evaluates it, from the positions kept per revolution by the
    * geometry cache. A frame blends the point and the two trail ends, copies the samples between them,
    * and uploads only the vertices it draws.
    */
-  update(env: LayerEnv, layer: BodyLayer, driver: PanelPlan['driver']): void {
+  update(env: LayerEnv, layer: BodyLayer, reference: PanelPlan['reference']): void {
     if (this.imageError !== null) throw this.imageError;
     const opacity = opacityAt(this.layer.opacity, timeAt(env.clock, env.q));
     (this.point.material as THREE.PointsMaterial).opacity = opacity;
     (this.trail.material as THREE.LineBasicMaterial).opacity = 0.6 * opacity;
-    if (driver === null) {
+    if (reference === null) {
       this.point.visible = false;
       this.trail.visible = false;
       this.at = null;
       return;
     }
-    const { set, track } = driver;
-    const laps = clockLaps(env.clock);
-    const tc = this.geometry.readings(set.id, env.channel).clocks[track]!;
-    const table = this.geometry.bodyTrail(layer.body, env.display, set.id, track);
-    const loopReading = laps * bound(tc.reading(env.clock, env.q))!;
-    const at = lapOf(loopReading, laps);
+    const { set, trajectory } = reference;
+    const revolutions = clockRevolutions(env.clock);
+    const tc = this.geometry.readings(set.id, env.channel).clocks[trajectory]!;
+    const table = this.geometry.bodyTrail(layer.body, env.display, set.id, trajectory);
+    const loopReading = revolutions * bound(tc.reading(env.clock, env.q))!;
+    const at = revolutionOf(loopReading, revolutions);
     const s = this.scratch;
-    table.vertex(point(tc, at.u, false, at.lap), s);
+    table.vertex(point(tc, at.u, false, at.revolution), s);
     this.point.visible = !this.hasImage || (this.point.material as THREE.PointsMaterial).map !== null;
     this.at = new THREE.Vector3(s[0], s[1], s[2]);
     const pa = this.point.geometry.getAttribute('position') as THREE.BufferAttribute;
@@ -2087,9 +2101,9 @@ class BodyDraw implements Draw {
       return;
     }
     const fraction = layer.trail.fraction;
-    let tail = loopReading - laps * fraction;
+    let tail = loopReading - revolutions * fraction;
     if (tail < 0 && !set.periodic) tail = 0;
-    const need = trailCapacity(table.m, laps, fraction);
+    const need = trailCapacity(table.m, revolutions, fraction);
     if (need > this.capacity) {
       this.capacity = need;
       this.trail.geometry.dispose();
@@ -2098,7 +2112,7 @@ class BodyDraw implements Draw {
       this.trail.geometry = g;
     }
     const a = this.trail.geometry.getAttribute('position') as THREE.BufferAttribute;
-    const n = table.polyline(tc, tail, loopReading, laps, a.array as Float32Array);
+    const n = table.polyline(tc, tail, loopReading, revolutions, a.array as Float32Array);
     a.clearUpdateRanges();
     a.addUpdateRange(0, 3 * n);
     a.needsUpdate = true;
@@ -2156,7 +2170,7 @@ class ArrowDraw implements Draw {
       uHead: { value: layer.head?.size ?? ARROWHEAD_SIZE },
       uHeadWidth: { value: ARROWHEAD_WIDTH },
     };
-    this.buffer = this.allocate(plan.set.tracks);
+    this.buffer = this.allocate(plan.set.trajectories);
     const head = new THREE.InstancedBufferGeometry();
     head.setAttribute('position', new THREE.Float32BufferAttribute([-1, 0, 0, 1, 0, 0, 0, 1, 0], 3));
     this.shaft = new THREE.Mesh(this.attach(quadGeometry()), material(ARROW_VERTEX, uniforms));
@@ -2219,17 +2233,17 @@ class ArrowDraw implements Draw {
   }
 }
 
-// outlines
+// inset boxes
 
 /**
- * The corners, in CSS pixels from the host panel's top left corner, of what a plane camera shows in the target panel, i.e. the rectangle `view` in
+ * The corners, in CSS pixels from the host panel's top left corner, of what a 2d camera shows in the target panel, i.e. the rectangle `view` in
  * the target panel's display frame, mapped by `map` into the host's display frame, stretched as the host camera stretches it, and projected by the
  * host camera onto a panel of `w` by `h` pixels. Null when a corner is behind a perspective camera.
  */
 export function outlineCorners(
-  map: OutlineLayerResult & { origin: Vec3; axes: [Vec3, Vec3, Vec3] },
+  map: InsetBoxLayerResult & { origin: Vec3; axes: [Vec3, Vec3, Vec3] },
   view: PlaneView,
-  target: Camera & { kind: 'plane' },
+  target: Camera & { kind: '2d' },
   camera: THREE.OrthographicCamera | THREE.PerspectiveCamera,
   host: Camera,
   w: number,
@@ -2257,18 +2271,23 @@ export function outlineCorners(
 }
 
 /**
- * The outline of what another panel shows (rule L8). Its map from the target frame is evaluated at the clock in `update`, and the ring is laid out
- * in `place` from the target camera's visible rectangle at the same frame, after every camera of the stage has moved.
+ * An inset box, the outline of what another panel shows (rule `inset-box`). Its map from the target frame is evaluated at the clock in `update`, and the ring is laid out
+ * in `place` from the target camera's visible rectangle at the same frame, after every camera of the panel area has moved.
  */
-class OutlineDraw implements Draw {
+/** The id of the shown panel whose window an inset box outlines, or null when the layout does not show its declared panel or the reference does not resolve. */
+export function insetBoxShownPanel(map: InsetBoxLayerResult | null): string | null {
+  return map?.origin == null ? null : map.shown_panel;
+}
+
+class InsetBoxDraw implements Draw {
   readonly key: string;
   readonly group = new THREE.Group();
-  private readonly layer: OutlineLayer;
+  private readonly layer: InsetBoxLayer;
   private readonly mesh: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
   private positions = new Float32Array(0);
-  private map: OutlineLayerResult | null = null;
+  private map: InsetBoxLayerResult | null = null;
 
-  constructor(ctx: DrawContext, layer: OutlineLayer, key: string) {
+  constructor(ctx: DrawContext, layer: InsetBoxLayer, key: string) {
     this.key = key;
     this.layer = layer;
     const color = new THREE.Vector4(...hexRgb(themed(layer.color ?? ctx.theme.foreground, ctx.theme)), typeof layer.opacity === 'number' ? layer.opacity : 1);
@@ -2278,23 +2297,23 @@ class OutlineDraw implements Draw {
     this.group.add(this.mesh);
   }
 
-  update(env: LayerEnv, driver: Driver): void {
+  update(env: LayerEnv, reference: Reference): void {
     if (typeof this.layer.opacity === 'object')
       (this.mesh.material.uniforms.uColor!.value as THREE.Vector4).w = opacityAt(this.layer.opacity, timeAt(env.clock, env.q));
-    this.map = outlineLayer(env, this.layer, driver);
+    this.map = insetBoxLayer(env, this.layer, reference);
   }
 
-  /** The panel the outline shows the view of, or null when the layout does not show the view or the driver does not resolve to a track. */
+  /** The shown panel whose window the inset box outlines, or null when the layout does not show its declared panel or the reference does not resolve to a trajectory. */
   get target(): string | null {
-    return this.map?.origin == null ? null : this.map.panel;
+    return insetBoxShownPanel(this.map);
   }
 
-  /** Lays the ring out on panel `host` from what the target panel `target` shows, or hides it when `target` is not a plane camera's panel. */
+  /** Lays the ring out on panel `host` from what the target panel `target` shows, or hides it when `target` is not a 2d camera's panel. */
   place(host: PanelRender, target: PanelRender | undefined): void {
     const map = this.map;
     let tri: number[] = [];
     const { w, h } = host.rect;
-    if (map?.origin != null && map.axes !== null && target?.view != null && target.error === null && target.cameraSpec.kind === 'plane') {
+    if (map?.origin != null && map.axes !== null && target?.view != null && target.error === null && target.cameraSpec.kind === '2d') {
       const corners = outlineCorners({ ...map, origin: map.origin, axes: map.axes }, target.view, target.cameraSpec, host.camera, host.cameraSpec, w, h);
       const look = { width: this.layer.width ?? 1, minSize: this.layer.min_size ?? OUTLINE_MIN_SIZE, dash: this.layer.dash };
       if (corners !== null) tri = outlineTriangles(corners, w, h, look);
@@ -2331,7 +2350,7 @@ class OutlineDraw implements Draw {
 // axes and grid
 
 /**
- * Lines of an axes or a grid layer. Under a plane camera, axes spanning the view, a grid that
+ * Lines of an axes or a grid layer. Under a 2d camera, axes spanning the view, a grid that
  * numbers its lines, and under a free aspect a grid without numbers follow the visible rectangle
  * and are laid out again whenever it moves. Every other mark is laid out from the fitted box: the
  * grid in the view plane, and the three axes from the origin, both ways when they span the view.
@@ -2340,13 +2359,13 @@ class MarkDraw implements Draw {
   readonly key: string;
   readonly group = new THREE.Group();
   readonly kind: 'axes' | 'grid';
-  /** Laid out from the visible rectangle of a plane camera, on every camera change. */
+  /** Laid out from the visible rectangle of a 2d camera, on every camera change. */
   readonly follows: boolean;
   /** Axes drawn both ways through the origin. */
   readonly full: boolean;
-  /** True when the mark gives tick numbers under a plane camera, i.e. for axes spanning the view or a grid with labels. */
+  /** True when the mark gives tick numbers under a 2d camera, i.e. for axes spanning the view or a grid with labels. */
   readonly ticks: boolean;
-  /** An axes layer with `"span": "box"`, which the stage paints around the plot rather than in GL (section 2.11). */
+  /** An axes layer with `"span": "box"`, which the panel area paints around the plot rather than in GL (section 2.11). */
   readonly box: MarkLayer | null;
   private readonly theme: Theme;
   private readonly lines: THREE.LineSegments;
@@ -2358,7 +2377,7 @@ class MarkDraw implements Draw {
     this.key = key;
     this.kind = layer.kind;
     this.theme = ctx.theme;
-    const plane = cam.kind === 'plane';
+    const plane = cam.kind === '2d';
     this.box = layer.kind === 'axes' && layer.span === 'box' && plane ? layer : null;
     if (layer.kind === 'axes') {
       this.full = (layer.span ?? (plane ? 'full' : 'positive')) === 'full';
@@ -2408,7 +2427,7 @@ class MarkDraw implements Draw {
       ];
       for (const tip of this.tips) add(this.full ? tip.clone().negate() : new THREE.Vector3(), tip, fg, 0.8);
     } else {
-      const { right, up, normal } = cameraBasis(cam.kind === 'plane' ? cam : { kind: 'plane', plane: cam.up === 'x' ? 'yz' : cam.up === 'y' ? 'xz' : 'xy' });
+      const { right, up, normal } = cameraBasis(cam.kind === '2d' ? cam : { kind: '2d', plane: cam.up === 'x' ? 'yz' : cam.up === 'y' ? 'xz' : 'xy' });
       const step = niceStep(ext, 8);
       const grid = hexRgb(this.theme.grid);
       const zero = hexRgb(mixHex(this.theme.grid, this.theme.foreground, 0.3));
@@ -2431,8 +2450,8 @@ class MarkDraw implements Draw {
     this.set(pos, col);
   }
 
-  /** Lays the lines out across a plane camera's visible rectangle, unless they are already laid out for it. */
-  follow(v: PlaneView, cam: Camera & { kind: 'plane' }): void {
+  /** Lays the lines out across a 2d camera's visible rectangle, unless they are already laid out for it. */
+  follow(v: PlaneView, cam: Camera & { kind: '2d' }): void {
     if (!this.follows) return;
     const key = [v.x0, v.x1, v.y0, v.y1, v.stepX, v.stepY].join(',');
     if (key === this.shown) return;
@@ -2544,7 +2563,7 @@ class PanelRender {
    * its own static layers over the panel's region of the underlay.
    */
   readonly staticScene = new THREE.Scene();
-  /** The panel's region of the stage's underlay, in device pixels, when its static layers were last copied there. */
+  /** The panel's region of the panel area's underlay, in device pixels, when its static layers were last copied there. */
   readonly underlay = new THREE.Vector4(-1, -1, -1, -1);
   underlayDirty = true;
   /** The keys of the draws in `staticScene`, to detect a change of the run when the panel is planned again. */
@@ -2556,23 +2575,23 @@ class PanelRender {
   /** The camera's world and projection matrices when the underlay was drawn. */
   readonly cameraSeen = new Float64Array(32);
   camera: AnyCamera = new THREE.OrthographicCamera();
-  cameraSpec: Camera = { kind: 'plane', plane: 'xy' };
+  cameraSpec: Camera = { kind: '2d', plane: 'xy' };
   controls: OrbitControls | null = null;
   element: HTMLElement | null = null;
   /** Text over the panel: tick numbers, axis titles, and body labels. */
   labels: HTMLElement | null = null;
-  /** The head and the colorbars over the panel, which its labels are kept clear of. */
-  clearance: Clearance = { head: 0, bars: null };
+  /** The header and the colorbars over the panel, which its labels are kept clear of. */
+  clearance: Clearance = { header: 0, bars: null };
   plan: PanelPlan | null = null;
   error: string | null = null;
   readonly draws = new Map<number, Draw>();
-  /** The part of the panel the camera draws into, inside the view's margin, in stage pixels. */
+  /** The part of the panel the camera draws into, inside the declared panel's margin, in pixels of the panel area. */
   rect: Rect = { x: 0, y: 0, w: 1, h: 1 };
-  /** The panel's tile on the stage, margin included. */
+  /** The panel's tile on the panel area, margin included. */
   outer: Rect = { x: 0, y: 0, w: 1, h: 1 };
-  /** The window of a camera with keys at the last frame, or null. */
+  /** The window of a camera with keyframes at the last frame, or null. */
   window: CameraWindow | null = null;
-  /** The camera was moved to a window of its keys and has not been fitted since. */
+  /** The camera was moved to a window of its keyframes and has not been fitted since. */
   atWindow = false;
   /** What the panel draws, as far as the fit depends on it. A change refits the camera. */
   content = '';
@@ -2582,13 +2601,13 @@ class PanelRender {
   /** Half the width and half the height of the orthographic view, at zoom 1. */
   halfWidth = 1;
   halfHeight = 1;
-  /** The box the camera was last fitted to, before an orbit camera's stretch. */
+  /** The box the camera was last fitted to, before a 3d camera's stretch. */
   box: THREE.Box3 | null = null;
-  /** The point the fit aimed the camera at, which an orbit camera turns about while it has no controls. */
+  /** The point the fit aimed the camera at, which a 3d camera turns about while it has no controls. */
   readonly target = new THREE.Vector3();
-  /** The angle in radians by which the clock has turned an orbit camera since the fit. */
+  /** The angle in radians by which the clock has turned a 3d camera since the fit. */
   turned = 0;
-  /** What a plane camera showed at the last frame, or null under an orbit camera. */
+  /** What a 2d camera showed at the last frame, or null under a 3d camera. */
   view: PlaneView | null = null;
 
   constructor(id: string) {
@@ -2598,10 +2617,10 @@ class PanelRender {
 
 const cameraKey = (c: Camera): string => JSON.stringify(c);
 
-/** An orbit camera turns with the clock when it has a nonzero turn. */
-const turns = (c: Camera): boolean => c.kind === 'orbit' && (c.turn ?? 0) !== 0;
+/** A 3d camera turns with the clock when it has a nonzero turn. */
+const turns = (c: Camera): boolean => c.kind === '3d' && (c.auto_rotate ?? 0) !== 0;
 
-export class StageRenderer {
+export class PanelAreaRenderer {
   readonly canvas: HTMLCanvasElement;
   /** Called when the user moves a camera, so that the page redraws. */
   onChange: () => void = () => undefined;
@@ -2704,7 +2723,7 @@ export class StageRenderer {
     }
   }
 
-  /** Sets the head and the colorbars over a panel, as the viewer measured them, for the labels drawn from the next frame on. */
+  /** Sets the header and the colorbars over a panel, as the viewer measured them, for the labels drawn from the next frame on. */
   setClearance(pid: string, clearance: Clearance): void {
     this.panel(pid).clearance = clearance;
   }
@@ -2723,28 +2742,28 @@ export class StageRenderer {
   }
 
   /**
-   * Whether the viewer has panned or zoomed a panel whose camera has keys (rule K5), so that the panel no longer follows them. A
-   * refit hands the camera back to its keys.
+   * Whether the viewer has panned or zoomed a panel whose camera has keyframes (rule `camera-keyframes`), so that the panel no longer follows them. A
+   * refit hands the camera back to its keyframes.
    */
   offKeys(pid: string): boolean {
     const p = this.panels.get(pid);
-    return p !== undefined && p.userMoved && p.cameraSpec.kind === 'plane' && p.cameraSpec.keys !== undefined;
+    return p !== undefined && p.userMoved && p.cameraSpec.kind === '2d' && p.cameraSpec.keyframes !== undefined;
   }
 
-  /** The panels with an orbit camera and its controls, i.e. those that the keys of an orbit camera move. */
+  /** The panels with a 3d camera and its controls, i.e. those that the keys of a 3d camera move. */
   orbitPanels(): string[] {
-    return [...this.panels.values()].filter((p) => p.cameraSpec.kind === 'orbit' && p.controls !== null).map((p) => p.id);
+    return [...this.panels.values()].filter((p) => p.cameraSpec.kind === '3d' && p.controls !== null).map((p) => p.id);
   }
 
   /**
-   * Shows a panel of an orbit camera from the side `sign` of the axis `axis` of its display frame, at the distance of the camera
+   * Shows a panel of a 3d camera from the side `sign` of the axis `axis` of its display frame, at the distance of the camera
    * from its target, with the up axis of the camera up the screen. Seen along the up axis, the second axis of the camera's basis
    * runs up the screen and the first to the right, as in a plot of them, e.g. y and x under the up axis z: the camera then stands
    * off the axis by a hair, where three's lookAt is undefined.
    */
   viewFrom(pid: string, axis: 'x' | 'y' | 'z', sign: 1 | -1): void {
     const p = this.panels.get(pid);
-    if (p === undefined || p.cameraSpec.kind !== 'orbit' || p.controls === null) return;
+    if (p === undefined || p.cameraSpec.kind !== '3d' || p.controls === null) return;
     const target = p.controls.target;
     const distance = p.camera.position.distanceTo(target);
     const unit = (a: string) => new THREE.Vector3(a === 'x' ? 1 : 0, a === 'y' ? 1 : 0, a === 'z' ? 1 : 0);
@@ -2756,10 +2775,10 @@ export class StageRenderer {
     p.controls.update();
   }
 
-  /** Turns a panel of an orbit camera about its up axis through its target by `degrees`, as a drag to the right turns it. */
+  /** Turns a panel of a 3d camera about its up axis through its target by `degrees`, as a drag to the right turns it. */
   turnBy(pid: string, degrees: number): void {
     const p = this.panels.get(pid);
-    if (p === undefined || p.cameraSpec.kind !== 'orbit' || p.controls === null) return;
+    if (p === undefined || p.cameraSpec.kind !== '3d' || p.controls === null) return;
     p.controls.rotateLeft((degrees * Math.PI) / 180);
   }
 
@@ -2772,7 +2791,7 @@ export class StageRenderer {
     const c = new OrbitControls(p.camera, p.element);
     c.enableDamping = false;
     c.screenSpacePanning = true;
-    if (p.cameraSpec.kind === 'plane') {
+    if (p.cameraSpec.kind === '2d') {
       c.enableRotate = false;
       c.zoomToCursor = true;
       c.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
@@ -2788,7 +2807,7 @@ export class StageRenderer {
 
   private setCamera(p: PanelRender, spec: Camera): void {
     p.cameraSpec = spec;
-    const ortho = spec.kind === 'plane' || spec.projection === 'orthographic';
+    const ortho = spec.kind === '2d' || spec.projection === 'orthographic';
     p.camera = ortho ? new THREE.OrthographicCamera(-1, 1, 1, -1, -1, 1) : new THREE.PerspectiveCamera(35, 1, 0.01, 100);
     const k = stretchOf(spec);
     p.scene.scale.copy(k);
@@ -2833,7 +2852,7 @@ export class StageRenderer {
         this.drawCoarse(p, this.underlay, vp);
         this.scheduleRefine();
       } else this.drawFine(p, this.underlay, vp);
-      // The draw covers the regions of the panels that lay here before, e.g. those that a split with keys hid or moved (section 2.11),
+      // The draw covers the regions of the panels that lay here before, e.g. those that a split with keyframes hid or moved (section 2.11),
       // which draw their static layers again before they next copy them back, rather than copy this panel's. A panel drawn earlier in
       // this frame copied its region back before, and the tiles of one frame do not overlap, hence a further frame is not needed.
       for (const q of this.panels.values()) if (q !== p && overlaps(q.underlay, vp)) q.underlayDirty = true;
@@ -2918,9 +2937,9 @@ export class StageRenderer {
       return;
     }
     const prev = p.plan;
-    const spec: Camera = plan.view.camera ?? { kind: 'plane', plane: 'xy' };
-    if (prev === null || prev.viewId !== plan.viewId || cameraKey(spec) !== cameraKey(p.cameraSpec)) this.setCamera(p, spec);
-    // a new display frame, driver's track set, or track layer's track set refits the camera. otherwise the camera stays where the user left it
+    const spec: Camera = plan.declared.camera ?? { kind: '2d', plane: 'xy' };
+    if (prev === null || prev.declaredId !== plan.declaredId || cameraKey(spec) !== cameraKey(p.cameraSpec)) this.setCamera(p, spec);
+    // a new display frame, reference's trajectory set, or trajectory layer's trajectory set refits the camera. otherwise the camera stays where the user left it
     const content = contentKey(plan);
     if (content !== p.content) {
       p.content = content;
@@ -2933,20 +2952,20 @@ export class StageRenderer {
     try {
       for (const lp of plan.layers) {
         let key: string;
-        if (lp.kind === 'track') {
+        if (lp.kind === 'trajectories') {
           if (lp.set === null) continue;
           const color = `${JSON.stringify(lp.color ?? null)}\0${theme}`;
-          key = `track\0${plan.viewId}\0${lp.index}\0${lp.set.id}\0${plan.display}\0${lp.channel ?? ''}\0${color}`;
+          key = `trajectory\0${plan.declaredId}\0${lp.index}\0${lp.set.id}\0${plan.display}\0${lp.channel ?? ''}\0${color}`;
         } else if (lp.kind === 'arrow') {
           if (lp.set === null) continue;
           const look = JSON.stringify([lp.layer.color ?? null, theme, lp.layer.opacity, lp.layer.width, lp.layer.head]);
-          key = `arrow\0${plan.viewId}\0${lp.index}\0${lp.set.id}\0${plan.display}\0${lp.channel}\0${look}`;
-        } else if (lp.kind === 'outline') {
-          key = `outline\0${plan.viewId}\0${lp.index}\0${JSON.stringify([lp.layer, theme])}`;
+          key = `arrow\0${plan.declaredId}\0${lp.index}\0${lp.set.id}\0${plan.display}\0${lp.channel}\0${look}`;
+        } else if (lp.kind === 'inset_box') {
+          key = `inset_box\0${plan.declaredId}\0${lp.index}\0${JSON.stringify([lp.layer, theme])}`;
         } else if (lp.kind === 'points' || lp.kind === 'label') {
           if (lp.kind === 'points' && lp.set === null) continue;
-          key = `${lp.kind}\0${plan.viewId}\0${lp.index}\0${lp.set?.id ?? ''}\0${plan.display}\0${JSON.stringify(lp.layer)}\0${theme}`;
-        } else key = `${lp.kind}\0${plan.viewId}\0${lp.index}\0${plan.display}\0${theme}`;
+          key = `${lp.kind}\0${plan.declaredId}\0${lp.index}\0${lp.set?.id ?? ''}\0${plan.display}\0${JSON.stringify(lp.layer)}\0${theme}`;
+        } else key = `${lp.kind}\0${plan.declaredId}\0${lp.index}\0${plan.display}\0${theme}`;
         keep.add(lp.index);
         const old = p.draws.get(lp.index);
         if (old !== undefined && old.key === key) {
@@ -2959,12 +2978,12 @@ export class StageRenderer {
           p.draws.delete(lp.index);
         }
         const draw: Draw =
-          lp.kind === 'track'
-            ? new TrackDraw(this.ctx, lp as TrackPlan & { set: SetData }, plan.display, key)
+          lp.kind === 'trajectories'
+            ? new TrajectoryDraw(this.ctx, lp as TrajectoryPlan & { set: SetData }, plan.display, key)
             : lp.kind === 'arrow'
               ? new ArrowDraw(this.ctx, lp as ArrowPlan & { set: SetData }, key)
-              : lp.kind === 'outline'
-                ? new OutlineDraw(this.ctx, lp.layer, key)
+              : lp.kind === 'inset_box'
+                ? new InsetBoxDraw(this.ctx, lp.layer, key)
                 : lp.kind === 'body'
                   ? new BodyDraw(this.ctx, lp.layer, key, () => {
                       p.underlayDirty = true;
@@ -3001,7 +3020,7 @@ export class StageRenderer {
     for (const lp of plan.layers) {
       const d = p.draws.get(lp.index);
       if (d === undefined) continue;
-      below &&= d instanceof TrackDraw && d.isStatic;
+      below &&= d instanceof TrajectoryDraw && d.isStatic;
       (below ? p.staticScene : p.scene).add(d.group);
       if (below) keys.push(d.key);
     }
@@ -3019,19 +3038,19 @@ export class StageRenderer {
     const scene = this.ctx.scene;
     const env: LayerEnv = { scope: plan.scope, frames: this.ctx.geometry.frames, clock: scene.clock, channel: state.clock.channel, q, display: plan.display };
     p.error = null;
-    const axes = p.cameraSpec.kind === 'plane' ? planeAxes(p.cameraSpec) : ([0, 1] as [number, number]);
+    const axes = p.cameraSpec.kind === '2d' ? planeAxes(p.cameraSpec) : ([0, 1] as [number, number]);
     try {
       for (const lp of plan.layers) {
         const d = p.draws.get(lp.index);
-        if (d instanceof TrackDraw && lp.kind === 'track') {
+        if (d instanceof TrajectoryDraw && lp.kind === 'trajectories') {
           d.planeAxes = axes;
           if (d.update(lp, scene, q) && d.isStatic) p.underlayDirty = true;
-          if (d.driverContext) d.place(env, plan.driver);
+          if (d.referenceContext) d.place(env, plan.reference);
         } else if (d instanceof ArrowDraw && lp.kind === 'arrow') d.update(layerEnv(env, lp.layer), lp as ArrowPlan & { set: SetData });
-        else if (d instanceof OutlineDraw && lp.kind === 'outline') d.update(env, plan.driver);
-        else if (d instanceof BodyDraw && lp.kind === 'body') d.update(env, lp.layer, plan.driver);
+        else if (d instanceof InsetBoxDraw && lp.kind === 'inset_box') d.update(env, plan.reference);
+        else if (d instanceof BodyDraw && lp.kind === 'body') d.update(env, lp.layer, plan.reference);
         else if (d instanceof PointsDraw && lp.kind === 'points') d.update(layerEnv(env, lp.layer), lp);
-        else if (d instanceof LabelDraw && lp.kind === 'label') d.update(env, lp, plan.driver);
+        else if (d instanceof LabelDraw && lp.kind === 'label') d.update(env, lp, plan.reference);
       }
     } catch (e) {
       if (!(e instanceof TychoError)) throw e;
@@ -3039,7 +3058,7 @@ export class StageRenderer {
     }
   }
 
-  /** Fits the camera to every track layer's members (fitBox), or to the bodies when the track layers do not draw anything. */
+  /** Fits the camera to every trajectory layer's members (fitBox), or to the bodies when the trajectory layers do not draw anything. */
   private fit(p: PanelRender): void {
     const box = new THREE.Box3();
     const b = p.plan === null ? null : fitBox(p.plan, this.ctx.geometry);
@@ -3104,13 +3123,13 @@ export class StageRenderer {
   }
 
   /**
-   * Turns an orbit camera about its up axis through its target to its turn in degrees times the
+   * Turns a 3d camera about its up axis through its target to its `auto_rotate` in degrees times the
    * progress `q` of the loop. The turn adds to where the viewer moved the camera.
    */
-  private turn(p: PanelRender, q: number): void {
+  private autoRotate(p: PanelRender, q: number): void {
     const spec = p.cameraSpec;
-    if (spec.kind !== 'orbit' || spec.turn === undefined) return;
-    const angle = (spec.turn * q * Math.PI) / 180;
+    if (spec.kind !== '3d' || spec.auto_rotate === undefined) return;
+    const angle = (spec.auto_rotate * q * Math.PI) / 180;
     const target = p.controls?.target ?? p.target;
     p.camera.position
       .sub(target)
@@ -3120,17 +3139,17 @@ export class StageRenderer {
     p.turned = angle;
   }
 
-  /** What a plane camera shows now, and the marks that follow it laid out across it. */
+  /** What a 2d camera shows now, and the marks that follow it laid out across it. */
   private follow(p: PanelRender): void {
     const spec = p.cameraSpec;
-    p.view = spec.kind === 'plane' && p.camera instanceof THREE.OrthographicCamera ? planeView(p.camera, spec, p.rect.w, p.rect.h) : null;
-    if (p.view === null || spec.kind !== 'plane') return;
+    p.view = spec.kind === '2d' && p.camera instanceof THREE.OrthographicCamera ? planeView(p.camera, spec, p.rect.w, p.rect.h) : null;
+    if (p.view === null || spec.kind !== '2d') return;
     for (const d of p.draws.values()) if (d instanceof MarkDraw) d.follow(p.view, spec);
   }
 
   /**
-   * Draws every panel of `state` at progress `q` in [0, 1) on a stage of `width` by `height` CSS
-   * pixels. A frame index i sits at q = i / steps, and playback draws between two of them. Returns the
+   * Draws every panel of `state` at progress `q` in [0, 1) on a panel area of `width` by `height` CSS
+   * pixels. A frame index i sits at q = i / frame_count, and playback draws between two of them. Returns the
    * message of every panel that could not be drawn.
    */
   renderAt(state: State, q: number, width: number, height: number, pixelRatio: number): Map<string, string> {
@@ -3157,7 +3176,7 @@ export class StageRenderer {
       const p = this.panel(pid);
       const replanned = replan || p.plan === null;
       if (replanned) this.replan(p, state);
-      const rect = inset(outer, p.plan?.view.margin);
+      const rect = inset(outer, p.plan?.declared.margin);
       const resized = rect.w !== p.rect.w || rect.h !== p.rect.h;
       p.outer = outer;
       p.rect = rect;
@@ -3165,15 +3184,15 @@ export class StageRenderer {
       if (p.needsFit || (resized && !p.userMoved)) this.fit(p);
       else if (resized) this.aspect(p);
       this.keyed(p, state, q);
-      this.turn(p, q);
+      this.autoRotate(p, q);
       this.follow(p);
       for (const d of p.draws.values()) if (d instanceof BodyDraw) d.clip(p.camera);
       const ortho = p.camera instanceof THREE.OrthographicCamera ? p.camera : null;
       const across = ortho === null ? 1 : p.rect.w / Math.max(1e-12, (ortho.right - ortho.left) / ortho.zoom);
       const up = ortho === null ? 1 : p.rect.h / Math.max(1e-12, (ortho.top - ortho.bottom) / ortho.zoom);
-      for (const d of p.draws.values()) if (d instanceof TrackDraw) d.setPixels(across, up);
-      // a dash pattern starts where its track enters the stage, widened by one device pixel, as matplotlib clips a line to its figure
-      for (const d of p.draws.values()) if (d instanceof TrackDraw) d.placeDash(p.camera, p.rect, w, h, 1 / pixelRatio);
+      for (const d of p.draws.values()) if (d instanceof TrajectoryDraw) d.setPixels(across, up);
+      // a dash pattern starts where its trajectory enters the panel area, widened by one device pixel, as matplotlib clips a line to its figure
+      for (const d of p.draws.values()) if (d instanceof TrajectoryDraw) d.placeDash(p.camera, p.rect, w, h, 1 / pixelRatio);
     }
     for (const [pid] of tiles.panels) {
       const p = this.panel(pid);
@@ -3182,10 +3201,10 @@ export class StageRenderer {
         errors.set(pid, p.error);
         continue;
       }
-      // a view faded out entirely is not drawn, rather than drawn under a cover whose edge may fall between two device pixels
-      if (rect.w < 1 || rect.h < 1 || opacityAt(p.plan?.view.opacity, s) <= 0) continue;
+      // a panel faded out entirely is not drawn, rather than drawn under a cover whose edge may fall between two device pixels
+      if (rect.w < 1 || rect.h < 1 || opacityAt(p.plan?.declared.opacity, s) <= 0) continue;
       for (const d of p.draws.values()) d.resize?.(rect.w, rect.h);
-      for (const d of p.draws.values()) if (d instanceof OutlineDraw) d.place(p, d.target === null ? undefined : this.panels.get(d.target));
+      for (const d of p.draws.values()) if (d instanceof InsetBoxDraw) d.place(p, d.target === null ? undefined : this.panels.get(d.target));
       const y = h - rect.y - rect.h;
       this.gl.setViewport(rect.x, y, rect.w, rect.h);
       this.gl.setScissor(rect.x, y, rect.w, rect.h);
@@ -3199,7 +3218,7 @@ export class StageRenderer {
 
   /**
    * The labels of a panel at the last frame, in CSS pixels from the panel's corner. They are the tick
-   * numbers and axis titles of a plane camera, the axis titles at the tips of axes laid out from the
+   * numbers and axis titles of a 2d camera, the axis titles at the tips of axes laid out from the
    * box, and the body labels beside their discs. An axis title under a shown body label is hidden,
    * since the body label is the name of the disc beside it. A body label that would cover the colorbars
    * moves to the other side of its disc, and a label still over them is hidden, since neither text could be read.
@@ -3227,12 +3246,12 @@ export class StageRenderer {
       return item;
     };
     const marks = [...p.draws.values()].filter((d): d is MarkDraw => d instanceof MarkDraw);
-    if (p.view !== null && p.cameraSpec.kind === 'plane') {
+    if (p.view !== null && p.cameraSpec.kind === '2d') {
       const [ix, iy] = planeAxes(p.cameraSpec);
       const title = (i: number) => (names[i] && frame?.unit ? `${names[i]} [${frame.unit}]` : (names[i] ?? ''));
       const axes = marks.some((d) => d.follows && d.kind === 'axes');
       const ticks = marks.some((d) => d.ticks);
-      for (const l of planeLabels(p.view, ticks, axes ? [title(ix), title(iy)] : null, p.clearance.head - oy)) {
+      for (const l of planeLabels(p.view, ticks, axes ? [title(ix), title(iy)] : null, p.clearance.header - oy)) {
         const item = { ...l, x: l.x + ox, y: l.y + oy, hidden: false };
         items.push(item);
         if (l.kind === 'title') titles.push(item);
@@ -3244,7 +3263,7 @@ export class StageRenderer {
           const name = names[i] ?? '';
           const factor = k.getComponent(i);
           const title = name !== '' && factor !== 1 ? `${name} ×${Number(factor.toPrecision(4))}` : name;
-          titles.push(add(title, tip, 4, p.cameraSpec.kind === 'plane' && Math.abs(tip.clone().normalize().dot(normal)) > 0.99));
+          titles.push(add(title, tip, 4, p.cameraSpec.kind === '2d' && Math.abs(tip.clone().normalize().dot(normal)) > 0.99));
         });
       } else if (d instanceof BodyDraw && d.label !== null && d.at !== null && d.group.visible) {
         const item = add(d.label, d.at, d.size / 2 + 3, false);
@@ -3278,7 +3297,7 @@ export class StageRenderer {
     const bars: Colorbar[] = [];
     if (p === undefined) return bars;
     for (const d of p.draws.values()) {
-      if (!(d instanceof TrackDraw) || !d.group.visible) continue;
+      if (!(d instanceof TrajectoryDraw) || !d.group.visible) continue;
       const b = d.colorbar();
       if (b !== null) bars.push(b);
     }
@@ -3303,14 +3322,14 @@ export class StageRenderer {
   }
 
   /**
-   * Moves a plane camera with keys to its window at progress `q` (rule K5), or back to its fit when the keys do not give a window
+   * Moves a 2d camera with keyframes to its window at progress `q` (rule `camera-keyframes`), or back to its fit when the keyframes do not give a window
    * then, unless the viewer has moved the camera since its last fit. The window's height is its own under a free aspect, and
    * the width over the panel's aspect ratio otherwise.
    */
   private keyed(p: PanelRender, state: State, q: number): void {
     const spec = p.cameraSpec;
     p.window = null;
-    if (spec.kind !== 'plane' || spec.keys === undefined || p.plan === null || p.userMoved || !(p.camera instanceof THREE.OrthographicCamera)) return;
+    if (spec.kind !== '2d' || spec.keyframes === undefined || p.plan === null || p.userMoved || !(p.camera instanceof THREE.OrthographicCamera)) return;
     const scene = this.ctx.scene;
     const env: LayerEnv = {
       scope: p.plan.scope,
@@ -3322,7 +3341,7 @@ export class StageRenderer {
     };
     let win: CameraWindow | null;
     try {
-      win = cameraAt(env, p.plan.view, this.ctx.geometry.sets, p.plan.driver);
+      win = cameraAt(env, p.plan.declared, this.ctx.geometry.sets, p.plan.reference);
     } catch (e) {
       if (!(e instanceof TychoError)) throw e;
       p.error = e.message;
@@ -3371,7 +3390,7 @@ export class StageRenderer {
     await Promise.all(waits);
   }
 
-  /** What the stage paints over a panel at the last frame (section 2.11), in stage pixels, or null for a panel that is not drawn. */
+  /** What the panel area paints over a panel at the last frame (section 2.11), in pixels of the panel area, or null for a panel that is not drawn. */
   paintInfo(pid: string): PanelPaint | null {
     const p = this.panels.get(pid);
     if (p === undefined || p.plan === null || p.error !== null) return null;
@@ -3394,7 +3413,7 @@ export class StageRenderer {
         if (screen) xy = [p.rect.x + at.screen![0] * p.rect.w, p.rect.y + at.screen![1] * p.rect.h];
         else xy = d.at === null ? null : project(d.at);
         if (xy !== null) labels.push({ layer: d.layer, x: xy[0], y: xy[1], clip: !screen });
-      } else if (d instanceof MarkDraw && d.box !== null && p.view !== null && p.cameraSpec.kind === 'plane') {
+      } else if (d instanceof MarkDraw && d.box !== null && p.view !== null && p.cameraSpec.kind === '2d') {
         const frame = scene.frames[p.plan.display];
         const names = frame?.axes ?? ['', '', ''];
         const [ix, iy] = planeAxes(p.cameraSpec);
@@ -3414,7 +3433,7 @@ export class StageRenderer {
         boxTitles = (d.box as { titles?: PanelPaint['boxTitles'] }).titles;
       }
     }
-    return { outer: p.outer, rect: p.rect, opacity: p.plan.view.opacity, labels, box, ...(boxTitles !== undefined ? { boxTitles } : {}) };
+    return { outer: p.outer, rect: p.rect, opacity: p.plan.declared.opacity, labels, box, ...(boxTitles !== undefined ? { boxTitles } : {}) };
   }
 
   dispose(): void {
@@ -3430,21 +3449,21 @@ export class StageRenderer {
   }
 }
 
-/** What the stage paints over a panel (section 2.11): its labels at their anchors, the box of an axes layer, and the view's opacity. */
+/** What the panel area paints over a panel (section 2.11): its labels at their anchors, the box of an axes layer, and the panel's opacity. */
 export interface PanelPaint {
   outer: Rect;
   rect: Rect;
-  opacity: View['opacity'];
+  opacity: Panel['opacity'];
   /** The titles of the box's axes layer, when it gives its own (section 2.11). */
   boxTitles?: MarkLayer extends never ? never : Extract<MarkLayer, { kind: 'axes' }>['titles'];
   /** The labels at their anchors, `clip` for an anchor at a point, which is hidden outside the plot. */
   labels: { layer: LabelLayer; x: number; y: number; clip: boolean }[];
-  /** The box of an axes layer, with the opacity of the layer, which the stage reads at the time of the timeline. */
+  /** The box of an axes layer, with the opacity of the layer, which the panel area reads at the time of the timeline. */
   box: (Omit<BoxPaint, 'opacity'> & { opacity: MarkLayer['opacity'] }) | null;
 }
 
-/** A rectangle less a view's margin, given as fractions of its height and width (section 2.11). */
-export function inset(r: Rect, margin: View['margin']): Rect {
+/** A rectangle less a panel's margin, given as fractions of its height and width (section 2.11). */
+export function inset(r: Rect, margin: Panel['margin']): Rect {
   if (margin === undefined) return r;
   const l = Math.round((margin.left ?? 0) * r.w);
   const rt = Math.round((margin.right ?? 0) * r.w);
@@ -3453,12 +3472,12 @@ export function inset(r: Rect, margin: View['margin']): Rect {
   return { x: r.x + l, y: r.y + t, w: Math.max(0, r.w - l - rt), h: Math.max(0, r.h - t - b) };
 }
 
-/** The layout at time `s` of the timeline, each split with keys at the ratio its tween gives then, clamped into [0, 1] (section 2.11). */
+/** The layout at time `s` of the timeline, each split with keyframes at the ratio its keyframes gives then, clamped into [0, 1] (section 2.11). */
 export function layoutAt(layout: Layout, s: number): Layout {
   if (layout.kind === 'panel') return layout;
   const a = layoutAt(layout.a, s);
   const b = layoutAt(layout.b, s);
-  const ratio = layout.keys === undefined ? layout.ratio : Math.min(1, Math.max(0, tweenValue(layout.keys as Key[], s)));
+  const ratio = layout.keyframes === undefined ? layout.ratio : Math.min(1, Math.max(0, keyframesValue(layout.keyframes as Keyframe[], s)));
   if (a === layout.a && b === layout.b && ratio === layout.ratio) return layout;
   return { ...layout, ratio, a, b };
 }

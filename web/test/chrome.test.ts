@@ -2,7 +2,7 @@
 // stand-in of dom-shim.ts, without a renderer, since WebGL is not available under Node.
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { chromeTokens, colormapName, cssColorHex, DEFAULT_THEME, hostTheme, PALETTES, themed } from '../src/runtime/colors';
+import { controlsTokens, colormapName, cssColorHex, DEFAULT_THEME, hostTheme, PALETTES, themed } from '../src/runtime/colors';
 import { buildChip, buildReadout, dropText, fillReadout, TychoViewerElement } from '../src/runtime/element';
 import { GeometryCache } from '../src/runtime/geometry';
 import { GLYPHS, icon } from '../src/runtime/icons';
@@ -30,11 +30,11 @@ import { byClass, byTag, FakeDocument, FakeElement, installDom } from './dom-shi
 
 const BROUCKE_CAPTION: Readout['parts'] = [
   'e = ',
-  { member: 'eccentricity', digits: 4 },
+  { parameter: 'eccentricity', digits: 4 },
   ', period ',
-  { member: 'period', digits: 5 },
+  { parameter: 'period', digits: 5 },
   ' rad, closure error ',
-  { member: 'closure_error', digits: 2 },
+  { parameter: 'closure_error', digits: 2 },
   ' DU, mu = ',
   { attr: 'mu', digits: 6 },
 ];
@@ -49,7 +49,7 @@ describe('readout tiles', () => {
     ]);
   });
   it('put scene constants last, take ":" as well as "=", and give a width to what changes during playback, i.e. a clock or a channel', () => {
-    const parts: Readout['parts'] = ['mu: ', { attr: 'mu' }, ', frame ', { clock: 'index' }, ', t = ', { channel: 't' }, ' TU'];
+    const parts: Readout['parts'] = ['mu: ', { attr: 'mu' }, ', frame ', { clock: 'frame_index' }, ', t = ', { channel: 't' }, ' TU'];
     expect(readoutTiles(parts)).toEqual([
       { label: 'frame', part: 3, unit: '', width: 5 },
       { label: 't', part: 5, unit: 'TU', width: 11 },
@@ -57,17 +57,17 @@ describe('readout tiles', () => {
     ]);
   });
   it('fail, for the line to show instead, when the text does not have a comma to split at or would be left over', () => {
-    expect(readoutTiles(['frame ', { clock: 'index' }, ' of ', { clock: 'steps' }])).toBeNull();
-    expect(readoutTiles(['a, b = ', { member: 'x' }])).toBeNull();
-    expect(readoutTiles(['x = ', { member: 'x' }, ' km, then'])).toBeNull();
-    expect(readoutTiles(['x = ', { member: 'x' }, ', more, y ', { member: 'y' }])).toBeNull();
-    expect(readoutTiles([{ member: 'x' }])).toBeNull();
+    expect(readoutTiles(['frame ', { clock: 'frame_index' }, ' of ', { clock: 'frame_count' }])).toBeNull();
+    expect(readoutTiles(['a, b = ', { parameter: 'x' }])).toBeNull();
+    expect(readoutTiles(['x = ', { parameter: 'x' }, ' km, then'])).toBeNull();
+    expect(readoutTiles(['x = ', { parameter: 'x' }, ', more, y ', { parameter: 'y' }])).toBeNull();
+    expect(readoutTiles([{ parameter: 'x' }])).toBeNull();
     expect(readoutTiles(['just text'])).toBeNull();
-    expect(readoutTiles([', = ', { member: 'x' }])).toBeNull();
+    expect(readoutTiles([', = ', { parameter: 'x' }])).toBeNull();
   });
   it('read the same values the line reads, part by part', () => {
     const c = loadCorpus('two-panels');
-    const parts: Readout['parts'] = ['e = ', { member: 'e', digits: 3 }, ', t = ', { channel: 't', digits: 4 }, ', ', { var: 'frame' }];
+    const parts: Readout['parts'] = ['e = ', { parameter: 'e', digits: 3 }, ', t = ', { channel: 't', digits: 4 }, ', ', { input: 'frame' }];
     c.scene.readouts = [{ place: 'panel', parts }];
     validate(c.scene, c.data);
     const ctx = { scene: c.scene, geometry: new GeometryCache(c.scene, c.data), state: c.scene.initial, panel: 'p1', frameIndex: 3 };
@@ -76,10 +76,12 @@ describe('readout tiles', () => {
     expect(pieces.join('')).toBe(readoutText(ctx, parts));
     expect(readoutPieces({ ...ctx, panel: 'nope' }, parts)).toEqual([]);
   });
-  it('pad the frame index and the step count to the width of the part (rule K7)', () => {
+  it('pad the frame index and the step count to the width of the part (rule `timeline-parts`)', () => {
     const c = loadCorpus('two-panels');
     const ctx = { scene: c.scene, geometry: new GeometryCache(c.scene, c.data), state: c.scene.initial, panel: 'p1', frameIndex: 3 };
-    expect(readoutText(ctx, [{ clock: 'index', width: 4 }, '/', { clock: 'steps', width: 6 }])).toBe(`   3/${String(c.scene.clock.steps).padStart(6)}`);
+    expect(readoutText(ctx, [{ clock: 'frame_index', width: 4 }, '/', { clock: 'frame_count', width: 6 }])).toBe(
+      `   3/${String(c.scene.clock.frame_count).padStart(6)}`,
+    );
   });
 });
 
@@ -145,7 +147,7 @@ describe('keys', () => {
     expect(keyAction('End', false, 480)).toBeNull();
   });
 
-  it('show the view of an orbit camera from an axis, and turn it about its up axis', () => {
+  it('show the view of an 3d camera from an axis, and turn it about its up axis', () => {
     expect(keyAction('x', false, 480)).toEqual({ kind: 'view', axis: 'x', sign: 1 });
     expect(keyAction('z', false, 480)).toEqual({ kind: 'view', axis: 'z', sign: 1 });
     expect(keyAction('Y', true, 480)).toEqual({ kind: 'view', axis: 'y', sign: -1 });
@@ -154,7 +156,7 @@ describe('keys', () => {
     expect(keyAction('[', false, 480, 'BracketLeft')).toBeNull();
   });
 
-  it('turn the view of an orbit camera by 90 degrees with Shift, whichever character the layout then gives', () => {
+  it('turn the view of an 3d camera by 90 degrees with Shift, whichever character the layout then gives', () => {
     // a US keyboard
     expect(keyAction('>', true, 480, 'Period')).toEqual({ kind: 'turn', degrees: 90 });
     expect(keyAction('<', true, 480, 'Comma')).toEqual({ kind: 'turn', degrees: -90 });
@@ -175,7 +177,7 @@ describe('keys', () => {
 
 describe('chrome tokens', () => {
   it('give the palette of the controls on the default theme', () => {
-    const t = chromeTokens(DEFAULT_THEME);
+    const t = controlsTokens(DEFAULT_THEME);
     expect(t).toMatchObject({
       '--bg': '#000000',
       '--surface': '#0b0b0b',
@@ -196,10 +198,10 @@ describe('chrome tokens', () => {
     });
   });
   it('follow a light theme, and pass only colors', () => {
-    const t = chromeTokens({ background: '#ffffff', foreground: '#000000', grid: '#cccccc' });
+    const t = controlsTokens({ background: '#ffffff', foreground: '#000000', grid: '#cccccc' });
     expect(t['--highlight']).toBe('#000000');
     expect(t['--surface']).toBe('#f2f2f2');
-    const bad = chromeTokens({ background: 'red;}x{', foreground: '#000000', grid: '#cccccc' });
+    const bad = controlsTokens({ background: 'red;}x{', foreground: '#000000', grid: '#cccccc' });
     for (const v of Object.values(bad)) expect(v).toMatch(/^(#[0-9a-f]{6}(cc)?|rgba\([0-9., ]+\))$/);
   });
 });
@@ -209,26 +211,26 @@ function dressedBroucke(): { scene: Scene; text: string; bytes: Uint8Array } {
   const c = loadCorpus('broucke-mini');
   const scene = structuredClone(c.scene);
   scene.title = 'Broucke families, mini';
-  const tags = { family: { var: 'family' }, branch: { var: 'branch' } };
-  const track = scene.views.main!.layers[0] as Extract<Scene['views'][string], object>['layers'][number] & { kind: 'track' };
-  scene.views.main!.layers[0] = { ...track, color: { colormap: 'viridis', parameter: 'eccentricity' }, highlight: { var: 'e' } };
+  const tags = { family: { input: 'family' }, branch: { input: 'branch' } };
+  const trajectory = scene.panels.main!.layers[0] as Extract<Scene['panels'][string], object>['layers'][number] & { kind: 'trajectories' };
+  scene.panels.main!.layers[0] = { ...trajectory, color: { colormap: 'viridis', parameter: 'eccentricity' }, highlight: { input: 'e' } };
   scene.controls = [
-    { kind: 'tabs', variable: 'family', label: 'family' },
-    { kind: 'tabs', variable: 'branch', label: 'branch' },
-    { kind: 'slider', variable: 'e', label: 'eccentricity', domain: { tags } },
-    { kind: 'tabs', variable: 'frame', label: 'frame' },
-    { kind: 'transport' },
+    { kind: 'tabs', input: 'family', label: 'family' },
+    { kind: 'tabs', input: 'branch', label: 'branch' },
+    { kind: 'slider', input: 'e', label: 'eccentricity', domain: { tags } },
+    { kind: 'tabs', input: 'frame', label: 'frame' },
+    { kind: 'playback' },
   ];
   scene.readouts = [
-    { place: 'caption', parts: ['e = ', { member: 'eccentricity', digits: 4 }, ', mu = ', { attr: 'mu', digits: 6 }] },
+    { place: 'caption', parts: ['e = ', { parameter: 'eccentricity', digits: 4 }, ', mu = ', { attr: 'mu', digits: 6 }] },
     { place: 'panel', parts: ['true anomaly = ', { channel: 'true_anomaly', digits: 3 }, ' rad'] },
   ];
   scene.initial = {
-    variables: {},
+    inputs: {},
     clock: { channel: 'true_anomaly' },
     panels: {
-      pulsating: { view: 'main', variables: { frame: 'rotating-pulsating' } },
-      inertial: { view: 'main', variables: { frame: 'barycentric-inertial' } },
+      pulsating: { panel: 'main', inputs: { frame: 'rotating-pulsating' } },
+      inertial: { panel: 'main', inputs: { frame: 'barycentric-inertial' } },
     },
     layout: { kind: 'split', dir: 'row', ratio: 0.5, a: { kind: 'panel', id: 'pulsating' }, b: { kind: 'panel', id: 'inertial' } },
   };
@@ -238,16 +240,16 @@ function dressedBroucke(): { scene: Scene; text: string; bytes: Uint8Array } {
 }
 
 describe('a colorbar as a slider', () => {
-  it('drives the scene-scoped selector over the parameter the layer is colored by, with the slider stops', () => {
+  it('drives the shared parameter input over the parameter the layer is colored by, with the slider stops', () => {
     const { scene } = dressedBroucke();
-    const view = scene.views.main!;
+    const view = scene.panels.main!;
     const link = colorbarLink(scene, view, 'eccentricity');
-    expect(link).toEqual({ variable: 'e', label: 'eccentricity', domain: (scene.controls![2] as Extract<Control, { kind: 'slider' }>).domain });
+    expect(link).toEqual({ input: 'e', label: 'eccentricity', domain: (scene.controls![2] as Extract<Control, { kind: 'slider' }>).domain });
     expect(colorbarLink(scene, view, 'period')).toBeNull();
     const noSlider = { ...scene, controls: [] };
-    expect(colorbarLink(noSlider, view, 'eccentricity')).toEqual({ variable: 'e', label: 'e', domain: (view.layers[0] as { sets: unknown }).sets });
+    expect(colorbarLink(noSlider, view, 'eccentricity')).toEqual({ input: 'e', label: 'e', domain: (view.layers[0] as { sets: unknown }).sets });
     const panelScoped = structuredClone(scene);
-    panelScoped.variables!.e = { ...panelScoped.variables!.e!, scope: 'panel' } as never;
+    panelScoped.inputs!.e = { ...panelScoped.inputs!.e!, scope: 'per_panel' } as never;
     expect(colorbarLink(panelScoped, view, 'eccentricity')).toBeNull();
   });
   it('shows one bar for layers that share a scale, with the first marker and the first kernel band any of them has', () => {
@@ -259,7 +261,7 @@ describe('a colorbar as a slider', () => {
     ]);
   });
   it('names the colormap a choice picks, falling back to the first entry', () => {
-    const byFrame = { var: 'frame', map: { rotating: 'blues' as const, inertial: 'plasma' as const } };
+    const byFrame = { input: 'frame', map: { rotating: 'blues' as const, inertial: 'plasma' as const } };
     expect(colormapName('cividis')).toBe('cividis');
     expect(colormapName(byFrame, (v) => (v === 'frame' ? 'inertial' : undefined))).toBe('plasma');
     expect(colormapName(byFrame, () => 'other')).toBe('blues');
@@ -278,7 +280,7 @@ describe('a colorbar as a slider', () => {
 describe('chip menus', () => {
   const { scene } = dressedBroucke();
   const name = (id: string) => ({ pulsating: 'rotating-pulsating', inertial: 'barycentric-inertial' })[id] ?? id;
-  const payload = { kind: 'value' as const, variable: 'frame', value: 'rotating' };
+  const payload = { kind: 'declared' as const, panel: 'main' };
   it('offer Add panel, then split right, split below, and replace for every panel in layout order', () => {
     expect(chipMenu(scene.initial, name, 8).map((m) => [m.label, m.disabled, m.group])).toEqual([
       ['Add panel', false, false],
@@ -301,11 +303,11 @@ describe('chip menus', () => {
       'Split rotating (2) below',
     ]);
   });
-  it('are state transitions, in which a split makes a panel with the value, a replace changes the target, and add splits the largest panel', () => {
+  it('are state transitions, in which a split copies the target, a replace by the declared panel it shows changes nothing, and add splits the largest panel', () => {
     const st = scene.initial;
     const split = withPlacement(scene, st, { kind: 'drop', target: 'inertial', zone: 'bottom' }, payload, 8, () => false);
     expect(Object.keys(split.panels)).toEqual(['pulsating', 'inertial', 'p3']);
-    expect(split.panels.p3!.variables!.frame).toBe('rotating');
+    expect(split.panels.p3).toEqual({ panel: 'main', inputs: { frame: 'barycentric-inertial' } });
     expect(split.layout).toEqual({
       kind: 'split',
       dir: 'row',
@@ -313,11 +315,10 @@ describe('chip menus', () => {
       a: { kind: 'panel', id: 'pulsating' },
       b: { kind: 'split', dir: 'col', ratio: 0.5, a: { kind: 'panel', id: 'inertial' }, b: { kind: 'panel', id: 'p3' } },
     });
-    const replaced = withPlacement(scene, st, { kind: 'drop', target: 'pulsating', zone: 'centre' }, payload, 8, () => false);
-    expect(replaced.panels.pulsating!.variables!.frame).toBe('rotating');
-    expect(replaced.layout).toBe(st.layout);
+    expect(withPlacement(scene, st, { kind: 'drop', target: 'pulsating', zone: 'centre' }, payload, 8, () => false)).toBe(st);
     // with equal areas, the first panel in layout order counts as the largest, and it is split below when it is tall
     const added = withAdd(scene, st, payload, 8, (id) => id === 'pulsating');
+    expect(added.panels.p3).toEqual({ panel: 'main', inputs: { frame: 'rotating-pulsating' } });
     expect(added.layout.kind === 'split' && added.layout.a).toEqual({
       kind: 'split',
       dir: 'col',
@@ -379,14 +380,14 @@ describe('the chrome under a DOM stand-in', () => {
     fillReadout(tiles, { error: 'no set matches' });
     expect([tiles.list!.hidden, tiles.line.hidden, tiles.line.textContent]).toEqual([true, false, 'no set matches']);
 
-    const line = buildReadout(['frame ', { clock: 'index' }, ' of ', { clock: 'steps' }], 'wide');
+    const line = buildReadout(['frame ', { clock: 'frame_index' }, ' of ', { clock: 'frame_count' }], 'wide');
     expect(line.list).toBeNull();
     fillReadout(line, ['frame ', '3', ' of ', '64']);
     expect(line.line.textContent).toBe('frame 3 of 64');
 
     expect([
-      dropText({ kind: 'value' }, 'right'),
-      dropText({ kind: 'view' }, 'centre'),
+      dropText({ kind: 'declared' }, 'right'),
+      dropText({ kind: 'declared' }, 'centre'),
       dropText({ kind: 'panel' }, 'centre'),
       dropText({ kind: 'panel' }, 'bottom'),
     ]).toEqual(['split right', 'replace', 'swap', 'move below']);
@@ -428,7 +429,7 @@ describe('the chrome under a DOM stand-in', () => {
       };
       expect(hostEvents.style['--accent']).toBe('#f0a050');
 
-      // the top bar holds the title, the scene variables as label and control, then Add panel
+      // the top bar holds the title, the scene inputs as label and control, then Add panel
       const header = byTag(root, 'header')[0]!;
       expect(header.childNodes.map((c) => (c.tagName === 'H1' ? 'h1' : c.className))).toEqual(['h1', 'vars', 'add']);
       expect(byTag(header, 'h1')[0]!.textContent).toBe('Broucke families, mini');
@@ -439,31 +440,25 @@ describe('the chrome under a DOM stand-in', () => {
       expect(add.getAttribute('aria-label')).toBe('Add panel');
       expect(byClass(add, 'k')[0]!.textContent).toBe('Add panel');
       const chips = byClass(add, 'chip');
-      expect(chips.map((c) => byClass(c, 'lbl')[0]!.textContent)).toEqual([
-        'rotating-pulsating',
-        'rotating',
-        'barycentric-inertial',
-        'inertial-m1',
-        'inertial-m2',
-      ]);
+      expect(chips.map((c) => byClass(c, 'lbl')[0]!.textContent)).toEqual(['main']);
       expect(
         chips.every((c) => byClass(c, 'body')[0]!.getAttribute('role') === 'button' && byClass(c, 'caret')[0]!.getAttribute('aria-haspopup') === 'menu'),
       ).toBe(true);
 
-      // a panel header holds the frame chip with its value list over the caret, reset view, and close, and it does not show a title when the scene has one view
+      // a panel header holds the frame chip with its value list over the caret, reset view, and close, and it does not show a title when the scene declares one panel
       const panels = byClass(root, 'panel');
       expect(panels.map((p) => p.dataset.id)).toEqual(['pulsating', 'inertial']);
-      const head = one('phead', panels[0]);
-      expect(one('t', head).hidden).toBe(true);
-      const hchip = one('chip', head);
+      const pheader = one('pheader', panels[0]);
+      expect(one('t', pheader).hidden).toBe(true);
+      const hchip = one('chip', pheader);
       expect(one('lbl', hchip).textContent).toBe('rotating-pulsating');
       const select = byTag(hchip, 'select')[0]!;
       expect([select.getAttribute('aria-label'), select.value, select.options.length]).toEqual(['frame', 'rotating-pulsating', 5]);
-      expect(byClass(head, 'icon').map((b) => b.getAttribute('aria-label'))).toEqual(['Reset view', 'Close panel']);
-      expect(byClass(head, 'seg')).toHaveLength(0);
+      expect(byClass(pheader, 'icon').map((b) => b.getAttribute('aria-label'))).toEqual(['Reset view', 'Close panel']);
+      expect(byClass(pheader, 'seg')).toHaveLength(0);
       select.value = 'inertial-m1';
       select.dispatchEvent({ type: 'change' });
-      expect(v.state.panels.pulsating.variables.frame).toBe('inertial-m1');
+      expect(v.state.panels.pulsating.inputs.frame).toBe('inertial-m1');
       expect(one('lbl', hchip).textContent).toBe('inertial-m1');
       const preadout = one('stack', panels[0]);
       expect(byTag(preadout, 'dt').map((d) => d.textContent)).toEqual(['true anomaly']);
@@ -486,7 +481,7 @@ describe('the chrome under a DOM stand-in', () => {
       expect(byTag(caps[0]!, 'input').map((i) => i.type)).toEqual(['range']);
       expect(one('fps', caps[0]).textContent).toBe('–– fps');
       // the frame counter reserves "dd / dd" for 64 steps, so that its width stays the same once the index reaches two digits
-      expect([scene.clock.steps, one('frame', caps[0]).style.minWidth]).toEqual([64, '7ch']);
+      expect([scene.clock.frame_count, one('frame', caps[0]).style.minWidth]).toEqual([64, '7ch']);
       expect(byTag(caps[0]!, 'button').map((b) => b.getAttribute('aria-label') ?? b.textContent)).toEqual(['Play (k)', 'true_anomaly', 'time', '@index']);
       expect(byTag(caps[1]!, 'button').map((b) => b.getAttribute('aria-label'))).toEqual(['Reset every view', 'Reset scene']);
       expect(byClass(caps[1]!, 'i-house')).toHaveLength(1);
@@ -535,8 +530,8 @@ describe('the chrome under a DOM stand-in', () => {
       key('Escape');
       expect([disclose.getAttribute('aria-expanded'), bar.hidden]).toEqual(['false', true]);
 
-      // a bar chip's caret opens the placement menu, whose items are the keyboard route to a drop
-      const caret = one('caret', chips[1]);
+      // a bar chip's caret opens the placement menu, whose items are the keyboard route to a drop, and a split copies the panel it splits
+      const caret = one('caret', chips[0]);
       caret.click();
       const menu = one('menu');
       expect(caret.getAttribute('aria-expanded')).toBe('true');
@@ -556,30 +551,17 @@ describe('the chrome under a DOM stand-in', () => {
       expect(caret.getAttribute('aria-expanded')).toBe('false');
       const st = v.state as State;
       expect(Object.keys(st.panels).sort()).toEqual(['inertial', 'p3', 'pulsating']);
-      expect(st.panels.p3!.variables!.frame).toBe('rotating');
+      expect(st.panels.p3!.inputs!.frame).toBe('barycentric-inertial');
       caret.click();
       key('Escape');
       expect(byClass(root, 'menu')).toHaveLength(0);
 
-      // on a narrow bar the chips would wrap, hence one Add panel menu button stands in for them
-      const addChips = byClass(add, 'chip');
-      addChips[addChips.length - 1]!.offsetTop = 30;
-      addChips[0]!.offsetHeight = 24;
+      // a single chip cannot wrap, hence it stays in place of the Add panel menu button
       v.fitAddGroup();
       const fallback = byTag(add, 'button').find((b) => b.className === 'btn')!;
-      expect([one('chips', add).hidden, fallback.hidden, fallback.textContent]).toEqual([true, false, 'Add panel']);
-      fallback.click();
-      expect(byTag(one('menu'), 'button').map((b) => b.textContent)).toEqual([
-        'rotating-pulsating',
-        'rotating',
-        'barycentric-inertial',
-        'inertial-m1',
-        'inertial-m2',
-      ]);
-      byTag(one('menu'), 'button')[4]!.click();
-      expect(Object.keys((v.state as State).panels)).toHaveLength(4);
+      expect([one('chips', add).hidden, fallback.hidden]).toEqual([false, true]);
 
-      // dragging a colorbar keyed on eccentricity, or using the keyboard on it, sets the scene-scoped eccentricity selector `e`
+      // dragging a colorbar keyed on eccentricity, or using the keyboard on it, sets the shared eccentricity parameter input `e`
       const bars: Colorbar[] = [{ label: 'eccentricity', gradient: 'linear-gradient(red, blue)', stops: [], lo: 0, hi: 1, marker: 0.5, band: [0.4, 0.65] }];
       v.renderer = { colorbars: () => bars, refit() {}, refitAll() {}, bind() {}, dispose() {} };
       const dom = v.panelDom.get('pulsating');
@@ -612,11 +594,11 @@ describe('the chrome under a DOM stand-in', () => {
       );
       expect(stops.length).toBeGreaterThan(1);
       v.setFromBar('pulsating', dom.barDom[0], 1);
-      expect((v.state as State).variables!.e).toBe(stops[stops.length - 1]);
+      expect((v.state as State).inputs!.e).toBe(stops[stops.length - 1]);
       grad.dispatchEvent({ type: 'keydown', key: 'ArrowDown' });
-      expect((v.state as State).variables!.e).toBe(stops[stops.length - 2]);
+      expect((v.state as State).inputs!.e).toBe(stops[stops.length - 2]);
       grad.dispatchEvent({ type: 'keydown', key: 'Home' });
-      expect((v.state as State).variables!.e).toBe(stops[0]);
+      expect((v.state as State).inputs!.e).toBe(stops[0]);
       bars[0]!.label = 'something else';
       v.syncBars('pulsating', dom);
       expect([grad.classList.contains('live'), grad.getAttribute('role')]).toEqual([false, null]);
@@ -675,8 +657,8 @@ describe('a viewer embedded on a page, under a DOM stand-in', () => {
   }
 
   /** A loaded viewer with a stand-in for its renderer and the subscription that start() makes. */
-  async function live(attributes: Record<string, string> = {}) {
-    const { text, bytes } = dressedBroucke();
+  async function live(attributes: Record<string, string> = {}, text = dressedBroucke().text) {
+    const { bytes } = dressedBroucke();
     const { v, host } = viewer(attributes);
     await v.load(text, bytes);
     v.unsubscribe = v.store.subscribe((c: string) => v.onChange(c));
@@ -685,6 +667,44 @@ describe('a viewer embedded on a page, under a DOM stand-in', () => {
     v.syncShown();
     return { v, host };
   }
+
+  it('stands one Add panel menu button in for the chips of the declared panels when they would wrap on a narrow bar', async () => {
+    const { scene } = dressedBroucke();
+    const { v } = await live({}, JSON.stringify({ ...scene, panels: { ...scene.panels, sketch: { ...scene.panels.main!, label: 'sketch' } } }));
+    const add = byClass(v.shadowRoot as FakeElement, 'add')[0]!;
+    const chips = byClass(add, 'chip');
+    expect(chips.map((c) => byClass(c, 'lbl')[0]!.textContent)).toEqual(['main', 'sketch']);
+    chips[1]!.offsetTop = 30;
+    chips[0]!.offsetHeight = 24;
+    v.fitAddGroup();
+    const fallback = byTag(add, 'button').find((b) => b.className === 'btn')!;
+    expect([byClass(add, 'chips')[0]!.hidden, fallback.hidden, fallback.textContent]).toEqual([true, false, 'Add panel']);
+    fallback.click();
+    const items = byTag(byClass(v.shadowRoot as FakeElement, 'menu')[0]!, 'button');
+    expect(items.map((b) => b.textContent)).toEqual(['main', 'sketch']);
+    v.renderer = { ...v.renderer, bind() {}, refit() {}, dispose() {} };
+    items[1]!.click();
+    expect(Object.values((v.state as State).panels).map((p) => p!.panel)).toEqual(['main', 'main', 'sketch']);
+  });
+
+  it('hides the title of a panel header that repeats the label of the frame of the panel', async () => {
+    const { scene } = dressedBroucke();
+    const panels = {
+      rotating: { ...scene.panels.main!, frame: 'rotating', label: 'rotating' },
+      sketch: { ...scene.panels.main!, frame: 'rotating', label: 'sketch' },
+    };
+    const initial = {
+      ...scene.initial,
+      panels: { rotating: { panel: 'rotating' }, sketch: { panel: 'sketch' } },
+      layout: { kind: 'split', dir: 'row', ratio: 0.5, a: { kind: 'panel', id: 'rotating' }, b: { kind: 'panel', id: 'sketch' } },
+    };
+    const { v } = await live({}, JSON.stringify({ ...scene, panels, initial }));
+    const titles = byClass(v.shadowRoot as FakeElement, 'pheader').map((h) => byClass(h, 't')[0]!);
+    expect(titles.map((t) => [t.textContent, t.hidden])).toEqual([
+      ['rotating', true],
+      ['sketch', false],
+    ]);
+  });
 
   const titled = (title: string) => JSON.stringify({ ...dressedBroucke().scene, title });
   const titleOf = (v: { titleEl: { textContent: string } }) => v.titleEl.textContent;
@@ -812,7 +832,7 @@ describe('a viewer embedded on a page, under a DOM stand-in', () => {
   });
 
   describe('the clock', () => {
-    const steps = (v: { scene: Scene }) => v.scene.clock.steps;
+    const steps = (v: { scene: Scene }) => v.scene.clock.frame_count;
 
     it('does not draw while the element is out of the viewport or the page is hidden', async () => {
       const raf = vi.fn(() => 7);
@@ -878,18 +898,18 @@ describe('a viewer embedded on a page, under a DOM stand-in', () => {
     it('reports false before a scene loads', () => {
       expect(viewer().v.playing).toBe(false);
     });
-    it('carries the class lean with the attribute, and keeps the scrubber and the speed menu, which a script of a page may set', async () => {
-      const { v } = await live({ lean: '' });
-      expect(v.root.className).toBe('root lean');
+    it('carries the class minimal with the attribute, and keeps the scrubber and the speed menu, which a script of a page may set', async () => {
+      const { v } = await live({ minimal: '' });
+      expect(v.root.className).toBe('root minimal');
       expect(byClass(v.footer as unknown as FakeElement, 'scrub')).toHaveLength(1);
       expect(byClass(v.footer as unknown as FakeElement, 'speed')).toHaveLength(1);
       expect((await live()).v.root.className).toBe('root');
     });
-    it('keeps the Add panel group and the icons of the panel heads under lean="panels", for a slide on which panels are added by hand', async () => {
-      expect((await live({ lean: 'panels' })).v.root.className).toBe('root lean keep-panels');
-      expect((await live({ lean: 'controls' })).v.root.className).toBe('root lean');
+    it('keeps the Add panel group and the icons of the panel headers under minimal="panels", for a slide on which panels are added by hand', async () => {
+      expect((await live({ minimal: 'panels' })).v.root.className).toBe('root minimal keep-panels');
+      expect((await live({ minimal: 'controls' })).v.root.className).toBe('root minimal');
     });
-    it('links a colorbar to its selector in kiosk mode too, so that a click on the bar of a kiosk page sets the eccentricity', async () => {
+    it('links a colorbar to its parameter input in kiosk mode too, so that a click on the bar of a kiosk page sets the eccentricity', async () => {
       const { v } = await live({ kiosk: '' });
       const bars: Colorbar[] = [{ label: 'eccentricity', gradient: 'linear-gradient(red, blue)', stops: [], lo: 0, hi: 1, marker: 0.5, band: null }];
       v.renderer = { ...v.renderer, colorbars: () => bars };
@@ -898,28 +918,28 @@ describe('a viewer embedded on a page, under a DOM stand-in', () => {
       const grad = dom.barDom[0].grad;
       expect([grad.classList.contains('live'), grad.getAttribute('role'), grad.getAttribute('aria-label')]).toEqual([true, 'slider', 'eccentricity']);
     });
-    it('writes the height of a panel head into a property that is not a color token, so that the head keeps its background', async () => {
+    it('writes the height of a panel header into a property that is not a color token, so that the header keeps its background', async () => {
       const { v } = await live();
       v.renderer = { ...v.renderer, setClearance: vi.fn() };
       const [pid, dom] = [...v.panelDom.entries()][0];
-      dom.head.offsetHeight = 30;
+      dom.header.offsetHeight = 30;
       v.measureOverlay(pid, dom);
       const written = Object.keys(dom.host.style).filter((k) => k.startsWith('--'));
       expect(written.map((k) => dom.host.style[k])).toContain('30px');
-      const tokens = chromeTokens(DEFAULT_THEME);
+      const tokens = controlsTokens(DEFAULT_THEME);
       expect(written.filter((k) => k in tokens)).toEqual([]);
       const css = readFileSync(new URL('../src/runtime/element.ts', import.meta.url), 'utf8');
-      const background = /\.phead \{[^}]*background: var\((--[\w-]+)\)/.exec(css)?.[1];
+      const background = /\.pheader \{[^}]*background: var\((--[\w-]+)\)/.exec(css)?.[1];
       expect(background !== undefined && background in tokens).toBe(true);
     });
   });
 
-  describe('stages (rule K9)', () => {
+  describe('stages (rule `steps`)', () => {
     /** A live viewer of the dressed Broucke scene with three stages, at 0, a quarter, and a half of its loop. */
     async function staged(end?: 'stop') {
       const { scene, bytes } = dressedBroucke();
       const L = loopSeconds(scene.clock);
-      scene.stages = [
+      scene.steps = [
         { id: 'a', at: 0 },
         { id: 'b', at: L / 4 },
         { id: 'c', at: L / 2 },
@@ -932,27 +952,27 @@ describe('a viewer embedded on a page, under a DOM stand-in', () => {
       v.renderer = { setTheme: vi.fn(), renderAt: () => new Map(), refitAll: () => undefined };
       v.dispatchEvent = vi.fn();
       v.syncShown();
-      return { v, L, steps: scene.clock.steps };
+      return { v, L, steps: scene.clock.frame_count };
     }
     it('seeks a time paused, between two frame indices, and names the stage at or before it', async () => {
       const { v, L, steps } = await staged();
-      expect(v.stages.map((st: { id: string }) => st.id)).toEqual(['a', 'b', 'c']);
+      expect(v.steps.map((st: { id: string }) => st.id)).toEqual(['a', 'b', 'c']);
       v.seek(0.3 * L);
       expect(v.playing).toBe(false);
       expect(v.time).toBeCloseTo(0.3 * L, 9);
       expect(v.store.frame).toBe(Math.floor(0.3 * steps));
-      expect(v.currentStage).toBe('b');
+      expect(v.currentStep).toBe('b');
       v.seek(-1);
-      expect(v.currentStage).toBe('a');
+      expect(v.currentStep).toBe('a');
     });
     it('goes to a stage by id or index, and refuses one it does not have', async () => {
       const { v, L } = await staged();
       v.goto('c');
       expect(v.time).toBeCloseTo(L / 2, 9);
       v.goto(1);
-      expect(v.currentStage).toBe('b');
-      expect(() => v.goto('nope')).toThrow(/stage/);
-      expect(() => v.goto(7)).toThrow(/stage/);
+      expect(v.currentStep).toBe('b');
+      expect(() => v.goto('nope')).toThrow(/step/);
+      expect(() => v.goto(7)).toThrow(/step/);
     });
     it('plays to a stage and pauses on it, and fires tycho-stage there', async () => {
       const { v, L } = await staged();
@@ -970,7 +990,7 @@ describe('a viewer embedded on a page, under a DOM stand-in', () => {
       v.goto('a');
       expect(v.next()).toBe('b');
       v.tick(v.anchor.time + 1000 * L);
-      expect(v.currentStage).toBe('b');
+      expect(v.currentStep).toBe('b');
       expect(v.previous()).toBe('a');
       expect(v.time).toBe(0);
       v.goto('c');
@@ -1016,13 +1036,13 @@ describe('a viewer embedded on a page, under a DOM stand-in', () => {
     });
   });
 
-  describe('the camera keys of the timeline (rule K5)', () => {
+  describe('the camera keys of the timeline (rule `camera-keyframes`)', () => {
     it('a panel moved off its camera keys offers to follow them again, and F returns every panel to them', async () => {
       let off = true;
       const { v, host } = await live({ kiosk: '' });
       const renderer = { ...v.renderer, colorbars: () => [], offKeys: () => off, refit: vi.fn(), refitAll: vi.fn() };
       v.renderer = renderer;
-      v.stageSize = { w: 400, h: 300 };
+      v.panelAreaSize = { w: 400, h: 300 };
       const [pid, dom] = [...v.panelDom.entries()][0];
       v.draw();
       expect(dom.follow.hidden).toBe(false);
@@ -1131,7 +1151,7 @@ describe('a viewer embedded on a page, under a DOM stand-in', () => {
 
 /** The background of the chrome for a scene without a `theme` attribute. */
 function sceneThemeBackground(scene: Scene): string {
-  return chromeTokens({ ...DEFAULT_THEME, ...(scene.theme ?? {}) })['--bg']!;
+  return controlsTokens({ ...DEFAULT_THEME, ...(scene.theme ?? {}) })['--bg']!;
 }
 
 it('the runtime does not use innerHTML', () => {

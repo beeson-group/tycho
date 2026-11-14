@@ -1,5 +1,5 @@
 /**
- * The screen geometry of an outline layer (rule L8), i.e. the corners of the target panel's visible rectangle on the host panel, widened to a
+ * The screen geometry of an inset box layer (rule `inset-box`), i.e. the corners of the target panel's visible rectangle on the host panel, widened to a
  * minimum size, cut into dashes across the visible part of the panel, and laid out as triangles with mitered corners.
  */
 

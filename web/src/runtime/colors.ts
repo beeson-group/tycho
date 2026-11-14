@@ -38,7 +38,7 @@ export function themed(hex: string, theme: Theme): string {
 export function themedSpec(spec: ColorSpec | undefined, theme: Theme): ColorSpec | undefined {
   if (spec === undefined) return spec;
   if (typeof spec === 'string') return themed(spec, theme);
-  if (isStepped(spec)) return { ...spec, colors: spec.colors.map((c) => themed(c, theme)) as typeof spec.colors };
+  if (isThreshold(spec)) return { ...spec, colors: spec.colors.map((c) => themed(c, theme)) as typeof spec.colors };
   return spec;
 }
 
@@ -103,15 +103,15 @@ export function hostTheme(base: Theme, name: string | null, read: (property: str
   return out;
 }
 
-/** The brand colors of the viewer's controls (its chrome). Orange marks what is current, and violet what the pointer or the keyboard touches. */
+/** The brand colors of the viewer's controls. Orange marks what is current, and violet what the pointer or the keyboard touches. */
 export const ACCENT = { accent: '#f0a050', hover: '#ffb366', press: '#d98a3a', violet: '#c050f0', violetText: '#d98cff', error: '#ff7a7a' } as const;
 
 /**
- * The colors of the chrome as CSS custom properties. The neutrals are
+ * The colors of the controls as CSS custom properties. The neutrals are
  * the theme's foreground mixed toward its background, and the orange and violet accents are
  * fixed. Every value is a color, hence the result can be put into a style sheet as it is.
  */
-export function chromeTokens(theme: Theme): Record<string, string> {
+export function controlsTokens(theme: Theme): Record<string, string> {
   const bg = mixHex(theme.background, theme.background, 0);
   const fg = mixHex(theme.foreground, theme.foreground, 0);
   const surface = mixHex(fg, bg, 0.95);
@@ -125,7 +125,7 @@ export function chromeTokens(theme: Theme): Record<string, string> {
     '--dim': mixHex(fg, bg, 0.287),
     '--track': mixHex(fg, bg, 0.574),
     '--gutter': theme.gutter ?? mixHex(fg, bg, 0.9),
-    '--head': `${surface}cc`,
+    '--header': `${surface}cc`,
     '--accent': ACCENT.accent,
     '--accent-hover': ACCENT.hover,
     '--accent-press': ACCENT.press,
@@ -158,12 +158,12 @@ export function mixHex(a: string, b: string, t: number): string {
 
 /**
  * A value's position on a colormap. The interval `range` maps to [0, 1], a value outside it is
- * clamped, and the result maps onto the part of the colormap that `clip` specifies.
+ * clamped, and the result maps onto the part of the colormap that `truncate` specifies.
  */
-export function colormapPosition(value: number, range: readonly [number, number], clip: readonly [number, number] = [0, 1]): number {
+export function colormapPosition(value: number, range: readonly [number, number], truncate: readonly [number, number] = [0, 1]): number {
   const [lo, hi] = range;
   const t = hi === lo ? 0.5 : Math.min(1, Math.max(0, (value - lo) / (hi - lo)));
-  return clip[0] + t * (clip[1] - clip[0]);
+  return truncate[0] + t * (truncate[1] - truncate[0]);
 }
 
 function extent(values: ArrayLike<number>): [number, number] {
@@ -177,18 +177,18 @@ function extent(values: ArrayLike<number>): [number, number] {
   return lo <= hi ? [lo, hi] : [0, 1];
 }
 
-/** A colormapped color's values over a set, one per track or one per sample, with its range and clip. */
+/** A colormapped color's values over a set, one per trajectory or one per sample, with its range and truncation. */
 export interface ColorScale {
   id: ColormapId;
   name: string;
-  perTrack: boolean;
+  perTrajectory: boolean;
   values: ArrayLike<number>;
   range: [number, number];
-  clip: [number, number];
+  truncate: [number, number];
 }
 
-/** A function from which a color reads a choice. It returns the current value of `variable`, or undefined when `variable` does not have one. */
-export type ChoiceValue = (variable: string) => string | undefined;
+/** A function from which a color reads a choice. It returns the current value of `input`, or undefined when `input` does not have one. */
+export type ChoiceValue = (input: string) => string | undefined;
 
 /**
  * The colormap given by `colormap`, or for a map keyed by a choice, its entry for the choice's
@@ -196,53 +196,53 @@ export type ChoiceValue = (variable: string) => string | undefined;
  */
 export function colormapName(colormap: ColormapName | ColormapByChoice, value?: ChoiceValue): ColormapId {
   if (typeof colormap === 'string') return colormap;
-  const v = value?.(colormap.var);
+  const v = value?.(colormap.input);
   const named = v !== undefined && Object.hasOwn(colormap.map, v) ? colormap.map[v] : undefined;
   return (named ?? Object.values(colormap.map).find((c) => c !== undefined) ?? 'viridis') as ColormapId;
 }
 
-/** A color given in steps of a channel (section 2.11), which is not a colormap and does not have a colorbar. */
-export type SteppedColor = Extract<ColorSpec, { steps: unknown }>;
+/** A color given by thresholds of a channel (section 2.11), which is not a colormap and does not have a colorbar. */
+export type ThresholdColor = Extract<ColorSpec, { thresholds: unknown }>;
 
-export const isStepped = (spec: ColorSpec | undefined): spec is SteppedColor => typeof spec === 'object' && spec !== null && 'steps' in spec;
+export const isThreshold = (spec: ColorSpec | undefined): spec is ThresholdColor => typeof spec === 'object' && spec !== null && 'thresholds' in spec;
 
-/** The index of the color of a stepped color at value `x`, i.e. the count of steps below `x`. */
-export function stepIndex(steps: readonly number[], x: number): number {
+/** The index of the color of a threshold color at value `x`, i.e. the count of thresholds below `x`. */
+export function thresholdIndex(thresholds: readonly number[], x: number): number {
   let j = 0;
-  while (j < steps.length && steps[j]! < x) j++;
+  while (j < thresholds.length && thresholds[j]! < x) j++;
   return j;
 }
 
-export function colorScale(spec: Exclude<ColorSpec, string | SteppedColor>, set: SetData, value?: ChoiceValue): ColorScale {
-  const perTrack = 'parameter' in spec;
+export function colorScale(spec: Exclude<ColorSpec, string | ThresholdColor>, set: SetData, value?: ChoiceValue): ColorScale {
+  const perTrajectory = 'parameter' in spec;
   const name = 'parameter' in spec ? spec.parameter : spec.channel;
-  const values = 'parameter' in spec ? set.parameter(spec.parameter, '2.7') : set.channel(spec.channel, '2.7');
-  return { id: colormapName(spec.colormap, value), name, perTrack, values, range: spec.range ?? extent(values), clip: spec.clip ?? [0, 1] };
+  const values = 'parameter' in spec ? set.parameter(spec.parameter, 'panel') : set.channel(spec.channel, 'panel');
+  return { id: colormapName(spec.colormap, value), name, perTrajectory, values, range: spec.range ?? extent(values), truncate: spec.truncate ?? [0, 1] };
 }
 
-/** A layer's color on its set, either one constant or one color per sample (a track's color repeated over its samples). */
+/** A layer's color on its set, either one constant or one color per sample (a trajectory's color repeated over its samples). */
 export type Coloring = { kind: 'constant'; rgb: Rgb } | { kind: 'sample'; rgb: Float32Array };
 
 export function coloring(spec: ColorSpec | undefined, set: SetData, fallback: Rgb, value?: ChoiceValue): Coloring {
   if (spec === undefined) return { kind: 'constant', rgb: fallback };
   if (typeof spec === 'string') return { kind: 'constant', rgb: hexRgb(spec) };
-  if (isStepped(spec)) {
-    const values = set.channel(spec.channel, '2.7');
+  if (isThreshold(spec)) {
+    const values = set.channel(spec.channel, 'panel');
     const colors = spec.colors.map(hexRgb);
     const out = new Float32Array(3 * set.samples);
-    for (let i = 0; i < set.samples; i++) out.set(colors[stepIndex(spec.steps, values[i]!)]!, 3 * i);
+    for (let i = 0; i < set.samples; i++) out.set(colors[thresholdIndex(spec.thresholds, values[i]!)]!, 3 * i);
     return { kind: 'sample', rgb: out };
   }
   const scale = colorScale(spec, set, value);
   const out = new Float32Array(3 * set.samples);
   const rgb = [0, 0, 0];
-  if (scale.perTrack) {
-    for (let t = 0; t < set.tracks; t++) {
-      colormap(scale.id, colormapPosition(scale.values[t]!, scale.range, scale.clip), rgb);
+  if (scale.perTrajectory) {
+    for (let t = 0; t < set.trajectories; t++) {
+      colormap(scale.id, colormapPosition(scale.values[t]!, scale.range, scale.truncate), rgb);
       for (let i = set.start(t); i < set.start(t) + set.count(t); i++) out.set(rgb, 3 * i);
     }
   } else {
-    for (let i = 0; i < set.samples; i++) out.set(colormap(scale.id, colormapPosition(scale.values[i]!, scale.range, scale.clip), rgb), 3 * i);
+    for (let i = 0; i < set.samples; i++) out.set(colormap(scale.id, colormapPosition(scale.values[i]!, scale.range, scale.truncate), rgb), 3 * i);
   }
   return { kind: 'sample', rgb: out };
 }
@@ -253,7 +253,7 @@ export function gradientStops(scale: ColorScale, stops = 12): [number, string][]
   const rgb = [0, 0, 0];
   for (let i = 0; i < stops; i++) {
     const t = i / (stops - 1);
-    colormap(scale.id, scale.clip[0] + t * (scale.clip[1] - scale.clip[0]), rgb);
+    colormap(scale.id, scale.truncate[0] + t * (scale.truncate[1] - scale.truncate[0]), rgb);
     out.push([t, `rgb(${rgb.map((v) => Math.round(255 * v)).join(',')})`]);
   }
   return out;

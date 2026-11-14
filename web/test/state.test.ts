@@ -1,19 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import type { Layout, Scene, State } from '../src/scene';
-import { fnv1a, newPanelId, repair, storageKey, Store, swapLeaves, withChannel, withDrop, withoutPanel, withVariable } from '../src/runtime/state';
+import { fnv1a, newPanelId, repair, storageKey, Store, swapLeaves, withChannel, withDrop, withoutPanel, withInput } from '../src/runtime/state';
 import { loadCorpus } from './corpus';
 
-// the two-panels scene has one view v, the clock channels t and @index, and the variables frame (choice, panel),
-// k (selector by index, panel), e (selector by nearest, scene), and group (choice, scene).
+// the two-panels scene has one declared panel v, the clock channels t and @index, and the inputs frame (choice, per panel),
+// k (parameter input over @index, per panel), e (parameter input, shared), and group (choice, shared).
 const scene = (): Scene => loadCorpus('two-panels').scene;
 
 const stored = (over: Partial<State> = {}): State => ({
-  variables: { e: 0.3, group: 'moving' },
+  inputs: { e: 0.3, group: 'moving' },
   clock: { channel: '@index' },
   panels: {
-    p1: { view: 'v', variables: { frame: 'rot', k: 1 } },
-    p2: { view: 'v', variables: { frame: 'tilt' } },
-    p3: { view: 'v', variables: { k: 2 } },
+    p1: { panel: 'v', inputs: { frame: 'rot', k: 1 } },
+    p2: { panel: 'v', inputs: { frame: 'tilt' } },
+    p3: { panel: 'v', inputs: { k: 2 } },
   },
   layout: {
     kind: 'split',
@@ -45,7 +45,7 @@ describe('repair (section 2.8)', () => {
 
   it('drops a panel whose view the scene lacks, with its layout leaf, collapsing the split', () => {
     const s = stored();
-    s.panels.p2 = { view: 'gone' };
+    s.panels.p2 = { panel: 'gone' };
     const r = repair(scene(), s);
     expect(Object.keys(r.panels).sort()).toEqual(['p1', 'p3']);
     expect(r.layout).toEqual({ kind: 'split', dir: 'row', ratio: 0.4, a: { kind: 'panel', id: 'p1' }, b: { kind: 'panel', id: 'p3' } });
@@ -53,26 +53,26 @@ describe('repair (section 2.8)', () => {
 
   it('falls back to initial once every panel is dropped', () => {
     const s = stored();
-    for (const p of Object.values(s.panels)) p!.view = 'gone';
+    for (const p of Object.values(s.panels)) p!.panel = 'gone';
     expect(repair(scene(), s)).toEqual(scene().initial);
   });
 
-  it('drops a value that does not fit its variable, in the scene and in a panel', () => {
-    const s = stored({ variables: { e: 'high', group: 'nowhere' } });
-    s.panels.p1!.variables = { frame: 'inertial', k: true };
-    s.panels.p2!.variables = { frame: 4, k: 2 };
+  it('drops a value that does not fit its input, in the scene and in a panel', () => {
+    const s = stored({ inputs: { e: 'high', group: 'nowhere' } });
+    s.panels.p1!.inputs = { frame: 'inertial', k: true };
+    s.panels.p2!.inputs = { frame: 4, k: 2 };
     const r = repair(scene(), s);
-    expect(r.variables).toEqual({});
-    expect(r.panels.p1!.variables).toEqual({});
-    expect(r.panels.p2!.variables).toEqual({ k: 2 });
+    expect(r.inputs).toEqual({});
+    expect(r.panels.p1!.inputs).toEqual({});
+    expect(r.panels.p2!.inputs).toEqual({ k: 2 });
   });
 
-  it('drops a panel value of a scene-scoped variable, and values that a reader never reads', () => {
-    const s = stored({ variables: { e: 0.3, frame: 'rot', unknown: 1 } });
-    s.panels.p1!.variables = { frame: 'rot', e: 0.5, group: 'moving', other: 'x' };
+  it('drops a panel value of a shared input, and values that a reader never reads', () => {
+    const s = stored({ inputs: { e: 0.3, frame: 'rot', unknown: 1 } });
+    s.panels.p1!.inputs = { frame: 'rot', e: 0.5, group: 'moving', other: 'x' };
     const r = repair(scene(), s);
-    expect(r.variables).toEqual({ e: 0.3 });
-    expect(r.panels.p1!.variables).toEqual({ frame: 'rot' });
+    expect(r.inputs).toEqual({ e: 0.3 });
+    expect(r.panels.p1!.inputs).toEqual({ frame: 'rot' });
   });
 
   it('drops a leaf without a panel, a panel without a leaf, a repeated leaf, and a bad ratio', () => {
@@ -101,24 +101,24 @@ describe('repair (section 2.8)', () => {
       [5, 0.2, 'hold'],
     ];
     const s = stored();
-    s.layout = { ...s.layout, keys: outer, b: { ...(s.layout as Extract<Layout, { kind: 'split' }>).b, keys: inner } } as Layout;
+    s.layout = { ...s.layout, keyframes: outer, b: { ...(s.layout as Extract<Layout, { kind: 'split' }>).b, keyframes: inner } } as Layout;
     const copy = structuredClone(s);
     const r = repair(scene(), s);
     expect(r.layout).toEqual(copy.layout);
     expect(s).toEqual(copy);
     // the keys are copied, hence a change of the restored layout cannot reach the stored one
-    const keys = (r.layout as Extract<Layout, { kind: 'split' }>).keys!;
+    const keys = (r.layout as Extract<Layout, { kind: 'split' }>).keyframes!;
     expect(keys).not.toBe(outer);
     expect(keys[0]).not.toBe(outer[0]);
     // a split that loses a side goes with its keys, and the split left in its place keeps its own
-    s.panels.p1 = { view: 'gone' };
+    s.panels.p1 = { panel: 'gone' };
     expect(repair(scene(), s).layout).toEqual({
       kind: 'split',
       dir: 'col',
       ratio: 0.7,
       a: { kind: 'panel', id: 'p2' },
       b: { kind: 'panel', id: 'p3' },
-      keys: inner,
+      keyframes: inner,
     });
   });
 
@@ -139,7 +139,7 @@ describe('repair (section 2.8)', () => {
     ];
     for (const keys of bad) {
       const s = stored();
-      (s.layout as Record<string, unknown>).keys = keys;
+      (s.layout as Record<string, unknown>).keyframes = keys;
       const r = repair(scene(), s);
       expect(r.layout).toEqual(stored().layout);
       expect(Object.hasOwn(r.layout, 'keys')).toBe(false);
@@ -148,7 +148,7 @@ describe('repair (section 2.8)', () => {
 
   it('drops a panel whose id is not an identifier, and keeps "__proto__" as an own key', () => {
     const s = JSON.parse(
-      '{"clock":{"channel":"t"},"panels":{"__proto__":{"view":"v"},"a b":{"view":"v"}},' +
+      '{"clock":{"channel":"t"},"panels":{"__proto__":{"panel":"v"},"a b":{"panel":"v"}},' +
         '"layout":{"kind":"split","dir":"row","ratio":0.5,"a":{"kind":"panel","id":"__proto__"},"b":{"kind":"panel","id":"a b"}}}',
     ) as unknown;
     const r = repair(scene(), s);
@@ -172,13 +172,13 @@ describe('storage key', () => {
 describe('store and updates', () => {
   it('notifies on a new snapshot, frame, or playing flag, and not on a no-op', () => {
     const s = scene();
-    const store = new Store(s.initial, s.clock.steps);
+    const store = new Store(s.initial, s.clock.frame_count);
     const seen: string[] = [];
     store.subscribe((c) => seen.push(c));
     store.set(store.state);
     store.setFrame(-1);
-    expect(store.frame).toBe(s.clock.steps - 1);
-    store.setFrame(s.clock.steps - 1);
+    expect(store.frame).toBe(s.clock.frame_count - 1);
+    store.setFrame(s.clock.frame_count - 1);
     store.setFrame(0.5);
     store.setPlaying(true);
     store.update((st) => withChannel(st, '@index'));
@@ -186,16 +186,16 @@ describe('store and updates', () => {
     expect(seen).toEqual(['frame', 'playing', 'state']);
   });
 
-  it('writes a panel-scoped value in the panel and a scene-scoped one in the scene, refusing what does not fit', () => {
+  it('writes a per-panel value in the panel and a shared one in the scene, refusing what does not fit', () => {
     const s = scene();
-    let st = withVariable(s, s.initial, 'frame', 'rot', 'p2');
-    expect(st.panels.p2!.variables).toEqual({ frame: 'rot', k: 2.5 });
+    let st = withInput(s, s.initial, 'frame', 'rot', 'p2');
+    expect(st.panels.p2!.inputs).toEqual({ frame: 'rot', k: 2.5 });
     expect(st.panels.p1).toBe(s.initial.panels.p1);
-    st = withVariable(s, st, 'e', 0.4, 'p1');
-    expect(st.variables).toEqual({ e: 0.4 });
-    expect(withVariable(s, st, 'frame', 'nowhere', 'p1')).toBe(st);
-    expect(withVariable(s, st, 'e', 'x')).toBe(st);
-    expect(withVariable(s, st, 'e', 0.4)).toBe(st);
+    st = withInput(s, st, 'e', 0.4, 'p1');
+    expect(st.inputs).toEqual({ e: 0.4 });
+    expect(withInput(s, st, 'frame', 'nowhere', 'p1')).toBe(st);
+    expect(withInput(s, st, 'e', 'x')).toBe(st);
+    expect(withInput(s, st, 'e', 0.4)).toBe(st);
   });
 
   it('closes a panel by collapsing its split, keeps the last one, and finds a free id', () => {
@@ -211,10 +211,10 @@ describe('store and updates', () => {
 
 describe('drops on a panel', () => {
   // the initial state splits a row at 0.5 into p1 (frame shift, k 0.5) and p2 (frame tilt, k 2.5)
-  it("a value on an edge makes a panel with the target's view and values, then sets the value", () => {
+  it('a declared panel on an edge makes a copy of the target there when the target shows it', () => {
     const s = scene();
-    const st = withDrop(s, s.initial, 'p2', 'bottom', { kind: 'value', variable: 'frame', value: 'rot' });
-    expect(st.panels.p3).toEqual({ view: 'v', variables: { frame: 'rot', k: 2.5 } });
+    const st = withDrop(s, s.initial, 'p2', 'bottom', { kind: 'declared', panel: 'v' });
+    expect(st.panels.p3).toEqual({ panel: 'v', inputs: s.initial.panels.p2!.inputs });
     expect(st.layout).toEqual({
       kind: 'split',
       dir: 'row',
@@ -224,13 +224,10 @@ describe('drops on a panel', () => {
     });
     expect(st.panels.p2).toBe(s.initial.panels.p2);
   });
-  it('a value or a view on the center changes the target only', () => {
+  it('a declared panel on the center replaces the declared panel of the target, and an unknown one changes nothing', () => {
     const s = scene();
-    const st = withDrop(s, s.initial, 'p1', 'centre', { kind: 'value', variable: 'frame', value: 'root' });
-    expect(st.panels.p1!.variables).toEqual({ frame: 'root', k: 0.5 });
-    expect(st.layout).toBe(s.initial.layout);
-    expect(withDrop(s, s.initial, 'p1', 'centre', { kind: 'view', view: 'nowhere' })).toBe(s.initial);
-    expect(withDrop(s, s.initial, 'p1', 'centre', { kind: 'view', view: 'v' }).panels.p1).toEqual(s.initial.panels.p1);
+    expect(withDrop(s, s.initial, 'p1', 'centre', { kind: 'declared', panel: 'nowhere' })).toBe(s.initial);
+    expect(withDrop(s, s.initial, 'p1', 'centre', { kind: 'declared', panel: 'v' })).toBe(s.initial);
   });
   it('a panel dropped on an edge moves there, and one dropped on the center swaps places', () => {
     const s = scene();
@@ -243,6 +240,6 @@ describe('drops on a panel', () => {
   });
   it('does not make a panel past the limit', () => {
     const s = scene();
-    expect(withDrop(s, s.initial, 'p1', 'right', { kind: 'view', view: 'v' }, 2)).toBe(s.initial);
+    expect(withDrop(s, s.initial, 'p1', 'right', { kind: 'declared', panel: 'v' }, 2)).toBe(s.initial);
   });
 });

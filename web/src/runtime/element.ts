@@ -7,19 +7,19 @@
  *   theme     `dark` or `light`, a built-in palette that replaces the scene's theme, followed when it changes
  *   autoplay  plays as soon as the scene is loaded and the element is visible
  *   kiosk     hides every control and plays as `autoplay` does, for a slide
- *   lean      hides the Add panel group, the icons of the panel heads, the frame and rate readouts, the View group, and Export,
+ *   minimal   hides the Add panel group, the icons of the panel headers, the frame and rate readouts, the View group, and Export,
  *             for a slide on which the controls of the scene are still worked by hand. With the value `panels`, the Add panel
- *             group and the icons of the panel heads stay, for a slide on which panels are added by hand
+ *             group and the icons of the panel headers stay, for a slide on which panels are added by hand
  *
  * A block is a `<script type="application/octet-stream">` with base64 text, and `data-encoding="base64"` is the default and the
  * only encoding. Each file is taken from the viewer's own child block marked `data-tycho="scene"` or `data-tycho="data"`, else from
  * its attribute, else from the block with the id `tycho-scene` or `tycho-data`, as on a page written by an older version. The
  * clock is not started by `autoplay` or `kiosk` under `prefers-reduced-motion: reduce`.
  *
- * Methods for a presentation that steps through a scene (rule K9 of the spec): `seek(t)` shows time `t` of the timeline paused,
- * `goto(stage)` shows a stage, given by its id or index, paused, `playTo(stage)` plays from the current time and pauses at a stage,
- * and `next()` and `previous()` step through the stages. The property `time` is the time shown, and `currentStage` the id of the last
- * stage at or before it. The event `tycho-stage` fires with `detail: { id, index, at }` when playback reaches a stage.
+ * Methods for a presentation that steps through a scene (rule `steps` of the spec): `seek(t)` shows time `t` of the timeline paused,
+ * `goto(step)` shows a step, given by its id or index, paused, `playTo(step)` plays from the current time and pauses at a step,
+ * and `next()` and `previous()` go through the steps. The property `time` is the time shown, and `currentStep` the id of the last
+ * step at or before it. The event `tycho-step` fires with `detail: { id, index, at }` when playback reaches a step.
  *
  * The custom properties `--tycho-background`, `--tycho-foreground`, and `--tycho-grid` of the host take precedence over the theme.
  * Text in HTML inherits the font of the host, and text drawn on a canvas is set in `--tycho-font` when it is set. The clock runs only
@@ -27,23 +27,23 @@
  * element or a descendant has focus, and a key that the viewer uses does not reach the page.
  *
  * The page state is the snapshot of section 2.8 of spec/tycho-scene.md, kept in a Store, restored from
- * and saved to localStorage under a hash of scene.tys and repaired before use. Panels tile the
- * stage according to the snapshot's layout.
+ * and saved to localStorage under a hash of scene.tys and repaired before use. Shown panels tile the
+ * panel area according to the snapshot's layout.
  *
- * The top bar holds the title, the scene-scoped variables, and the Add panel group, whose chips
- * are the scene's views, or the values of its panel-scoped choice when it has one view. Drag a
- * chip onto a panel's edge to split it there or onto its center to replace it, click it to add
- * a panel, or use its menu. Drag a panel by its header to move or swap it, and a gutter to
- * resize. Under the stage the caption readouts are stat tiles, and the footer groups Playback,
- * View, and Export. A colorbar over the parameter of a scene-scoped selector sets it. Every
- * string from the scene is written as text (rule S2).
+ * The top bar holds the title, the shared inputs, and the Add panel group, whose chips are the
+ * scene's declared panels. Drag a chip onto a panel's edge to split it there or onto its center
+ * to replace it, click it to add a panel, or use its menu. A declared panel that is already shown
+ * is added as a copy. Drag a panel by its header to move or swap it, and a gutter to
+ * resize. Under the panel area the caption readouts are stat tiles, and the footer groups Playback,
+ * View, and Export. A colorbar over the parameter of a shared input of kind parameter sets it. Every
+ * string from the scene is written as text (rule `plain-text`).
  */
 import { decodeEmbedded, Container } from '../container.js';
 import { TychoError } from '../errors.js';
-import { variableDef, type PanelScope } from '../evaluate/resolve.js';
-import type { Choice, Control, Layout, PanelState, Readout, Scene, State, VariableValue } from '../scene.js';
+import { inputDef, type PanelScope } from '../evaluate/resolve.js';
+import type { Choice, Control, Layout, ShownPanel, Readout, Scene, State, InputValue } from '../scene.js';
 import { validate } from '../validate.js';
-import { chromeTokens, hostTheme, sceneTheme, type Theme } from './colors.js';
+import { controlsTokens, hostTheme, sceneTheme, type Theme } from './colors.js';
 import {
   EXPORT_FPS,
   EXPORT_LOOPS,
@@ -82,8 +82,8 @@ import {
   type FrameReport,
   type ReadoutTile,
 } from './readouts.js';
-import { GUTTER, layoutAt, StageRenderer } from './renderer.js';
-import { paintStage } from './paint.js';
+import { GUTTER, layoutAt, PanelAreaRenderer } from './renderer.js';
+import { paintPanelArea } from './paint.js';
 import { rasterize } from './raster.js';
 import { loopSeconds as timelineSeconds } from '../evaluate/timeline.js';
 import {
@@ -97,16 +97,16 @@ import {
   withLayout,
   withoutPanel,
   withPlacement,
-  withVariable,
+  withInput,
   type DropPayload,
 } from './state.js';
 import { ratioAt, tile, withRatio, type Gutter } from './tiles.js';
 
 const MAX_PANELS = 8;
-/** The height in CSS pixels between a panel's head and its tick row below which its colorbars are hidden, since their title and two ends would not fit. */
+/** The height in CSS pixels between a panel's header and its tick row below which its colorbars are hidden, since their title and two ends would not fit. */
 const BAR_ROOM = 56;
 const SPEEDS = [0.25, 0.5, 1, 2, 4];
-/** The keys that move the view of a panel with an orbit camera, in groups, each with what its keys do. The keys of the group `turn` turn the view to the left and to the right. */
+/** The keys that move the view of a panel with a 3d camera, in groups, each with what they do. The keys of the group `turn` turn the view to the left and to the right. */
 const ORBIT_KEYS: readonly { keys: readonly string[]; does: string; turn?: true }[] = [
   { keys: ['X', 'Y', 'Z'], does: 'view from axis' },
   { keys: [',', '.'], does: 'turn 15°', turn: true },
@@ -125,10 +125,10 @@ const STYLE = `
 button, select, input { font: inherit; color: inherit; margin: 0; }
 .root { position: absolute; inset: 0; display: grid; grid-template-rows: auto 1fr auto auto; }
 .root.kiosk { grid-template-rows: 1fr; }
-.root.kiosk header, .root.kiosk .stats, .root.kiosk footer, .root.kiosk .phead { display: none; }
+.root.kiosk header, .root.kiosk .stats, .root.kiosk footer, .root.kiosk .pheader { display: none; }
 .root.picture { grid-template-rows: 1fr auto; }
-.root.picture header, .root.picture footer, .root.picture .phead { display: none; }
-.root.lean:not(.keep-panels) .add, .root.lean:not(.keep-panels) .phead .icon, .root.lean .frame, .root.lean .fps, .root.lean .cap.view, .root.lean .cap.export { display: none; }
+.root.picture header, .root.picture footer, .root.picture .pheader { display: none; }
+.root.minimal:not(.keep-panels) .add, .root.minimal:not(.keep-panels) .pheader .icon, .root.minimal .frame, .root.minimal .fps, .root.minimal .cap.view, .root.minimal .cap.export { display: none; }
 .root.dragging, .root.dragging * { cursor: grabbing !important; }
 
 header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; padding: 10px 14px 8px; }
@@ -207,31 +207,31 @@ input[type=range]:disabled { opacity: 0.4; cursor: default; }
 .menu button:disabled { color: var(--dim); cursor: default; }
 .menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 2px; }
 
-.stage { position: relative; min-height: 120px; overflow: hidden; background: var(--gutter); }
-.stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-.stage canvas.paint { pointer-events: none; }
+.panel-area { position: relative; min-height: 120px; overflow: hidden; background: var(--gutter); }
+.panel-area canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.panel-area canvas.paint { pointer-events: none; }
 .panels { position: absolute; inset: 0; }
 .panel { position: absolute; overflow: hidden; }
 .pbody { position: absolute; inset: 0; }
-.phead { position: absolute; top: 0; left: 0; right: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px;
-  padding: 3px 3px 3px 6px; background: var(--head); cursor: grab; user-select: none; -webkit-user-select: none; touch-action: none;
+.pheader { position: absolute; top: 0; left: 0; right: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px;
+  padding: 3px 3px 3px 6px; background: var(--header); cursor: grab; user-select: none; -webkit-user-select: none; touch-action: none;
   font-size: 12px; white-space: nowrap; min-width: 0; }
-.phead .t { font-weight: 600; flex: 0 1 auto; min-width: 2em; overflow: hidden; text-overflow: ellipsis; }
-.phead .m { color: var(--dim); flex: 0 10 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.phead .pc { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; flex: 0 1 auto; min-width: 0; }
-.phead select { padding: 0 4px; font-size: 11px; }
-.phead .sp { flex: 1 0 0; }
-.phead .icon { width: 24px; height: 24px; }
-.phead .chip { min-width: 0; }
-.phead .chip .body { padding: 1px 6px 1px 2px; min-width: 0; }
-.phead .chip .lbl { overflow: hidden; text-overflow: ellipsis; }
-.phead .chip .grip { visibility: hidden; }
-.phead .chip:is(:hover, :focus-within) .grip { visibility: visible; }
+.pheader .t { font-weight: 600; flex: 0 1 auto; min-width: 2em; overflow: hidden; text-overflow: ellipsis; }
+.pheader .m { color: var(--dim); flex: 0 10 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.pheader .pc { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; flex: 0 1 auto; min-width: 0; }
+.pheader select { padding: 0 4px; font-size: 11px; }
+.pheader .sp { flex: 1 0 0; }
+.pheader .icon { width: 24px; height: 24px; }
+.pheader .chip { min-width: 0; }
+.pheader .chip .body { padding: 1px 6px 1px 2px; min-width: 0; }
+.pheader .chip .lbl { overflow: hidden; text-overflow: ellipsis; }
+.pheader .chip .grip { visibility: hidden; }
+.pheader .chip:is(:hover, :focus-within) .grip { visibility: visible; }
 .labels, .preadout, .perror, .drop, .cbars { pointer-events: none; }
 .labels { position: absolute; inset: 0; z-index: 1; overflow: hidden; }
 .labels span { position: absolute; left: 0; top: 0; white-space: nowrap; color: var(--fg); font-size: 12px; text-shadow: 0 0 3px var(--bg), 0 0 3px var(--bg); }
-/* the colorbars sit between the head, whose height the viewer writes as --head-height, and the row of x tick numbers, and shrink to fit */
-.cbars { position: absolute; right: 10px; top: calc(var(--head-height, 30px) + 10px); bottom: 40px; z-index: 1; display: flex; align-items: flex-start; gap: 12px; }
+/* the colorbars sit between the header, whose height the viewer writes as --header-height, and the row of x tick numbers, and shrink to fit */
+.cbars { position: absolute; right: 10px; top: calc(var(--header-height, 30px) + 10px); bottom: 40px; z-index: 1; display: flex; align-items: flex-start; gap: 12px; }
 .cbars.tight > .cbar { display: none; }
 .cbar { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; max-height: 100%; font-size: 11px; color: var(--dim); }
 .cbar-t { flex: none; max-width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -251,7 +251,7 @@ input[type=range]:disabled { opacity: 0.4; cursor: default; }
 .pbody .follow { position: absolute; right: 8px; bottom: 8px; z-index: 2; padding: 3px 10px 3px 8px; font: inherit; font-size: 12px; cursor: pointer; }
 .pbody .follow[hidden] { display: none; }
 .pbody .hint { position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 2; width: fit-content; margin: 0 auto; display: flex; flex-wrap: wrap;
-  justify-content: center; gap: 6px 18px; padding: 5px 9px; border-radius: 6px; background: var(--head); color: var(--dim);
+  justify-content: center; gap: 6px 18px; padding: 5px 9px; border-radius: 6px; background: var(--header); color: var(--dim);
   font-size: 11px; line-height: 1.3;
   pointer-events: none; opacity: 0; transition: opacity 0.2s; }
 .hint .g { display: grid; justify-items: center; gap: 3px; white-space: nowrap; }
@@ -261,9 +261,9 @@ input[type=range]:disabled { opacity: 0.4; cursor: default; }
 /* a comma and a period are too small to tell apart at the size of the letters */
 .hint kbd.mark { align-items: end; padding-bottom: 7px; font-size: 17px; font-weight: 800; }
 .hint svg { width: 13px; height: 13px; color: var(--fg); }
-/* the keys are listed only where a pointer hovers, and not on a slide, where the audience would read them */
+/* the keyframes are listed only where a pointer hovers, and not on a slide, where the audience would read them */
 @media (hover: hover) { .pbody:hover .hint { opacity: 1; } }
-.root.kiosk .hint, .root.lean .hint, .root.picture .hint { display: none; }
+.root.kiosk .hint, .root.minimal .hint, .root.picture .hint { display: none; }
 .drop span { font-size: 11px; color: var(--fg); background: var(--raised); border-radius: 4px; padding: 1px 6px; }
 .gutter { position: absolute; z-index: 2; touch-action: none; background: var(--gutter); }
 .gutter.row { cursor: col-resize; }
@@ -311,8 +311,8 @@ footer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; pad
 .status.error { color: var(--error); }
 `;
 
-/** What the Add panel group offers, either a view or a value of the panel-scoped choice, with the chip's label. */
-type Template = Exclude<DropPayload, { kind: 'panel' }> & { label: string };
+/** What the Add panel group offers, i.e. a declared panel, with the chip's label. */
+type Template = Extract<DropPayload, { kind: 'declared' }> & { label: string };
 type DragPayload = Template | Extract<DropPayload, { kind: 'panel' }>;
 
 interface Widget {
@@ -347,7 +347,7 @@ interface BarDom {
 interface PanelDom {
   host: HTMLDivElement;
   body: HTMLDivElement;
-  head: HTMLDivElement;
+  header: HTMLDivElement;
   title: HTMLSpanElement;
   chip: HTMLDivElement;
   chipLabel: HTMLSpanElement;
@@ -356,7 +356,7 @@ interface PanelDom {
   close: HTMLButtonElement;
   readouts: ReadoutDom[];
   error: HTMLDivElement;
-  /** Returns the panel to its camera keys, shown while the viewer has moved it off them. */
+  /** Returns the panel to its camera keyframes, shown while the viewer has moved it off them. */
   follow: HTMLButtonElement;
   drop: HTMLDivElement;
   dropLabel: HTMLSpanElement;
@@ -365,7 +365,8 @@ interface PanelDom {
   /** The snapshot the colorbars were last read for. */
   barsFor: State | null;
   widgets: Widget[];
-  view: string;
+  /** The declared panel that the shown panel showed when its DOM was built. */
+  panel: string;
 }
 
 interface MenuEntry {
@@ -383,7 +384,7 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: 
   return e;
 }
 
-/** The keys of an orbit camera as key caps, each group over what its keys do, which a panel shows while the pointer is over it. */
+/** The keys of a 3d camera as key caps, each group over what they do, which a panel shows while the pointer is over it. */
 function buildHint(): HTMLElement {
   const hint = el('div', 'hint');
   for (const g of ORBIT_KEYS) {
@@ -488,7 +489,7 @@ export function buildChip(text: string, caret: 'menu' | 'select' | 'none') {
   return { root, body, label, button, select };
 }
 
-/** A readout's elements, as stat tiles when `readoutTiles` splits its parts, in a row under the stage or stacked in a panel. */
+/** A readout's elements, as stat tiles when `readoutTiles` splits its parts, in a row under the panel area or stacked in a panel. */
 export function buildReadout(parts: Readout['parts'], cls: 'wide' | 'stack'): ReadoutDom {
   const tiles = readoutTiles(parts);
   const root = el('div', `readout ${cls}`);
@@ -529,7 +530,7 @@ export function fillReadout(r: ReadoutDom, pieces: string[] | { error: string })
   setText(r.line, ok ? pieces.join('') : pieces.error);
 }
 
-/** The words inside a drop overlay. */
+/** The words inside a drop marker. */
 export function dropText(payload: { kind: string }, zone: DropZone): string {
   const panel = payload.kind === 'panel';
   if (zone === 'centre') return panel ? 'swap' : 'replace';
@@ -555,21 +556,21 @@ export class TychoViewerElement extends Base {
   private sceneText = '';
   private geometry: GeometryCache | null = null;
   private store: Store | null = null;
-  private renderer: StageRenderer | null = null;
+  private renderer: PanelAreaRenderer | null = null;
   /** The colors in use, or null before a scene loads. */
   private theme: Theme | null = null;
   private kiosk = false;
   /**
    * What a twin made by `exportVideo` shows, or null for a viewer on the page. A twin is hidden, is drawn only by the export, and
-   * does not save its state. As `kiosk` it is the picture of a kiosk viewer, and as `picture` the stage over its caption readouts.
+   * does not save its state. As `kiosk` it is the picture of a kiosk viewer, and as `picture` the panel area over its caption readouts.
    */
   private twin: 'kiosk' | 'picture' | null = null;
-  private lean = false;
+  private minimal = false;
   private keepPanels = false;
   private loading = false;
   /** Counts the loads begun, so that a load that a later one overtook drops its result. */
   private loads = 0;
-  /** The panel-scoped choice that a panel's header chip shows. */
+  /** The per-panel choice that a panel's header chip shows. */
   private choice: { id: string; def: Choice; label: string } | null = null;
 
   private root!: HTMLDivElement;
@@ -577,13 +578,13 @@ export class TychoViewerElement extends Base {
   private titleEl!: HTMLHeadingElement;
   private varsEl!: HTMLDivElement;
   private addEl!: HTMLDivElement;
-  private stage!: HTMLDivElement;
+  private panelArea!: HTMLDivElement;
   private panelsEl!: HTMLDivElement;
   private statusEl!: HTMLDivElement;
   private statsEl!: HTMLDivElement;
   private footer!: HTMLElement;
   private canvas: HTMLCanvasElement | null = null;
-  /** The 2D canvas over the stage, on which labels, boxes, and overlays are painted (section 2.11). */
+  /** The 2D canvas over the panel area, on which labels, boxes, and overlays are painted (section 2.11). */
   private paintCanvas: HTMLCanvasElement | null = null;
 
   /** The held progress, valid while the frame index is the one it was taken at. */
@@ -593,13 +594,13 @@ export class TychoViewerElement extends Base {
 
   private set heldProgress(q: number | null) {
     this.heldValue = q;
-    if (q !== null && this.scene !== null) this.heldFrame = Math.min(this.scene.clock.steps - 1, Math.floor(q * this.scene.clock.steps));
+    if (q !== null && this.scene !== null) this.heldFrame = Math.min(this.scene.clock.frame_count - 1, Math.floor(q * this.scene.clock.frame_count));
   }
   /** The progress shown while paused at a time between two frame indices, e.g. after `seek`, or null. */
   private heldValue: number | null = null;
   /** The frame index at which `heldValue` was taken. Any other frame index, e.g. after a scrub, drops it. */
   private heldFrame = -1;
-  /** The loop position, unwrapped from the anchor of playback, at which `playTo` pauses, and the stage it stops at. */
+  /** The loop position, unwrapped from the anchor of playback, at which `playTo` pauses, and the step it stops at. */
   private stopAt: { x: number; index: number } | null = null;
 
   private readonly panelDom = new Map<string, PanelDom>();
@@ -610,7 +611,7 @@ export class TychoViewerElement extends Base {
   private addChips: HTMLElement[] = [];
   private addButton: HTMLButtonElement | null = null;
   private addGroup: HTMLElement | null = null;
-  private transport: {
+  private playback: {
     play: HTMLButtonElement;
     scrub: HTMLInputElement;
     frame: HTMLSpanElement;
@@ -622,7 +623,7 @@ export class TychoViewerElement extends Base {
   private closeExport: (() => boolean) | null = null;
 
   private raf = 0;
-  /** The panel under the pointer, on which the keys of an orbit camera act, or null. */
+  /** The panel under the pointer, on which the keys of a 3d camera act, or null. */
   private hovered: string | null = null;
   /** Whether the element intersects the viewport. It stays true where IntersectionObserver does not exist. */
   private intersecting = true;
@@ -636,11 +637,11 @@ export class TychoViewerElement extends Base {
   private playProgress: number | null = null;
   private speed = 1;
   private readonly meter = new FrameMeter();
-  /** The stage's size in CSS pixels, kept by the resize observer so that a draw never forces a layout. */
-  private stageSize = { w: 0, h: 0 };
+  /** The panel area's size in CSS pixels, kept by the resize observer so that a draw never forces a layout. */
+  private panelAreaSize = { w: 0, h: 0 };
   private saveTimer = 0;
   private resizeObserver: ResizeObserver | null = null;
-  /** Watches the head and the colorbars of every panel, whose sizes the labels are kept clear of. */
+  /** Watches the header and the colorbars of every panel, whose sizes the labels are kept clear of. */
   private overlayObserver: ResizeObserver | null = null;
   private readonly onPageHide = () => this.flushSave();
   private unsubscribe: (() => void) | null = null;
@@ -675,15 +676,15 @@ export class TychoViewerElement extends Base {
 
   private buildShell(): void {
     this.kiosk = this.hasAttribute('kiosk') || this.twin === 'kiosk';
-    this.lean = this.hasAttribute('lean');
-    this.keepPanels = this.lean && (this.getAttribute('lean') ?? '').split(/\s+/).includes('panels');
+    this.minimal = this.hasAttribute('minimal');
+    this.keepPanels = this.minimal && (this.getAttribute('minimal') ?? '').split(/\s+/).includes('panels');
     const shadow = this.attachShadow({ mode: 'open' });
     const style = el('style');
     style.textContent = STYLE;
     shadow.appendChild(style);
     this.root = el(
       'div',
-      `root${this.kiosk ? ' kiosk' : ''}${this.twin === 'picture' ? ' picture' : ''}${this.lean ? ' lean' : ''}${this.keepPanels ? ' keep-panels' : ''}`,
+      `root${this.kiosk ? ' kiosk' : ''}${this.twin === 'picture' ? ' picture' : ''}${this.minimal ? ' minimal' : ''}${this.keepPanels ? ' keep-panels' : ''}`,
     );
     this.header = el('header');
     this.titleEl = el('h1');
@@ -694,13 +695,13 @@ export class TychoViewerElement extends Base {
     this.addEl.setAttribute('role', 'group');
     this.addEl.setAttribute('aria-label', 'Add panel');
     this.header.append(this.titleEl, this.varsEl, this.addEl);
-    this.stage = el('div', 'stage');
+    this.panelArea = el('div', 'panel-area');
     this.panelsEl = el('div', 'panels');
     this.statusEl = el('div', 'status', 'loading…');
-    this.stage.append(this.panelsEl, this.statusEl);
+    this.panelArea.append(this.panelsEl, this.statusEl);
     this.statsEl = el('div', 'stats');
     this.footer = el('footer');
-    this.root.append(this.header, this.stage, this.statsEl, this.footer);
+    this.root.append(this.header, this.panelArea, this.statsEl, this.footer);
     shadow.appendChild(this.root);
     if (!this.hasAttribute('tabindex')) this.tabIndex = 0;
     this.addEventListener('keydown', (ev) => this.onKey(ev));
@@ -781,7 +782,7 @@ export class TychoViewerElement extends Base {
     this.scene = scene;
     this.sceneText = sceneText;
     this.geometry = new GeometryCache(scene, data);
-    this.store = new Store(this.recall(), scene.clock.steps);
+    this.store = new Store(this.recall(), scene.clock.frame_count);
     this.choice = this.templateChoice();
     this.statusEl.hidden = true;
     this.applyTheme();
@@ -797,31 +798,31 @@ export class TychoViewerElement extends Base {
   private start(): void {
     if (this.scene === null || this.store === null || this.renderer !== null || !this.isConnected) return;
     this.canvas = el('canvas');
-    this.stage.insertBefore(this.canvas, this.panelsEl);
+    this.panelArea.insertBefore(this.canvas, this.panelsEl);
     this.paintCanvas = el('canvas', 'paint');
-    this.stage.insertBefore(this.paintCanvas, this.panelsEl);
+    this.panelArea.insertBefore(this.paintCanvas, this.panelsEl);
     try {
       // a twin's frames are read back from its canvas after each draw
       const twin = this.twin === null ? {} : { preserveDrawingBuffer: true, coarseDrags: false };
-      this.renderer = new StageRenderer(this.canvas, this.scene, this.geometry!, { theme: this.theme!, ...twin });
+      this.renderer = new PanelAreaRenderer(this.canvas, this.scene, this.geometry!, { theme: this.theme!, ...twin });
     } catch (e) {
       this.fail(`WebGL is not available: ${(e as Error).message}`);
       return;
     }
     this.renderer.onChange = () => this.invalidate();
     this.unsubscribe = this.store.subscribe((change) => this.onChange(change));
-    this.measureStage();
+    this.measurePanelArea();
     if (this.twin !== null) {
       this.onChange('state');
       return;
     }
     this.resizeObserver = new ResizeObserver(() => {
-      this.measureStage();
+      this.measurePanelArea();
       this.layoutDom();
       this.fitAddGroup();
       this.invalidate();
     });
-    this.resizeObserver.observe(this.stage);
+    this.resizeObserver.observe(this.panelArea);
     this.resizeObserver.observe(this.header);
     this.overlayObserver = new ResizeObserver((entries) => {
       const pids = new Set(entries.map((e) => (e.target.closest('.panel') as HTMLElement | null)?.dataset.id));
@@ -882,11 +883,11 @@ export class TychoViewerElement extends Base {
     return typeof getComputedStyle === 'undefined' ? '' : getComputedStyle(this).getPropertyValue(name).trim();
   }
 
-  /** Recolors the chrome and a live renderer from the scene's theme, the `theme` attribute, and the custom properties of the host. */
+  /** Recolors the controls and a live renderer from the scene's theme, the `theme` attribute, and the custom properties of the host. */
   private applyTheme(): void {
     if (this.scene === null) return;
     this.theme = hostTheme(sceneTheme(this.scene), this.getAttribute('theme'), (name) => this.hostProperty(name));
-    for (const [k, v] of Object.entries(chromeTokens(this.theme))) this.style.setProperty(k, v);
+    for (const [k, v] of Object.entries(controlsTokens(this.theme))) this.style.setProperty(k, v);
     this.renderer?.setTheme(this.theme);
     this.invalidate();
   }
@@ -950,7 +951,7 @@ export class TychoViewerElement extends Base {
       this.syncWidgets();
       this.save();
     } else if (change === 'playing') {
-      const t = this.transport;
+      const t = this.playback;
       if (t !== null) {
         const label = store.playing ? 'Pause (k)' : 'Play (k)';
         t.play.replaceChildren(icon(store.playing ? 'pause' : 'play'));
@@ -961,10 +962,10 @@ export class TychoViewerElement extends Base {
       this.meter.reset();
       if (store.playing) {
         // playback resumes from the time that was held, between two frame indices, and from the start once a clock that
-        // ends with a stop holds the end of its loop, as a video plays again (rule K9)
+        // ends with a stop holds the end of its loop, as a video plays again (rule `steps`)
         const clock = this.scene!.clock;
         const ended = clock.end === 'stop' && this.heldProgress !== null && this.heldProgress >= 1 - 2e-9;
-        this.anchor = { index: ended ? 0 : this.heldProgress === null ? store.frame : this.heldProgress * clock.steps, time: performance.now() };
+        this.anchor = { index: ended ? 0 : this.heldProgress === null ? store.frame : this.heldProgress * clock.frame_count, time: performance.now() };
         this.heldProgress = null;
       } else if (this.playProgress !== null) this.heldProgress = this.playProgress;
       this.playProgress = null;
@@ -1002,7 +1003,7 @@ export class TychoViewerElement extends Base {
 
   /** The loop position that playback last reached, between two frame indices, so that a new anchor does not move the picture back to a frame index. */
   private playPosition(): number {
-    return this.playProgress === null ? this.store!.frame : this.playProgress * this.scene!.clock.steps;
+    return this.playProgress === null ? this.store!.frame : this.playProgress * this.scene!.clock.frame_count;
   }
 
   /**
@@ -1015,22 +1016,22 @@ export class TychoViewerElement extends Base {
     const store = this.store!;
     const clock = this.scene!.clock;
     if (store.playing) {
-      let x = loopPosition(this.anchor.index, now - this.anchor.time, 1000, clock.steps, this.speed, loopSeconds(clock));
+      let x = loopPosition(this.anchor.index, now - this.anchor.time, 1000, clock.frame_count, this.speed, loopSeconds(clock));
       const stop = this.stopAt;
-      // a clock that ends with a stop holds the end of its loop, as a video does (rule K9)
-      const end = clock.end === 'stop' ? Math.floor(this.anchor.index / clock.steps) * clock.steps + clock.steps * (1 - 1e-9) : Infinity;
+      // a clock that ends with a stop holds the end of its loop, as a video does (rule `steps`)
+      const end = clock.end === 'stop' ? Math.floor(this.anchor.index / clock.frame_count) * clock.frame_count + clock.frame_count * (1 - 1e-9) : Infinity;
       const target = Math.min(stop?.x ?? Infinity, end);
       if (x >= target) {
         x = target;
         const reached = stop !== null && stop.x <= end ? stop.index : null;
-        store.setFrame(positionIndex(x, clock.steps));
-        this.playProgress = positionProgress(x, clock.steps);
+        store.setFrame(positionIndex(x, clock.frame_count));
+        this.playProgress = positionProgress(x, clock.frame_count);
         this.stopAt = null;
         this.pause();
-        if (reached !== null) this.reachStage(reached);
+        if (reached !== null) this.reachStep(reached);
       } else {
-        store.setFrame(positionIndex(x, clock.steps));
-        this.playProgress = positionProgress(x, clock.steps);
+        store.setFrame(positionIndex(x, clock.frame_count));
+        this.playProgress = positionProgress(x, clock.frame_count);
       }
       this.dirty = true;
     }
@@ -1049,34 +1050,34 @@ export class TychoViewerElement extends Base {
   }
 
   private showRate(report: FrameReport | null): void {
-    const t = this.transport;
+    const t = this.playback;
     if (t === null) return;
     setText(t.fps, fpsText(report));
     const title = fpsTitle(report);
     if (t.fps.title !== title) t.fps.title = title;
   }
 
-  /** Reads the stage's size once per resize, so that the draw loop never forces a layout. */
-  private measureStage(): void {
-    this.stageSize = { w: this.stage.clientWidth, h: this.stage.clientHeight };
+  /** Reads the panel area's size once per resize, so that the draw loop never forces a layout. */
+  private measurePanelArea(): void {
+    this.panelAreaSize = { w: this.panelArea.clientWidth, h: this.panelArea.clientHeight };
   }
 
-  /** Draws the stage and its overlays at the pixel ratio of the screen, at most 2, or at `ratio` when it is given. */
+  /** Draws the panel area and its overlays at the pixel ratio of the screen, at most 2, or at `ratio` when it is given. */
   private draw(ratio = Math.min(window.devicePixelRatio || 1, 2)): void {
     const renderer = this.renderer;
     const store = this.store!;
     const scene = this.scene!;
     if (renderer === null) return;
     const st = store.state;
-    const { w, h } = this.stageSize;
+    const { w, h } = this.panelAreaSize;
     if (w < 1 || h < 1) return;
-    const q = store.playing && this.playProgress !== null ? this.playProgress : (this.heldProgress ?? store.frame / scene.clock.steps);
+    const q = store.playing && this.playProgress !== null ? this.playProgress : (this.heldProgress ?? store.frame / scene.clock.frame_count);
     const errors = renderer.renderAt(st, q, w, h, ratio);
     this.paint(q, w, h, ratio);
     if (this.animatedLayout) this.layoutDom(q);
     for (const [pid, dom] of this.panelDom) {
       setText(dom.error, errors.get(pid) ?? '');
-      // a panel panned or zoomed off its camera keys offers to follow them again
+      // a panel panned or zoomed off its camera keyframes offers to follow them again
       const off = renderer.offKeys?.(pid) ?? false;
       if (dom.follow.hidden === off) dom.follow.hidden = !off;
       for (const r of dom.readouts) fillReadout(r, this.pieces(pid, r.parts, q));
@@ -1087,19 +1088,19 @@ export class TychoViewerElement extends Base {
     }
     const first = this.firstPanel();
     for (const r of this.captions) fillReadout(r, first === null ? [] : this.pieces(first, r.parts, q));
-    if (this.transport) {
-      setRange(this.transport.scrub, store.frame);
-      setText(this.transport.frame, `${store.frame} / ${scene.clock.steps}`);
+    if (this.playback) {
+      setRange(this.playback.scrub, store.frame);
+      setText(this.playback.frame, `${store.frame} / ${scene.clock.frame_count}`);
     }
   }
 
   /** Whether a split of the layout moves with the timeline, so that the panels' elements follow it at every frame. */
   private get animatedLayout(): boolean {
-    const keyed = (n: Layout): boolean => n.kind === 'split' && (n.keys !== undefined || keyed(n.a) || keyed(n.b));
+    const keyed = (n: Layout): boolean => n.kind === 'split' && (n.keyframes !== undefined || keyed(n.a) || keyed(n.b));
     return this.store !== null && keyed(this.store.state.layout);
   }
 
-  /** Paints the labels, the boxes, the panel fades, and the overlays of section 2.11 over the stage at progress `q`. */
+  /** Paints the labels, the boxes, the panel fades, and the overlays of section 2.11 over the panel area at progress `q`. */
   private paint(q: number, w: number, h: number, ratio: number): void {
     const c = this.paintCanvas;
     const renderer = this.renderer;
@@ -1115,7 +1116,7 @@ export class TychoViewerElement extends Base {
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, bw, bh);
     g.setTransform(ratio, 0, 0, ratio, 0, 0);
-    paintStage(g, renderer, this.scene, this.store!.state, this.theme, q, w, h, (pid, parts) => {
+    paintPanelArea(g, renderer, this.scene, this.store!.state, this.theme, q, w, h, (pid, parts) => {
       const r = this.pieces(pid, parts, q);
       return 'error' in r ? [] : r;
     });
@@ -1136,10 +1137,10 @@ export class TychoViewerElement extends Base {
     return this.store === null ? null : walk(this.store.state.layout);
   }
 
-  // transport
+  // playback
 
-  private hasTransport(): boolean {
-    return (this.scene?.controls ?? []).some((c) => c.kind === 'transport');
+  private hasPlayback(): boolean {
+    return (this.scene?.controls ?? []).some((c) => c.kind === 'playback');
   }
 
   /** Whether the clock is set to run. It stays true while the clock waits for the element to be shown. */
@@ -1165,32 +1166,32 @@ export class TychoViewerElement extends Base {
     store.setFrame(store.frame + by);
   }
 
-  // stages (rule K9)
+  // steps (rule `steps`)
 
-  /** The stages of the scene, in order of time. */
-  get stages(): { id: string; at: number; label?: string }[] {
-    return [...(this.scene?.stages ?? [])];
+  /** The steps of the scene, in order of time. */
+  get steps(): { id: string; at: number; label?: string }[] {
+    return [...(this.scene?.steps ?? [])];
   }
 
   /** The time of the timeline shown, in seconds, or 0 before a scene loads. */
   get time(): number {
     if (this.scene === null || this.store === null) return 0;
-    const q = this.store.playing && this.playProgress !== null ? this.playProgress : (this.heldProgress ?? this.store.frame / this.scene.clock.steps);
+    const q = this.store.playing && this.playProgress !== null ? this.playProgress : (this.heldProgress ?? this.store.frame / this.scene.clock.frame_count);
     return q * timelineSeconds(this.scene.clock);
   }
 
-  /** The id of the last stage at or before the time shown, or null when there is none. */
-  get currentStage(): string | null {
+  /** The id of the last step at or before the time shown, or null when there is none. */
+  get currentStep(): string | null {
     const t = this.time + 1e-9;
     let id: string | null = null;
-    for (const st of this.stages) if (st.at <= t) id = st.id;
+    for (const st of this.steps) if (st.at <= t) id = st.id;
     return id;
   }
 
-  private stageIndex(stage: string | number): number {
-    const all = this.stages;
-    const i = typeof stage === 'number' ? stage : all.findIndex((st) => st.id === stage);
-    if (!Number.isInteger(i) || i < 0 || i >= all.length) throw new Error(`the scene does not have a stage ${JSON.stringify(stage)}`);
+  private stepIndex(step: string | number): number {
+    const all = this.steps;
+    const i = typeof step === 'number' ? step : all.findIndex((st) => st.id === step);
+    if (!Number.isInteger(i) || i < 0 || i >= all.length) throw new Error(`the scene does not have a step ${JSON.stringify(step)}`);
     return i;
   }
 
@@ -1205,62 +1206,62 @@ export class TychoViewerElement extends Base {
     this.pause();
     this.heldProgress = q;
     this.playProgress = null;
-    store.setFrame(Math.min(scene.clock.steps - 1, Math.floor(q * scene.clock.steps)));
+    store.setFrame(Math.min(scene.clock.frame_count - 1, Math.floor(q * scene.clock.frame_count)));
     this.invalidate();
   }
 
-  /** Shows a stage, given by its id or its index, paused. */
-  goto(stage: string | number): void {
-    this.seek(this.stages[this.stageIndex(stage)]!.at);
+  /** Shows a step, given by its id or its index, paused. */
+  goto(step: string | number): void {
+    this.seek(this.steps[this.stepIndex(step)]!.at);
   }
 
-  /** Plays from the time shown, and pauses at the time of a stage, given by its id or index. A stage behind the time shown is reached on the next loop. */
-  playTo(stage: string | number): void {
+  /** Plays from the time shown, and pauses at the time of a step, given by its id or index. A step behind the time shown is reached on the next loop. */
+  playTo(step: string | number): void {
     const scene = this.scene;
     const store = this.store;
     if (scene === null || store === null) return;
-    const index = this.stageIndex(stage);
+    const index = this.stepIndex(step);
     const L = timelineSeconds(scene.clock);
-    const steps = scene.clock.steps;
+    const frameCount = scene.clock.frame_count;
     const now = this.time;
-    const at = this.stages[index]!.at;
+    const at = this.steps[index]!.at;
     if (Math.abs(at - now) < 1e-9) {
-      this.reachStage(index);
+      this.reachStep(index);
       return;
     }
-    const target = (at > now ? 0 : 1) * steps + Math.min((at / L) * steps, steps * (1 - 1e-9));
-    // the target is counted from the loop of the time shown, hence playback takes a new anchor there, in [0, steps)
+    const target = (at > now ? 0 : 1) * frameCount + Math.min((at / L) * frameCount, frameCount * (1 - 1e-9));
+    // the target is counted from the loop of the time shown, hence playback takes a new anchor there, in [0, frameCount)
     if (store.playing) this.anchor = { index: this.playPosition(), time: performance.now() };
-    else this.heldProgress ??= store.frame / steps;
+    else this.heldProgress ??= store.frame / frameCount;
     store.setPlaying(true);
     this.stopAt = { x: target, index };
   }
 
-  /** Plays to the next stage, and returns its id, or null when the time shown is at or past the last stage. */
+  /** Plays to the next step, and returns its id, or null when the time shown is at or past the last step. */
   next(): string | null {
     const t = this.time + 1e-6;
-    const i = this.stages.findIndex((st) => st.at > t);
+    const i = this.steps.findIndex((st) => st.at > t);
     if (i < 0) return null;
     this.playTo(i);
-    return this.stages[i]!.id;
+    return this.steps[i]!.id;
   }
 
-  /** Shows the stage before the time shown, paused, and returns its id, or null when there is none. */
+  /** Shows the step before the time shown, paused, and returns its id, or null when there is none. */
   previous(): string | null {
     const t = this.time - 1e-6;
     let i = -1;
-    this.stages.forEach((st, k) => {
+    this.steps.forEach((st, k) => {
       if (st.at < t) i = k;
     });
     if (i < 0) return null;
     this.goto(i);
-    return this.stages[i]!.id;
+    return this.steps[i]!.id;
   }
 
-  private reachStage(index: number): void {
-    const st = this.stages[index];
+  private reachStep(index: number): void {
+    const st = this.steps[index];
     if (st === undefined) return;
-    this.dispatchEvent(new CustomEvent('tycho-stage', { detail: { id: st.id, index, at: st.at }, bubbles: true, composed: true }));
+    this.dispatchEvent(new CustomEvent('tycho-step', { detail: { id: st.id, index, at: st.at }, bubbles: true, composed: true }));
   }
 
   /** Goes to a frame, playing on from there when playing. */
@@ -1289,7 +1290,7 @@ export class TychoViewerElement extends Base {
       ev.preventDefault();
       return true;
     }
-    const action = keyAction(ev.key, ev.shiftKey, this.scene!.clock.steps, ev.code);
+    const action = keyAction(ev.key, ev.shiftKey, this.scene!.clock.frame_count, ev.code);
     const target = ev.composedPath()[0] as Element | undefined;
     // a key that a focused control takes itself, such as Space on a button, is left to the control, and the other keys act
     // on the viewer, so that 0 rewinds the loop right after a click on a tab
@@ -1310,7 +1311,7 @@ export class TychoViewerElement extends Base {
     if (action.kind === 'view' || action.kind === 'turn') {
       const renderer = this.renderer;
       const orbits = renderer?.orbitPanels() ?? [];
-      // the panel under the pointer, or every panel with an orbit camera when the pointer is over none of them
+      // the panel under the pointer, or every panel with a 3d camera when the pointer is over none of them
       const pids = this.hovered !== null && orbits.includes(this.hovered) ? [this.hovered] : orbits;
       if (renderer === null || pids.length === 0) return false;
       ev.preventDefault();
@@ -1321,7 +1322,7 @@ export class TychoViewerElement extends Base {
       this.invalidate();
       return true;
     }
-    if (!this.hasTransport() && !this.kiosk) return false;
+    if (!this.hasPlayback() && !this.kiosk) return false;
     ev.preventDefault();
     if (action.kind === 'toggle') this.store.setPlaying(!this.store.playing);
     else if (action.kind === 'step') this.step(action.by);
@@ -1329,7 +1330,7 @@ export class TychoViewerElement extends Base {
     return true;
   }
 
-  /** Returns every panel with camera keys to its keys, and fits every other panel's camera to what it draws. */
+  /** Returns every panel with camera keyframes to its keyframes, and fits every other panel's camera to what it draws. */
   fitAll(): void {
     this.renderer?.refitAll();
     this.invalidate();
@@ -1340,35 +1341,35 @@ export class TychoViewerElement extends Base {
     this.invalidate();
   }
 
-  /** Moves the first scene-scoped slider by `by` stops, and returns false when there is not a slider with stops to move. */
+  /** Moves the first shared slider by `by` stops, and returns false when there is not a slider with stops to move. */
   private stepSlider(by: number): boolean {
     const scene = this.scene!;
     const st = this.store!.state;
     const first = this.firstPanel();
-    const control = (scene.controls ?? []).find((c) => c.kind === 'slider' && variableDef(scene, c.variable)?.scope !== 'panel') as
+    const control = (scene.controls ?? []).find((c) => c.kind === 'slider' && inputDef(scene, c.input)?.scope !== 'per_panel') as
       Extract<Control, { kind: 'slider' }> | undefined;
     if (control === undefined || first === null) return false;
     const scope: PanelScope = { scene, state: st, panel: st.panels[first]! };
     const stops = sliderStops(scope, this.geometry!.sets, control);
     if (stops.length === 0) return false;
-    const value = this.panelValue(scope, control.variable) as number;
+    const value = this.panelValue(scope, control.input) as number;
     const i = Math.min(stops.length - 1, Math.max(0, nearestStop(stops, value) + by));
-    this.store!.update((s) => withVariable(scene, s, control.variable, stops[i]!));
+    this.store!.update((s) => withInput(scene, s, control.input, stops[i]!));
     return true;
   }
 
   private buildFooter(): void {
     const scene = this.scene!;
     this.footer.replaceChildren();
-    this.transport = null;
-    if (this.hasTransport()) {
+    this.playback = null;
+    if (this.hasPlayback()) {
       const cap = capsule('Playback', 'playback');
       const play = iconButton('play', 'Play (k)', 'Play (k)', 'icon play');
       play.addEventListener('click', () => this.store!.setPlaying(!this.store!.playing));
       const scrub = el('input', 'scrub');
       scrub.type = 'range';
       scrub.min = '0';
-      scrub.max = String(scene.clock.steps - 1);
+      scrub.max = String(scene.clock.frame_count - 1);
       scrub.step = '1';
       scrub.setAttribute('aria-label', 'Frame');
       scrub.addEventListener('pointerdown', stop);
@@ -1377,7 +1378,7 @@ export class TychoViewerElement extends Base {
         this.store!.setFrame(Number(scrub.value));
       });
       const frame = el('span', 'frame');
-      frame.style.minWidth = `${2 * String(scene.clock.steps).length + 3}ch`;
+      frame.style.minWidth = `${2 * String(scene.clock.frame_count).length + 3}ch`;
       frame.title = 'Frame index of the loop. Left and right step, Home goes to 0';
       const speed = el('select', 'speed');
       speed.setAttribute('aria-label', 'Playback speed');
@@ -1408,7 +1409,7 @@ export class TychoViewerElement extends Base {
       fps.title = fpsTitle(null);
       cap.append(fps);
       this.footer.append(cap);
-      this.transport = { play, scrub, frame, fps, channel };
+      this.playback = { play, scrub, frame, fps, channel };
     }
     const view = capsule('View', 'view');
     const fit = iconButton('house', 'Reset every view', "Reset every view: return each panel to its timeline's camera, or fit it to what it draws (F)");
@@ -1425,7 +1426,7 @@ export class TychoViewerElement extends Base {
   /**
    * Exports a video of the current state, at the viewer's playback speed unless `options.speed` is set, and resolves to an MP4
    * blob. The frames show what a kiosk viewer of this size shows when `options.kiosk` is true, which is the default for a kiosk
-   * viewer, and the stage over its caption readouts otherwise. It rejects for the reasons that exportVideo in export.ts lists, and
+   * viewer, and the panel area over its caption readouts otherwise. It rejects for the reasons that exportVideo in export.ts lists, and
    * when the viewer has not loaded a scene.
    */
   exportVideo(options: ExportOptions = {}): Promise<Blob> {
@@ -1434,17 +1435,17 @@ export class TychoViewerElement extends Base {
     const scene = this.scene;
     const source: ExportSource = {
       clock: scene.clock,
-      stage: this.pictureSize(kiosk),
+      panelArea: this.pictureSize(kiosk),
       open: (w, h, ratio) => this.openTwin(kiosk ? 'kiosk' : 'picture', w, h, ratio),
     };
     return runExport(source, { speed: this.speed, ...options });
   }
 
-  /** The size in CSS pixels of what an export shows at the size of this viewer, i.e. the whole viewer for a kiosk, and the stage over the caption readouts otherwise. */
+  /** The size in CSS pixels of what an export shows at the size of this viewer, i.e. the whole viewer for a kiosk, and the panel area over the caption readouts otherwise. */
   private pictureSize(kiosk: boolean): { w: number; h: number } {
     if (kiosk) return { w: this.clientWidth, h: this.clientHeight };
     const stats = this.kiosk ? 0 : this.statsEl.offsetHeight;
-    return { w: this.stage.clientWidth, h: this.stage.clientHeight + stats };
+    return { w: this.panelArea.clientWidth, h: this.panelArea.clientHeight + stats };
   }
 
   /**
@@ -1463,7 +1464,7 @@ export class TychoViewerElement extends Base {
     twin.scene = this.scene;
     twin.sceneText = this.sceneText;
     twin.geometry = this.geometry;
-    twin.store = new Store(structuredClone(this.store!.state), this.scene!.clock.steps);
+    twin.store = new Store(structuredClone(this.store!.state), this.scene!.clock.frame_count);
     twin.choice = twin.templateChoice();
     twin.statusEl.hidden = true;
     twin.titleEl.textContent = this.scene!.title ?? '';
@@ -1474,7 +1475,7 @@ export class TychoViewerElement extends Base {
       twin.buildTopBar();
       twin.buildFooter();
       twin.start();
-      if (twin.renderer === null) throw new Error(twin.statusEl.textContent ?? 'the export cannot draw the stage');
+      if (twin.renderer === null) throw new Error(twin.statusEl.textContent ?? 'the export cannot draw the panel area');
       // a first frame builds the panels' draws, whose body images are decoded, and the fonts are loaded, before the video starts
       twin.drawAt(0, 0, ratio);
       await twin.renderer.ready();
@@ -1502,7 +1503,7 @@ export class TychoViewerElement extends Base {
     // the progress is held at the frame index of the export's schedule, which may round differently from the progress
     this.heldValue = q;
     this.heldFrame = index;
-    this.measureStage();
+    this.measurePanelArea();
     this.layoutDom(q);
     for (const [pid, dom] of this.panelDom) this.measureOverlay(pid, dom);
     this.draw(ratio);
@@ -1561,15 +1562,15 @@ export class TychoViewerElement extends Base {
     const size = select('Size', [
       ['720p', '1280×720'],
       ['1080p', '1920×1080'],
-      ['stage', 'stage size'],
+      ['panels', 'size of the panels'],
     ]);
     const fps = select(
       'Frame rate',
       EXPORT_FPS.map((f) => [String(f), `${f} fps`]),
     );
     fps.value = '30';
-    // the stage preset's size depends on the rate, since the size and the rate must fit one H.264 level together
-    const stageSize = () => sizePreset('stage', this.pictureSize(this.kiosk), window.devicePixelRatio || 1, Number(fps.value));
+    // the size of the panels preset depends on the rate, since the size and the rate must fit one H.264 level together
+    const panelsSize = () => sizePreset('panels', this.pictureSize(this.kiosk), window.devicePixelRatio || 1, Number(fps.value));
     const loops = select(
       'Loops',
       EXPORT_LOOPS.map((n) => [String(n), n === 1 ? '1 loop' : `${n} loops`]),
@@ -1593,15 +1594,15 @@ export class TychoViewerElement extends Base {
       if (running !== null) return;
       const clock = this.scene!.clock;
       loops.value = '1';
-      fps.value = String(defaultExportFps(clock.steps, this.speed, loopSeconds(clock)) ?? EXPORT_FPS[0]);
+      fps.value = String(defaultExportFps(clock.frame_count, this.speed, loopSeconds(clock)) ?? EXPORT_FPS[0]);
     };
     const refresh = () => {
       if (running !== null) return;
-      const stageOption = size.options[2]!;
-      const st = stageSize();
-      stageOption.textContent = `stage, ${st.width}×${st.height}`;
+      const panelsOption = size.options[2]!;
+      const st = panelsSize();
+      panelsOption.textContent = `panels, ${st.width}×${st.height}`;
       const clock = this.scene!.clock;
-      const sch = frameSchedule(clock.steps, Number(fps.value), Number(loops.value), this.speed, 0, loopSeconds(clock));
+      const sch = frameSchedule(clock.frame_count, Number(fps.value), Number(loops.value), this.speed, 0, loopSeconds(clock));
       const refused = checkExport(sch.count, Number(fps.value));
       info.textContent = refused ?? `${sch.count} frames, ${sch.duration.toFixed(1)} s at ${this.speed}× speed`;
       start.disabled = refused !== null;
@@ -1672,14 +1673,14 @@ export class TychoViewerElement extends Base {
 
   // the top bar
 
-  private makeWidget(control: Exclude<Control, { kind: 'transport' }>, panel: string | undefined): Widget | null {
+  private makeWidget(control: Exclude<Control, { kind: 'playback' }>, panel: string | undefined): Widget | null {
     const scene = this.scene!;
-    const v = variableDef(scene, control.variable);
+    const v = inputDef(scene, control.input);
     if (v === undefined) return null;
-    const write = (value: VariableValue) => this.store!.update((s) => withVariable(scene, s, control.variable, value, panel));
-    const current = (scope: PanelScope): VariableValue => {
-      const values = v.scope === 'panel' ? scope.panel.variables : scope.state.variables;
-      return values !== undefined && Object.hasOwn(values, control.variable) ? values[control.variable]! : v.default;
+    const write = (value: InputValue) => this.store!.update((s) => withInput(scene, s, control.input, value, panel));
+    const current = (scope: PanelScope): InputValue => {
+      const values = v.scope === 'per_panel' ? scope.panel.inputs : scope.state.inputs;
+      return values !== undefined && Object.hasOwn(values, control.input) ? values[control.input]! : v.default;
     };
     const field = (): HTMLLabelElement => {
       const f = el('label', 'field');
@@ -1721,7 +1722,7 @@ export class TychoViewerElement extends Base {
       f.prepend(box);
       return { el: f, sync: (scope) => void (box.checked = current(scope) === true) };
     }
-    if (control.kind === 'slider' && v.kind === 'selector') {
+    if (control.kind === 'slider' && v.kind === 'parameter') {
       const range = el('input');
       range.type = 'range';
       range.min = '0';
@@ -1750,24 +1751,20 @@ export class TychoViewerElement extends Base {
     return null;
   }
 
-  /** The panel-scoped choice that a header chip shows and, with one view, the Add panel group offers, i.e. the one a view's frame reads, or else the first. */
+  /** The per-panel choice that a panel header chip shows, i.e. the one that the frame of a declared panel reads, or else the first. */
   private templateChoice(): { id: string; def: Choice; label: string } | null {
     const scene = this.scene!;
-    const choices = Object.entries(scene.variables ?? {}).filter(([, v]) => v?.kind === 'choice' && v.scope === 'panel') as [string, Choice][];
+    const choices = Object.entries(scene.inputs ?? {}).filter(([, v]) => v?.kind === 'choice' && v.scope === 'per_panel') as [string, Choice][];
     if (choices.length === 0) return null;
-    const framed = new Set(Object.values(scene.views).map((v) => (typeof v!.frame === 'string' ? '' : v!.frame.var)));
+    const framed = new Set(Object.values(scene.panels).map((v) => (typeof v!.frame === 'string' ? '' : v!.frame.input)));
     const [id, def] = choices.find(([c]) => framed.has(c)) ?? choices[0]!;
-    const tabs = (scene.controls ?? []).find((c) => c.kind === 'tabs' && c.variable === id) as Extract<Control, { kind: 'tabs' | 'toggle' }> | undefined;
+    const tabs = (scene.controls ?? []).find((c) => c.kind === 'tabs' && c.input === id) as Extract<Control, { kind: 'tabs' | 'toggle' }> | undefined;
     return { id, def, label: tabs?.label ?? id };
   }
 
-  /** What the Add panel group offers. It offers the views when there are several, and the values of the panel-scoped choice otherwise. */
+  /** What the Add panel group offers, i.e. every declared panel by its label or id. */
   private templates(): Template[] {
-    const scene = this.scene!;
-    const views = Object.entries(scene.views).map(([id, v]) => ({ kind: 'view' as const, view: id, label: v!.label ?? id }));
-    const c = this.choice;
-    if (views.length > 1 || c === null) return views;
-    return c.def.values.map((value, i) => ({ kind: 'value' as const, variable: c.id, value, label: c.def.labels?.[i] ?? value }));
+    return Object.entries(this.scene!.panels).map(([id, p]) => ({ kind: 'declared' as const, panel: id, label: p!.label ?? id }));
   }
 
   private buildTopBar(): void {
@@ -1775,8 +1772,8 @@ export class TychoViewerElement extends Base {
     this.varsEl.replaceChildren();
     this.sceneWidgets = [];
     for (const c of scene.controls ?? []) {
-      if (c.kind === 'transport') continue;
-      if (variableDef(scene, c.variable)?.scope === 'panel') continue;
+      if (c.kind === 'playback') continue;
+      if (inputDef(scene, c.input)?.scope === 'per_panel') continue;
       const w = this.makeWidget(c, undefined);
       if (w) {
         this.sceneWidgets.push(w);
@@ -1868,7 +1865,7 @@ export class TychoViewerElement extends Base {
     return r !== undefined && r.width < r.height;
   }
 
-  /** A panel's name in the menus, which is its view when the scene has several, then what its header chip shows. */
+  /** A shown panel's name in the menus, which is its declared panel when the scene declares several, then what its header chip shows. */
   private panelName(pid: string): string {
     const dom = this.panelDom.get(pid);
     if (dom === undefined) return pid;
@@ -1958,21 +1955,22 @@ export class TychoViewerElement extends Base {
       const scope: PanelScope = { scene, state: st, panel: st.panels[first]! };
       for (const w of this.sceneWidgets) w.sync(scope);
     }
-    const views = Object.keys(scene.views).length;
+    const declaredCount = Object.keys(scene.panels).length;
     const choice = this.choice;
     for (const [pid, dom] of this.panelDom) {
       const panel = st.panels[pid];
       if (panel === undefined) continue;
       const scope: PanelScope = { scene, state: st, panel };
       for (const w of dom.widgets) w.sync(scope);
-      const view = scene.views[panel.view]!;
-      dom.title.textContent = view.label ?? panel.view;
-      dom.title.hidden = views < 2;
-      const frame = typeof view.frame === 'string' ? view.frame : String(this.panelValue(scope, view.frame.var));
+      const declared = scene.panels[panel.panel]!;
+      const frame = typeof declared.frame === 'string' ? declared.frame : String(this.panelValue(scope, declared.frame.input));
       const f = Object.hasOwn(scene.frames, frame) ? scene.frames[frame] : undefined;
       const frameLabel = f?.label ?? frame;
-      const vf = view.frame;
-      const framedBy = typeof vf === 'string' ? null : vf.var;
+      dom.title.textContent = declared.label ?? panel.panel;
+      // the frame chip already names a panel whose title repeats the label of its frame
+      dom.title.hidden = declaredCount < 2 || dom.title.textContent === frameLabel;
+      const vf = declared.frame;
+      const framedBy = typeof vf === 'string' ? null : vf.input;
       if (choice !== null && dom.select !== null) {
         const value = String(this.panelValue(scope, choice.id));
         dom.select.value = value;
@@ -1982,20 +1980,20 @@ export class TychoViewerElement extends Base {
         dom.meta.hidden =
           framedBy === choice.id ||
           (framedBy !== null &&
-            (scene.controls ?? []).some((c) => c.kind !== 'transport' && c.variable === framedBy && variableDef(scene, framedBy)?.scope === 'panel'));
+            (scene.controls ?? []).some((c) => c.kind !== 'playback' && c.input === framedBy && inputDef(scene, framedBy)?.scope === 'per_panel'));
       } else {
         setText(dom.chipLabel, frameLabel);
         dom.meta.hidden = true;
       }
       dom.close.hidden = Object.keys(st.panels).length < 2;
     }
-    this.transport?.channel?.set(st.clock.channel);
+    this.playback?.channel?.set(st.clock.channel);
   }
 
-  private panelValue(scope: PanelScope, id: string): VariableValue {
-    const v = variableDef(scope.scene, id);
+  private panelValue(scope: PanelScope, id: string): InputValue {
+    const v = inputDef(scope.scene, id);
     if (v === undefined) return '';
-    const values = v.scope === 'panel' ? scope.panel.variables : scope.state.variables;
+    const values = v.scope === 'per_panel' ? scope.panel.inputs : scope.state.inputs;
     return values !== undefined && Object.hasOwn(values, id) ? values[id]! : v.default;
   }
 
@@ -2006,13 +2004,13 @@ export class TychoViewerElement extends Base {
     for (const pid of [...this.panelDom.keys()]) if (!Object.hasOwn(st.panels, pid)) this.removePanelDom(pid);
     for (const pid of Object.keys(st.panels)) {
       const dom = this.panelDom.get(pid);
-      if (dom !== undefined && dom.view === st.panels[pid]!.view) continue;
+      if (dom !== undefined && dom.panel === st.panels[pid]!.panel) continue;
       if (dom !== undefined) this.removePanelDom(pid);
       this.createPanelDom(pid, st.panels[pid]!);
     }
   }
 
-  private createPanelDom(pid: string, panel: PanelState): void {
+  private createPanelDom(pid: string, panel: ShownPanel): void {
     const scene = this.scene!;
     const host = el('div', 'panel');
     host.dataset.id = pid;
@@ -2034,14 +2032,14 @@ export class TychoViewerElement extends Base {
     follow.addEventListener('pointerdown', stop);
     follow.addEventListener('click', () => this.fitPanel(pid));
     body.append(preadout, error, bars, drop, follow);
-    // the keys of an orbit camera act on the panel under the pointer
-    if (scene.views[panel.view]?.camera?.kind === 'orbit') body.append(buildHint());
+    // the keys of a 3d camera act on the panel under the pointer
+    if (scene.panels[panel.panel]?.camera?.kind === '3d') body.append(buildHint());
     body.addEventListener('pointerenter', () => (this.hovered = pid));
     body.addEventListener('pointerleave', () => {
       if (this.hovered === pid) this.hovered = null;
     });
     body.addEventListener('dblclick', () => this.fitPanel(pid));
-    const head = el('div', 'phead');
+    const header = el('div', 'pheader');
     const title = el('span', 't');
     const choice = this.choice;
     const chip = buildChip('', choice === null ? 'none' : 'select');
@@ -2054,14 +2052,14 @@ export class TychoViewerElement extends Base {
         o.value = value;
         select.appendChild(o);
       });
-      select.addEventListener('change', () => this.store!.update((s) => withVariable(scene, s, choice.id, select.value, pid)));
+      select.addEventListener('change', () => this.store!.update((s) => withInput(scene, s, choice.id, select.value, pid)));
     }
     const meta = el('span', 'm');
     const pc = el('span', 'pc mini');
     const widgets: Widget[] = [];
     for (const c of scene.controls ?? []) {
-      if (c.kind === 'transport' || variableDef(scene, c.variable)?.scope !== 'panel') continue;
-      if (choice !== null && c.kind === 'tabs' && c.variable === choice.id) continue;
+      if (c.kind === 'playback' || inputDef(scene, c.input)?.scope !== 'per_panel') continue;
+      if (choice !== null && c.kind === 'tabs' && c.input === choice.id) continue;
       const w = this.makeWidget(c, pid);
       if (w) {
         widgets.push(w);
@@ -2072,14 +2070,14 @@ export class TychoViewerElement extends Base {
     home.addEventListener('click', () => this.fitPanel(pid));
     const close = iconButton('x', 'Close panel', 'Close panel');
     close.addEventListener('click', () => this.store!.update((s) => withoutPanel(s, pid)));
-    head.append(title, chip.root, meta, pc, el('span', 'sp'), home, close);
-    head.addEventListener('pointerdown', (ev) => this.startDrag(ev, { kind: 'panel', id: pid }, head, chip.root));
-    host.append(body, head);
+    header.append(title, chip.root, meta, pc, el('span', 'sp'), home, close);
+    header.addEventListener('pointerdown', (ev) => this.startDrag(ev, { kind: 'panel', id: pid }, header, chip.root));
+    host.append(body, header);
     this.panelsEl.appendChild(host);
     this.panelDom.set(pid, {
       host,
       body,
-      head,
+      header,
       title,
       chip: chip.root,
       chipLabel: chip.label,
@@ -2095,50 +2093,50 @@ export class TychoViewerElement extends Base {
       barDom: [],
       barsFor: null,
       widgets,
-      view: panel.view,
+      panel: panel.panel,
     });
     this.renderer?.bind(pid, body);
     this.observeOverlay(this.panelDom.get(pid)!);
   }
 
   private observeOverlay(dom: PanelDom): void {
-    this.overlayObserver?.observe(dom.head);
+    this.overlayObserver?.observe(dom.header);
     this.overlayObserver?.observe(dom.bars);
   }
 
   /**
-   * Measures the head of a panel and writes its height as --head-height, which places the colorbars under it, hides the colorbars when
+   * Measures the header of a panel and writes its height as --header-height, which places the colorbars under it, hides the colorbars when
    * they do not have room, and gives the renderer both boxes, which the labels are kept clear of. It reads the layout, hence it
    * runs when the observer reports a change of size, or before a frame of an export, but not in the draw loop.
    */
   private measureOverlay(pid: string, dom: PanelDom): void {
-    const head = dom.head.offsetHeight;
-    const value = `${head}px`;
-    if (dom.host.style.getPropertyValue('--head-height') !== value) dom.host.style.setProperty('--head-height', value);
+    const header = dom.header.offsetHeight;
+    const value = `${header}px`;
+    if (dom.host.style.getPropertyValue('--header-height') !== value) dom.host.style.setProperty('--header-height', value);
     const bars = dom.bars;
     bars.classList.toggle('tight', bars.clientHeight < BAR_ROOM);
     let height = 0;
     for (const c of bars.children) height = Math.max(height, (c as HTMLElement).offsetHeight);
     const width = bars.offsetWidth;
     const right = dom.body.clientWidth - bars.offsetLeft - width;
-    this.renderer?.setClearance(pid, { head, bars: height > 0 && width > 0 ? { right, top: bars.offsetTop, width, height } : null });
+    this.renderer?.setClearance(pid, { header, bars: height > 0 && width > 0 ? { right, top: bars.offsetTop, width, height } : null });
   }
 
   private removePanelDom(pid: string): void {
     const dom = this.panelDom.get(pid);
     if (!dom) return;
     this.renderer?.bind(pid, null);
-    this.overlayObserver?.unobserve(dom.head);
+    this.overlayObserver?.unobserve(dom.header);
     this.overlayObserver?.unobserve(dom.bars);
     dom.host.remove();
     this.panelDom.delete(pid);
   }
 
-  /** Places panels and gutters where the layout tiles the stage. */
+  /** Places panels and gutters where the layout tiles the panel area. */
   private layoutDom(q?: number): void {
     if (this.store === null) return;
-    const { w, h } = this.stageSize;
-    const at = q ?? this.heldProgress ?? this.store.frame / this.scene!.clock.steps;
+    const { w, h } = this.panelAreaSize;
+    const at = q ?? this.heldProgress ?? this.store.frame / this.scene!.clock.frame_count;
     const tiles = tile(layoutAt(this.store.state.layout, at * timelineSeconds(this.scene!.clock)), { x: 0, y: 0, w, h }, GUTTER);
     for (const [pid, r] of tiles.panels) {
       const dom = this.panelDom.get(pid);
@@ -2174,7 +2172,7 @@ export class TychoViewerElement extends Base {
     handle.classList.add('active');
     handle.setPointerCapture(ev.pointerId);
     const move = (e: PointerEvent) => {
-      const r = this.stage.getBoundingClientRect();
+      const r = this.panelArea.getBoundingClientRect();
       const ratio = ratioAt(g, e.clientX - r.left, e.clientY - r.top, GUTTER);
       this.store!.update((s) => withLayout(s, withRatio(s.layout, path, ratio)));
     };
@@ -2189,7 +2187,7 @@ export class TychoViewerElement extends Base {
     handle.addEventListener('pointercancel', up);
   }
 
-  // colorbars, one of which can set a selector
+  // colorbars, one of which can set a parameter input
 
   /** Writes a panel's colorbars from the renderer's data, in place, so that a drag on one survives the redraw it causes. */
   private syncBars(pid: string, dom: PanelDom): void {
@@ -2200,7 +2198,7 @@ export class TychoViewerElement extends Base {
       dom.bars.replaceChildren(...dom.barDom.map((d) => d.root));
     }
     const panel = this.store!.state.panels[pid];
-    const view = panel === undefined ? undefined : scene.views[panel.view];
+    const declared = panel === undefined ? undefined : scene.panels[panel.panel];
     bars.forEach((b, i) => {
       const d = dom.barDom[i]!;
       setText(d.title, b.label);
@@ -2220,7 +2218,7 @@ export class TychoViewerElement extends Base {
         d.band.style.bottom = `${(100 * b.band[0]).toFixed(2)}%`;
         d.band.style.height = `${(100 * (b.band[1] - b.band[0])).toFixed(2)}%`;
       }
-      d.link = view === undefined ? null : colorbarLink(scene, view, b.label);
+      d.link = declared === undefined ? null : colorbarLink(scene, declared, b.label);
       const g = d.grad;
       g.classList.toggle('live', d.link !== null);
       if (d.link === null) {
@@ -2228,7 +2226,7 @@ export class TychoViewerElement extends Base {
           g.removeAttribute(a);
         return;
       }
-      const value = this.panelValue({ scene, state: this.store!.state, panel: panel! }, d.link.variable) as number;
+      const value = this.panelValue({ scene, state: this.store!.state, panel: panel! }, d.link.input) as number;
       g.setAttribute('role', 'slider');
       g.setAttribute('tabindex', '0');
       g.setAttribute('aria-orientation', 'vertical');
@@ -2292,17 +2290,17 @@ export class TychoViewerElement extends Base {
     const st = this.store!.state;
     const panel = st.panels[pid];
     if (panel === undefined) return [];
-    const control = { kind: 'slider' as const, variable: link.variable, label: link.label, domain: link.domain };
+    const control = { kind: 'slider' as const, input: link.input, label: link.label, domain: link.domain };
     return sliderStops({ scene: this.scene!, state: st, panel }, this.geometry!.sets, control);
   }
 
-  /** Sets the bar's selector to the stop nearest the value at `t` along the bar, as the top bar's slider does. */
+  /** Sets the bar's parameter input to the stop nearest the value at `t` along the bar, as the top bar's slider does. */
   private setFromBar(pid: string, d: BarDom, t: number): void {
     if (d.link === null) return;
     const stops = this.barStops(pid, d.link);
     const i = stopAt(stops, d.range[0], d.range[1], t);
-    const variable = d.link.variable;
-    if (i >= 0) this.store!.update((s) => withVariable(this.scene!, s, variable, stops[i]!));
+    const input = d.link.input;
+    if (i >= 0) this.store!.update((s) => withInput(this.scene!, s, input, stops[i]!));
   }
 
   private stepBar(pid: string, d: BarDom, by: number): void {
@@ -2310,10 +2308,10 @@ export class TychoViewerElement extends Base {
     const stops = this.barStops(pid, d.link);
     const st = this.store!.state;
     if (stops.length === 0 || st.panels[pid] === undefined) return;
-    const value = this.panelValue({ scene: this.scene!, state: st, panel: st.panels[pid]! }, d.link.variable) as number;
+    const value = this.panelValue({ scene: this.scene!, state: st, panel: st.panels[pid]! }, d.link.input) as number;
     const i = Math.min(stops.length - 1, Math.max(0, nearestStop(stops, value) + by));
-    const variable = d.link.variable;
-    this.store!.update((s) => withVariable(this.scene!, s, variable, stops[i]!));
+    const input = d.link.input;
+    this.store!.update((s) => withInput(this.scene!, s, input, stops[i]!));
   }
 
   // drag and drop, with pointer events so that it works on touch

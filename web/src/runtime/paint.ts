@@ -1,10 +1,10 @@
 /**
  * The 2D painting of section 2.11 of spec/tycho-scene.md: markers, labels, the box of an axes layer, and the overlays. The page
- * paints them onto a canvas over the stage, and a video export onto each of its frames, with the same functions, so that a frame of a
- * video shows what the page shows. Every text is canvas text, never markup (rule S2).
+ * paints them onto a canvas over the panel area, and a video export onto each of its frames, with the same functions, so that a frame of a
+ * video shows what the page shows. Every text is canvas text, never markup (rule `plain-text`).
  */
 import type { Box, LabelLayer, Layout, Marker, Overlay, Readout, Scene, State } from '../scene.js';
-import type { StageRenderer } from './renderer.js';
+import type { PanelAreaRenderer } from './renderer.js';
 import { loopSeconds, opacityAt, sizeAt } from '../evaluate/timeline.js';
 import { hexRgb, mixHex, themed, themedMarker, type Theme } from './colors.js';
 import type { Rect } from './tiles.js';
@@ -149,7 +149,7 @@ export function linePitch(linespacing = 1.2): number {
   return LINE_PITCH + TEXT_ASCENT * (linespacing - 1.2);
 }
 
-/** A run of a text, set lowered and smaller as a subscript, raised and smaller as a superscript, or on the baseline (rule K7). */
+/** A run of a text, set lowered and smaller as a subscript, raised and smaller as a superscript, or on the baseline (rule `timeline-parts`). */
 export interface TextRun {
   text: string;
   shift?: 'sub' | 'sup';
@@ -278,7 +278,7 @@ export function styleOf(
 }
 
 /**
- * Draws a label (rule K6) whose anchor lies at (ax, ay), with its text `offset` pixels away and the leader between them. The leader
+ * Draws a label (rule `label`) whose anchor lies at (ax, ay), with its text `offset` pixels away and the leader between them. The leader
  * runs from the anchor to the nearest point of the text's rectangle, and stops 3 pixels short of it.
  */
 export function drawLabel(g: G, layer: LabelLayer, text: string | TextRun[], ax: number, ay: number, theme: Theme, s: number): void {
@@ -356,7 +356,7 @@ export function tickLabel(v: number, step: number): string {
 }
 
 export interface BoxPaint {
-  /** The part of the panel the camera draws, in stage pixels. */
+  /** The part of the panel the camera draws, in pixels of the panel area. */
   rect: Rect;
   /** The visible window along the camera's right and up axes. */
   x0: number;
@@ -436,7 +436,7 @@ export function drawBox(g: G, b: BoxPaint, theme: Theme): void {
   g.restore();
 }
 
-/** Draws a legend overlay (section 2.11) on a stage of `w` by `h` pixels. */
+/** Draws a legend overlay (section 2.11) on a panel area of `w` by `h` pixels. */
 export function drawLegend(g: G, legend: Extract<Overlay, { kind: 'legend' }>, w: number, h: number, theme: Theme, s: number): void {
   const opacity = opacityAt(legend.opacity, s);
   if (opacity <= 0 || legend.entries.length === 0) return;
@@ -553,12 +553,12 @@ export function coverPanel(g: G, r: Rect, opacity: number, theme: Theme): void {
 export const gutterColor = (theme: Theme): string => theme.gutter ?? mixHex(theme.foreground, theme.background, 0.9);
 
 /**
- * Paints, for every panel of `state`, the cover of its view's opacity, the box of its axes layer, and its labels, and then the
- * overlays of the scene, onto `g`, a 2D context in stage pixels (section 2.11). `text` gives the text of a list of parts in a panel.
+ * Paints, for every panel of `state`, the cover of its opacity, the box of its axes layer, and its labels, and then the
+ * overlays of the scene, onto `g`, a 2D context in pixels of the panel area (section 2.11). `text` gives the text of a list of parts in a panel.
  */
-export function paintStage(
+export function paintPanelArea(
   g: CanvasRenderingContext2D,
-  renderer: StageRenderer,
+  renderer: PanelAreaRenderer,
   scene: Scene,
   state: State,
   theme: Theme,
@@ -610,7 +610,7 @@ export function paintStage(
   }
 }
 
-/** The runs of a text from its parts and the text of each part, a `sub` or a `sup` part set as a script (rule K7). */
+/** The runs of a text from its parts and the text of each part, a `sub` or a `sup` part set as a script (rule `timeline-parts`). */
 export function runsOf(parts: Readout['parts'], pieces: string[]): TextRun[] {
   return pieces.map((text, i) => {
     const p = parts[i] as object | string | undefined;

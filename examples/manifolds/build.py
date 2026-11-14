@@ -62,7 +62,7 @@ import pytycho as ty
 
 HERE = Path(__file__).resolve().parent
 # the SHA-256 hash of the input attached to the Release, or None to read any input
-INPUT_SHA256: str | None = None
+INPUT_SHA256: str | None = "01f4a05c3c3936b7bb445a72db3d0304234598cf4a083aa87425bfc338ac41f5"
 FRAMES = ["rotating", "barycentric-inertial"]
 LEGS = [("stable", "left"), ("stable", "right"), ("unstable", "left"), ("unstable", "right")]
 COLORS = {"stable": "#0072b2", "unstable": "#d55e00", "orbit": "#ffffff"}

@@ -54,7 +54,7 @@ import pytycho as ty
 HERE = Path(__file__).resolve().parent
 # the SHA-256 of the released broucke-input.tyd, set in each release as described in .agents/skills/release/SKILL.md.
 # read_input() checks the file against it if set
-INPUT_SHA256: str | None = None
+INPUT_SHA256: str | None = "70fd39da1c62ee08102020fd61f6a6801c7f7a3dd930e3585aca4d1b5fbc441a"
 FAMILIES = [("7", 0.012155), ("8", 0.5), ("11", 0.5)]
 # each frame maps to its axis titles and its colormap
 FRAMES = {

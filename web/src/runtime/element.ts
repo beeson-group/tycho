@@ -251,7 +251,7 @@ input[type=range]:disabled { opacity: 0.4; cursor: default; }
 .pbody .follow { position: absolute; right: 8px; bottom: 8px; z-index: 2; padding: 3px 10px 3px 8px; font: inherit; font-size: 12px; cursor: pointer; }
 .pbody .follow[hidden] { display: none; }
 .pbody .hint { position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 2; width: fit-content; margin: 0 auto; display: flex; flex-wrap: wrap;
-  justify-content: center; gap: 6px 18px; padding: 5px 9px; border-radius: 6px; background: color-mix(in srgb, var(--surface) 80%, transparent); color: var(--dim);
+  justify-content: center; gap: 6px 18px; padding: 5px 9px; border-radius: 6px; background: var(--head); color: var(--dim);
   font-size: 11px; line-height: 1.3;
   pointer-events: none; opacity: 0; transition: opacity 0.2s; }
 .hint .g { display: grid; justify-items: center; gap: 3px; white-space: nowrap; }

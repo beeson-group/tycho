@@ -20,6 +20,17 @@ export async function generate() {
   const schema = JSON.parse(await readFile(SCHEMA_PATH, 'utf8'));
   // Name every $defs entry after its key, so that renaming a title cannot rename a type.
   for (const [key, def] of Object.entries(schema.$defs)) def.title = pascal(key);
+  // A $ref with a sibling description would become a numbered copy of its type, hence it is written as the
+  // name of the type, and the description becomes the doc comment of the property.
+  const named = (node) => {
+    if (node === null || typeof node !== 'object') return;
+    if (typeof node.$ref === 'string' && node.description !== undefined) {
+      node.tsType = pascal(node.$ref.replace('#/$defs/', ''));
+      delete node.$ref;
+    }
+    Object.values(node).forEach(named);
+  };
+  named(schema);
   schema.title = 'Scene';
   return compile(schema, 'Scene', {
     bannerComment: BANNER,

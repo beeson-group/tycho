@@ -286,17 +286,43 @@ export function fpsTitle(report: FrameReport | null): string {
   return `${report.drawn} frames drawn in the last second, ${report.late} late, on a display refreshing about ${hz} times a second`;
 }
 
-export type KeyAction = { kind: 'toggle' } | { kind: 'step'; by: number } | { kind: 'seek'; frame: number } | { kind: 'fit' } | { kind: 'slider'; by: number };
+export type KeyAction =
+  | { kind: 'toggle' }
+  | { kind: 'step'; by: number }
+  | { kind: 'seek'; frame: number }
+  | { kind: 'fit' }
+  | { kind: 'slider'; by: number }
+  | { kind: 'view'; axis: 'x' | 'y' | 'z'; sign: 1 | -1 }
+  | { kind: 'turn'; degrees: number };
 
 /**
  * The action of a key, following common video players. Space or k plays and pauses. The left and right
  * arrows, or "," and ".", step one frame and pause, and ten with Shift. Home or 0 goes to frame 0, and a
  * digit from 1 to 9 goes to as many tenths of the loop. The key f fits every panel. The up and down arrows
- * step the first scene-scoped slider by one stop, or by ten with Shift.
+ * step the first scene-scoped slider by one stop, or by ten with Shift. In a panel with an orbit camera, as
+ * in ParaView, x, y, and z show the view from the positive side of that axis, and from the negative side
+ * with Shift, and "[" and "]" turn it about the camera's up axis by 15 degrees, or 90 with Shift ("{" and
+ * "}"), where "]" turns it as a drag to the right does.
  */
 export function keyAction(key: string, shift: boolean, steps: number): KeyAction | null {
   const n = shift ? 10 : 1;
   switch (key) {
+    case 'x':
+    case 'y':
+    case 'z':
+      return { kind: 'view', axis: key, sign: shift ? -1 : 1 };
+    case 'X':
+    case 'Y':
+    case 'Z':
+      return { kind: 'view', axis: key.toLowerCase() as 'x' | 'y' | 'z', sign: -1 };
+    case ']':
+      return { kind: 'turn', degrees: shift ? 90 : 15 };
+    case '[':
+      return { kind: 'turn', degrees: shift ? -90 : -15 };
+    case '}':
+      return { kind: 'turn', degrees: 90 };
+    case '{':
+      return { kind: 'turn', degrees: -90 };
     case ' ':
     case 'k':
     case 'K':

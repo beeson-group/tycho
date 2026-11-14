@@ -108,8 +108,18 @@ The keys below act while the viewer element, `<tycho-viewer>`, has the keyboard 
 - Home or `0` goes to frame 0, and `1` to `9` go to as many tenths of the loop.
 - `F` resets every panel's view, as the house icon in the View group does: a panel whose camera has keys (see [the timeline](timeline.md)) follows its keys again, and any other panel is fitted to what it draws. A double click on a panel resets its own view.
 - The up and down arrows move the first scene-scoped slider by one stop, or ten stops with Shift.
+- In a panel with an orbit camera, `x`, `y`, and `z` show the view from the positive side of that axis of the display frame, and Shift shows it from the negative side.
+  The camera keeps its distance from its target, and the camera's up axis stays up the screen.
+  Seen along the up axis, the view is a plot of the other two axes, e.g. of x to the right and y up under the up axis z.
+- In a panel with an orbit camera, `]` and `[` turn the view about the camera's up axis by 15 degrees, as a drag to the right or to the left does, and Shift turns it by 90 degrees.
+  These keys and the axis keys act on the panel under the pointer, or on every panel with an orbit camera when the pointer is over none of them.
 - Escape closes an open menu or the export options.
 
 The keys that play, step, and seek require a transport, except on a kiosk page, which plays without one.
+
+A drag across a panel with an orbit camera turns the view about the camera's up axis, as a turntable does.
+A drag up or down the panel tilts the view toward this axis, so that the up axis stays up the screen.
+Shift with a drag, or a drag with the right button, pans the view, and the wheel or a pinch zooms it.
+While the pointer is over such a panel, a line at its foot lists these moves and the keys above.
 
 A panel whose camera has keys stops following them once it is panned or zoomed, so that it stays where it was moved while the scene plays on. It then shows a button, Timeline view, in its lower right corner, which hands the camera back to the keys, as `F` does for every panel.

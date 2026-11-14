@@ -145,8 +145,20 @@ describe('keys', () => {
     expect(keyAction('F', true, 480)).toEqual({ kind: 'fit' });
     expect(keyAction('ArrowUp', false, 480)).toEqual({ kind: 'slider', by: 1 });
     expect(keyAction('ArrowDown', true, 480)).toEqual({ kind: 'slider', by: -10 });
-    expect(keyAction('x', false, 480)).toBeNull();
+    expect(keyAction('q', false, 480)).toBeNull();
     expect(keyAction('End', false, 480)).toBeNull();
+  });
+
+  it('show the view of an orbit camera from an axis, and turn it about its up axis, as ParaView does', () => {
+    expect(keyAction('x', false, 480)).toEqual({ kind: 'view', axis: 'x', sign: 1 });
+    expect(keyAction('z', false, 480)).toEqual({ kind: 'view', axis: 'z', sign: 1 });
+    expect(keyAction('Y', true, 480)).toEqual({ kind: 'view', axis: 'y', sign: -1 });
+    expect(keyAction(']', false, 480)).toEqual({ kind: 'turn', degrees: 15 });
+    expect(keyAction('[', false, 480)).toEqual({ kind: 'turn', degrees: -15 });
+    // Shift with a bracket gives a brace on most layouts, and a bracket on some
+    expect(keyAction('}', true, 480)).toEqual({ kind: 'turn', degrees: 90 });
+    expect(keyAction('{', true, 480)).toEqual({ kind: 'turn', degrees: -90 });
+    expect(keyAction(']', true, 480)).toEqual({ kind: 'turn', degrees: 90 });
   });
 });
 

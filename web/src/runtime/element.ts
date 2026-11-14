@@ -106,6 +106,8 @@ const MAX_PANELS = 8;
 /** The height in CSS pixels between a panel's head and its tick row below which its colorbars are hidden, since their title and two ends would not fit. */
 const BAR_ROOM = 56;
 const SPEEDS = [0.25, 0.5, 1, 2, 4];
+/** How the view of a panel with an orbit camera is moved, shown in the panel while the pointer is over it. */
+const HINT_3D = 'Drag: turn · Shift+drag: pan · Scroll: zoom · X Y Z: view from an axis (Shift: other side) · [ ]: turn 15° (Shift: 90°) · F: reset';
 
 const STYLE = `
 :host { display: block; position: relative; background: var(--bg); color: var(--fg);
@@ -243,6 +245,10 @@ input[type=range]:disabled { opacity: 0.4; cursor: default; }
 .drop { position: absolute; inset: 0; z-index: 3; display: grid; place-items: center; background: var(--accent-2-tint); border: 2px solid var(--accent-2); }
 .pbody .follow { position: absolute; right: 8px; bottom: 8px; z-index: 2; padding: 3px 10px 3px 8px; font: inherit; font-size: 12px; cursor: pointer; }
 .pbody .follow[hidden] { display: none; }
+.pbody .hint { position: absolute; left: 50%; bottom: 8px; z-index: 2; max-width: calc(100% - 16px); translate: -50% 0; padding: 2px 8px;
+  border-radius: 4px; background: var(--head); color: var(--dim); font-size: 11px; line-height: 1.4; text-align: center;
+  pointer-events: none; opacity: 0; transition: opacity 0.2s; }
+.pbody:hover .hint { opacity: 1; }
 .drop span { font-size: 11px; color: var(--fg); background: var(--raised); border-radius: 4px; padding: 1px 6px; }
 .gutter { position: absolute; z-index: 2; touch-action: none; background: var(--gutter); }
 .gutter.row { cursor: col-resize; }
@@ -584,6 +590,8 @@ export class TychoViewerElement extends Base {
   private closeExport: (() => boolean) | null = null;
 
   private raf = 0;
+  /** The panel under the pointer, on which the keys of an orbit camera act, or null. */
+  private hovered: string | null = null;
   /** Whether the element intersects the viewport. It stays true where IntersectionObserver does not exist. */
   private intersecting = true;
   /** Whether the animation loop may run, i.e. the element intersects the viewport and the page is visible. */
@@ -1265,6 +1273,20 @@ export class TychoViewerElement extends Base {
     if (action.kind === 'slider') {
       if (!this.stepSlider(action.by)) return false;
       ev.preventDefault();
+      return true;
+    }
+    if (action.kind === 'view' || action.kind === 'turn') {
+      const renderer = this.renderer;
+      const orbits = renderer?.orbitPanels() ?? [];
+      // the panel under the pointer, or every panel with an orbit camera when the pointer is over none of them
+      const pids = this.hovered !== null && orbits.includes(this.hovered) ? [this.hovered] : orbits;
+      if (renderer === null || pids.length === 0) return false;
+      ev.preventDefault();
+      for (const pid of pids) {
+        if (action.kind === 'view') renderer.viewFrom(pid, action.axis, action.sign);
+        else renderer.turnBy(pid, action.degrees);
+      }
+      this.invalidate();
       return true;
     }
     if (!this.hasTransport() && !this.kiosk) return false;
@@ -1980,6 +2002,12 @@ export class TychoViewerElement extends Base {
     follow.addEventListener('pointerdown', stop);
     follow.addEventListener('click', () => this.fitPanel(pid));
     body.append(preadout, error, bars, drop, follow);
+    // the keys of an orbit camera act on the panel under the pointer
+    if (scene.views[panel.view]?.camera?.kind === 'orbit') body.append(el('div', 'hint', HINT_3D));
+    body.addEventListener('pointerenter', () => (this.hovered = pid));
+    body.addEventListener('pointerleave', () => {
+      if (this.hovered === pid) this.hovered = null;
+    });
     body.addEventListener('dblclick', () => this.fitPanel(pid));
     const head = el('div', 'phead');
     const title = el('span', 't');

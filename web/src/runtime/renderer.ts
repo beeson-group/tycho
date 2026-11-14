@@ -2731,6 +2731,38 @@ export class StageRenderer {
     return p !== undefined && p.userMoved && p.cameraSpec.kind === 'plane' && p.cameraSpec.keys !== undefined;
   }
 
+  /** The panels with an orbit camera and its controls, i.e. those that the keys of an orbit camera move. */
+  orbitPanels(): string[] {
+    return [...this.panels.values()].filter((p) => p.cameraSpec.kind === 'orbit' && p.controls !== null).map((p) => p.id);
+  }
+
+  /**
+   * Shows a panel of an orbit camera from the side `sign` of the axis `axis` of its display frame, at the distance of the camera
+   * from its target, with the up axis of the camera up the screen. Seen along the up axis, the second axis of the camera's basis
+   * runs up the screen and the first to the right, as in a plot of them, e.g. y and x under the up axis z: the camera then stands
+   * off the axis by a hair, where three's lookAt is undefined.
+   */
+  viewFrom(pid: string, axis: 'x' | 'y' | 'z', sign: 1 | -1): void {
+    const p = this.panels.get(pid);
+    if (p === undefined || p.cameraSpec.kind !== 'orbit' || p.controls === null) return;
+    const target = p.controls.target;
+    const distance = p.camera.position.distanceTo(target);
+    const unit = (a: string) => new THREE.Vector3(a === 'x' ? 1 : 0, a === 'y' ? 1 : 0, a === 'z' ? 1 : 0);
+    const dir = unit(axis).multiplyScalar(sign);
+    const up = p.cameraSpec.up ?? 'z';
+    if (axis === up) dir.addScaledVector(unit({ x: 'z', y: 'x', z: 'y' }[up]), -sign * 1e-4).normalize();
+    p.camera.position.copy(target).addScaledVector(dir, distance);
+    p.camera.lookAt(target);
+    p.controls.update();
+  }
+
+  /** Turns a panel of an orbit camera about its up axis through its target by `degrees`, as a drag to the right turns it. */
+  turnBy(pid: string, degrees: number): void {
+    const p = this.panels.get(pid);
+    if (p === undefined || p.cameraSpec.kind !== 'orbit' || p.controls === null) return;
+    p.controls.rotateLeft((degrees * Math.PI) / 180);
+  }
+
   private makeControls(p: PanelRender): void {
     p.controls?.dispose();
     p.controls = null;

@@ -160,6 +160,12 @@ describe('keys', () => {
     expect(keyAction('{', true, 480)).toEqual({ kind: 'turn', degrees: -90 });
     expect(keyAction(']', true, 480)).toEqual({ kind: 'turn', degrees: 90 });
   });
+
+  it('take the side of an axis from Shift alone, so that Caps Lock does not change it', () => {
+    // under Caps Lock, x arrives as "X" without Shift, and Shift with x as "x"
+    expect(keyAction('X', false, 480)).toEqual({ kind: 'view', axis: 'x', sign: 1 });
+    expect(keyAction('z', true, 480)).toEqual({ kind: 'view', axis: 'z', sign: -1 });
+  });
 });
 
 describe('chrome tokens', () => {

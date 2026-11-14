@@ -297,14 +297,15 @@ export type KeyAction =
 
 /**
  * The action of a key, following common video players. Space or k plays and pauses. The left and right
- * arrows, or "," and ".", step one frame and pause, and ten with Shift. Home or 0 goes to frame 0, and a
- * digit from 1 to 9 goes to as many tenths of the loop. The key f fits every panel. The up and down arrows
- * step the first scene-scoped slider by one stop, or by ten with Shift. In a panel with an orbit camera, as
- * in ParaView, x, y, and z show the view from the positive side of that axis, and from the negative side
- * with Shift, and "[" and "]" turn it about the camera's up axis by 15 degrees, or 90 with Shift ("{" and
- * "}"), where "]" turns it as a drag to the right does.
+ * arrows step one frame and pause, and ten with Shift. Home or 0 goes to frame 0, and a digit from 1 to 9
+ * goes to as many tenths of the loop. The key f fits every panel. The up and down arrows step the first
+ * scene-scoped slider by one stop, or by ten with Shift. In a panel with an orbit camera, x, y, and z show
+ * the view from the positive side of that axis, and from the negative side with Shift, and "," and "." turn
+ * it about the camera's up axis by 15 degrees, where "." turns it as a drag to the right does. Shift with
+ * either turns it by 90 degrees. Shift with them gives "<" and ">" on a US keyboard and other characters
+ * elsewhere, hence the two keys are then known by `code`, the `code` of the key event.
  */
-export function keyAction(key: string, shift: boolean, steps: number): KeyAction | null {
+export function keyAction(key: string, shift: boolean, steps: number, code = ''): KeyAction | null {
   const n = shift ? 10 : 1;
   switch (key) {
     case 'x':
@@ -314,28 +315,22 @@ export function keyAction(key: string, shift: boolean, steps: number): KeyAction
     case 'Y':
     case 'Z':
       return { kind: 'view', axis: key.toLowerCase() as 'x' | 'y' | 'z', sign: shift ? -1 : 1 };
-    case ']':
-      return { kind: 'turn', degrees: shift ? 90 : 15 };
-    case '[':
-      return { kind: 'turn', degrees: shift ? -90 : -15 };
-    case '}':
+    case '.':
+      return { kind: 'turn', degrees: 15 };
+    case ',':
+      return { kind: 'turn', degrees: -15 };
+    case '>':
       return { kind: 'turn', degrees: 90 };
-    case '{':
+    case '<':
       return { kind: 'turn', degrees: -90 };
     case ' ':
     case 'k':
     case 'K':
       return { kind: 'toggle' };
     case 'ArrowRight':
-    case '.':
       return { kind: 'step', by: n };
     case 'ArrowLeft':
-    case ',':
       return { kind: 'step', by: -n };
-    case '>':
-      return { kind: 'step', by: 10 };
-    case '<':
-      return { kind: 'step', by: -10 };
     case 'Home':
       return { kind: 'seek', frame: 0 };
     case 'f':
@@ -346,6 +341,8 @@ export function keyAction(key: string, shift: boolean, steps: number): KeyAction
     case 'ArrowDown':
       return { kind: 'slider', by: -n };
   }
+  if (shift && code === 'Period') return { kind: 'turn', degrees: 90 };
+  if (shift && code === 'Comma') return { kind: 'turn', degrees: -90 };
   return /^[0-9]$/.test(key) ? { kind: 'seek', frame: Math.round((steps * Number(key)) / 10) % steps } : null;
 }
 

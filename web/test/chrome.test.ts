@@ -133,10 +133,6 @@ describe('keys', () => {
     expect(keyAction('k', false, 480)).toEqual({ kind: 'toggle' });
     expect(keyAction('ArrowRight', false, 480)).toEqual({ kind: 'step', by: 1 });
     expect(keyAction('ArrowLeft', true, 480)).toEqual({ kind: 'step', by: -10 });
-    expect(keyAction('.', false, 480)).toEqual({ kind: 'step', by: 1 });
-    expect(keyAction(',', false, 480)).toEqual({ kind: 'step', by: -1 });
-    expect(keyAction('<', true, 480)).toEqual({ kind: 'step', by: -10 });
-    expect(keyAction('>', true, 480)).toEqual({ kind: 'step', by: 10 });
     expect(keyAction('Home', false, 480)).toEqual({ kind: 'seek', frame: 0 });
     expect(keyAction('0', false, 480)).toEqual({ kind: 'seek', frame: 0 });
     expect(keyAction('1', false, 480)).toEqual({ kind: 'seek', frame: 48 });
@@ -149,16 +145,25 @@ describe('keys', () => {
     expect(keyAction('End', false, 480)).toBeNull();
   });
 
-  it('show the view of an orbit camera from an axis, and turn it about its up axis, as ParaView does', () => {
+  it('show the view of an orbit camera from an axis, and turn it about its up axis', () => {
     expect(keyAction('x', false, 480)).toEqual({ kind: 'view', axis: 'x', sign: 1 });
     expect(keyAction('z', false, 480)).toEqual({ kind: 'view', axis: 'z', sign: 1 });
     expect(keyAction('Y', true, 480)).toEqual({ kind: 'view', axis: 'y', sign: -1 });
-    expect(keyAction(']', false, 480)).toEqual({ kind: 'turn', degrees: 15 });
-    expect(keyAction('[', false, 480)).toEqual({ kind: 'turn', degrees: -15 });
-    // Shift with a bracket gives a brace on most layouts, and a bracket on some
-    expect(keyAction('}', true, 480)).toEqual({ kind: 'turn', degrees: 90 });
-    expect(keyAction('{', true, 480)).toEqual({ kind: 'turn', degrees: -90 });
-    expect(keyAction(']', true, 480)).toEqual({ kind: 'turn', degrees: 90 });
+    expect(keyAction('.', false, 480, 'Period')).toEqual({ kind: 'turn', degrees: 15 });
+    expect(keyAction(',', false, 480, 'Comma')).toEqual({ kind: 'turn', degrees: -15 });
+    expect(keyAction('[', false, 480, 'BracketLeft')).toBeNull();
+  });
+
+  it('turn the view of an orbit camera by 90 degrees with Shift, whichever character the layout then gives', () => {
+    // a US keyboard
+    expect(keyAction('>', true, 480, 'Period')).toEqual({ kind: 'turn', degrees: 90 });
+    expect(keyAction('<', true, 480, 'Comma')).toEqual({ kind: 'turn', degrees: -90 });
+    // a German or an Italian keyboard, on which Shift with the two keys gives ":" and ";"
+    expect(keyAction(':', true, 480, 'Period')).toEqual({ kind: 'turn', degrees: 90 });
+    expect(keyAction(';', true, 480, 'Comma')).toEqual({ kind: 'turn', degrees: -90 });
+    // the same characters from other keys of a US keyboard do not turn the view
+    expect(keyAction(':', true, 480, 'Semicolon')).toBeNull();
+    expect(keyAction(';', false, 480, 'Semicolon')).toBeNull();
   });
 
   it('take the side of an axis from Shift alone, so that Caps Lock does not change it', () => {

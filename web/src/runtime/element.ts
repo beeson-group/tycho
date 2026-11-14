@@ -107,7 +107,7 @@ const MAX_PANELS = 8;
 const BAR_ROOM = 56;
 const SPEEDS = [0.25, 0.5, 1, 2, 4];
 /** How the view of a panel with an orbit camera is moved, shown in the panel while the pointer is over it. */
-const HINT_3D = 'Drag: turn · Shift+drag: pan · Scroll: zoom · X Y Z: view from an axis (Shift: other side) · [ ]: turn 15° (Shift: 90°) · F: reset';
+const HINT_3D = 'Drag: turn · Shift+drag: pan · Scroll: zoom · X Y Z: view from an axis (Shift: other side) · , .: turn 15° (Shift: 90°) · F: reset';
 
 const STYLE = `
 :host { display: block; position: relative; background: var(--bg); color: var(--fg);
@@ -1257,7 +1257,7 @@ export class TychoViewerElement extends Base {
       ev.preventDefault();
       return true;
     }
-    const action = keyAction(ev.key, ev.shiftKey, this.scene!.clock.steps);
+    const action = keyAction(ev.key, ev.shiftKey, this.scene!.clock.steps, ev.code);
     const target = ev.composedPath()[0] as Element | undefined;
     // a key that a focused control takes itself, such as Space on a button, is left to the control, and the other keys act
     // on the viewer, so that 0 rewinds the loop right after a click on a tab

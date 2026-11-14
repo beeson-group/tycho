@@ -64,7 +64,7 @@ node web/scripts/frame-profile.mjs <page.html>      # the cost of playback, in h
 
 ## Reviewing a pull request
 
-PR-Agent reviews in the workflow `pr-agent` every pull request that a branch of this repository opens, and it reads this file as its review context, this section included. A pull request from a fork is reviewed only after a person with write access comments a command, and a pull request of a bot is not reviewed.
+PR-Agent reviews in the workflow `pr-agent` every pull request that a branch of this repository opens, and it reads this file as its review context, this section included. An event sent by a bot starts nothing, a person needs effective write access to start a review, and an authorized command reviews any pull request, one opened by a bot included. A pull request from a fork is reviewed only after a person with write access comments a command.
 
 - Treat the hard invariants above as the review criteria, and name the invariant that a finding breaks. A change that breaks one is a finding that blocks the pull request, not a suggestion.
 - Do not suggest a change in `web/src/scene.gen.ts`, which is generated from `spec/scene.schema.json`. Review the schema instead.

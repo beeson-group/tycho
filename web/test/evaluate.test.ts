@@ -299,3 +299,31 @@ describe('arrows (L7)', () => {
     expect(rule(() => validate(scene({ before: 'fade' }), data(), state()))).toBe('C3');
   });
 });
+
+describe('drawing keys of a track layer (2.11)', () => {
+  it('rejects a dash that is not two positive lengths with the rule that pytycho cites', () => {
+    const data = new MemoryStore()
+      .add('off', [0, 2], 'uint32')
+      .add('pos', [
+        [0, 0, 0],
+        [1, 0, 0],
+      ])
+      .add('time', [0, 1]);
+    const scene = baseScene({
+      views: {
+        main: {
+          frame: 'a',
+          driver: { sets: { set: 's' }, member: { index: 0 } },
+          layers: [{ kind: 'track', sets: { set: 's' }, members: 'all', dash: [1, 0] }],
+        },
+      },
+    });
+    let rule: string | undefined;
+    try {
+      validate(scene, data, state());
+    } catch (e) {
+      rule = (e as { rule?: string }).rule;
+    }
+    expect(rule).toBe('2.11');
+  });
+});

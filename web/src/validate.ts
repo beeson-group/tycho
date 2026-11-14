@@ -341,7 +341,7 @@ function checkTrackLayer(scene: Scene, id: string, layer: TrackLayer): void {
     fail('2.7', `view ${id}: a track layer's flat is ${JSON.stringify(layer.flat)}, not a boolean`);
   const dash = layer.dash as unknown;
   if (dash !== undefined && !(Array.isArray(dash) && dash.length === 2 && dash.every((d) => finite(d) && d > 0)))
-    fail('2.7', `view ${id}: a track layer's dash is ${JSON.stringify(dash)}, not two positive lengths`);
+    fail('2.11', `view ${id}: a track layer's dash is ${JSON.stringify(dash)}, not two positive lengths`);
   if (layer.fill !== undefined) {
     if (layer.fill.base !== undefined && !finite(layer.fill.base)) fail('S4', `view ${id}: a fill's base is not finite`);
     if (layer.fill.color !== undefined && !COLOR.test(layer.fill.color)) fail('2.7', `view ${id}: a fill's color is not #rrggbb`);

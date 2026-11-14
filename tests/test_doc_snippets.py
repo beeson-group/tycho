@@ -6,6 +6,8 @@ import re
 import runpy
 from pathlib import Path
 
+import pytycho.html
+
 ROOT = Path(__file__).resolve().parents[1]
 SKILL = ROOT / "skills" / "tycho" / "SKILL.md"
 # docs/quickstart.md includes the python fence between these two markers
@@ -18,5 +20,7 @@ def test_the_minimal_scene_writes_its_page(tmp_path, monkeypatch):
     script = tmp_path / "minimal_scene.py"
     script.write_text(match.group(1), encoding="utf-8")
     monkeypatch.chdir(tmp_path)
+    # the Python jobs of CI do not build the runtime, which the page only inlines
+    monkeypatch.setattr(pytycho.html, "runtime_js", lambda: "console.log('tycho')")
     runpy.run_path(str(script), run_name="__main__")
     assert "<tycho-viewer" in (tmp_path / "loop.html").read_text(encoding="utf-8")

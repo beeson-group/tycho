@@ -42,6 +42,50 @@ A scene of this size has to be thinned ([thinning](thinning.md)) or store fewer 
 The page requires WebGL to draw.
 The state of the page, i.e. what the person at the page has changed, is stored per browser in local storage, under a hash of `scene.tys`.
 
+## Using the page
+
+The top bar of the page holds the title, the controls of the shared inputs, and a row of Add panel chips, i.e. small labeled buttons that each add a panel.
+The chips stand for the declared panels of the scene, each shown by its label or its id.
+Adding a declared panel that is already shown makes a copy of it with a new id.
+
+- A click on a chip adds the panel where there is most room, by splitting the largest panel.
+- A drag of a chip onto a panel splits this panel on the side that a drop marker shows during the drag, or replaces what the panel shows on a drop at its center.
+- The caret of a chip opens a menu that adds the panel, or that splits or replaces any panel by name, which is the way to do it from the keyboard.
+
+When the chips would not fit on one line, one Add panel button takes their place.
+A page holds at most eight panels.
+
+Each panel has a header along its top.
+The chip in the header names the frame of the panel, and its caret switches the frame when the panel has a per-panel choice of frame.
+The header also holds the controls of the other per-panel inputs, a house icon that resets the view of the panel, and a × that closes the panel when there is more than one.
+
+- A drag of a panel by its header onto another panel moves it to the side that the drop marker shows, or swaps the two on a drop at the center.
+- A drag of the gutter, i.e. the gap between two panels, resizes them.
+- A double click on a panel resets its view.
+
+A drag across a panel with a 3d camera turns the view about the camera's up axis, as a turntable does, and a drag up or down tilts the view toward this axis.
+Shift with a drag, or a drag with the right button, pans the view, and the wheel or a pinch zooms it.
+While the pointer is over such a panel, its keys are listed at its foot, except under `minimal` and `kiosk` and on a device whose pointer does not hover, such as a phone.
+
+A colorbar shows a colormap against its values at the top right of a panel.
+When a shared parameter input is over the same parameter, the colorbar acts as a second slider for this input, except on a kiosk page.
+A click or a drag on the colorbar jumps the input to the stop nearest the value under the pointer, and with the colorbar focused, the arrow keys move the input by one stop, PageUp and PageDown by ten, and Home and End to the ends.
+
+The keys below act while the viewer element has the keyboard focus, also on one of its tabs or buttons, unless the control takes the key itself, as a button takes Space.
+In a text field or a select, every key is left to the field.
+
+- Space or `k` plays and pauses.
+- The right and left arrows move by one frame index and pause, or by ten with Shift.
+- Home or `0` goes to frame index 0, and `1` to `9` go to as many tenths of the loop.
+- `f` resets the view of every panel: a panel whose camera has keyframes follows them again, and any other panel is fitted to what it draws.
+- The up and down arrows move the first slider over a shared input by one stop, or ten with Shift.
+- In a panel with a 3d camera, `x`, `y`, and `z` show the view from the positive side of that axis, and from the negative side with Shift.
+- In a panel with a 3d camera, `.` and `,` turn the view about the camera's up axis by 15 degrees, or by 90 with Shift.
+  These keys and the axis keys act on the panel under the pointer, or on every panel with a 3d camera when the pointer is over none.
+- Escape closes an open menu or the export options.
+
+The keys that play, step, and seek require a playback control, except on a kiosk page, which plays without one.
+
 ## Embedding and kiosk pages
 
 A page embeds in another page, on a website or on a reveal.js slide, through an iframe, i.e. an HTML element that shows one page inside another.

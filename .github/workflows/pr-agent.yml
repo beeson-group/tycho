@@ -8,7 +8,9 @@ on:
 permissions: {}
 
 concurrency:
-  group: pr-agent-${{ github.event.pull_request.number || github.run_id }}
+  # the issue number of a pull request is its number, so a comment-triggered run shares the
+  # group with the synchronize runs of the same pull request
+  group: pr-agent-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
   cancel-in-progress: true
 
 jobs:

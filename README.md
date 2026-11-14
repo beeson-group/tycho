@@ -21,8 +21,8 @@ You can also embed the page in a website, retaining the interactive UI elements,
 TyCHO is not a physics engine, but it does plot real data.
 
 The core idea is:
-1. Generate your data from your preferred choice of trajectory optimization software (as of [v0.3.0](https://github.com/beeson-group/tycho/releases/tag/v0.3.0), only [pydylan](https://github.com/beeson-group/pydylan) is supported for this step);
-2. Call `pytycho`, our python package that takes your data and efficiently compresses it into binary containers (one `data.tyd` and one `scene.tys` file, for the data and metadata respectively);
+1. Generate your data from your preferred choice of trajectory optimization software (as of [v0.3.0](https://github.com/beeson-group/tycho/releases/tag/v0.3.0), all of our demos were generated with [pydylan](https://github.com/beeson-group/pydylan));
+2. Call `pytycho`, our python package that takes your data and efficiently compresses it into a binary container, `data.tyd`, and a JSON scene document with metadata, `scene.tys`;
 3. Draw the scene in the browser with our runtime renderer (built on [three.js](https://threejs.org/)).
 
 ## Installing and using TyCHO

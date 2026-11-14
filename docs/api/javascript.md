@@ -29,13 +29,13 @@ import { Container, evaluate, validate } from '@beeson-group/tycho';
 A page without a bundler loads the runtime as a module from a content delivery network that serves npm packages. The version is fixed in the URL, since before version 1.0 a new minor version may break the scene format.
 
 ```html
-<script type="module" src="https://cdn.jsdelivr.net/npm/@beeson-group/tycho@0.2.0/dist/tycho.esm.js"></script>
+<script type="module" src="https://cdn.jsdelivr.net/npm/@beeson-group/tycho@0.3.0/dist/tycho.esm.js"></script>
 ```
 
 The page can also load the runtime as a classic script, which is a `<script>` element without `type="module"`. This bundle registers the viewer like the ES module, and it also defines `tycho` on `window`.
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/@beeson-group/tycho@0.2.0/dist/tycho.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@beeson-group/tycho@0.3.0/dist/tycho.js"></script>
 ```
 
 ## The element

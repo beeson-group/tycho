@@ -10,10 +10,10 @@ comes from the input file.
 The input: ``broucke-input.tyd`` is not in the repository. It is attached to the GitHub Release of each version
 and is downloaded next to this script::
 
-    gh release download v0.2.0 --repo beeson-group/tycho --pattern broucke-input.tyd --dir examples/broucke
+    gh release download v0.3.0 --repo beeson-group/tycho --pattern broucke-input.tyd --dir examples/broucke
 
-or from ``https://github.com/beeson-group/tycho/releases/download/v0.2.0/broucke-input.tyd``, with the
-version of the checkout in place of 0.2.0. The trajectories in it were computed with PyDyLAN and thinned
+or from ``https://github.com/beeson-group/tycho/releases/download/v0.3.0/broucke-input.tyd``, with the
+version of the checkout in place of 0.3.0. The trajectories in it were computed with PyDyLAN and thinned
 to at most 1920 samples a member in the same five frames. The file is a TyCHO data container. For each track
 set ``family-<family>-<branch>``, it holds the view ``offsets`` (uint32) and the float64 views ``positions``,
 ``channels/true_anomaly``, ``channels/rho``, ``channels/time``, ``parameters/eccentricity``, ``parameters/period``,

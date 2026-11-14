@@ -30,18 +30,17 @@ Run the steps below from the repository root of a checkout of the tag, with the 
    node web/scripts/poster.mjs examples/broucke/broucke.html examples/broucke/broucke.png
    node web/scripts/poster.mjs examples/manifolds/manifolds.html examples/manifolds/manifolds.png
    ```
-3. Render the GIF of the README from the Broucke page. The picture of the README is loaded from `https://github.com/beeson-group/tycho/releases/latest/download/broucke.gif`, hence it is broken whenever this file is missing from the latest release.
+3. Convert the screen recording of the Broucke page to the GIF of the README. Claudio Vestini records this video for each release, while he uses the page in a full-screen browser, hence ask him for the file. The picture of the README is loaded from `https://github.com/beeson-group/tycho/releases/latest/download/broucke.gif`, hence it is broken whenever this file is missing from the latest release. Add `-t SECONDS` before each `-i recording.mov` to cut the end of the recording, where the browser bar or the recording controls come into view.
    ```sh
-   node web/scripts/video.mjs examples/broucke/broucke.html broucke.mp4 --size 2400x1350 --dpr 2 --fps 60 --page lean
-   ffmpeg -v error -y -i broucke.mp4 -vf "select=not(mod(n\,4)),setpts=N/(15*TB),scale=960:-2:flags=lanczos,palettegen=max_colors=256:stats_mode=full" broucke-palette.png
-   ffmpeg -v error -y -i broucke.mp4 -i broucke-palette.png -lavfi "select=not(mod(n\,4)),setpts=N/(15*TB),scale=960:-2:flags=lanczos[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle" -r 15 -loop 0 broucke.gif
+   ffmpeg -v error -y -i recording.mov -vf "setpts=PTS/1.5,fps=15,scale=960:-2:flags=lanczos,palettegen=max_colors=256:stats_mode=full" broucke-palette.png
+   ffmpeg -v error -y -i recording.mov -i broucke-palette.png -lavfi "setpts=PTS/1.5,fps=15,scale=960:-2:flags=lanczos[x];[x][1:v]paletteuse=dither=none:diff_mode=rectangle" -loop 0 broucke.gif
    ```
 4. Upload the pages, the posters, the inputs, and the GIF to the release.
    ```sh
    gh release upload vX.Y.Z examples/broucke/broucke.html examples/broucke/broucke.png examples/broucke/broucke-input.tyd examples/manifolds/manifolds.html examples/manifolds/manifolds.png examples/manifolds/manifolds-input.tyd --clobber --repo beeson-group/tycho
    gh release upload vX.Y.Z broucke.gif --repo beeson-group/tycho
    ```
-5. Delete `broucke.mp4`, `broucke.png`, `broucke-palette.png`, and `broucke.gif` from the repository root, since they are not gitignored there. The file `broucke.png` in the root is the poster that `video.mjs` writes next to the video, and not the poster of step 2.
+5. Delete `broucke-palette.png` and `broucke.gif` from the repository root, since they are not gitignored there.
 6. Rebuild the versions `stable` and `latest` from the dashboard of Read the Docs, so that the new pages are shown in the gallery, since both versions were built before the pages were attached.
 
 ## One-time setup

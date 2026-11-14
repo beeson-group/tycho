@@ -6,6 +6,8 @@ The two file formats are versioned apart from the packages, i.e. either format v
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-14
+
 Scene format 0.4 is written and read at this version, and scenes of formats 0.2 and 0.3 are still read. Format 0.3 differs from 0.2 by the arrow and outline layers, origins given by channels, and five keys. Format 0.4 adds the timeline of section 2.11 of the spec, with the features `clock.keys`, `layers.clock`, `camera.keys`, `layers.label`, and `layers.points`.
 
 ### Added
@@ -80,5 +82,6 @@ Version 0.2.0 introduces the scene grammar, i.e. a general vocabulary from which
 - The npm package bundles three.js and mp4-muxer, and it does not have any runtime dependencies, hence installing it does not install any other package.
 - Both packages declare the license `Apache-2.0 AND MIT`, since the bundle carries MIT-licensed code, and they ship `NOTICE` and `THIRD_PARTY_NOTICES.md`. Every bundle starts with a comment listing the bundled packages. Every page that pytycho writes inlines the bundle, and thus carries the same comment.
 
-[Unreleased]: https://github.com/beeson-group/tycho/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/beeson-group/tycho/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/beeson-group/tycho/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/beeson-group/tycho/releases/tag/v0.2.0

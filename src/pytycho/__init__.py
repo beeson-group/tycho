@@ -6,7 +6,7 @@ frame formula of a dynamical model, and it does not interpolate samples. Every a
 the caller.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 from ._evaluate import EvaluationError, evaluate
 from .container import Container, ContainerWriter

@@ -584,7 +584,7 @@ export class TychoViewerElement extends Base {
   private statsEl!: HTMLDivElement;
   private footer!: HTMLElement;
   private canvas: HTMLCanvasElement | null = null;
-  /** The 2D canvas over the panel area, on which labels, boxes, and overlays are painted (section 2.11). */
+  /** The 2D canvas over the panel area, on which labels, boxes, and overlays are painted. */
   private paintCanvas: HTMLCanvasElement | null = null;
 
   /** The held progress, valid while the frame index is the one it was taken at. */
@@ -1100,7 +1100,7 @@ export class TychoViewerElement extends Base {
     return this.store !== null && keyed(this.store.state.layout);
   }
 
-  /** Paints the labels, the boxes, the panel fades, and the overlays of section 2.11 over the panel area at progress `q`. */
+  /** Paints the labels, the boxes, the panel fades, and the overlays over the panel area at progress `q`. */
   private paint(q: number, w: number, h: number, ratio: number): void {
     const c = this.paintCanvas;
     const renderer = this.renderer;

@@ -221,7 +221,7 @@ export class GeometryCache {
     this.frames = new Frames(scene);
   }
 
-  /** The bytes of an array of `uint8` elements, e.g. the image file of a body (section 2.11). */
+  /** The bytes of an array of `uint8` elements, e.g. the image file of a body. */
   bytes(name: string): Uint8Array {
     if (!this.data.has(name)) fail('body', `the data container does not hold array ${JSON.stringify(name)}`);
     const v = this.data.array(name);

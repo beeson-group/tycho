@@ -15,8 +15,11 @@ MINIMAL_SCENE = re.compile(r"<!-- minimal-scene:start -->\n```python\n(.*?)```\n
 
 
 def test_the_minimal_scene_writes_its_page(tmp_path, monkeypatch):
-    match = MINIMAL_SCENE.search(SKILL.read_text(encoding="utf-8"))
+    text = SKILL.read_text(encoding="utf-8")
+    match = MINIMAL_SCENE.search(text)
     assert match, "the python fence between the minimal-scene markers of SKILL.md was not found"
+    # the literalinclude of docs/quickstart.md starts after the first python fence, which must be this one
+    assert text.index("```python") == match.start() + len("<!-- minimal-scene:start -->\n")
     script = tmp_path / "minimal_scene.py"
     script.write_text(match.group(1), encoding="utf-8")
     monkeypatch.chdir(tmp_path)

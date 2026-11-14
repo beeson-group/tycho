@@ -1,8 +1,8 @@
 /**
  * The icons of the viewer's controls, as inline SVG built with createElementNS from path strings, so that
  * the browser neither parses markup nor fetches a file. The icons house, chevron-down, grip-vertical, x,
- * rotate-ccw, plus, and download are taken from Lucide, on its 24 px grid with a 2 px stroke (the dots of grip-vertical
- * are written as paths). The icons play and pause are drawn here on a 16 px grid and filled.
+ * rotate-ccw, undo and redo (here turnLeft and turnRight), plus, and download are taken from Lucide, on its 24 px grid with a 2 px
+ * stroke (the dots of grip-vertical are written as paths). The icons play and pause are drawn here on a 16 px grid and filled.
  */
 
 /**
@@ -46,6 +46,8 @@ export const GLYPHS = {
   grip: { grid: 24, fill: false, d: [[5, 12, 19].map((y) => dot(9, y)).join(''), [5, 12, 19].map((y) => dot(15, y)).join('')] },
   x: { grid: 24, fill: false, d: ['M18 6 6 18', 'm6 6 12 12'] },
   rotateCcw: { grid: 24, fill: false, d: ['M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8', 'M3 3v5h5'] },
+  turnLeft: { grid: 24, fill: false, d: ['M3 7v6h6', 'M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13'] },
+  turnRight: { grid: 24, fill: false, d: ['M21 7v6h-6', 'M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7'] },
   plus: { grid: 24, fill: false, d: ['M5 12h14', 'M12 5v14'] },
   download: { grid: 24, fill: false, d: ['M12 15V3', 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4', 'm7 10 5 5 5-5'] },
   play: { grid: 16, fill: true, d: ['M5 3.5v9l7.5-4.5z'] },

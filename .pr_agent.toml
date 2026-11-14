@@ -1,0 +1,11 @@
+# The knobs of PR-Agent that belong to this repository. The model, its endpoint, and its key are
+# set by .github/workflows/pr-agent.yml, since the key is a secret.
+
+[pr_reviewer]
+require_tests_review = true
+require_security_review = true
+
+[pr_code_suggestions]
+# a suggestion carries GitHub's Apply suggestion button, with which the author takes it as a commit
+committable_code_suggestions = true
+num_code_suggestions = 4

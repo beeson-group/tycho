@@ -62,6 +62,14 @@ node web/scripts/frame-profile.mjs <page.html>      # the cost of playback, in h
 - Merge a pull request only when you are told to by the person you work for.
 - Add a line for every user-visible change under `## [Unreleased]` in `CHANGELOG.md`, in the sections of Keep a Changelog (Added, Changed, Deprecated, Removed, Fixed, and Security). This section becomes the notes of the next release.
 
+## Reviewing a pull request
+
+PR-Agent reviews every pull request in the workflow `pr-agent`, and it reads this file as its review context, this section included.
+
+- Treat the hard invariants above as the review criteria, and name the invariant that a finding breaks. A change that breaks one is a finding that blocks the pull request, not a suggestion.
+- Do not suggest a change in `web/src/scene.gen.ts`, which is generated from `spec/scene.schema.json`. Review the schema instead.
+- A change of an expected answer in the conformance corpus is right only together with the change that justifies it, since the corpus is taken as right where the two evaluators disagree.
+
 ## Conventions
 
 - Python lines run to 140 columns and are formatted with ruff. TypeScript lines run to 160 columns and use single quotes. In the hooks, the TypeScript is checked with prettier without being rewritten, hence you apply a fix with `npx prettier --write <file>` from `web/`.

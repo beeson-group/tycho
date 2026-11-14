@@ -1,0 +1,47 @@
+name: PR Agent
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, synchronize]
+  issue_comment:  # zizmor: ignore[dangerous-triggers] a command is taken only from an owner, a member, or a collaborator, see the guard below
+
+permissions: {}
+
+concurrency:
+  group: pr-agent-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  pr_agent_job:
+    # a bot does not review the work of a bot, and a command in a comment is taken only from an
+    # owner, a member, or a collaborator, since anyone can comment on a public repository
+    if: >-
+      ${{ github.event.sender.type != 'Bot' &&
+      (github.event_name != 'issue_comment' ||
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - name: PR Agent action step
+        id: pragent
+        uses: docker://pragent/pr-agent:0.50.0-github_action
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GLM-5.3 on the NRP gateway, with Qwen3.8-Flash-Next as the fallback. The gateway
+          # separates a model's reasoning from its answer, so the commands receive clean JSON.
+          # The repository knobs are in .pr_agent.toml
+          config.model: "openai/glm-5"
+          config.fallback_models: '["openai/qwen3"]'
+          config.custom_model_max_tokens: "1000000"
+          config.max_model_tokens: "64000"
+          config.ai_timeout: "300"
+          OPENAI.API_BASE: "https://ellm.nrp-nautilus.io/v1"
+          OPENAI.KEY: ${{ secrets.NRP_API_KEY }}
+          github_action_config.auto_describe: "true"
+          github_action_config.auto_review: "true"
+          github_action_config.auto_improve: "true"
+          github_action_config.pr_actions: '["opened", "reopened", "ready_for_review", "synchronize"]'

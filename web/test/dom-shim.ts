@@ -13,11 +13,17 @@ export class FakeElement {
   private readonly listeners = new Map<string, Listener[]>();
   private text = '';
   readonly dataset: Record<string, string> = {};
-  readonly style: Record<string, string> & { setProperty(k: string, v: string): void } = Object.assign(Object.create(null), {
-    setProperty(this: Record<string, string>, k: string, v: string) {
-      this[k] = v;
+  readonly style: Record<string, string> & { setProperty(k: string, v: string): void; getPropertyValue(k: string): string } = Object.assign(
+    Object.create(null),
+    {
+      setProperty(this: Record<string, string>, k: string, v: string) {
+        this[k] = v;
+      },
+      getPropertyValue(this: Record<string, string>, k: string) {
+        return this[k] ?? '';
+      },
     },
-  });
+  );
   hidden = false;
   offsetTop = 0;
   offsetHeight = 0;

@@ -40,13 +40,14 @@ jobs:
         run: |
           authorized=false
           if [ "$GITHUB_EVENT_NAME" = "issue_comment" ]; then
-            trimmed="$(printf '%s' "$COMMENT_BODY" | sed -e 's/^[[:space:]]*//')"
+            trimmed="$(printf '%s' "$COMMENT_BODY" | sed -z 's/^[[:space:]]*//')"
             case "$trimmed" in
               /*) ;;
               *) echo "authorized=false" >> "$GITHUB_OUTPUT"; exit 0 ;;
             esac
           fi
-          perm="$(gh api "repos/${{ github.repository }}/collaborators/$SENDER/permission" --jq .permission)"
+          # a query that fails counts as no access, so the review is refused rather than run
+          perm="$(gh api "repos/${{ github.repository }}/collaborators/$SENDER/permission" --jq .permission || echo none)"
           case "$perm" in
             write | maintain | admin) authorized=true ;;
           esac

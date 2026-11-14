@@ -13,12 +13,14 @@ concurrency:
 
 jobs:
   pr_agent_job:
-    # a bot does not review the work of a bot, and a command in a comment is taken only from an
-    # owner, a member, or a collaborator, since anyone can comment on a public repository
+    # a bot does not review the work of a bot, and a command in a comment is taken only from a
+    # comment on a pull request, by an owner, a member, or a collaborator, since anyone can
+    # comment on a public repository
     if: >-
       ${{ github.event.sender.type != 'Bot' &&
       (github.event_name != 'issue_comment' ||
-      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)) }}
+      (github.event.issue.pull_request &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

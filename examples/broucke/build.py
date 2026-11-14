@@ -82,6 +82,11 @@ FRAME_COUNT = 480
 
 def declare_frames(scene: ty.Scene):
     """Declares the five frames, the primary m1, and the secondary m2, and returns the pulsating frame, m1, and m2."""
+    # the orbits are stored in the root, the rotating-pulsating frame, in which m1 and m2 stay 1 DU apart. the rotating
+    # frame is the pulsating one scaled by the channel rho, the distance between m1 and m2 along their elliptic orbit. the
+    # barycentric inertial frame is the rotating one turned by the channel true_anomaly, since a rotation angle is that of
+    # the parent's axes seen in the child. PyDyLAN stored both channels per sample, hence the scene does not hold a formula
+    # of the elliptic problem
     pulsating = scene.frame("rotating-pulsating", label="rotating-pulsating", axes=FRAMES["rotating-pulsating"][0], unit="DU")
     rotating = scene.frame("rotating", label="rotating", axes=FRAMES["rotating"][0], unit="DU", parent=pulsating, scale=ty.channel("rho"))
     inertial = scene.frame(
@@ -92,6 +97,8 @@ def declare_frames(scene: ty.Scene):
         parent=rotating,
         rotation=ty.rotation("z", ty.channel("true_anomaly")),
     )
+    # the two inertial frames are centered on the bodies. an origin at a body reads mu in the context of the set drawn,
+    # hence every set carries mu, rho, and true_anomaly (rule transform-channels)
     m1 = scene.body("m1", frame=pulsating, position=[-ty.attr("mu"), 0.0, 0.0], label="m1", color="#e69f00")
     m2 = scene.body("m2", frame=pulsating, position=[1 - ty.attr("mu"), 0.0, 0.0], label="m2", color="#56b4e9")
     scene.frame("inertial-m1", label="inertial, centered on m1", axes=FRAMES["inertial-m1"][0], unit="DU", parent=inertial, origin=m1)

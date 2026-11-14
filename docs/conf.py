@@ -1,9 +1,10 @@
 """Sphinx configuration of the TyCHO documentation site.
 
-The spec, the schema, the conformance README, the skill, and the changelog are read where they
-live in the repository. The example pages are not tracked in git. Read the Docs downloads them
-from the latest GitHub Release into ``_extra/examples``, as does a local build with TYCHO_DOCS_EXAMPLES=1
-set. A build without the pages still succeeds, and docs/gallery.md then shows where they are.
+The spec, the conformance README, the skill, and the changelog are read where they live in the
+repository. The scene reference, reference.md, is written from the JSON Schema by reference.py at
+every build, and it is not tracked in git. The example pages are not tracked in git either. Read the
+Docs downloads them from the latest GitHub Release into ``_extra/examples``, as does a local build with
+TYCHO_DOCS_EXAMPLES=1 set. A build without the pages still succeeds, and docs/gallery.md then shows where they are.
 """
 
 from __future__ import annotations
@@ -25,6 +26,9 @@ logger = logging.getLogger("conf")
 DOCS = Path(__file__).resolve().parent
 ROOT = DOCS.parent
 sys.path.insert(0, str(ROOT / "src"))
+sys.path.insert(0, str(DOCS))
+
+import reference  # noqa: E402
 
 import pytycho  # noqa: E402
 
@@ -105,6 +109,8 @@ def fetch_example_pages(dest: Path) -> None:
 if os.environ.get("READTHEDOCS") == "True" or os.environ.get("TYCHO_DOCS_EXAMPLES") == "1":
     fetch_example_pages(EXAMPLES)
 
+reference.write(DOCS / "reference.md")
+
 myst_substitutions = {
     "version": release,
     "scene_format": SCENE_FORMAT,
@@ -157,7 +163,7 @@ html_theme_options = {
 # llms.txt
 
 llms_txt_summary = (
-    "TyCHO writes animated, interactive astrodynamics visualizations as one self-contained HTML page: "
+    "TyCHO writes animated, interactive astrodynamics pages, each one self-contained HTML file: "
     "pytycho declares a scene over NumPy arrays, and the browser runtime draws it."
 )
 

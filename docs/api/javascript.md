@@ -41,17 +41,14 @@ import { Container, evaluate, validate } from '@beeson-group/tycho';
 
 A page without a bundler loads the runtime as a module from a content delivery network that serves npm packages.
 The version is fixed in the URL, since before version 1.0 a new minor version may break the scene format.
+The URLs below load version {{ version }}, the version of this documentation.
 
-```html
-<script type="module" src="https://cdn.jsdelivr.net/npm/@beeson-group/tycho@0.3.0/dist/tycho.esm.js"></script>
-```
+{{ '```html\n<script type="module" src="https://cdn.jsdelivr.net/npm/@beeson-group/tycho@' ~ version ~ '/dist/tycho.esm.js"></script>\n```' }}
 
 The page can also load the runtime as a classic script, which is a `<script>` element without `type="module"`.
 This bundle registers the viewer like the ES module, and it also defines `tycho` on `window`.
 
-```html
-<script src="https://cdn.jsdelivr.net/npm/@beeson-group/tycho@0.3.0/dist/tycho.js"></script>
-```
+{{ '```html\n<script src="https://cdn.jsdelivr.net/npm/@beeson-group/tycho@' ~ version ~ '/dist/tycho.js"></script>\n```' }}
 
 ## The element
 
@@ -68,7 +65,8 @@ This bundle registers the viewer like the ES module, and it also defines `tycho`
 | `data` | a URL of `data.tyd`, or a CSS selector of such a block |
 | `theme` | `dark` or `light`, a built-in palette that replaces the theme of the scene. The viewer follows a later change of this attribute |
 | `autoplay` | present or absent, whatever its value. When present, the viewer plays once the scene is loaded and the element is visible |
-| `kiosk` | present or absent, whatever its value. When present, the viewer hides every control and plays as with `autoplay`, which suits a slide, and it neither restores nor stores the state. |
+| `kiosk` | present or absent, whatever its value. When present, the viewer hides every control and plays as with `autoplay`, which suits a slide, and it neither restores nor stores the state |
+| `minimal` | present or absent. When present, the viewer hides the Add panel group, the icons of the panel headers, the frame and rate readouts, the View group, and Export, while the title, the controls of the scene, play, the scrubber, and the speed menu stay. This suits a slide on which the controls of the scene are worked by hand. With the value `panels`, the Add panel group and the icons of the panel headers stay as well, for a slide on which panels are added by hand |
 
 The viewer takes each file from its child block marked `data-tycho="scene"` or `data-tycho="data"`, else from the attribute, else from the block with the id `tycho-scene` or `tycho-data`.
 A page can thus hold several viewers, each with its child blocks.
@@ -97,13 +95,13 @@ The element is a `TychoViewerElement`, with the methods and properties below.
 | Member | What it does |
 |---|---|
 | `load(sceneText, dataBytes)` | loads a scene from the text of `scene.tys` and the bytes of `data.tyd`, in place of the attributes, and returns a promise that resolves once the scene or its error shows. A load begun later takes precedence over one still decoding, whose result is then dropped |
-| `state` | the current state snapshot of section 2.8 of the spec, which holds the shown panels and their layout, the values of the inputs, and the clock channel. It is `null` before a scene loads |
+| `state` | the current state snapshot (rule `state` of the spec), which holds the shown panels and their layout, the values of the inputs, and the clock channel. It is `null` before a scene loads |
 | `play()`, `pause()` | starts and stops the clock, and does not do anything before a scene loads |
 | `playing` | whether the clock is set to run, which stays true while the clock waits for the element to be shown |
 | `reset()` | returns to the initial state of the scene and discards the stored state |
 | `fitAll()` | returns every panel with camera keyframes to its keyframes (rule `camera-keyframes`), and fits the camera of every other panel to what the panel draws, panning and zooming it until its content fills it |
 | `exportVideo(options)` | records a video of the current state, as described below |
-| `seek(t)` | shows time `t` of the timeline, in seconds, paused (section 2.11 of the spec) |
+| `seek(t)` | shows time `t` of the timeline, in seconds, paused (rule `timeline` of the spec) |
 | `steps` | the steps of the scene, `{id, at, label}` in order of time, i.e. its named times for a presentation (rule `steps`) |
 | `goto(step)` | shows a step, given by its id or its index, paused, and throws for a step the scene does not have |
 | `playTo(step)` | plays from the time shown and pauses at the time of a step. A step behind the time shown is reached in the next loop |
@@ -177,7 +175,7 @@ The options are an `ExportOptions` object, with the keys below.
 | `size` | `'720p'` | a `SizePreset`, i.e. `'720p'`, `'1080p'`, or `'panels'`, or an `ExportSize`, `{width, height, pixelRatio}`, with the width and the height in video pixels and the pixel ratio in video pixels per CSS pixel. The picture is laid out at a width of the width divided by the pixel ratio, in CSS pixels, hence with a higher ratio the same layout is drawn at a higher pixel density |
 | `fps` | 30 | frames per second |
 | `loops` | 1 | the number of loops of the clock that the video holds |
-| `speed` | the speed of the viewer | the playback speed, at which a revolution of the clock (one traversal of a trajectory, rule `revolutions`) lasts 8 s divided by the speed |
+| `speed` | the speed of the viewer | the playback speed. One loop of the clock lasts `clock.seconds` divided by the speed when the scene sets `seconds`, and otherwise 8 s per revolution (one traversal of a periodic trajectory, rule `revolutions`) divided by the speed |
 | `start` | 0 | the frame index of the first frame |
 | `bitrate` | 0.08 bits per pixel per frame, within 1 to 40 Mbit/s | the target bitrate in bits per second. The default is ample for lines on a plain background |
 | `kiosk` | the `kiosk` attribute of the viewer | whether the picture is that of a kiosk viewer, i.e. the panel area alone, which then fills the video, without the caption |
@@ -212,7 +210,7 @@ The exports below do not require a DOM, hence they run anywhere, in a browser or
 | `Container.parse(bytes)` | parses `data.tyd` from an `ArrayBuffer` or a typed array into a promise of a `Container`. It checks rules `array-dtype`, `array-keys`, `container-version`, and `shuffle-delta-deflate` for every array, and it decodes the encoded (compressed) arrays with `DecompressionStream`. On the container, `array(name)` returns one array, `has(name)` and `names()` report which arrays it holds, and `header` is the parsed JSON header |
 | `decodeEmbedded(text, encoding)` | decodes the text of a `<script>` element embedded in the page into bytes, for `base64`, the only encoding |
 | `validate(scene, data?, state?)` | checks a scene, and also its data and a state when they are given. It throws a `TychoError` for the first broken rule, and it returns the warnings as a list of strings |
-| `evaluate(scene, data, state, frameIndex)` | the pure evaluator of section 3 of the spec, which returns what each panel draws at a frame index as an `EvaluateResult`. It gives the same answer as {func}`pytycho.evaluate`, which is checked case by case through the conformance corpus |
+| `evaluate(scene, data, state, frameIndex)` | the pure evaluator of the spec, which returns what each panel draws at a frame index as an `EvaluateResult`. It gives the same answer as {func}`pytycho.evaluate`, which is checked case by case through the conformance corpus |
 | `TychoError` | the only error type that the validator and the evaluator throw, with `rule` set to the name of the broken rule, e.g. `'transform-channels'` or `'frame'` |
 | `SCENE_MAJOR`, `SCENE_MINOR`, `DATA_VERSION` | the scene and container versions this runtime reads |
 
@@ -233,7 +231,7 @@ The elements are flat in C order, i.e. one row after another with the last index
 
 The `header` of a container is a `DataHeader`, whose `arrays` give the `ArrayInfo` of each array.
 An `ArrayInfo` describes how one array is stored.
-It holds the `dtype`, the `shape`, and the `encoding` of the array, and it is one of two kinds (section 1 of the spec).
+It holds the `dtype`, the `shape`, and the `encoding` of the array, and it is one of two kinds (rule `container` of the spec).
 
 - A `RawArrayInfo` adds the byte `offset` and `length` of the array in the payload, the part of the file that follows the header.
 - An `EncodedArrayInfo` adds `chunk_rows` and `chunks`, the `[offset, length]` of each chunk, for an array that is compressed in chunks of `chunk_rows` rows.
@@ -244,19 +242,23 @@ They are the layers `TrajectoriesLayer`, `ArrowLayer`, `InsetBoxLayer`, `BodyLay
 The alias `InputValue` is a number, a string, or a boolean, i.e. the value of an input of kind parameter, a choice, or a toggle.
 
 The `EvaluateResult` of the evaluator maps each shown panel to a `PanelResult`, which holds the display `frame` of the panel (the frame it draws in) and one `LayerResult` per layer.
-A layer result is one of seven kinds, of which the three below are the most common.
+A layer result is one of seven kinds, told apart by its `kind`.
 
-- A `TrajectoriesLayerResult` holds one `MemberResult` per drawn member, with its `line`, the polyline that is drawn (rule `polyline`), and its `head`, the position of the moving point.
-- A `BodyLayerResult` holds the `position` and the `trail` of the body.
+- A `TrajectoriesLayerResult` holds the matched `set` and one `MemberResult` per drawn member, with its `line`, the polyline that is drawn (rule `polyline`), and its `head`, the position of the moving point.
+- An `ArrowLayerResult` holds the matched `set` and one `ArrowMemberResult` per drawn member, with the `base` of its arrow at the reading and its `tip`.
+- An `InsetBoxLayerResult` holds the declared target `panel`, the `shown_panel` that shows it, its display `frame`, and the `origin` and `axes` of the map from that frame into the display frame of the layer's panel.
+- A `BodyLayerResult` holds the `body`, its `position`, and its `trail`.
 - A `MarkLayerResult` stands for axes and a grid, for which the evaluator does not compute anything.
+- A `LabelLayerResult` holds the `position` of the anchor of the label in the display frame.
+- A `PointsLayerResult` holds the matched `set` and one `PointsMemberResult` per drawn member, with the drawn samples as `points`.
 
-The others are the `ArrowLayerResult`, the `InsetBoxLayerResult`, the `LabelLayerResult`, and the `PointsLayerResult` of section 3 of the spec.
+A panel whose camera has keyframes also holds its `camera`, a `CameraResult` with the `center`, `width`, and `height` of its window.
 
 Every position is a `Vec3` of three numbers.
 
 ## Readout numbers and colormaps
 
-The function `formatNumber(x, digits)` writes a number as a readout shows it, where a readout is a piece of text on the page that shows current values (section 2.9 of the spec).
+The function `formatNumber(x, digits)` writes a number as a readout shows it, where a readout is a piece of text on the page that shows current values.
 It follows three rules.
 
 - When `digits` is given, the number is written to `digits` significant digits with trailing zeros kept.

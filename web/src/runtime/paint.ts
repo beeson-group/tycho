@@ -1,5 +1,5 @@
 /**
- * The 2D painting of section 2.11 of spec/tycho-scene.md: markers, labels, the box of an axes layer, and the overlays. The page
+ * The 2D painting of markers, labels, the box of an axes layer, and the overlays. The page
  * paints them onto a canvas over the panel area, and a video export onto each of its frames, with the same functions, so that a frame of a
  * video shows what the page shows. Every text is canvas text, never markup (rule `plain-text`).
  */
@@ -436,7 +436,7 @@ export function drawBox(g: G, b: BoxPaint, theme: Theme): void {
   g.restore();
 }
 
-/** Draws a legend overlay (section 2.11) on a panel area of `w` by `h` pixels. */
+/** Draws a legend overlay on a panel area of `w` by `h` pixels. */
 export function drawLegend(g: G, legend: Extract<Overlay, { kind: 'legend' }>, w: number, h: number, theme: Theme, s: number): void {
   const opacity = opacityAt(legend.opacity, s);
   if (opacity <= 0 || legend.entries.length === 0) return;
@@ -540,7 +540,7 @@ export function drawLegend(g: G, legend: Extract<Overlay, { kind: 'legend' }>, w
   g.restore();
 }
 
-/** Covers a panel with the background at `1 - opacity`, which fades it as a whole (section 2.11). */
+/** Covers a panel with the background at `1 - opacity`, which fades it as a whole. */
 export function coverPanel(g: G, r: Rect, opacity: number, theme: Theme): void {
   if (opacity >= 1) return;
   g.save();
@@ -554,7 +554,7 @@ export const gutterColor = (theme: Theme): string => theme.gutter ?? mixHex(them
 
 /**
  * Paints, for every panel of `state`, the cover of its opacity, the box of its axes layer, and its labels, and then the
- * overlays of the scene, onto `g`, a 2D context in pixels of the panel area (section 2.11). `text` gives the text of a list of parts in a panel.
+ * overlays of the scene, onto `g`, a 2D context in pixels of the panel area. `text` gives the text of a list of parts in a panel.
  */
 export function paintPanelArea(
   g: CanvasRenderingContext2D,

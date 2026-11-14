@@ -1,7 +1,7 @@
 {
  "format": "tycho-scene",
  "version": "0.5",
- "generator": "pytycho 0.2.0",
+ "generator": "pytycho 0.3.0",
  "title": "Broucke families, three members each",
  "frames": {
   "rotating-pulsating": {

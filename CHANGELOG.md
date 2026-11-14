@@ -8,7 +8,7 @@ The two file formats are versioned apart from the packages, i.e. either format v
 
 ## [0.3.0] - 2026-11-14
 
-Scene format 0.5 and data container version 2 are written and read at this version, and a scene or a container of an older version is rejected and is written again with this version of pytycho. Format 0.5 differs from format 0.2, the format of 0.2.0, by the arrow and inset box layers, origins given by channels, and the timeline, with the features `clock.keyframes`, `layers.clock`, `camera.keyframes`, `layers.label`, and `layers.points`. It also renames keys and values of format 0.2 without aliases, as listed under Changed.
+Scene format 0.5 and data container version 2 are written and read at this version, and a scene or a container of an older version is rejected and is written again with this version of pytycho. Format 0.5 differs from format 0.2, the format of 0.2.0, by the arrow and inset box layers, layers that read their trajectories with the attributes and channels of the reference trajectory (`layers.read_from`), origins given by channels, and the timeline, with the features `clock.keyframes`, `layers.clock`, `camera.keyframes`, `layers.label`, and `layers.points`. It also renames keys and values of format 0.2 without aliases, as listed under Changed.
 
 ### Added
 
@@ -42,6 +42,7 @@ Scene format 0.5 and data container version 2 are written and read at this versi
 - The viewer element takes the attribute `minimal`, under which the Add panel group, the icons of the panel headers, the frame and rate readouts, the View group, and Export are hidden, while the title, the controls of the scene, play, the scrubber, and the speed menu stay. It is meant for a slide on which the controls of the scene are worked by hand, where `kiosk` hides too much. With the value `panels`, the Add panel group and the icons of the panel headers stay, for a slide on which panels are added by hand.
 - The options `limits`, `keyFrameInterval`, `hardwareAcceleration`, `kiosk`, and `onFrame` of `exportVideo` raise the ceiling of an export, e.g. to one loop of 72 s at 60 fps, set the interval of the key frames, down to a single key frame, choose the encoder, record a kiosk picture from any viewer, and hand each frame to the caller. The type `ExportLimits` is exported.
 - In a panel with a 3d camera, the keys `x`, `y`, and `z` show the view from the positive side of that axis, and from the negative side with Shift, and `.` and `,` turn the view about the camera's up axis by 15 degrees, or 90 with Shift (#7). They act on the panel under the pointer, or on every panel with a 3d camera. While the pointer is over such a panel, the keys are listed at its foot as key caps, except under `minimal` and `kiosk` and on a device whose pointer does not hover, such as a phone.
+- Every key of `spec/scene.schema.json` has a `description` with its unit and its default. The page Scene reference of the docs is generated from these descriptions, and the TypeScript types of the npm package carry them as doc comments. The concept pages of the guide are removed, and `spec/tycho-scene.md` keeps the layout of the data container and the rules that a reader follows, without the meaning of each key and without the drawing.
 
 ### Changed
 

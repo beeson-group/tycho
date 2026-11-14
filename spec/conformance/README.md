@@ -2,12 +2,12 @@
 
 The _conformance corpus_ is the set of test scenes on which both evaluators of TyCHO must agree.
 An _evaluator_ is a function `evaluate(scene, data, state, frame_index)`, given in section 3 of `../tycho-scene.md`, which returns every position that a scene draws at one frame index.
-Each directory here is one scene with the answers an evaluator must give for it.
+Each directory here but `containers/` is one scene with the answers an evaluator must give for it, and `containers/` holds the fixtures of the data container that the last section describes.
 Both implementations, the TypeScript evaluator in `web/` and the NumPy evaluator in `pytycho`, run every case.
 The Python runner `tests/test_conformance.py`, a pytest suite, passes each case to the NumPy evaluator, and the TypeScript runner `web/test/conformance.test.ts`, a vitest suite, passes it to the TypeScript evaluator.
 Where the two evaluators disagree, the answer in the corpus holds.
 
-A scene directory holds the four files below.
+A scene directory holds the three files below, and a fourth, `rejections.json`, when the scene has rejections.
 The first two are the files of every TyCHO scene, i.e. the scene document of section 2 of `../tycho-scene.md` and the data container of its section 1.
 
 ```
@@ -82,14 +82,14 @@ The Python runner calls `evaluate` and checks that it raises a `ValueError` whos
 The TypeScript runner calls `validate` and then `evaluate`, and it checks that one of them throws a `TychoError` whose `rule` is the given rule.
 
 The field `source` records where the expected numbers come from.
-The script `generate.py` in this directory writes every scene but `broucke-mini` and `halo-mini`, and the script `generate_pydylan.py` writes these two with PyDyLAN, the Python module of the DyLAN astrodynamics library.
+The script `generate.py` in this directory writes every scene but `broucke-mini`, whose files are committed as they are.
 
 - The value `analytic` marks numbers written by hand from a closed form, in a scene small enough to check on paper.
   The script `generate.py` computes them from closed forms that are written independently of the NumPy evaluator.
-- The value `pydylan` marks positions converted between frames by PyDyLAN, state by state, which tie the frame algebra of TyCHO to an independent implementation.
+- The value `pydylan` marks positions converted between frames by PyDyLAN, the Python module of the DyLAN astrodynamics library, state by state, which tie the frame algebra of TyCHO to an independent implementation.
   The frame algebra is the chain of transforms through which TyCHO takes a position from one frame to another (section 2.3).
   State by state means that the conversion functions of PyDyLAN convert each stored sample separately.
-  The `broucke-mini` cases come from a PyDyLAN computation that is kept private, and they are committed as outputs so that every machine can run them.
+  The `pydylan` cases are those of `broucke-mini`, whose numbers come from a PyDyLAN computation that is kept private, and they are committed as outputs so that every machine can run them.
 - The value `reference` marks numbers produced by one evaluator and checked by the other, for behavior specific to TyCHO (the blend between samples, the trail, and the wrap of a periodic trajectory).
   The script `generate.py` produces them with the NumPy evaluator, and the TypeScript evaluator must reproduce them.
   Rules `segment`, `trail-wrap`, and `revolutions` define these behaviors, which do not come from a dynamical model.

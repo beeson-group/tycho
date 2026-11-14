@@ -148,7 +148,7 @@ function checkTrail(id: string, trail: Trail): void {
     fail('panel', `panel ${id}: a trail taper is not in [0, 1]`);
 }
 
-/** Checks a marker or a head (section 2.11), whose color the layer may give instead. */
+/** Checks a marker or a head, whose color the layer may give instead. */
 function checkMarker(id: string, m: Marker & { glow?: unknown }, rule: string): void {
   if (m.shape !== undefined && !SHAPES.includes(m.shape))
     fail(rule, `panel ${id}: a marker's shape is ${JSON.stringify(m.shape)}, not one of ${SHAPES.join(', ')}`);

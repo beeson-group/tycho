@@ -1,5 +1,5 @@
 /**
- * Colors for drawing (section 2.7): the theme, a layer's color as a constant or a colormap over
+ * Colors for drawing: the theme, a layer's color as a constant or a colormap over
  * a parameter or a channel of its set, and the body colors. Colors are sRGB in [0, 1] and are
  * written to the canvas as they are, without color management.
  */
@@ -13,11 +13,11 @@ export interface Theme {
   background: string;
   foreground: string;
   grid: string;
-  /** A CSS font family for every text of the page and of a video (section 2.11). */
+  /** A CSS font family for every text of the page and of a video. */
   font?: string;
-  /** The color of the gutters between panels in a video, by default a blend of the foreground and the background. */
+  /** The color of the panel area and of the gutters between panels, on the page and in a video, by default a blend of the foreground and the background. */
   gutter?: string;
-  /** The foreground and the background of the scene's own theme, which the colors equal to them follow (section 2.11). */
+  /** The foreground and the background of the scene's own theme, which the colors equal to them follow. */
   sceneForeground?: string;
   sceneBackground?: string;
 }
@@ -201,7 +201,7 @@ export function colormapName(colormap: ColormapName | ColormapByChoice, value?: 
   return (named ?? Object.values(colormap.map).find((c) => c !== undefined) ?? 'viridis') as ColormapId;
 }
 
-/** A color given by thresholds of a channel (section 2.11), which is not a colormap and does not have a colorbar. */
+/** A color given by thresholds of a channel (section 2.7), which is not a colormap and does not have a colorbar. */
 export type ThresholdColor = Extract<ColorSpec, { thresholds: unknown }>;
 
 export const isThreshold = (spec: ColorSpec | undefined): spec is ThresholdColor => typeof spec === 'object' && spec !== null && 'thresholds' in spec;

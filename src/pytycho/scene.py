@@ -526,7 +526,7 @@ def layer_clock(channel: str, *, range: Sequence[float] | None = None, keyframes
 
 
 def _marker(value: Any, what: str, *, extra: Sequence[str] = ()) -> dict[str, Any]:
-    """A marker ``{"shape", "size", "color", "edge", "edge_width", "opacity"}`` (section 2.11), all keys optional."""
+    """A marker ``{"shape", "size", "color", "edge", "edge_width", "opacity"}``, all keys optional."""
     if not isinstance(value, Mapping):
         raise SceneError(f"timeline: {what} is a dict of shape, size, color, edge, edge_width, and opacity, not {value!r}")
     if unknown := set(value) - {"shape", "size", "color", "edge", "edge_width", "opacity", *extra}:
@@ -561,7 +561,7 @@ def marker(
     edge_width: Any = None,
     opacity: Any = None,
 ) -> dict[str, Any]:
-    """A marker for a points layer, a head, or a legend entry. ``size`` and ``opacity`` may be keyframes (section 2.11)."""
+    """A marker for a points layer, a head, or a legend entry. ``size`` and ``opacity`` may be keyframes."""
     spec = (("shape", shape), ("size", size), ("color", color), ("edge", edge), ("edge_width", edge_width), ("opacity", opacity))
     return _marker({k: v for k, v in spec if v is not None}, "a marker")
 
@@ -787,7 +787,7 @@ def _color_spec(value: Any, what: str) -> Any:
     if isinstance(value, str):
         return _color(value, what)
     if isinstance(value, Mapping) and "thresholds" in value:
-        # a color by thresholds of a channel (section 2.11)
+        # a color by thresholds of a channel (section 2.7)
         if set(value) != {"channel", "thresholds", "colors"}:
             raise SceneError(f"timeline: {what} by thresholds is a dict of channel, thresholds, and colors, not {dict(value)!r}")
         cuts = value["thresholds"]
@@ -823,7 +823,7 @@ def _color_spec(value: Any, what: str) -> Any:
 
 
 def threshold_color(channel: str, thresholds: Sequence[float], colors: Sequence[str]) -> dict[str, Any]:
-    """A color by thresholds of a channel (section 2.11). A sample whose channel is ``x`` takes ``colors[j]``, where ``j`` counts the
+    """A color by thresholds of a channel (section 2.7). A sample whose channel is ``x`` takes ``colors[j]``, where ``j`` counts the
     thresholds below ``x``, e.g. ``threshold_color("S", [0.0], ["#000000", "#d62728"])`` for coast and thrust by the sign of a
     switching function."""
     return _color_spec({"channel": channel, "thresholds": list(thresholds), "colors": list(colors)}, "a color by thresholds")
@@ -1246,7 +1246,7 @@ def inset_box(
 
 
 def body(body: Any, *, trail: float | None = None, size: float | None = None, visible: Any = None, opacity: Any = None) -> dict[str, Any]:
-    """A body layer, with an optional trail fraction. A body with an image draws it ``size`` CSS pixels across (section 2.11)."""
+    """A body layer, with an optional trail fraction. A body with an image draws it ``size`` CSS pixels across."""
     layer: dict[str, Any] = {"kind": "body", "body": _id(body)}
     for key, value in (("trail", trail), ("size", size), ("visible", visible), ("opacity", opacity)):
         if value is not None:
@@ -1264,7 +1264,7 @@ def axes(
     titles: Sequence[Any] | None = None,
 ) -> dict[str, Any]:
     """An axes layer. ``span`` is ``"full"`` or ``"positive"``, by default full under a 2d camera, or ``"box"``, a plot box with
-    ticks outside and tick numbers on the axes of ``ticks`` (``"x"`` and ``"y"``, by default both), ``size`` CSS pixels high (section 2.11).
+    ticks outside and tick numbers on the axes of ``ticks`` (``"x"`` and ``"y"``, by default both), ``size`` CSS pixels high.
     ``titles``, two texts of parts, replace the titles of the frame's axes, e.g. ``(["Time [days]"], ["λ", ty.sub("r")])``.
     """
     layer: dict[str, Any] = {"kind": "axes"}
@@ -1527,7 +1527,7 @@ def _camera_keyframes(value: Any, aspect: str) -> list[dict[str, Any]]:
 
 
 def _entry(value: Any) -> dict[str, Any]:
-    """A legend entry, ``{"label"}`` with a ``line``, a ``marker``, or ``colors`` (section 2.11)."""
+    """A legend entry, ``{"label"}`` with a ``line``, a ``marker``, or ``colors``."""
     if not isinstance(value, Mapping) or "label" not in value:
         raise SceneError(f"timeline: a legend entry is a dict with a label, not {value!r}")
     if extra := set(value) - {"label", "line", "marker", "colors"}:
@@ -1573,7 +1573,7 @@ def entry(
     label: Any, *, line: Mapping[str, Any] | None = None, marker: Mapping[str, Any] | None = None, colors: Sequence[str] | None = None
 ) -> dict[str, Any]:
     """A legend entry: ``label`` with a ``line`` (``{"color", "width", "dash", "opacity"}``), a :func:`marker`, or ``colors``, a list of
-    colors drawn as short lines side by side (section 2.11)."""
+    colors drawn as short lines side by side."""
     spec: dict[str, Any] = {"label": label}
     for key, value in (("line", line), ("marker", marker), ("colors", None if colors is None else list(colors))):
         if value is not None:
@@ -1850,7 +1850,7 @@ class Scene:
         """Declares a body, a point at three numbers or attributes in ``frame``.
 
         ``image`` is the path or the bytes of a PNG, JPEG, or WebP file, e.g. a photograph of the Earth, stored in the data container
-        and drawn in place of the body's disc (section 2.11).
+        and drawn in place of the body's disc.
         """
         self._new(self._bodies, id, "body")
         if _id(frame) not in self._frames:
@@ -2158,7 +2158,7 @@ class Scene:
         return id
 
     def text(self, text: Any, at: Sequence[float], **style: Any) -> None:
-        """A text overlay over the whole panel area at the fractions ``at = (fx, fy)`` of its width and height (section 2.11).
+        """A text overlay over the whole panel area at the fractions ``at = (fx, fy)`` of its width and height.
 
         ``style`` takes the ``align``, ``baseline``, ``size``, ``color``, ``weight``, ``linespacing``, ``box``, and ``opacity`` of a
         label.
@@ -2184,8 +2184,8 @@ class Scene:
         handle_pad: float | None = None,
         column_spacing: float | None = None,
     ) -> None:
-        """A legend overlay of :func:`entry` items at the fractions ``at = (fx, fy)`` of the panel area, ``columns`` entries a row
-        (section 2.11). ``handle_length``, ``handle_pad``, and ``column_spacing`` are matplotlib's ``handlelength``,
+        """A legend overlay of :func:`entry` items at the fractions ``at = (fx, fy)`` of the panel area, ``columns`` entries a row.
+        ``handle_length``, ``handle_pad``, and ``column_spacing`` are matplotlib's ``handlelength``,
         ``handletextpad``, and ``columnspacing``, in units of the text size, by default 2, 0.8, and 2."""
         out: dict[str, Any] = {"kind": "legend", "at": _pair(at, "the place of a legend"), "entries": [_entry(e) for e in entries]}
         if columns is not None:

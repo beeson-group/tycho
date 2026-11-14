@@ -18,7 +18,7 @@ The first returns the page as a string, and the second writes the page to a file
 
 The page embeds both files as text in two `<script type="application/octet-stream">` elements.
 Each file is base64-encoded, i.e. written with letters, digits, `+`, `/`, and `=` only, hence a string of the scene cannot close a script tag.
-The container goes in as it is, since it already stores each array compressed ([section 1](../spec.md#1-the-data-container-datatyd)).
+The container goes in as it is, since it already stores each array compressed (rule `shuffle-delta-deflate` of the [spec](../spec.md)).
 An array is compressed in three steps as it is written into the container.
 
 1. The bit patterns of each column are delta-coded down the rows, i.e. each row is replaced by its difference from the row before it.
@@ -29,7 +29,7 @@ Along a smooth trajectory consecutive rows are close, and their differences thus
 The three steps roughly halve the size of smooth trajectories.
 The `<tycho-viewer>` element is the HTML element of the runtime that draws the scene.
 It finds the two script elements through its `scene` and `data` attributes, inflates the container's chunks with the browser's native `DecompressionStream`, and parses both files without any library.
-The runtime itself is inlined, at about 700 KB.
+The runtime itself is inlined, at about 850 KB.
 The page thus works offline, from disk, inside an iframe on a website or a reveal.js slide, or anywhere else a single HTML file can go.
 
 Every string in a scene is plain text.
@@ -42,6 +42,50 @@ A scene of this size has to be thinned ([thinning](thinning.md)) or store fewer 
 The page requires WebGL to draw.
 The state of the page, i.e. what the person at the page has changed, is stored per browser in local storage, under a hash of `scene.tys`.
 
+## Using the page
+
+The top bar of the page holds the title, the controls of the shared inputs, and a row of Add panel chips, i.e. small labeled buttons that each add a panel.
+The chips stand for the declared panels of the scene, each shown by its label or its id.
+Adding a declared panel that is already shown makes a copy of it with a new id.
+
+- A click on a chip adds the panel where there is most room, by splitting the largest panel.
+- A drag of a chip onto a panel splits this panel on the side that a drop marker shows during the drag, or replaces what the panel shows on a drop at its center.
+- The caret of a chip opens a menu that adds the panel, or that splits or replaces any panel by name, which is the way to do it from the keyboard.
+
+When the chips would not fit on one line, one Add panel button takes their place.
+A page holds at most eight panels.
+
+Each panel has a header along its top.
+The chip in the header names the frame of the panel, and its caret switches the frame when the panel has a per-panel choice of frame.
+The header also holds the controls of the other per-panel inputs, a house icon that resets the view of the panel, and a × that closes the panel when there is more than one.
+
+- A drag of a panel by its header onto another panel moves it to the side that the drop marker shows, or swaps the two on a drop at the center.
+- A drag of the gutter, i.e. the gap between two panels, resizes them.
+- A double click on a panel resets its view.
+
+A drag across a panel with a 3d camera turns the view about the camera's up axis, as a turntable does, and a drag up or down tilts the view toward this axis.
+Shift with a drag, or a drag with the right button, pans the view, and the wheel or a pinch zooms it.
+While the pointer is over such a panel, its keys are listed at its foot, except under `minimal` and `kiosk` and on a device whose pointer does not hover, such as a phone.
+
+A colorbar shows a colormap against its values at the top right of a panel.
+When a shared parameter input is over the same parameter, the colorbar acts as a second slider for this input, except on a kiosk page.
+A click or a drag on the colorbar jumps the input to the stop nearest the value under the pointer, and with the colorbar focused, the arrow keys move the input by one stop, PageUp and PageDown by ten, and Home and End to the ends.
+
+The keys below act while the viewer element has the keyboard focus, also on one of its tabs or buttons, unless the control takes the key itself, as a button takes Space.
+In a text field or a select, every key is left to the field.
+
+- Space or `k` plays and pauses.
+- The right and left arrows move by one frame index and pause, or by ten with Shift.
+- Home or `0` goes to frame index 0, and `1` to `9` go to as many tenths of the loop.
+- `f` resets the view of every panel: a panel whose camera has keyframes follows them again, and any other panel is fitted to what it draws.
+- The up and down arrows move the first slider over a shared input by one stop, or ten with Shift.
+- In a panel with a 3d camera, `x`, `y`, and `z` show the view from the positive side of that axis, and from the negative side with Shift.
+- In a panel with a 3d camera, `.` and `,` turn the view about the camera's up axis by 15 degrees, or by 90 with Shift.
+  These keys and the axis keys act on the panel under the pointer, or on every panel with a 3d camera when the pointer is over none.
+- Escape closes an open menu or the export options.
+
+The keys that play, step, and seek require a playback control, except on a kiosk page, which plays without one.
+
 ## Embedding and kiosk pages
 
 A page embeds in another page, on a website or on a reveal.js slide, through an iframe, i.e. an HTML element that shows one page inside another.
@@ -52,7 +96,7 @@ A page embeds in another page, on a website or on a reveal.js slide, through an 
 
 The call `write_html(path, kiosk=True)` writes a kiosk page, i.e. a page meant for a slide.
 A kiosk page hides the top bar, the panel headers, the caption's tiles, and the footer, and it plays at once.
-The keys still play, step, and reset the views ([keys](panels.md#keys)).
+The keys still play, step, and reset the views, e.g. Space plays and pauses, and the key `f` resets the view of every panel.
 A kiosk page starts from the scene's initial state every time and does not store anything.
 
 To put a scene on a slide without an iframe, paste the output of {func}`pytycho.build_embed` into the deck, and load the runtime from {func}`pytycho.html.runtime_js` once per deck.
@@ -61,7 +105,7 @@ To put the viewer element in a page you write yourself, use the npm package ([Ja
 
 ## The video export
 
-The Export video button in the footer records the current state as an MP4 video ([section 2.10](../spec.md#210-export)).
+The Export video button in the footer records the current state as an MP4 video.
 The button opens a row of options, i.e. the size, the frame rate, and the number of loops, from one to four.
 The row shows the number of frames and the length of the video that these options give.
 The Start button records the video, showing a progress bar and a Cancel button, and then downloads the MP4, named after the scene's title.

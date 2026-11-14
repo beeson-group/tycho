@@ -15,7 +15,7 @@ export interface Theme {
   grid: string;
   /** A CSS font family for every text of the page and of a video. */
   font?: string;
-  /** The color of the gutters between panels in a video, by default a blend of the foreground and the background. */
+  /** The color of the panel area and of the gutters between panels, on the page and in a video, by default a blend of the foreground and the background. */
   gutter?: string;
   /** The foreground and the background of the scene's own theme, which the colors equal to them follow. */
   sceneForeground?: string;

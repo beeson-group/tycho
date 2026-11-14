@@ -131,7 +131,7 @@ export type Layer =
              */
             edge?: Color;
             /**
-             * The width of the outline, or of the stroke of a ring, a cross, or a plus, is given in CSS pixels. It is a sixth of the size by default.
+             * The width of the outline, or of the stroke of a ring, a cross, or a plus, is given in CSS pixels. By default it is 1 for a filled shape with an edge, and a sixth of the size, at least 1, for a ring, a cross, or a plus.
              */
             edge_width?: number | Keyframed;
             /**
@@ -1841,7 +1841,7 @@ export interface Theme {
    */
   font?: string;
   /**
-   * The color of the gutters between panels in a video is a blend of the foreground and the background by default.
+   * The color of the panel area behind the panels and of the gutters between them, on the page and in a video, is a blend of the foreground and the background by default.
    */
   gutter?: Color;
 }
@@ -2053,7 +2053,7 @@ export interface Marker {
    */
   edge?: Color;
   /**
-   * The width of the outline, or of the stroke of a ring, a cross, or a plus, is given in CSS pixels, or keyframed. It is a sixth of the size by default.
+   * The width of the outline, or of the stroke of a ring, a cross, or a plus, is given in CSS pixels, or keyframed. By default it is 1 for a filled shape with an edge, and a sixth of the size, at least 1, for a ring, a cross, or a plus.
    */
   edge_width?: number | Keyframed;
   /**

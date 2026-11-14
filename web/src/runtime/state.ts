@@ -1,19 +1,19 @@
 /**
  * The state of a page (section 2.8 of spec/tycho-scene.md). A small store holds the snapshot (the
- * variables, the panels with their views and values, the clock channel, and the layout), plus the
+ * shared inputs, the shown panels with their declared panels and inputs, the clock channel, and the layout), plus the
  * frame index and the playing flag, which are not part of the snapshot and are never stored. The
  * snapshot is immutable and is replaced on every change, thus the code that reads it compares references.
  */
-import { checkState, fits, variableDef } from '../evaluate/resolve.js';
-import { checkKeys, isShare } from '../evaluate/timeline.js';
-import { ID_PATTERN, type Keys, type Layout, type PanelState, type Scene, type State, type VariableValue } from '../scene.js';
+import { checkState, fits, inputDef } from '../evaluate/resolve.js';
+import { checkKeyframes, isShare } from '../evaluate/timeline.js';
+import { ID_PATTERN, type Keyframes, type Layout, type ShownPanel, type Scene, type State, type InputValue } from '../scene.js';
 import { panelAreas, panelIds, removePanel, splitAt, type DropZone } from './layout.js';
 
 /** Which of the snapshot, the frame index, and the playing flag changed. */
 export type Change = 'state' | 'frame' | 'playing';
 export type Listener = (change: Change) => void;
 
-type Values = NonNullable<State['variables']>;
+type Values = NonNullable<State['inputs']>;
 
 /** A dictionary without a prototype, so that an id like "__proto__" is an own key. */
 export function dict<T>(): Record<string, T> {
@@ -34,19 +34,19 @@ export class Store {
   private snap: State;
   private index = 0;
   private play = false;
-  private readonly steps: number;
+  private readonly frameCount: number;
   private readonly listeners = new Set<Listener>();
 
-  constructor(state: State, steps: number) {
+  constructor(state: State, frameCount: number) {
     this.snap = state;
-    this.steps = steps;
+    this.frameCount = frameCount;
   }
 
   get state(): State {
     return this.snap;
   }
 
-  /** The frame index, kept in [0, steps), since the indices i and i + steps are the same frame (section 2.6). */
+  /** The frame index, kept in [0, frameCount), since the indices i and i + frameCount are the same frame (section 2.6). */
   get frame(): number {
     return this.index;
   }
@@ -76,7 +76,7 @@ export class Store {
 
   setFrame(i: number): void {
     if (!Number.isInteger(i)) return;
-    const next = mod(i, this.steps);
+    const next = mod(i, this.frameCount);
     if (next === this.index) return;
     this.index = next;
     this.emit('frame');
@@ -92,27 +92,27 @@ export class Store {
 // pure updates of a snapshot
 
 /**
- * Sets a variable in the panel when the variable is panel-scoped, and in the scene otherwise
- * (rule V1). A value that does not fit the variable leaves the state as it is.
+ * Sets an input in the shown panel when the input is per-panel, and in the state's shared inputs otherwise
+ * (rule `input-scope`). A value that does not fit the input leaves the state as it is.
  */
-export function withVariable(scene: Scene, state: State, id: string, value: VariableValue, panel?: string): State {
-  const v = variableDef(scene, id);
+export function withInput(scene: Scene, state: State, id: string, value: InputValue, panel?: string): State {
+  const v = inputDef(scene, id);
   if (v === undefined || !fits(v, value)) return state;
-  if (v.scope === 'panel') {
+  if (v.scope === 'per_panel') {
     if (panel === undefined || !Object.hasOwn(state.panels, panel)) return state;
     const p = state.panels[panel]!;
-    if (p.variables !== undefined && Object.hasOwn(p.variables, id) && p.variables[id] === value) return state;
-    return withPanel(state, panel, { ...p, variables: put(p.variables, id, value) });
+    if (p.inputs !== undefined && Object.hasOwn(p.inputs, id) && p.inputs[id] === value) return state;
+    return withPanel(state, panel, { ...p, inputs: put(p.inputs, id, value) });
   }
-  if (state.variables !== undefined && Object.hasOwn(state.variables, id) && state.variables[id] === value) return state;
-  return { ...state, variables: put(state.variables, id, value) };
+  if (state.inputs !== undefined && Object.hasOwn(state.inputs, id) && state.inputs[id] === value) return state;
+  return { ...state, inputs: put(state.inputs, id, value) };
 }
 
 export function withChannel(state: State, channel: string): State {
   return state.clock.channel === channel ? state : { ...state, clock: { channel } };
 }
 
-export function withPanel(state: State, id: string, panel: PanelState): State {
+export function withPanel(state: State, id: string, panel: ShownPanel): State {
   return { ...state, panels: put(state.panels, id, panel) };
 }
 
@@ -142,14 +142,26 @@ export function swapLeaves(node: Layout, a: string, b: string): Layout {
   return { ...node, a: swapLeaves(node.a, a, b), b: swapLeaves(node.b, a, b) };
 }
 
-/** What can be dropped on a panel: a view, a value of a panel-scoped choice, or another panel. */
-export type DropPayload = { kind: 'view'; view: string } | { kind: 'value'; variable: string; value: string } | { kind: 'panel'; id: string };
+/** What can be dropped on a shown panel: a declared panel, or another shown panel. */
+export type DropPayload = { kind: 'declared'; panel: string } | { kind: 'panel'; id: string };
 
 /**
- * The state after a drop on panel `target`. On an edge, a view or a value makes a new panel
- * there, which takes the target's view and panel values and then the dropped one, and a panel
- * moves there. On the center, a view or a value changes the target, and a panel swaps places
- * with it. A new panel is not made once the state has `maxPanels` panels.
+ * A new shown panel of declared panel `panel`. It copies the inputs of the shown panel `target` when
+ * `target` shows the same declared panel, and else those of the first shown panel in layout order that
+ * does, so that adding a declared panel that is already shown makes a copy of it. It starts from the
+ * defaults of its inputs when no shown panel shows the declared panel.
+ */
+function shownCopy(state: State, panel: string, target: string): ShownPanel {
+  const ids = [target, ...panelIds(state.layout)];
+  const from = ids.map((id) => state.panels[id]).find((p) => p !== undefined && p.panel === panel);
+  return { panel, inputs: Object.assign(dict<InputValue>(), from?.inputs) };
+}
+
+/**
+ * The state after a drop on the shown panel `target`. On an edge, a declared panel makes a new shown
+ * panel there, and a shown panel moves there. On the center, a declared panel replaces the declared
+ * panel that the target shows, which keeps its inputs, and a shown panel swaps places with it. A new
+ * shown panel is not made once the state has `maxPanels` shown panels.
  */
 export function withDrop(scene: Scene, state: State, target: string, zone: DropZone, payload: DropPayload, maxPanels = Infinity): State {
   if (!Object.hasOwn(state.panels, target)) return state;
@@ -160,19 +172,11 @@ export function withDrop(scene: Scene, state: State, target: string, zone: DropZ
     const without = removePanel(state.layout, payload.id);
     return without === null ? state : withLayout(state, splitAt(without, target, payload.id, zone));
   }
-  if (zone === 'centre') {
-    if (payload.kind === 'view') return Object.hasOwn(scene.views, payload.view) ? withPanel(state, target, { ...base, view: payload.view }) : state;
-    return withVariable(scene, state, payload.variable, payload.value, target);
-  }
+  if (!Object.hasOwn(scene.panels, payload.panel)) return state;
+  if (zone === 'centre') return base.panel === payload.panel ? state : withPanel(state, target, { ...base, panel: payload.panel });
   if (Object.keys(state.panels).length >= maxPanels) return state;
   const id = newPanelId(state);
-  const panel: PanelState = { view: base.view, variables: Object.assign(dict<VariableValue>(), base.variables) };
-  if (payload.kind === 'view') {
-    if (!Object.hasOwn(scene.views, payload.view)) return state;
-    panel.view = payload.view;
-  }
-  const next = withLayout(withPanel(state, id, panel), splitAt(state.layout, target, id, zone));
-  return payload.kind === 'value' ? withVariable(scene, next, payload.variable, payload.value, id) : next;
+  return withLayout(withPanel(state, id, shownCopy(state, payload.panel, target)), splitAt(state.layout, target, id, zone));
 }
 
 /**
@@ -180,7 +184,13 @@ export function withDrop(scene: Scene, state: State, target: string, zone: DropZ
  * area is split along its longer side, below it when `tall` returns true (taller than wide) and
  * to its right otherwise. A new panel is not made once the state has `maxPanels` panels.
  */
-export function withAdd(scene: Scene, state: State, payload: Exclude<DropPayload, { kind: 'panel' }>, maxPanels: number, tall: (id: string) => boolean): State {
+export function withAdd(
+  scene: Scene,
+  state: State,
+  payload: Extract<DropPayload, { kind: 'declared' }>,
+  maxPanels: number,
+  tall: (id: string) => boolean,
+): State {
   if (Object.keys(state.panels).length >= maxPanels) return state;
   const largest = panelAreas(state.layout).reduce((a, b) => (b.area > a.area ? b : a));
   return withDrop(scene, state, largest.id, tall(largest.id) ? 'bottom' : 'right', payload, maxPanels);
@@ -225,7 +235,7 @@ export function withPlacement(
   scene: Scene,
   state: State,
   placement: Placement,
-  payload: Exclude<DropPayload, { kind: 'panel' }>,
+  payload: Extract<DropPayload, { kind: 'declared' }>,
   maxPanels: number,
   tall: (id: string) => boolean,
 ): State {
@@ -255,25 +265,25 @@ export function storageKey(sceneText: string): string {
 const isObject = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
 
 /**
- * The values of `stored` that a scene can use in `scope`, i.e. those whose variable is declared
- * and has the scope `scope`, and that fit the variable. Every other value is dropped.
+ * The values of `stored` that a scene can use in `scope`, i.e. those whose input is declared
+ * and has the scope `scope`, and that fit the input. Every other value is dropped.
  */
-function keepValues(scene: Scene, stored: unknown, scope: 'scene' | 'panel'): Values {
-  const out = dict<VariableValue>();
+function keepValues(scene: Scene, stored: unknown, scope: 'shared' | 'per_panel'): Values {
+  const out = dict<InputValue>();
   if (!isObject(stored)) return out;
   for (const [id, value] of Object.entries(stored)) {
-    const v = variableDef(scene, id);
-    if (v === undefined || (v.scope === 'panel') !== (scope === 'panel') || !fits(v, value)) continue;
-    out[id] = value as VariableValue;
+    const v = inputDef(scene, id);
+    if (v === undefined || (v.scope ?? 'shared') !== scope || !fits(v, value)) continue;
+    out[id] = value as InputValue;
   }
   return out;
 }
 
-/** A copy of the keys of a split (section 2.11) when the scene reader would take them, and undefined otherwise. */
-function splitKeys(keys: unknown): Keys | undefined {
-  if (keys === undefined) return undefined;
+/** A copy of the keyframes of a split (section 2.11) when the scene reader would take them, and undefined otherwise. */
+function splitKeyframes(keyframes: unknown): Keyframes | undefined {
+  if (keyframes === undefined) return undefined;
   try {
-    return checkKeys(keys, 'a split', isShare).map((k) => [...k]) as Keys;
+    return checkKeyframes(keyframes, 'a split', isShare).map((k) => [...k]) as Keyframes;
   } catch {
     return undefined;
   }
@@ -281,7 +291,7 @@ function splitKeys(keys: unknown): Keys | undefined {
 
 /**
  * The layout without the leaves for which `keep` returns false or that repeat an earlier leaf, with
- * splits collapsed as closing a panel collapses them. A split keeps its keys when they are valid, and
+ * splits collapsed as closing a panel collapses them. A split keeps its keyframes when they are valid, and
  * loses them otherwise, to stay at its ratio. It is undefined when the tree is malformed, and null when
  * every leaf is dropped.
  */
@@ -302,20 +312,20 @@ function cleanLayout(node: unknown, keep: (id: string) => boolean, seen: Set<str
   const r = node.ratio;
   const ratio = typeof r === 'number' && r > 0 && r < 1 ? r : 0.5;
   const split: Layout = { kind: 'split', dir: node.dir, ratio, a, b };
-  const keys = splitKeys(node.keys);
-  if (keys !== undefined) split.keys = keys;
+  const keyframes = splitKeyframes(node.keyframes);
+  if (keyframes !== undefined) split.keyframes = keyframes;
   return split;
 }
 
 /**
- * Repairs a stored state against a scene, as described in section 2.8. A panel whose view the
- * scene lacks is dropped together with its layout leaf, and a value that does not fit its
- * variable is dropped, as is a panel value of a scene-scoped variable. A split keeps its keys, the
- * tween of its ratio (section 2.11), when they are valid, so that a restored layout still moves with
+ * Repairs a stored state against a scene, as described in section 2.8. A shown panel whose declared
+ * panel the scene lacks is dropped together with its layout leaf, and a value that does not fit its
+ * input is dropped, as is a value of a shared input in a shown panel. A split keeps its keyframes, the
+ * keyframes of its ratio (section 2.11), when they are valid, so that a restored layout still moves with
  * the timeline, and loses them otherwise. The repair falls back to `initial` once every panel is
  * dropped or when the clock channel is unknown. Beyond section 2.8,
- * it also drops values that are never read (undeclared ids, and a scene value of a panel-scoped variable),
- * a panel that the layout does not show or whose id is not an identifier, and a repeated leaf. It falls
+ * it also drops values that are never read (undeclared ids, and a shared value of a per-panel input),
+ * a shown panel that the layout does not show or whose id is not an identifier, and a repeated leaf. It falls
  * back to `initial` as well on input that is not a state at all. It is pure and does not modify `stored`.
  */
 export function repair(scene: Scene, stored: unknown): State {
@@ -324,10 +334,10 @@ export function repair(scene: Scene, stored: unknown): State {
   const channel = stored.clock.channel;
   if (typeof channel !== 'string' || !scene.clock.channels.includes(channel)) return initial();
 
-  const panels = dict<PanelState>();
+  const panels = dict<ShownPanel>();
   for (const [pid, p] of Object.entries(stored.panels)) {
-    if (!ID_PATTERN.test(pid) || !isObject(p) || typeof p.view !== 'string' || !Object.hasOwn(scene.views, p.view)) continue;
-    panels[pid] = { view: p.view, variables: keepValues(scene, p.variables, 'panel') };
+    if (!ID_PATTERN.test(pid) || !isObject(p) || typeof p.panel !== 'string' || !Object.hasOwn(scene.panels, p.panel)) continue;
+    panels[pid] = { panel: p.panel, inputs: keepValues(scene, p.inputs, 'per_panel') };
   }
   const layout = cleanLayout(stored.layout, (id) => Object.hasOwn(panels, id), new Set());
   if (layout === undefined || layout === null) return initial();
@@ -337,7 +347,7 @@ export function repair(scene: Scene, stored: unknown): State {
   for (const pid of Object.keys(panels)) if (!shown.has(pid)) delete panels[pid];
   if (Object.keys(panels).length === 0) return initial();
 
-  const state: State = { variables: keepValues(scene, stored.variables, 'scene'), clock: { channel }, panels, layout };
+  const state: State = { inputs: keepValues(scene, stored.inputs, 'shared'), clock: { channel }, panels, layout };
   try {
     checkState(scene, state);
   } catch {

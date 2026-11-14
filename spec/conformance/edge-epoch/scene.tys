@@ -1,0 +1,199 @@
+{
+ "format": "tycho-scene",
+ "version": "0.5",
+ "generator": "pytycho 0.3.0",
+ "title": "edge cases, epoch mode",
+ "frames": {
+  "p": {},
+  "th": {
+   "parent": "p",
+   "rotation": {
+    "axis": "z",
+    "angle": {
+     "channel": "th"
+    }
+   }
+  }
+ },
+ "bodies": {
+  "b": {
+   "frame": "p",
+   "position": [
+    1.0,
+    0.0,
+    0.0
+   ]
+  }
+ },
+ "trajectory_sets": {
+  "dec": {
+   "frame": "p",
+   "trajectories": 1,
+   "offsets": "dec/offsets",
+   "positions": "dec/positions",
+   "channels": {
+    "t": {
+     "array": "dec/channels/t"
+    }
+   },
+   "periodic": false
+  },
+  "drv": {
+   "frame": "p",
+   "trajectories": 1,
+   "offsets": "drv/offsets",
+   "positions": "drv/positions",
+   "channels": {
+    "t": {
+     "array": "drv/channels/t"
+    },
+    "th": {
+     "array": "drv/channels/th"
+    }
+   },
+   "periodic": false
+  },
+  "whole": {
+   "frame": "p",
+   "trajectories": 1,
+   "offsets": "whole/offsets",
+   "positions": "whole/positions",
+   "channels": {
+    "t": {
+     "array": "whole/channels/t"
+    }
+   },
+   "periodic": false
+  },
+  "idx": {
+   "frame": "p",
+   "trajectories": 1,
+   "offsets": "idx/offsets",
+   "positions": "idx/positions",
+   "channels": {
+    "t": {
+     "array": "idx/channels/t"
+    }
+   },
+   "periodic": false
+  }
+ },
+ "clock": {
+  "mode": "epoch",
+  "channels": [
+   "t",
+   "@index"
+  ],
+  "frame_count": 8,
+  "range": [
+   2.0,
+   10.0
+  ]
+ },
+ "panels": {
+  "v": {
+   "frame": "p",
+   "reference": {
+    "sets": {
+     "set": "drv"
+    },
+    "member": {
+     "index": 0
+    }
+   },
+   "layers": [
+    {
+     "kind": "trajectories",
+     "sets": {
+      "set": "dec"
+     },
+     "members": "all",
+     "reveal": "grow",
+     "head": true,
+     "before": "hidden",
+     "after": "clamp"
+    },
+    {
+     "kind": "trajectories",
+     "sets": {
+      "set": "dec"
+     },
+     "members": "all",
+     "reveal": "grow",
+     "head": true,
+     "before": "clamp",
+     "after": "hidden"
+    },
+    {
+     "kind": "trajectories",
+     "sets": {
+      "set": "whole"
+     },
+     "members": "all",
+     "reveal": "none",
+     "after": "hidden"
+    },
+    {
+     "kind": "trajectories",
+     "sets": {
+      "set": "idx"
+     },
+     "members": "all",
+     "reveal": "grow",
+     "head": true
+    }
+   ]
+  },
+  "body": {
+   "frame": "th",
+   "reference": {
+    "sets": {
+     "set": "drv"
+    },
+    "member": {
+     "index": 0
+    }
+   },
+   "layers": [
+    {
+     "kind": "body",
+     "body": "b"
+    },
+    {
+     "kind": "body",
+     "body": "b",
+     "trail": {
+      "fraction": 0.5
+     }
+    }
+   ]
+  }
+ },
+ "initial": {
+  "inputs": {},
+  "clock": {
+   "channel": "t"
+  },
+  "panels": {
+   "v": {
+    "panel": "v"
+   },
+   "body": {
+    "panel": "body"
+   }
+  },
+  "layout": {
+   "kind": "split",
+   "dir": "row",
+   "ratio": 0.5,
+   "a": {
+    "kind": "panel",
+    "id": "v"
+   },
+   "b": {
+    "kind": "panel",
+    "id": "body"
+   }
+  }
+ }
+}

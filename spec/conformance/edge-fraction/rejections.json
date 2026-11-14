@@ -1,21 +1,21 @@
 [
  {
-  "name": "T1: a track of one sample",
-  "rule": "T1",
+  "name": "two-samples: a trajectory of one sample",
+  "rule": "two-samples",
   "scene": {
-   "track_sets": {
+   "trajectory_sets": {
     "open": {
-     "tracks": 2,
+     "trajectories": 2,
      "offsets": "bad/one"
     }
    }
   }
  },
  {
-  "name": "2.1: offsets[0] is not 0",
-  "rule": "2.1",
+  "name": "trajectory-set: offsets[0] is not 0",
+  "rule": "trajectory-set",
   "scene": {
-   "track_sets": {
+   "trajectory_sets": {
     "off": {
      "offsets": "bad/offsets"
     }
@@ -23,14 +23,14 @@
   }
  },
  {
-  "name": "S3: a set channel named @index",
-  "rule": "S3",
+  "name": "identifier: a set channel named @index",
+  "rule": "identifier",
   "scene": {
-   "track_sets": {
+   "trajectory_sets": {
     "off": {
      "channels": {
       "@index": {
-       "view": "bad/time"
+       "array": "bad/time"
       }
      }
     }
@@ -38,14 +38,29 @@
   }
  },
  {
-  "name": "T3: a clock channel that is not monotone",
-  "rule": "T3",
+  "name": "identifier: a set parameter named @index",
+  "rule": "identifier",
   "scene": {
-   "track_sets": {
+   "trajectory_sets": {
+    "off": {
+     "parameters": {
+      "@index": {
+       "array": "bad/time"
+      }
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "monotone-clock-channel: a clock channel that is not monotone",
+  "rule": "monotone-clock-channel",
+  "scene": {
+   "trajectory_sets": {
     "open": {
      "channels": {
       "t": {
-       "view": "bad/t"
+       "array": "bad/t"
       }
      }
     }
@@ -62,13 +77,13 @@
    }
   },
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "t"
    },
    "panels": {
     "open": {
-     "view": "open"
+     "panel": "open"
     }
    },
    "layout": {
@@ -78,8 +93,8 @@
   }
  },
  {
-  "name": "F2: a constant zero scale",
-  "rule": "F2",
+  "name": "origin: a constant zero scale",
+  "rule": "origin",
   "scene": {
    "frames": {
     "c": {
@@ -89,8 +104,8 @@
   }
  },
  {
-  "name": "F2: an origin of two scalars",
-  "rule": "F2",
+  "name": "origin: an origin of two scalars",
+  "rule": "origin",
   "scene": {
    "frames": {
     "c": {
@@ -103,8 +118,8 @@
   }
  },
  {
-  "name": "2.3: an edge field on the root",
-  "rule": "2.3",
+  "name": "frame: an edge field on the root",
+  "rule": "frame",
   "scene": {
    "frames": {
     "p": {
@@ -114,8 +129,8 @@
   }
  },
  {
-  "name": "2.2: @index in a frame edge",
-  "rule": "2.2",
+  "name": "context-number: @index in a frame edge",
+  "rule": "context-number",
   "scene": {
    "frames": {
     "c": {
@@ -130,8 +145,8 @@
   }
  },
  {
-  "name": "F6: an origin at a body in the frame it defines",
-  "rule": "F6",
+  "name": "body-origin-cycle: an origin at a body in the frame it defines",
+  "rule": "body-origin-cycle",
   "scene": {
    "bodies": {
     "loop": {
@@ -153,14 +168,14 @@
   }
  },
  {
-  "name": "V2: a {set} query naming no set",
-  "rule": "V2",
+  "name": "set-query: a {set} query naming no set",
+  "rule": "set-query",
   "scene": {
-   "views": {
+   "panels": {
     "open": {
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "sets": {
         "set": "nope"
        },
@@ -172,10 +187,10 @@
   }
  },
  {
-  "name": "V2: a driver query matching two sets",
-  "rule": "V2",
+  "name": "set-query: a reference trajectory query matching two sets",
+  "rule": "set-query",
   "scene": {
-   "track_sets": {
+   "trajectory_sets": {
     "open": {
      "tags": {
       "g": "x"
@@ -187,9 +202,9 @@
      }
     }
    },
-   "views": {
+   "panels": {
     "open": {
-     "driver": {
+     "reference": {
       "sets": {
        "set": null,
        "tags": {
@@ -202,12 +217,12 @@
   }
  },
  {
-  "name": "V3: a literal index past the last track",
-  "rule": "V3",
+  "name": "members: a literal index past the last trajectory",
+  "rule": "members",
   "scene": {
-   "views": {
+   "panels": {
     "open": {
-     "driver": {
+     "reference": {
       "sets": {
        "set": "open"
       },
@@ -220,12 +235,12 @@
   }
  },
  {
-  "name": "V3: a driver member of all",
-  "rule": "V3",
+  "name": "members: a reference trajectory member of all",
+  "rule": "members",
   "scene": {
-   "views": {
+   "panels": {
     "open": {
-     "driver": {
+     "reference": {
       "sets": {
        "set": "open"
       },
@@ -236,14 +251,14 @@
   }
  },
  {
-  "name": "C5: a driver set without the clock channel",
-  "rule": "C5",
+  "name": "clock-channel-carried: a reference trajectory set without the clock channel",
+  "rule": "clock-channel-carried",
   "scene": {
-   "track_sets": {
+   "trajectory_sets": {
     "nokey": {
      "channels": {
       "t": {
-       "view": "bad/time"
+       "array": "bad/time"
       }
      }
     }
@@ -260,13 +275,13 @@
    }
   },
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "t"
    },
    "panels": {
     "open": {
-     "view": "open"
+     "panel": "open"
     }
    },
    "layout": {
@@ -276,30 +291,30 @@
   }
  },
  {
-  "name": "C2: value mode without a range",
-  "rule": "C2",
+  "name": "clock-mode: epoch mode without a range",
+  "rule": "clock-mode",
   "scene": {
    "clock": {
-    "mode": "value"
+    "mode": "epoch"
    }
   }
  },
  {
-  "name": "2.6: a frame index that is not an integer",
-  "rule": "2.6",
+  "name": "clock: a frame index that is not an integer",
+  "rule": "clock",
   "frame_index": 0.5
  },
  {
-  "name": "2.8: a panel showing an unknown view",
-  "rule": "2.8",
+  "name": "state: a panel showing an unknown panel",
+  "rule": "state",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "@index"
    },
    "panels": {
     "open": {
-     "view": "nope"
+     "panel": "nope"
     }
    },
    "layout": {
@@ -309,16 +324,16 @@
   }
  },
  {
-  "name": "2.8: a layout showing a panel twice",
-  "rule": "2.8",
+  "name": "state: a layout showing a panel twice",
+  "rule": "state",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "@index"
    },
    "panels": {
     "open": {
-     "view": "open"
+     "panel": "open"
     }
    },
    "layout": {
@@ -337,31 +352,31 @@
   }
  },
  {
-  "name": "2.5: a selector holding a boolean",
-  "rule": "2.5",
+  "name": "input: a parameter input holding a boolean",
+  "rule": "input",
   "scene": {
-   "variables": {
+   "inputs": {
     "k": {
-     "kind": "selector",
-     "by": "index",
+     "kind": "parameter",
+     "parameter": "@index",
      "default": 0
     }
    },
-   "views": {
+   "panels": {
     "open": {
-     "driver": {
+     "reference": {
       "sets": {
        "set": "open"
       },
       "member": {
-       "var": "k"
+       "input": "k"
       }
      }
     }
    }
   },
   "state": {
-   "variables": {
+   "inputs": {
     "k": true
    },
    "clock": {
@@ -369,7 +384,7 @@
    },
    "panels": {
     "open": {
-     "view": "open"
+     "panel": "open"
     }
    },
    "layout": {
@@ -379,10 +394,10 @@
   }
  },
  {
-  "name": "L5: visible naming a choice",
-  "rule": "L5",
+  "name": "visible: visible naming a choice",
+  "rule": "visible",
   "scene": {
-   "variables": {
+   "inputs": {
     "c": {
      "kind": "choice",
      "values": [
@@ -391,13 +406,13 @@
      "default": "x"
     }
    },
-   "views": {
+   "panels": {
     "open": {
      "layers": [
       {
        "kind": "grid",
        "visible": {
-        "var": "c"
+        "input": "c"
        }
       }
      ]
@@ -406,10 +421,10 @@
   }
  },
  {
-  "name": "S1: a layer kind that is not implemented",
-  "rule": "S1",
+  "name": "version: a layer kind that is not implemented",
+  "rule": "version",
   "scene": {
-   "views": {
+   "panels": {
     "open": {
      "layers": [
       {
@@ -421,14 +436,14 @@
   }
  },
  {
-  "name": "2.7: a trail fraction above 1",
-  "rule": "2.7",
+  "name": "panel: a trail fraction above 1",
+  "rule": "panel",
   "scene": {
-   "views": {
+   "panels": {
     "open": {
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "sets": {
         "set": "open"
        },

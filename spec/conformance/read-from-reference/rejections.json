@@ -1,0 +1,148 @@
+[
+ {
+  "name": "read-from: a context that is neither own nor reference trajectory",
+  "rule": "read-from",
+  "scene": {
+   "panels": {
+    "v": {
+     "layers": [
+      {
+       "kind": "trajectories",
+       "sets": {
+        "set": "grid"
+       },
+       "members": "all",
+       "reveal": "none",
+       "read_from": "sample",
+       "color": "#3a4150"
+      },
+      {
+       "kind": "trajectories",
+       "sets": {
+        "set": "ring"
+       },
+       "members": "all",
+       "reveal": "grow",
+       "head": true,
+       "read_from": "reference"
+      },
+      {
+       "kind": "trajectories",
+       "sets": {
+        "set": "orbit"
+       },
+       "members": "all",
+       "reveal": "none",
+       "head": true
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "panel: a reveal that is neither none, grow, nor trail, on a layer whose context is neither own nor reference trajectory",
+  "rule": "panel",
+  "scene": {
+   "panels": {
+    "v": {
+     "layers": [
+      {
+       "kind": "trajectories",
+       "sets": {
+        "set": "grid"
+       },
+       "members": "all",
+       "reveal": "sweep",
+       "read_from": "sample",
+       "color": "#3a4150"
+      },
+      {
+       "kind": "trajectories",
+       "sets": {
+        "set": "ring"
+       },
+       "members": "all",
+       "reveal": "grow",
+       "head": true,
+       "read_from": "reference"
+      },
+      {
+       "kind": "trajectories",
+       "sets": {
+        "set": "orbit"
+       },
+       "members": "all",
+       "reveal": "none",
+       "head": true
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "clock-channel-carried: a head on a layer in the reference trajectory's context whose set lacks the clock channel f",
+  "rule": "clock-channel-carried",
+  "scene": {
+   "panels": {
+    "v": {
+     "layers": [
+      {
+       "kind": "trajectories",
+       "sets": {
+        "set": "grid"
+       },
+       "members": "all",
+       "reveal": "none",
+       "read_from": "reference",
+       "color": "#3a4150",
+       "head": true
+      },
+      {
+       "kind": "trajectories",
+       "sets": {
+        "set": "ring"
+       },
+       "members": "all",
+       "reveal": "grow",
+       "head": true,
+       "read_from": "reference"
+      },
+      {
+       "kind": "trajectories",
+       "sets": {
+        "set": "orbit"
+       },
+       "members": "all",
+       "reveal": "none",
+       "head": true
+      },
+      {
+       "kind": "axes"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "transform-channels: the reference trajectory's set lacks the channel rho, which only the layer in the reference trajectory's context reads in the inertial frame",
+  "rule": "transform-channels",
+  "scene": {
+   "trajectory_sets": {
+    "orbit": {
+     "channels": {
+      "rho": null
+     }
+    }
+   }
+  }
+ }
+]

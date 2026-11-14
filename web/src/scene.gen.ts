@@ -38,15 +38,14 @@ export type Point = [ConstantScalar, ConstantScalar, ConstantScalar];
 export type ConstantScalar = number | Attr;
 /**
  * This interface was referenced by `Scene`'s JSON-Schema
- * via the `definition` "variable".
+ * via the `definition` "input".
  */
-export type Variable =
+export type Input =
   | {
-      kind: 'selector';
-      by?: 'nearest' | 'index';
-      parameter?: Name;
+      kind: 'parameter';
+      parameter: Name;
       default: number;
-      scope?: 'scene' | 'panel';
+      scope?: 'shared' | 'per_panel';
     }
   | {
       kind: 'choice';
@@ -56,20 +55,20 @@ export type Variable =
       values: [string, ...string[]];
       labels?: string[];
       default: string;
-      scope?: 'scene' | 'panel';
+      scope?: 'shared' | 'per_panel';
     }
   | {
       kind: 'toggle';
       default: boolean;
-      scope?: 'scene' | 'panel';
+      scope?: 'shared' | 'per_panel';
     };
 /**
  * @minItems 1
  *
  * This interface was referenced by `Scene`'s JSON-Schema
- * via the `definition` "keys".
+ * via the `definition` "keyframes".
  */
-export type Keys = [
+export type Keyframes = [
   [number | string, number | string] | [number | string, number | string, number | string],
   ...([number | string, number | string] | [number | string, number | string, number | string])[]
 ];
@@ -79,13 +78,13 @@ export type Keys = [
  */
 export type Camera =
   | {
-      kind: 'plane';
+      kind: '2d';
       plane?: 'xy' | 'xz' | 'yz';
       aspect?: 'equal' | 'free';
       /**
        * @minItems 1
        */
-      keys?: [
+      keyframes?: [
         {
           at: number;
           width: number;
@@ -147,7 +146,7 @@ export type Camera =
       ];
     }
   | {
-      kind: 'orbit';
+      kind: '3d';
       projection?: 'orthographic' | 'perspective';
       up?: 'x' | 'y' | 'z';
       /**
@@ -155,7 +154,7 @@ export type Camera =
        * @maxItems 3
        */
       stretch?: [number, number, number];
-      turn?: number;
+      auto_rotate?: number;
     };
 /**
  * This interface was referenced by `Scene`'s JSON-Schema
@@ -179,14 +178,14 @@ export type SetQuery =
  * This interface was referenced by `Scene`'s JSON-Schema
  * via the `definition` "stringValue".
  */
-export type StringValue = string | VarRef;
+export type StringValue = string | InputRef;
 /**
  * This interface was referenced by `Scene`'s JSON-Schema
  * via the `definition` "layer".
  */
 export type Layer =
   | {
-      kind: 'track';
+      kind: 'trajectories';
       sets: SetQuery;
       members: MemberRef;
       reveal?: 'none' | 'grow' | 'trail';
@@ -198,7 +197,7 @@ export type Layer =
             size?: Size;
             shape?: 'disc' | 'ring' | 'square' | 'diamond' | 'triangle' | 'star' | 'cross' | 'plus';
             edge?: Color;
-            edge_width?: number | Tween;
+            edge_width?: number | Keyframed;
             opacity?: Opacity;
             glow?: {
               channel: Name;
@@ -209,13 +208,13 @@ export type Layer =
           };
       before?: 'clamp' | 'hidden';
       after?: 'clamp' | 'hidden';
-      context?: 'own' | 'driver';
+      read_from?: 'own' | 'reference';
       fit?: boolean;
       color?: ColorSpec;
       opacity?: Opacity;
       width?: number;
       highlight?: {
-        var: Id;
+        input: Id;
         width?: number;
         opacity?: number;
         kernel?: {
@@ -223,10 +222,10 @@ export type Layer =
           opacity: number;
         };
       };
-      visible?: VarRef;
+      visible?: InputRef;
       clock?: LayerClock;
       line?: boolean;
-      flat?: boolean;
+      group_opacity?: boolean;
       /**
        * @minItems 2
        * @maxItems 2
@@ -256,12 +255,12 @@ export type Layer =
       head?: {
         size?: number;
       };
-      visible?: VarRef;
+      visible?: InputRef;
       clock?: LayerClock;
     }
   | {
-      kind: 'outline';
-      view: Id;
+      kind: 'inset_box';
+      panel: Id;
       color?: Color;
       opacity?: Opacity;
       width?: number;
@@ -271,20 +270,20 @@ export type Layer =
        */
       dash?: [number, number];
       min_size?: number;
-      visible?: VarRef;
+      visible?: InputRef;
     }
   | {
       kind: 'body';
       body: Id;
       trail?: Trail;
       size?: number;
-      visible?: VarRef;
+      visible?: InputRef;
       opacity?: Opacity;
     }
   | {
       kind: 'axes';
       span?: 'positive' | 'full' | 'box';
-      visible?: VarRef;
+      visible?: InputRef;
       ticks?: ('x' | 'y')[];
       size?: number;
       opacity?: Opacity;
@@ -297,7 +296,7 @@ export type Layer =
   | {
       kind: 'grid';
       labels?: boolean;
-      visible?: VarRef;
+      visible?: InputRef;
       opacity?: Opacity;
     }
   | {
@@ -324,7 +323,7 @@ export type Layer =
             width?: number;
           };
       clock?: LayerClock;
-      visible?: VarRef;
+      visible?: InputRef;
     }
   | {
       kind: 'points';
@@ -337,7 +336,7 @@ export type Layer =
       clock?: LayerClock;
       fit?: boolean;
       opacity?: Opacity;
-      visible?: VarRef;
+      visible?: InputRef;
     };
 /**
  * This interface was referenced by `Scene`'s JSON-Schema
@@ -349,19 +348,19 @@ export type MemberRef =
       index: number;
     }
   | {
-      count: number;
+      evenly_spaced: number;
     }
-  | VarRef;
+  | InputRef;
 /**
  * This interface was referenced by `Scene`'s JSON-Schema
  * via the `definition` "size".
  */
-export type Size = number | Tween;
+export type Size = number | Keyframed;
 /**
  * This interface was referenced by `Scene`'s JSON-Schema
  * via the `definition` "opacity".
  */
-export type Opacity = number | Tween;
+export type Opacity = number | Keyframed;
 /**
  * This interface was referenced by `Scene`'s JSON-Schema
  * via the `definition` "colorSpec".
@@ -380,7 +379,7 @@ export type ColorSpec =
        * @minItems 2
        * @maxItems 2
        */
-      clip?: [number, number];
+      truncate?: [number, number];
     }
   | {
       channel: Name;
@@ -394,14 +393,14 @@ export type ColorSpec =
        * @minItems 2
        * @maxItems 2
        */
-      clip?: [number, number];
+      truncate?: [number, number];
     }
   | {
       channel: Name;
       /**
        * @minItems 1
        */
-      steps: [number, ...number[]];
+      thresholds: [number, ...number[]];
       /**
        * @minItems 2
        */
@@ -424,7 +423,7 @@ export type Text = string | TextPart[];
 export type TextPart =
   | string
   | {
-      var: Id;
+      input: Id;
       digits?: number;
       decimals?: number;
       grouping?: boolean;
@@ -433,7 +432,7 @@ export type TextPart =
       width?: number;
     }
   | {
-      member: Name;
+      parameter: Name;
       digits?: number;
       decimals?: number;
       grouping?: boolean;
@@ -460,7 +459,7 @@ export type TextPart =
       width?: number;
     }
   | {
-      clock: 'index' | 'steps' | 'value' | 'time';
+      clock: 'frame_index' | 'frame_count' | 'value' | 'time';
       digits?: number;
       decimals?: number;
       grouping?: boolean;
@@ -469,7 +468,7 @@ export type TextPart =
       width?: number;
     }
   | {
-      keys: Keys;
+      keyframes: Keyframes;
       digits?: number;
       decimals?: number;
       grouping?: boolean;
@@ -478,7 +477,7 @@ export type TextPart =
       width?: number;
     }
   | {
-      steps: [number | string, number | string][];
+      timed_text: [number | string, number | string][];
     }
   | {
       sub: string;
@@ -517,17 +516,17 @@ export type Anchor =
 export type Control =
   | {
       kind: 'slider';
-      variable: Id;
+      input: Id;
       label: string;
       domain: SetQuery;
     }
   | {
       kind: 'tabs' | 'toggle';
-      variable: Id;
+      input: Id;
       label: string;
     }
   | {
-      kind: 'transport';
+      kind: 'playback';
     };
 /**
  * This interface was referenced by `Scene`'s JSON-Schema
@@ -544,7 +543,7 @@ export type Layout =
       ratio: number;
       a: Layout;
       b: Layout;
-      keys?: Keys;
+      keyframes?: Keyframes;
     };
 /**
  * This interface was referenced by `Scene`'s JSON-Schema
@@ -615,7 +614,7 @@ export type Overlay =
     };
 
 /**
- * Structure of scene.tys, version 0.4. The rules that this schema cannot express are in tycho-scene.md.
+ * Structure of scene.tys, version 0.5. The rules that this schema cannot express are in tycho-scene.md.
  */
 export interface Scene {
   format: 'tycho-scene';
@@ -630,20 +629,20 @@ export interface Scene {
   bodies?: {
     [k: string]: Body | undefined;
   };
-  track_sets: {
-    [k: string]: TrackSet | undefined;
+  trajectory_sets: {
+    [k: string]: TrajectorySet | undefined;
   };
-  variables?: {
-    [k: string]: Variable | undefined;
+  inputs?: {
+    [k: string]: Input | undefined;
   };
   clock: Clock;
-  views: {
-    [k: string]: View | undefined;
+  panels: {
+    [k: string]: Panel | undefined;
   };
   controls?: Control[];
   readouts?: Readout[];
   initial: State;
-  stages?: {
+  steps?: {
     id: Id;
     at: number;
     label?: string;
@@ -714,9 +713,9 @@ export interface Body {
 }
 /**
  * This interface was referenced by `Scene`'s JSON-Schema
- * via the `definition` "trackSet".
+ * via the `definition` "trajectorySet".
  */
-export interface TrackSet {
+export interface TrajectorySet {
   label?: string;
   frame: Id;
   tags?: {
@@ -725,13 +724,13 @@ export interface TrackSet {
   attrs?: {
     [k: string]: number | undefined;
   };
-  tracks: number;
+  trajectories: number;
   offsets: Name;
   positions: Name;
   channels?: {
     [k: string]:
       | {
-          view: Name;
+          array: Name;
           interp?: 'linear' | 'hold';
           unit?: string;
         }
@@ -740,7 +739,7 @@ export interface TrackSet {
   parameters?: {
     [k: string]:
       | {
-          view: Name;
+          array: Name;
           label?: string;
           unit?: string;
         }
@@ -753,32 +752,32 @@ export interface TrackSet {
  * via the `definition` "clock".
  */
 export interface Clock {
-  mode: 'fraction' | 'value';
+  mode: 'fraction' | 'epoch';
   /**
    * @minItems 1
    */
   channels: [Name, ...Name[]];
   labels?: string[];
-  steps: number;
+  frame_count: number;
   /**
    * @minItems 2
    * @maxItems 2
    */
   range?: [number, number];
-  laps?: number;
+  revolutions?: number;
   seconds?: number;
-  keys?: Keys;
+  keyframes?: Keyframes;
   end?: 'loop' | 'stop';
 }
 /**
  * This interface was referenced by `Scene`'s JSON-Schema
- * via the `definition` "view".
+ * via the `definition` "panel".
  */
-export interface View {
+export interface Panel {
   label?: string;
-  frame: Id | VarRef;
+  frame: Id | InputRef;
   camera?: Camera;
-  driver: Driver;
+  reference: Reference;
   layers: Layer[];
   opacity?: Opacity;
   margin?: {
@@ -790,22 +789,22 @@ export interface View {
 }
 /**
  * This interface was referenced by `Scene`'s JSON-Schema
- * via the `definition` "varRef".
+ * via the `definition` "inputRef".
  */
-export interface VarRef {
-  var: Id;
+export interface InputRef {
+  input: Id;
 }
 /**
  * This interface was referenced by `Scene`'s JSON-Schema
- * via the `definition` "driver".
+ * via the `definition` "reference".
  */
-export interface Driver {
+export interface Reference {
   sets: SetQuery;
   member:
     | {
         index: number;
       }
-    | VarRef;
+    | InputRef;
 }
 /**
  * This interface was referenced by `Scene`'s JSON-Schema
@@ -820,17 +819,17 @@ export interface Trail {
 }
 /**
  * This interface was referenced by `Scene`'s JSON-Schema
- * via the `definition` "tween".
+ * via the `definition` "keyframed".
  */
-export interface Tween {
-  keys: Keys;
+export interface Keyframed {
+  keyframes: Keyframes;
 }
 /**
  * This interface was referenced by `Scene`'s JSON-Schema
  * via the `definition` "colormapByChoice".
  */
 export interface ColormapByChoice {
-  var: Id;
+  input: Id;
   map: {
     [k: string]: ColormapName | undefined;
   };
@@ -846,7 +845,7 @@ export interface LayerClock {
    * @maxItems 2
    */
   range?: [number, number];
-  keys?: Keys;
+  keyframes?: Keyframes;
 }
 /**
  * This interface was referenced by `Scene`'s JSON-Schema
@@ -869,7 +868,7 @@ export interface Marker {
   size?: Size;
   color?: Color;
   edge?: Color;
-  edge_width?: number | Tween;
+  edge_width?: number | Keyframed;
   opacity?: Opacity;
 }
 /**
@@ -885,7 +884,7 @@ export interface Readout {
  * via the `definition` "state".
  */
 export interface State {
-  variables?: {
+  inputs?: {
     [k: string]: number | string | boolean | undefined;
   };
   clock: {
@@ -894,8 +893,8 @@ export interface State {
   panels: {
     [k: string]:
       | {
-          view: Id;
-          variables?: {
+          panel: Id;
+          inputs?: {
             [k: string]: number | string | boolean | undefined;
           };
         }

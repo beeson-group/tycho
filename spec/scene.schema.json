@@ -1,17 +1,17 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://pytycho.readthedocs.io/en/stable/schema/0.4/scene.schema.json",
+  "$id": "https://pytycho.readthedocs.io/en/stable/schema/0.5/scene.schema.json",
   "title": "TyCHO scene",
-  "description": "Structure of scene.tys, version 0.4. The rules that this schema cannot express are in tycho-scene.md.",
+  "description": "Structure of scene.tys, version 0.5. The rules that this schema cannot express are in tycho-scene.md.",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "format",
     "version",
     "frames",
-    "track_sets",
+    "trajectory_sets",
     "clock",
-    "views",
+    "panels",
     "initial"
   ],
   "properties": {
@@ -57,36 +57,36 @@
         "$ref": "#/$defs/body"
       }
     },
-    "track_sets": {
+    "trajectory_sets": {
       "type": "object",
       "minProperties": 1,
       "propertyNames": {
         "$ref": "#/$defs/id"
       },
       "additionalProperties": {
-        "$ref": "#/$defs/trackSet"
+        "$ref": "#/$defs/trajectorySet"
       }
     },
-    "variables": {
+    "inputs": {
       "type": "object",
       "propertyNames": {
         "$ref": "#/$defs/id"
       },
       "additionalProperties": {
-        "$ref": "#/$defs/variable"
+        "$ref": "#/$defs/input"
       }
     },
     "clock": {
       "$ref": "#/$defs/clock"
     },
-    "views": {
+    "panels": {
       "type": "object",
       "minProperties": 1,
       "propertyNames": {
         "$ref": "#/$defs/id"
       },
       "additionalProperties": {
-        "$ref": "#/$defs/view"
+        "$ref": "#/$defs/panel"
       }
     },
     "controls": {
@@ -104,7 +104,7 @@
     "initial": {
       "$ref": "#/$defs/state"
     },
-    "stages": {
+    "steps": {
       "type": "array",
       "items": {
         "type": "object",
@@ -334,12 +334,12 @@
         }
       }
     },
-    "trackSet": {
+    "trajectorySet": {
       "type": "object",
       "additionalProperties": false,
       "required": [
         "frame",
-        "tracks",
+        "trajectories",
         "offsets",
         "positions"
       ],
@@ -362,7 +362,7 @@
             "type": "number"
           }
         },
-        "tracks": {
+        "trajectories": {
           "type": "integer",
           "minimum": 1
         },
@@ -383,10 +383,10 @@
             "type": "object",
             "additionalProperties": false,
             "required": [
-              "view"
+              "array"
             ],
             "properties": {
-              "view": {
+              "array": {
                 "$ref": "#/$defs/name"
               },
               "interp": {
@@ -407,10 +407,10 @@
             "type": "object",
             "additionalProperties": false,
             "required": [
-              "view"
+              "array"
             ],
             "properties": {
-              "view": {
+              "array": {
                 "$ref": "#/$defs/name"
               },
               "label": {
@@ -420,6 +420,11 @@
                 "type": "string"
               }
             }
+          },
+          "propertyNames": {
+            "not": {
+              "const": "@index"
+            }
           }
         },
         "periodic": {
@@ -427,24 +432,19 @@
         }
       }
     },
-    "variable": {
+    "input": {
       "oneOf": [
         {
           "type": "object",
           "additionalProperties": false,
           "required": [
             "kind",
+            "parameter",
             "default"
           ],
           "properties": {
             "kind": {
-              "const": "selector"
-            },
-            "by": {
-              "enum": [
-                "nearest",
-                "index"
-              ]
+              "const": "parameter"
             },
             "parameter": {
               "$ref": "#/$defs/name"
@@ -454,25 +454,10 @@
             },
             "scope": {
               "enum": [
-                "scene",
-                "panel"
+                "shared",
+                "per_panel"
               ]
             }
-          },
-          "if": {
-            "properties": {
-              "by": {
-                "const": "index"
-              }
-            },
-            "required": [
-              "by"
-            ]
-          },
-          "else": {
-            "required": [
-              "parameter"
-            ]
           }
         },
         {
@@ -506,8 +491,8 @@
             },
             "scope": {
               "enum": [
-                "scene",
-                "panel"
+                "shared",
+                "per_panel"
               ]
             }
           }
@@ -528,22 +513,22 @@
             },
             "scope": {
               "enum": [
-                "scene",
-                "panel"
+                "shared",
+                "per_panel"
               ]
             }
           }
         }
       ]
     },
-    "varRef": {
+    "inputRef": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "var"
+        "input"
       ],
       "properties": {
-        "var": {
+        "input": {
           "$ref": "#/$defs/id"
         }
       }
@@ -554,7 +539,7 @@
           "type": "string"
         },
         {
-          "$ref": "#/$defs/varRef"
+          "$ref": "#/$defs/inputRef"
         }
       ]
     },
@@ -611,17 +596,17 @@
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "count"
+            "evenly_spaced"
           ],
           "properties": {
-            "count": {
+            "evenly_spaced": {
               "type": "integer",
               "minimum": 1
             }
           }
         },
         {
-          "$ref": "#/$defs/varRef"
+          "$ref": "#/$defs/inputRef"
         }
       ]
     },
@@ -638,11 +623,11 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "var",
+        "input",
         "map"
       ],
       "properties": {
-        "var": {
+        "input": {
           "$ref": "#/$defs/id"
         },
         "map": {
@@ -660,13 +645,13 @@
       "required": [
         "mode",
         "channels",
-        "steps"
+        "frame_count"
       ],
       "properties": {
         "mode": {
           "enum": [
             "fraction",
-            "value"
+            "epoch"
           ]
         },
         "channels": {
@@ -683,7 +668,7 @@
             "type": "string"
           }
         },
-        "steps": {
+        "frame_count": {
           "type": "integer",
           "minimum": 1
         },
@@ -695,7 +680,7 @@
           "minItems": 2,
           "maxItems": 2
         },
-        "laps": {
+        "revolutions": {
           "type": "integer",
           "minimum": 1
         },
@@ -703,8 +688,8 @@
           "type": "number",
           "exclusiveMinimum": 0
         },
-        "keys": {
-          "$ref": "#/$defs/keys"
+        "keyframes": {
+          "$ref": "#/$defs/keyframes"
         },
         "end": {
           "enum": [
@@ -716,14 +701,14 @@
       "if": {
         "properties": {
           "mode": {
-            "const": "value"
+            "const": "epoch"
           }
         }
       },
       "then": {
         "not": {
           "required": [
-            "laps"
+            "revolutions"
           ]
         },
         "oneOf": [
@@ -733,13 +718,13 @@
             ],
             "not": {
               "required": [
-                "keys"
+                "keyframes"
               ]
             }
           },
           {
             "required": [
-              "keys"
+              "keyframes"
             ],
             "not": {
               "required": [
@@ -752,7 +737,7 @@
       "else": {
         "not": {
           "required": [
-            "keys"
+            "keyframes"
           ]
         }
       }
@@ -791,7 +776,7 @@
               "minItems": 2,
               "maxItems": 2
             },
-            "clip": {
+            "truncate": {
               "type": "array",
               "items": {
                 "type": "number",
@@ -832,7 +817,7 @@
               "minItems": 2,
               "maxItems": 2
             },
-            "clip": {
+            "truncate": {
               "type": "array",
               "items": {
                 "type": "number",
@@ -849,14 +834,14 @@
           "additionalProperties": false,
           "required": [
             "channel",
-            "steps",
+            "thresholds",
             "colors"
           ],
           "properties": {
             "channel": {
               "$ref": "#/$defs/name"
             },
-            "steps": {
+            "thresholds": {
               "type": "array",
               "items": {
                 "type": "number"
@@ -916,7 +901,7 @@
           ],
           "properties": {
             "kind": {
-              "const": "track"
+              "const": "trajectories"
             },
             "sets": {
               "$ref": "#/$defs/setQuery"
@@ -971,7 +956,7 @@
                           "minimum": 0
                         },
                         {
-                          "$ref": "#/$defs/tween"
+                          "$ref": "#/$defs/keyframed"
                         }
                       ]
                     },
@@ -1018,10 +1003,10 @@
                 "hidden"
               ]
             },
-            "context": {
+            "read_from": {
               "enum": [
                 "own",
-                "driver"
+                "reference"
               ]
             },
             "fit": {
@@ -1041,10 +1026,10 @@
               "type": "object",
               "additionalProperties": false,
               "required": [
-                "var"
+                "input"
               ],
               "properties": {
-                "var": {
+                "input": {
                   "$ref": "#/$defs/id"
                 },
                 "width": {
@@ -1079,7 +1064,7 @@
               }
             },
             "visible": {
-              "$ref": "#/$defs/varRef"
+              "$ref": "#/$defs/inputRef"
             },
             "clock": {
               "$ref": "#/$defs/layerClock"
@@ -1087,7 +1072,7 @@
             "line": {
               "type": "boolean"
             },
-            "flat": {
+            "group_opacity": {
               "type": "boolean"
             },
             "dash": {
@@ -1196,7 +1181,7 @@
               }
             },
             "visible": {
-              "$ref": "#/$defs/varRef"
+              "$ref": "#/$defs/inputRef"
             },
             "clock": {
               "$ref": "#/$defs/layerClock"
@@ -1208,13 +1193,13 @@
           "additionalProperties": false,
           "required": [
             "kind",
-            "view"
+            "panel"
           ],
           "properties": {
             "kind": {
-              "const": "outline"
+              "const": "inset_box"
             },
-            "view": {
+            "panel": {
               "$ref": "#/$defs/id"
             },
             "color": {
@@ -1241,7 +1226,7 @@
               "minimum": 0
             },
             "visible": {
-              "$ref": "#/$defs/varRef"
+              "$ref": "#/$defs/inputRef"
             }
           }
         },
@@ -1267,7 +1252,7 @@
               "exclusiveMinimum": 0
             },
             "visible": {
-              "$ref": "#/$defs/varRef"
+              "$ref": "#/$defs/inputRef"
             },
             "opacity": {
               "$ref": "#/$defs/opacity"
@@ -1292,7 +1277,7 @@
               ]
             },
             "visible": {
-              "$ref": "#/$defs/varRef"
+              "$ref": "#/$defs/inputRef"
             },
             "ticks": {
               "type": "array",
@@ -1335,7 +1320,7 @@
               "type": "boolean"
             },
             "visible": {
-              "$ref": "#/$defs/varRef"
+              "$ref": "#/$defs/inputRef"
             },
             "opacity": {
               "$ref": "#/$defs/opacity"
@@ -1430,7 +1415,7 @@
               "$ref": "#/$defs/layerClock"
             },
             "visible": {
-              "$ref": "#/$defs/varRef"
+              "$ref": "#/$defs/inputRef"
             }
           }
         },
@@ -1483,7 +1468,7 @@
               "$ref": "#/$defs/opacity"
             },
             "visible": {
-              "$ref": "#/$defs/varRef"
+              "$ref": "#/$defs/inputRef"
             }
           }
         }
@@ -1499,7 +1484,7 @@
           ],
           "properties": {
             "kind": {
-              "const": "plane"
+              "const": "2d"
             },
             "plane": {
               "enum": [
@@ -1514,7 +1499,7 @@
                 "free"
               ]
             },
-            "keys": {
+            "keyframes": {
               "type": "array",
               "minItems": 1,
               "items": {
@@ -1590,7 +1575,7 @@
           ],
           "properties": {
             "kind": {
-              "const": "orbit"
+              "const": "3d"
             },
             "projection": {
               "enum": [
@@ -1614,14 +1599,14 @@
               "minItems": 3,
               "maxItems": 3
             },
-            "turn": {
+            "auto_rotate": {
               "type": "number"
             }
           }
         }
       ]
     },
-    "driver": {
+    "reference": {
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -1648,18 +1633,18 @@
               }
             },
             {
-              "$ref": "#/$defs/varRef"
+              "$ref": "#/$defs/inputRef"
             }
           ]
         }
       }
     },
-    "view": {
+    "panel": {
       "type": "object",
       "additionalProperties": false,
       "required": [
         "frame",
-        "driver",
+        "reference",
         "layers"
       ],
       "properties": {
@@ -1672,15 +1657,15 @@
               "$ref": "#/$defs/id"
             },
             {
-              "$ref": "#/$defs/varRef"
+              "$ref": "#/$defs/inputRef"
             }
           ]
         },
         "camera": {
           "$ref": "#/$defs/camera"
         },
-        "driver": {
-          "$ref": "#/$defs/driver"
+        "reference": {
+          "$ref": "#/$defs/reference"
         },
         "layers": {
           "type": "array",
@@ -1726,7 +1711,7 @@
           "additionalProperties": false,
           "required": [
             "kind",
-            "variable",
+            "input",
             "label",
             "domain"
           ],
@@ -1734,7 +1719,7 @@
             "kind": {
               "const": "slider"
             },
-            "variable": {
+            "input": {
               "$ref": "#/$defs/id"
             },
             "label": {
@@ -1750,7 +1735,7 @@
           "additionalProperties": false,
           "required": [
             "kind",
-            "variable",
+            "input",
             "label"
           ],
           "properties": {
@@ -1760,7 +1745,7 @@
                 "toggle"
               ]
             },
-            "variable": {
+            "input": {
               "$ref": "#/$defs/id"
             },
             "label": {
@@ -1776,7 +1761,7 @@
           ],
           "properties": {
             "kind": {
-              "const": "transport"
+              "const": "playback"
             }
           }
         }
@@ -1853,8 +1838,8 @@
             "b": {
               "$ref": "#/$defs/layout"
             },
-            "keys": {
-              "$ref": "#/$defs/keys"
+            "keyframes": {
+              "$ref": "#/$defs/keyframes"
             }
           }
         }
@@ -1869,7 +1854,7 @@
         "layout"
       ],
       "properties": {
-        "variables": {
+        "inputs": {
           "type": "object",
           "additionalProperties": {
             "type": [
@@ -1901,13 +1886,13 @@
             "type": "object",
             "additionalProperties": false,
             "required": [
-              "view"
+              "panel"
             ],
             "properties": {
-              "view": {
+              "panel": {
                 "$ref": "#/$defs/id"
               },
-              "variables": {
+              "inputs": {
                 "type": "object",
                 "additionalProperties": {
                   "type": [
@@ -1935,7 +1920,7 @@
         "hold"
       ]
     },
-    "keys": {
+    "keyframes": {
       "type": "array",
       "minItems": 1,
       "items": {
@@ -1950,15 +1935,15 @@
         }
       }
     },
-    "tween": {
+    "keyframed": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "keys"
+        "keyframes"
       ],
       "properties": {
-        "keys": {
-          "$ref": "#/$defs/keys"
+        "keyframes": {
+          "$ref": "#/$defs/keyframes"
         }
       }
     },
@@ -1970,7 +1955,7 @@
           "maximum": 1
         },
         {
-          "$ref": "#/$defs/tween"
+          "$ref": "#/$defs/keyframed"
         }
       ]
     },
@@ -1981,7 +1966,7 @@
           "exclusiveMinimum": 0
         },
         {
-          "$ref": "#/$defs/tween"
+          "$ref": "#/$defs/keyframed"
         }
       ]
     },
@@ -2003,8 +1988,8 @@
           "minItems": 2,
           "maxItems": 2
         },
-        "keys": {
-          "$ref": "#/$defs/keys"
+        "keyframes": {
+          "$ref": "#/$defs/keyframes"
         }
       }
     },
@@ -2040,7 +2025,7 @@
               "minimum": 0
             },
             {
-              "$ref": "#/$defs/tween"
+              "$ref": "#/$defs/keyframed"
             }
           ]
         },
@@ -2087,10 +2072,10 @@
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "var"
+            "input"
           ],
           "properties": {
-            "var": {
+            "input": {
               "$ref": "#/$defs/id"
             },
             "digits": {
@@ -2123,10 +2108,10 @@
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "member"
+            "parameter"
           ],
           "properties": {
-            "member": {
+            "parameter": {
               "$ref": "#/$defs/name"
             },
             "digits": {
@@ -2236,8 +2221,8 @@
           "properties": {
             "clock": {
               "enum": [
-                "index",
-                "steps",
+                "frame_index",
+                "frame_count",
                 "value",
                 "time"
               ]
@@ -2272,11 +2257,11 @@
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "keys"
+            "keyframes"
           ],
           "properties": {
-            "keys": {
-              "$ref": "#/$defs/keys"
+            "keyframes": {
+              "$ref": "#/$defs/keyframes"
             },
             "digits": {
               "type": "integer",
@@ -2308,10 +2293,10 @@
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "steps"
+            "timed_text"
           ],
           "properties": {
-            "steps": {
+            "timed_text": {
               "type": "array",
               "items": {
                 "type": "array",

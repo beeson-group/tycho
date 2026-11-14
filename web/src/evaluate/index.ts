@@ -5,12 +5,23 @@
  */
 import type { DataStore } from '../container.js';
 import { fail } from '../errors.js';
-import type { Scene, State, TrackLayer, View } from '../scene.js';
-import { clockLaps, progress } from './clock.js';
+import type { Panel, Scene, State, TrajectoriesLayer } from '../scene.js';
+import { clockRevolutions, progress } from './clock.js';
 import { Frames } from './frames.js';
-import { arrowLayer, bodyLayer, labelLayer, layerEnv, outlineLayer, pointsLayer, targetPoint, trackLayer, type Driver, type LayerEnv } from './layers.js';
-import { cameraWindow, checkCameraKeys, planeAxes, timeAt, type CameraKey } from './timeline.js';
-import { checkState, displayFrame, driverMember, layerVisible, oneSet, type PanelScope } from './resolve.js';
+import {
+  arrowLayer,
+  bodyLayer,
+  labelLayer,
+  layerEnv,
+  insetBoxLayer,
+  pointsLayer,
+  targetPoint,
+  trajectoriesLayer,
+  type Reference,
+  type LayerEnv,
+} from './layers.js';
+import { cameraWindow, checkCameraKeyframes, planeAxes, timeAt, type CameraKeyframe } from './timeline.js';
+import { checkState, displayFrame, referenceMember, layerVisible, oneSet, type PanelScope } from './resolve.js';
 import { INDEX_CHANNEL } from '../scene.js';
 import { SetCache } from './sets.js';
 import type { CameraResult, EvaluateResult, LayerResult, PanelResult } from './types.js';
@@ -25,75 +36,77 @@ export function evaluate(scene: Scene, data: DataStore, state: State, frameIndex
   const sets = new SetCache(scene, data);
   const frames = new Frames(scene);
   checkState(scene, state);
-  const laps = clockLaps(scene.clock);
+  const revolutions = clockRevolutions(scene.clock);
   const channel = state.clock.channel;
-  const q = progress(scene.clock.steps, frameIndex);
+  const q = progress(scene.clock.frame_count, frameIndex);
   // a null prototype, so that a panel id like "__proto__" is an own key of the result
   const panels: Record<string, PanelResult> = Object.create(null) as Record<string, PanelResult>;
   for (const [pid, panel] of Object.entries(state.panels)) {
-    const view = scene.views[panel!.view]!;
+    const declared = scene.panels[panel!.panel]!;
     const scope: PanelScope = { scene, state, panel: panel! };
-    const display = displayFrame(scope, view);
-    // the driver is resolved for every panel, whether or not a layer uses it (section 2.7)
-    const driverId = oneSet(scope, view.driver.sets);
-    const driver = driverId === null ? null : { set: sets.get(driverId), track: 0 };
-    if (driver) {
-      driver.track = driverMember(scope, view.driver.member, driver.set);
-      const missing = scene.clock.channels.filter((c) => c !== INDEX_CHANNEL && !driver.set.hasChannel(c));
-      if (missing.length > 0) fail('C5', `the driver's track set ${driver.set.id} lacks clock channels ${missing.join(', ')}`);
-      if (laps > 1 && !driver.set.periodic) fail('C6', `the driver's track set ${driver.set.id} is not periodic, and the clock has ${laps} laps`);
+    const display = displayFrame(scope, declared);
+    // the reference is resolved for every panel, whether or not a layer uses it (section 2.7)
+    const referenceId = oneSet(scope, declared.reference.sets);
+    const reference = referenceId === null ? null : { set: sets.get(referenceId), trajectory: 0 };
+    if (reference) {
+      reference.trajectory = referenceMember(scope, declared.reference.member, reference.set);
+      const missing = scene.clock.channels.filter((c) => c !== INDEX_CHANNEL && !reference.set.hasChannel(c));
+      if (missing.length > 0)
+        fail('clock-channel-carried', `the reference trajectory's trajectory set ${reference.set.id} lacks clock channels ${missing.join(', ')}`);
+      if (revolutions > 1 && !reference.set.periodic)
+        fail('revolutions', `the reference trajectory's trajectory set ${reference.set.id} is not periodic, and the clock has ${revolutions} revolutions`);
     }
     const env: LayerEnv = { scope, frames, clock: scene.clock, channel, q, display };
     const layers: LayerResult[] = [];
-    for (const layer of view.layers) {
-      if (!LAYER_KINDS.includes(layer.kind)) fail('S1', `layer kind ${JSON.stringify(layer.kind)} is not implemented`);
+    for (const layer of declared.layers) {
+      if (!LAYER_KINDS.includes(layer.kind)) fail('version', `layer kind ${JSON.stringify(layer.kind)} is not implemented`);
       if (!layerVisible(scope, layer)) continue;
-      if (layer.kind === 'track') {
+      if (layer.kind === 'trajectories') {
         const id = oneSet(scope, layer.sets);
-        layers.push(trackLayer(layerEnv(env, layer), layer, id === null ? null : sets.get(id), driver));
+        layers.push(trajectoriesLayer(layerEnv(env, layer), layer, id === null ? null : sets.get(id), reference));
       } else if (layer.kind === 'arrow') {
         const id = oneSet(scope, layer.sets);
         layers.push(arrowLayer(layerEnv(env, layer), layer, id === null ? null : sets.get(id)));
-      } else if (layer.kind === 'outline') {
-        layers.push(outlineLayer(env, layer, driver));
+      } else if (layer.kind === 'inset_box') {
+        layers.push(insetBoxLayer(env, layer, reference));
       } else if (layer.kind === 'body') {
-        layers.push(bodyLayer(env, layer, driver));
+        layers.push(bodyLayer(env, layer, reference));
       } else if (layer.kind === 'points') {
         const id = oneSet(scope, layer.sets);
         layers.push(pointsLayer(env, layer, id === null ? null : sets.get(id)));
       } else if (layer.kind === 'label') {
         const at = layer.at as { sets?: unknown };
         const id = at !== null && typeof at === 'object' && 'sets' in at ? oneSet(scope, at.sets as never) : null;
-        layers.push(labelLayer(env, layer, id === null ? null : sets.get(id), driver));
+        layers.push(labelLayer(env, layer, id === null ? null : sets.get(id), reference));
       } else {
         layers.push({ kind: layer.kind });
       }
     }
     const result: PanelResult = { frame: display, layers };
-    if (view.camera?.kind === 'plane' && view.camera.keys !== undefined) result.camera = cameraAt(env, view, sets, driver);
+    if (declared.camera?.kind === '2d' && declared.camera.keyframes !== undefined) result.camera = cameraAt(env, declared, sets, reference);
     panels[pid] = result;
   }
   return { panels };
 }
 
-const LAYER_KINDS = ['track', 'arrow', 'outline', 'body', 'axes', 'grid', 'label', 'points'];
+const LAYER_KINDS = ['trajectories', 'arrow', 'inset_box', 'body', 'axes', 'grid', 'label', 'points'];
 
-/** The lists of camera keys that passed `checkCameraKeys`, each with whether it was checked for a camera of free aspect. */
-const checkedKeys = new WeakMap<object, boolean>();
+/** The lists of camera keyframes that passed `checkCameraKeyframes`, each with whether it was checked for a camera of free aspect. */
+const checkedKeyframes = new WeakMap<object, boolean>();
 
 /**
- * The window of a plane camera with keys at the environment's progress (rule K5). A follow key's center is the mean of its targets'
+ * The window of a 2d camera with keyframes at the environment's progress (rule `camera-keyframes`). A follow key's center is the mean of its targets'
  * points, projected onto the plane, plus its offset, and its `center` when every target's set query fails to match.
  */
-export function cameraAt(env: LayerEnv, view: View, sets: SetCache, driver: Driver): CameraResult | null {
-  const cam = view.camera as Extract<View['camera'], { kind: 'plane' }> & {};
-  // a renderer asks for the window at every frame, hence a list of keys is checked once
+export function cameraAt(env: LayerEnv, panel: Panel, sets: SetCache, reference: Reference): CameraResult | null {
+  const cam = panel.camera as Extract<Panel['camera'], { kind: '2d' }> & {};
+  // a renderer asks for the window at every frame, hence a list of keyframes is checked once
   const free = cam.aspect === 'free';
-  if (typeof cam.keys !== 'object' || cam.keys === null || checkedKeys.get(cam.keys) !== free) {
-    checkCameraKeys(cam.keys, free, 'the camera');
-    checkedKeys.set(cam.keys!, free);
+  if (typeof cam.keyframes !== 'object' || cam.keyframes === null || checkedKeyframes.get(cam.keyframes) !== free) {
+    checkCameraKeyframes(cam.keyframes, free, 'the camera');
+    checkedKeyframes.set(cam.keyframes!, free);
   }
-  const keys = cam.keys as unknown as CameraKey[];
+  const keys = cam.keyframes as unknown as CameraKeyframe[];
   const [ix, iy] = planeAxes(cam);
   const s = timeAt(env.clock, env.q);
   const center = (i: number): [number, number] | null => {
@@ -103,10 +116,11 @@ export function cameraAt(env: LayerEnv, view: View, sets: SetCache, driver: Driv
     let x = 0;
     let y = 0;
     for (const t of k.follow) {
-      const layer = view.layers[t.layer];
-      if (layer === undefined || layer.kind !== 'track') fail('K5', `a camera key follows layer ${t.layer}, which is not a track layer of the view`);
-      const id = oneSet(env.scope, (layer as TrackLayer).sets);
-      const p = targetPoint(env, layer as TrackLayer, id === null ? null : sets.get(id), t.member, driver);
+      const layer = panel.layers[t.layer];
+      if (layer === undefined || layer.kind !== 'trajectories')
+        fail('camera-keyframes', `a camera keyframe follows layer ${t.layer}, which is not a trajectories layer of the panel`);
+      const id = oneSet(env.scope, (layer as TrajectoriesLayer).sets);
+      const p = targetPoint(env, layer as TrajectoriesLayer, id === null ? null : sets.get(id), t.member, reference);
       if (p === null) continue;
       x += p[ix]!;
       y += p[iy]!;

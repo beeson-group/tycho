@@ -1,7 +1,7 @@
 {
  "format": "tycho-scene",
- "version": "0.4",
- "generator": "pytycho 0.2.0",
+ "version": "0.5",
+ "generator": "pytycho 0.3.0",
  "title": "two panels",
  "frames": {
   "root": {},
@@ -53,7 +53,7 @@
    ]
   }
  },
- "track_sets": {
+ "trajectory_sets": {
   "orbits": {
    "frame": "tilt",
    "tags": {
@@ -63,20 +63,20 @@
     "d": 0.5,
     "k": 2.0
    },
-   "tracks": 3,
+   "trajectories": 3,
    "offsets": "orbits/offsets",
    "positions": "orbits/positions",
    "channels": {
     "th": {
-     "view": "orbits/channels/th"
+     "array": "orbits/channels/th"
     },
     "t": {
-     "view": "orbits/channels/t"
+     "array": "orbits/channels/t"
     }
    },
    "parameters": {
     "e": {
-     "view": "orbits/parameters/e"
+     "array": "orbits/parameters/e"
     }
    },
    "periodic": false
@@ -90,18 +90,18 @@
     "d": 0.5,
     "k": 2.0
    },
-   "tracks": 1,
+   "trajectories": 1,
    "offsets": "fixed/offsets",
    "positions": "fixed/positions",
    "channels": {
     "th": {
-     "view": "fixed/channels/th"
+     "array": "fixed/channels/th"
     }
    },
    "periodic": false
   }
  },
- "variables": {
+ "inputs": {
   "frame": {
    "kind": "choice",
    "values": [
@@ -111,20 +111,19 @@
     "shift"
    ],
    "default": "root",
-   "scope": "panel"
+   "scope": "per_panel"
   },
   "k": {
-   "kind": "selector",
-   "by": "index",
+   "kind": "parameter",
+   "parameter": "@index",
    "default": 0.0,
-   "scope": "panel"
+   "scope": "per_panel"
   },
   "e": {
-   "kind": "selector",
-   "by": "nearest",
+   "kind": "parameter",
+   "parameter": "e",
    "default": 0.2,
-   "scope": "scene",
-   "parameter": "e"
+   "scope": "shared"
   },
   "group": {
    "kind": "choice",
@@ -133,7 +132,7 @@
     "absent"
    ],
    "default": "moving",
-   "scope": "scene"
+   "scope": "shared"
   }
  },
  "clock": {
@@ -142,28 +141,28 @@
    "t",
    "@index"
   ],
-  "steps": 6
+  "frame_count": 6
  },
- "views": {
+ "panels": {
   "v": {
    "frame": {
-    "var": "frame"
+    "input": "frame"
    },
-   "driver": {
+   "reference": {
     "sets": {
      "tags": {
       "group": {
-       "var": "group"
+       "input": "group"
       }
      }
     },
     "member": {
-     "var": "k"
+     "input": "k"
     }
    },
    "layers": [
     {
-     "kind": "track",
+     "kind": "trajectories",
      "sets": {
       "set": "fixed"
      },
@@ -171,7 +170,7 @@
      "reveal": "none"
     },
     {
-     "kind": "track",
+     "kind": "trajectories",
      "sets": {
       "set": "orbits"
      },
@@ -179,16 +178,16 @@
      "reveal": "none"
     },
     {
-     "kind": "track",
+     "kind": "trajectories",
      "sets": {
       "tags": {
        "group": {
-        "var": "group"
+        "input": "group"
        }
       }
      },
      "members": {
-      "var": "k"
+      "input": "k"
      },
      "reveal": "trail",
      "trail": {
@@ -197,12 +196,12 @@
      "head": true
     },
     {
-     "kind": "track",
+     "kind": "trajectories",
      "sets": {
       "set": "orbits"
      },
      "members": {
-      "var": "e"
+      "input": "e"
      },
      "reveal": "grow"
     },
@@ -220,21 +219,21 @@
   }
  },
  "initial": {
-  "variables": {},
+  "inputs": {},
   "clock": {
    "channel": "t"
   },
   "panels": {
    "p1": {
-    "view": "v",
-    "variables": {
+    "panel": "v",
+    "inputs": {
      "frame": "shift",
-     "k": 0.5
+     "k": 1.0
     }
    },
    "p2": {
-    "view": "v",
-    "variables": {
+    "panel": "v",
+    "inputs": {
      "frame": "tilt",
      "k": 2.5
     }

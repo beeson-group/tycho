@@ -1,0 +1,407 @@
+[
+ {
+  "name": "revolutions: revolutions on an epoch clock",
+  "rule": "revolutions",
+  "scene": {
+   "clock": {
+    "mode": "epoch",
+    "range": [
+     0.0,
+     1.0
+    ]
+   }
+  }
+ },
+ {
+  "name": "revolutions: revolutions of zero",
+  "rule": "revolutions",
+  "scene": {
+   "clock": {
+    "revolutions": 0
+   }
+  }
+ },
+ {
+  "name": "revolutions: revolutions 2 with a reference trajectory whose set is not periodic",
+  "rule": "revolutions",
+  "scene": {
+   "clock": {
+    "revolutions": 2
+   },
+   "trajectory_sets": {
+    "loop": {
+     "periodic": false
+    }
+   }
+  }
+ },
+ {
+  "name": "revolutions: revolutions 3 with a reading taken on a set that is not periodic",
+  "rule": "revolutions",
+  "scene": {
+   "panels": {
+    "v": {
+     "layers": [
+      {
+       "kind": "trajectories",
+       "sets": {
+        "set": "loop"
+       },
+       "members": "all",
+       "reveal": "none"
+      },
+      {
+       "kind": "trajectories",
+       "sets": {
+        "set": "loop"
+       },
+       "members": "all",
+       "reveal": "trail",
+       "trail": {
+        "fraction": 0.25,
+        "taper": {
+         "width": 0.0,
+         "opacity": 0.0
+        }
+       },
+       "head": {
+        "color": "#f0e442",
+        "size": 9.0
+       }
+      },
+      {
+       "kind": "trajectories",
+       "sets": {
+        "set": "loop"
+       },
+       "members": "all",
+       "reveal": "grow"
+      },
+      {
+       "kind": "trajectories",
+       "sets": {
+        "set": "loop"
+       },
+       "members": "all",
+       "reveal": "trail",
+       "trail": {
+        "fraction": 0.5
+       }
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "trail": {
+        "fraction": 0.25
+       }
+      },
+      {
+       "kind": "trajectories",
+       "sets": {
+        "set": "fan"
+       },
+       "members": {
+        "evenly_spaced": 2
+       },
+       "reveal": "none",
+       "color": {
+        "colormap": {
+         "input": "frame",
+         "map": {
+          "rot": "viridis",
+          "inertial": "plasma"
+         }
+        },
+        "parameter": "e"
+       },
+       "opacity": 0.4,
+       "head": true
+      },
+      {
+       "kind": "trajectories",
+       "sets": {
+        "set": "fan"
+       },
+       "members": "all",
+       "reveal": "none",
+       "color": {
+        "colormap": {
+         "input": "frame",
+         "map": {
+          "rot": "viridis",
+          "inertial": "plasma"
+         }
+        },
+        "parameter": "e"
+       },
+       "opacity": 0.05,
+       "highlight": {
+        "input": "e",
+        "width": 2.5,
+        "kernel": {
+         "width": 0.05,
+         "opacity": 0.55
+        }
+       }
+      },
+      {
+       "kind": "axes",
+       "span": "full"
+      },
+      {
+       "kind": "grid",
+       "labels": true
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "revolutions: revolutions 3 with a points layer that grows on a set that is not periodic",
+  "rule": "revolutions",
+  "scene": {
+   "panels": {
+    "v": {
+     "layers": [
+      {
+       "kind": "trajectories",
+       "sets": {
+        "set": "loop"
+       },
+       "members": "all",
+       "reveal": "none"
+      },
+      {
+       "kind": "trajectories",
+       "sets": {
+        "set": "loop"
+       },
+       "members": "all",
+       "reveal": "trail",
+       "trail": {
+        "fraction": 0.25,
+        "taper": {
+         "width": 0.0,
+         "opacity": 0.0
+        }
+       },
+       "head": {
+        "color": "#f0e442",
+        "size": 9.0
+       }
+      },
+      {
+       "kind": "trajectories",
+       "sets": {
+        "set": "loop"
+       },
+       "members": "all",
+       "reveal": "grow"
+      },
+      {
+       "kind": "trajectories",
+       "sets": {
+        "set": "loop"
+       },
+       "members": "all",
+       "reveal": "trail",
+       "trail": {
+        "fraction": 0.5
+       }
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "trail": {
+        "fraction": 0.25
+       }
+      },
+      {
+       "kind": "points",
+       "sets": {
+        "set": "fan"
+       },
+       "members": {
+        "evenly_spaced": 2
+       },
+       "reveal": "grow"
+      },
+      {
+       "kind": "trajectories",
+       "sets": {
+        "set": "fan"
+       },
+       "members": "all",
+       "reveal": "none",
+       "color": {
+        "colormap": {
+         "input": "frame",
+         "map": {
+          "rot": "viridis",
+          "inertial": "plasma"
+         }
+        },
+        "parameter": "e"
+       },
+       "opacity": 0.05,
+       "highlight": {
+        "input": "e",
+        "width": 2.5,
+        "kernel": {
+         "width": 0.05,
+         "opacity": 0.55
+        }
+       }
+      },
+      {
+       "kind": "axes",
+       "span": "full"
+      },
+      {
+       "kind": "grid",
+       "labels": true
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "members: a member count of zero",
+  "rule": "members",
+  "scene": {
+   "panels": {
+    "v": {
+     "layers": [
+      {
+       "kind": "trajectories",
+       "sets": {
+        "set": "loop"
+       },
+       "members": "all",
+       "reveal": "none"
+      },
+      {
+       "kind": "trajectories",
+       "sets": {
+        "set": "loop"
+       },
+       "members": "all",
+       "reveal": "trail",
+       "trail": {
+        "fraction": 0.25,
+        "taper": {
+         "width": 0.0,
+         "opacity": 0.0
+        }
+       },
+       "head": {
+        "color": "#f0e442",
+        "size": 9.0
+       }
+      },
+      {
+       "kind": "trajectories",
+       "sets": {
+        "set": "loop"
+       },
+       "members": "all",
+       "reveal": "grow"
+      },
+      {
+       "kind": "trajectories",
+       "sets": {
+        "set": "loop"
+       },
+       "members": "all",
+       "reveal": "trail",
+       "trail": {
+        "fraction": 0.5
+       }
+      },
+      {
+       "kind": "body",
+       "body": "b1",
+       "trail": {
+        "fraction": 0.25
+       }
+      },
+      {
+       "kind": "trajectories",
+       "sets": {
+        "set": "fan"
+       },
+       "members": {
+        "evenly_spaced": 0
+       },
+       "reveal": "none",
+       "color": {
+        "colormap": {
+         "input": "frame",
+         "map": {
+          "rot": "viridis",
+          "inertial": "plasma"
+         }
+        },
+        "parameter": "e"
+       },
+       "opacity": 0.4
+      },
+      {
+       "kind": "trajectories",
+       "sets": {
+        "set": "fan"
+       },
+       "members": "all",
+       "reveal": "none",
+       "color": {
+        "colormap": {
+         "input": "frame",
+         "map": {
+          "rot": "viridis",
+          "inertial": "plasma"
+         }
+        },
+        "parameter": "e"
+       },
+       "opacity": 0.05,
+       "highlight": {
+        "input": "e",
+        "width": 2.5,
+        "kernel": {
+         "width": 0.05,
+         "opacity": 0.55
+        }
+       }
+      },
+      {
+       "kind": "axes",
+       "span": "full"
+      },
+      {
+       "kind": "grid",
+       "labels": true
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "members: a reference trajectory member that is a count",
+  "rule": "members",
+  "scene": {
+   "panels": {
+    "v": {
+     "reference": {
+      "member": {
+       "index": null,
+       "evenly_spaced": 2
+      }
+     }
+    }
+   }
+  }
+ }
+]

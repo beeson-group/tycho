@@ -1,18 +1,18 @@
 [
  {
-  "name": "K1 to K8: at s = 2, a smooth clock key, a layer clock, points, labels, and a blend into a follow key",
+  "name": "keyframes to points: at s = 2, a smooth clock keyframe, a layer clock, points, labels, and a blend into a follow keyframe",
   "source": "analytic",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "t"
    },
    "panels": {
     "p1": {
-     "view": "main"
+     "panel": "main"
     },
     "p2": {
-     "view": "plot"
+     "panel": "plot"
     }
    },
    "layout": {
@@ -37,7 +37,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -83,7 +83,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -221,19 +221,19 @@
   }
  },
  {
-  "name": "K1, K2, K5: at s = 5, a jump of the clock, and an in-out blend between two follow keys",
+  "name": "keyframes, ease, camera-keyframes: at s = 5, a jump of the clock, and an in-out blend between two follow keyframes",
   "source": "analytic",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "t"
    },
    "panels": {
     "p1": {
-     "view": "main"
+     "panel": "main"
     },
     "p2": {
-     "view": "plot"
+     "panel": "plot"
     }
    },
    "layout": {
@@ -258,7 +258,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -416,19 +416,19 @@
   }
  },
  {
-  "name": "K1, K5, K8: at s = 0, before the first keys, and a points member hidden before its range",
+  "name": "keyframes, camera-keyframes, points: at s = 0, before the first keyframes, and a points member hidden before its range",
   "source": "analytic",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "t"
    },
    "panels": {
     "p1": {
-     "view": "main"
+     "panel": "main"
     },
     "p2": {
-     "view": "plot"
+     "panel": "plot"
     }
    },
    "layout": {
@@ -531,19 +531,19 @@
   }
  },
  {
-  "name": "K1, K5, K8: at s = 9.5, after the last keys",
+  "name": "keyframes, camera-keyframes, points: at s = 9.5, after the last keyframes",
   "source": "analytic",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "t"
    },
    "panels": {
     "p1": {
-     "view": "main"
+     "panel": "main"
     },
     "p2": {
-     "view": "plot"
+     "panel": "plot"
     }
    },
    "layout": {
@@ -635,16 +635,16 @@
   "name": "frame -1",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "t"
    },
    "panels": {
     "p1": {
-     "view": "main"
+     "panel": "main"
     },
     "p2": {
-     "view": "plot"
+     "panel": "plot"
     }
    },
    "layout": {
@@ -669,7 +669,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -785,7 +785,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -1017,7 +1017,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -1089,16 +1089,16 @@
   "name": "frame 0",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "t"
    },
    "panels": {
     "p1": {
-     "view": "main"
+     "panel": "main"
     },
     "p2": {
-     "view": "plot"
+     "panel": "plot"
     }
    },
    "layout": {
@@ -1123,7 +1123,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -1159,7 +1159,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -1270,7 +1270,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -1342,16 +1342,16 @@
   "name": "frame 1",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "t"
    },
    "panels": {
     "p1": {
-     "view": "main"
+     "panel": "main"
     },
     "p2": {
-     "view": "plot"
+     "panel": "plot"
     }
    },
    "layout": {
@@ -1376,7 +1376,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -1412,7 +1412,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -1533,7 +1533,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -1605,16 +1605,16 @@
   "name": "frame 2",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "t"
    },
    "panels": {
     "p1": {
-     "view": "main"
+     "panel": "main"
     },
     "p2": {
-     "view": "plot"
+     "panel": "plot"
     }
    },
    "layout": {
@@ -1639,7 +1639,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -1675,7 +1675,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -1796,7 +1796,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -1868,16 +1868,16 @@
   "name": "frame 3",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "t"
    },
    "panels": {
     "p1": {
-     "view": "main"
+     "panel": "main"
     },
     "p2": {
-     "view": "plot"
+     "panel": "plot"
     }
    },
    "layout": {
@@ -1902,7 +1902,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -1948,7 +1948,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -2069,7 +2069,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -2141,16 +2141,16 @@
   "name": "frame 4",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "t"
    },
    "panels": {
     "p1": {
-     "view": "main"
+     "panel": "main"
     },
     "p2": {
-     "view": "plot"
+     "panel": "plot"
     }
    },
    "layout": {
@@ -2175,7 +2175,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -2221,7 +2221,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -2348,7 +2348,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -2420,16 +2420,16 @@
   "name": "frame 5",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "t"
    },
    "panels": {
     "p1": {
-     "view": "main"
+     "panel": "main"
     },
     "p2": {
-     "view": "plot"
+     "panel": "plot"
     }
    },
    "layout": {
@@ -2454,7 +2454,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -2510,7 +2510,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -2642,7 +2642,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -2714,16 +2714,16 @@
   "name": "frame 6",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "t"
    },
    "panels": {
     "p1": {
-     "view": "main"
+     "panel": "main"
     },
     "p2": {
-     "view": "plot"
+     "panel": "plot"
     }
    },
    "layout": {
@@ -2748,7 +2748,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -2804,7 +2804,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -2941,7 +2941,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -3013,16 +3013,16 @@
   "name": "frame 7",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "t"
    },
    "panels": {
     "p1": {
-     "view": "main"
+     "panel": "main"
     },
     "p2": {
-     "view": "plot"
+     "panel": "plot"
     }
    },
    "layout": {
@@ -3047,7 +3047,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -3103,7 +3103,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -3240,7 +3240,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -3312,16 +3312,16 @@
   "name": "frame 8",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "t"
    },
    "panels": {
     "p1": {
-     "view": "main"
+     "panel": "main"
     },
     "p2": {
-     "view": "plot"
+     "panel": "plot"
     }
    },
    "layout": {
@@ -3346,7 +3346,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -3402,7 +3402,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -3539,7 +3539,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -3611,16 +3611,16 @@
   "name": "frame 9",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "t"
    },
    "panels": {
     "p1": {
-     "view": "main"
+     "panel": "main"
     },
     "p2": {
-     "view": "plot"
+     "panel": "plot"
     }
    },
    "layout": {
@@ -3645,7 +3645,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -3701,7 +3701,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -3838,7 +3838,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -3910,16 +3910,16 @@
   "name": "frame 10",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "t"
    },
    "panels": {
     "p1": {
-     "view": "main"
+     "panel": "main"
     },
     "p2": {
-     "view": "plot"
+     "panel": "plot"
     }
    },
    "layout": {
@@ -3944,7 +3944,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -4010,7 +4010,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -4167,7 +4167,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -4239,16 +4239,16 @@
   "name": "frame 11",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "t"
    },
    "panels": {
     "p1": {
-     "view": "main"
+     "panel": "main"
     },
     "p2": {
-     "view": "plot"
+     "panel": "plot"
     }
    },
    "layout": {
@@ -4273,7 +4273,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -4349,7 +4349,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -4506,7 +4506,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -4578,16 +4578,16 @@
   "name": "frame 12",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "t"
    },
    "panels": {
     "p1": {
-     "view": "main"
+     "panel": "main"
     },
     "p2": {
-     "view": "plot"
+     "panel": "plot"
     }
    },
    "layout": {
@@ -4612,7 +4612,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -4688,7 +4688,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -4855,7 +4855,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -4927,16 +4927,16 @@
   "name": "frame 13",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "t"
    },
    "panels": {
     "p1": {
-     "view": "main"
+     "panel": "main"
     },
     "p2": {
-     "view": "plot"
+     "panel": "plot"
     }
    },
    "layout": {
@@ -4961,7 +4961,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -5037,7 +5037,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -5204,7 +5204,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -5276,16 +5276,16 @@
   "name": "frame 14",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "t"
    },
    "panels": {
     "p1": {
-     "view": "main"
+     "panel": "main"
     },
     "p2": {
-     "view": "plot"
+     "panel": "plot"
     }
    },
    "layout": {
@@ -5310,7 +5310,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -5386,7 +5386,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -5568,7 +5568,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -5640,16 +5640,16 @@
   "name": "frame 15",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "t"
    },
    "panels": {
     "p1": {
-     "view": "main"
+     "panel": "main"
     },
     "p2": {
-     "view": "plot"
+     "panel": "plot"
     }
    },
    "layout": {
@@ -5674,7 +5674,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -5750,7 +5750,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -5947,7 +5947,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -6019,16 +6019,16 @@
   "name": "frame 16",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "t"
    },
    "panels": {
     "p1": {
-     "view": "main"
+     "panel": "main"
     },
     "p2": {
-     "view": "plot"
+     "panel": "plot"
     }
    },
    "layout": {
@@ -6053,7 +6053,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -6149,7 +6149,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -6361,7 +6361,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -6433,16 +6433,16 @@
   "name": "frame 17",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "t"
    },
    "panels": {
     "p1": {
-     "view": "main"
+     "panel": "main"
     },
     "p2": {
-     "view": "plot"
+     "panel": "plot"
     }
    },
    "layout": {
@@ -6467,7 +6467,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -6583,7 +6583,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -6805,7 +6805,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -6877,16 +6877,16 @@
   "name": "frame 18",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "t"
    },
    "panels": {
     "p1": {
-     "view": "main"
+     "panel": "main"
     },
     "p2": {
-     "view": "plot"
+     "panel": "plot"
     }
    },
    "layout": {
@@ -6911,7 +6911,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -7027,7 +7027,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -7259,7 +7259,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -7331,16 +7331,16 @@
   "name": "frame 19",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "t"
    },
    "panels": {
     "p1": {
-     "view": "main"
+     "panel": "main"
     },
     "p2": {
-     "view": "plot"
+     "panel": "plot"
     }
    },
    "layout": {
@@ -7365,7 +7365,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -7481,7 +7481,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -7713,7 +7713,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -7785,16 +7785,16 @@
   "name": "frame 20",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "t"
    },
    "panels": {
     "p1": {
-     "view": "main"
+     "panel": "main"
     },
     "p2": {
-     "view": "plot"
+     "panel": "plot"
     }
    },
    "layout": {
@@ -7819,7 +7819,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -7855,7 +7855,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {
@@ -7966,7 +7966,7 @@
      "frame": "root",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "a",
        "members": [
         {

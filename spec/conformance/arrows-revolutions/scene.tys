@@ -1,0 +1,131 @@
+{
+ "format": "tycho-scene",
+ "version": "0.5",
+ "requires": [
+  "layers.arrows"
+ ],
+ "generator": "pytycho 0.3.0, spec/conformance/generate.py",
+ "frames": {
+  "rot": {},
+  "inertial": {
+   "parent": "rot",
+   "rotation": {
+    "axis": "z",
+    "angle": {
+     "channel": "th"
+    }
+   }
+  }
+ },
+ "trajectory_sets": {
+  "loop": {
+   "frame": "rot",
+   "trajectories": 1,
+   "offsets": "loop/offsets",
+   "positions": "loop/positions",
+   "channels": {
+    "th": {
+     "array": "loop/th"
+    },
+    "vx": {
+     "array": "loop/vx"
+    },
+    "vy": {
+     "array": "loop/vy"
+    }
+   },
+   "periodic": true
+  }
+ },
+ "clock": {
+  "mode": "fraction",
+  "channels": [
+   "@index"
+  ],
+  "frame_count": 10,
+  "revolutions": 2
+ },
+ "panels": {
+  "rot": {
+   "frame": "rot",
+   "reference": {
+    "sets": {
+     "set": "loop"
+    },
+    "member": {
+     "index": 0
+    }
+   },
+   "layers": [
+    {
+     "kind": "arrow",
+     "sets": {
+      "set": "loop"
+     },
+     "members": {
+      "index": 0
+     },
+     "vector": [
+      "vx",
+      "vy"
+     ],
+     "scale": 0.5
+    }
+   ]
+  },
+  "inertial": {
+   "frame": "inertial",
+   "reference": {
+    "sets": {
+     "set": "loop"
+    },
+    "member": {
+     "index": 0
+    }
+   },
+   "layers": [
+    {
+     "kind": "arrow",
+     "sets": {
+      "set": "loop"
+     },
+     "members": {
+      "index": 0
+     },
+     "vector": [
+      "vx",
+      "vy"
+     ],
+     "scale": 0.5
+    }
+   ]
+  }
+ },
+ "initial": {
+  "inputs": {},
+  "clock": {
+   "channel": "@index"
+  },
+  "panels": {
+   "rot": {
+    "panel": "rot"
+   },
+   "inertial": {
+    "panel": "inertial"
+   }
+  },
+  "layout": {
+   "kind": "split",
+   "dir": "row",
+   "ratio": 0.5,
+   "a": {
+    "kind": "panel",
+    "id": "rot"
+   },
+   "b": {
+    "kind": "panel",
+    "id": "inertial"
+   }
+  }
+ }
+}

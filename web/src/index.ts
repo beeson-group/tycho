@@ -4,7 +4,7 @@
  * It is bundled as an immediately invoked function expression (IIFE) that exposes `tycho`, and as an ES module.
  */
 export { Container, DATA_VERSION, decodeEmbedded } from './container.js';
-export type { ArrayView, DataHeader, DataStore, Dtype, EncodedViewInfo, RawViewInfo, TypedArray, ViewInfo } from './container.js';
+export type { ArrayInfo, DataArray, DataHeader, DataStore, Dtype, EncodedArrayInfo, RawArrayInfo, TypedArray } from './container.js';
 export { TychoError } from './errors.js';
 export { SCENE_MAJOR, SCENE_MINOR } from './scene.js';
 export type * from './scene.js';

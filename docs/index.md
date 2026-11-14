@@ -1,27 +1,39 @@
 # TyCHO
 
-TyCHO, the Typed Celestial HTML Observer, turns trajectories computed elsewhere into animated, interactive visualizations, each of which ships as one HTML file. A page has a black background, sliders, tabs, and panels you drag and drop. It can show the same orbit family in several reference frames side by side, e.g. a rotating frame next to an inertial one.
+TyCHO, the Typed Celestial HTML Observer, turns trajectories computed elsewhere into animated, interactive visualizations, each of which ships as one HTML file.
+A page has a black background, sliders, tabs, and panels you drag and drop.
+It can show the same orbit family in several reference frames side by side, e.g. a rotating frame next to an inertial one.
 
-A Python script declares the visualization as a scene over NumPy arrays. A scene is a set of declarations that specify what the arrays are and how they are drawn, and it is made of the following pieces.
+A Python script declares the visualization as a scene over NumPy arrays.
+A scene is a set of declarations that specify what the arrays are and how they are drawn, and it is made of the following pieces.
 
-- Track sets hold the trajectories. A track is one trajectory, i.e. a sequence of samples, and a track set is a collection of tracks that share a frame and a meaning, e.g. the members of one orbit family. Each sample can carry channels, which are numbers stored beside its position, such as the time.
+- Trajectory sets hold the trajectories.
+  A trajectory is a sequence of samples, and a trajectory set is a collection of trajectories that share a frame and a meaning, e.g. the members of one orbit family.
+  Each sample can carry channels, which are numbers stored beside its position, such as the time.
 - Bodies are named points, e.g. the primary and the secondary of the three-body problem.
 - Frames are coordinate frames, and they form a tree in which every frame but the root is defined against its parent.
-- Variables are the state that a person viewing the page can change, e.g. which member of a family is shown.
+- Inputs are the values that the person at the page can change, e.g. which member of a family is shown.
 - The clock is the animation time, which every panel shares.
-- A view is a template for a panel, and a panel is one picture on the page. Each panel shows one view, hence two panels can show the same view in two frames.
-- Controls are the widgets that change the variables and the clock, e.g. sliders and tabs. Readouts are the pieces of text that show current values.
+- A panel is one picture on the page, with its own display frame, camera, reference trajectory, and layers.
+  The scene declares its panels, and the page may show one declared panel several times, hence two shown panels can show the same declared panel in two frames.
+- Controls are the widgets that change the inputs and the clock, e.g. sliders and tabs.
+  Readouts are the pieces of text that show current values.
 
-Together these declarations form the scene grammar, the vocabulary from which every scene is built, and the browser runtime interprets this grammar. The runtime only rotates, scales, and translates points, and blends linearly between two stored samples. It does not integrate any equation of motion, and every number on screen therefore comes from the library that computed the trajectory. The page works offline, from disk, inside an iframe, or on a reveal.js slide (a slide of a presentation written in HTML), since the runtime and the data are inlined into its one file.
+Together these declarations form the scene grammar, the vocabulary from which every scene is built, and the browser runtime interprets this grammar.
+The runtime only rotates, scales, and translates points, and blends linearly between two stored samples.
+It does not integrate any equation of motion, and every number on screen therefore comes from the library that computed the trajectory.
+The page works offline, from disk, inside an iframe, or on a reveal.js slide (a slide of a presentation written in HTML), since the runtime and the data are inlined into its one file.
 
 ## Two packages
 
 | Package | Registry | What it is |
 |---|---|---|
 | `pytycho` | PyPI, the Python Package Index | the Python API, i.e. the `Scene` builder, which records the declarations, the data container, which holds the arrays, and the HTML writer, which bundles the runtime into the page |
-| `@beeson-group/tycho` | npm | the browser runtime, i.e. the scene reader, which reads and checks a scene, the evaluator, which computes what each panel draws, and the `<tycho-viewer>` element, which shows a scene on a page. It ships as an ECMAScript module and as an immediately invoked function expression (a classic script that defines the global `tycho`) |
+| `@beeson-group/tycho` | npm | the browser runtime, i.e. the validator, which reads and checks a scene, the evaluator, which computes what each panel draws, and the `<tycho-viewer>` element, which shows a scene on a page. It ships as an ECMAScript module and as an immediately invoked function expression (a classic script that defines the global `tycho`) |
 
-Most users need only `pytycho`, since every page it writes carries the runtime inline. The npm package serves to embed the viewer (the `<tycho-viewer>` element) in a website or an application that you build. Both packages are released together under one version, which is {{ version }} for this documentation.
+Most users need only `pytycho`, since every page it writes carries the runtime inline.
+The npm package serves to embed the viewer (the `<tycho-viewer>` element) in a website or an application that you build.
+Both packages are released together under one version, which is {{ version }} for this documentation.
 
 ## Where to start
 
@@ -32,14 +44,15 @@ Most users need only `pytycho`, since every page it writes carries the runtime i
 :link: quickstart
 :link-type: doc
 
-The quickstart shows how to install pytycho, write the minimal scene, a page of one looping track in two frames, and build the Broucke example.
+The quickstart shows how to install pytycho, write the minimal scene, a page of one looping trajectory in two frames, and build the Broucke example.
 :::
 
 :::{grid-item-card} Guide
 :link: guide/index
 :link-type: doc
 
-The guide gives one page to each concept of the scene grammar, i.e. track sets, frames, bodies, variables, the clock, views, panels, thinning, and the page. Thinning keeps a subset of the stored samples, which makes a page smaller.
+The guide gives one page to each concept of the scene grammar, i.e. trajectory sets, frames, bodies, inputs, the clock, panels and layers, controls and readouts, the timeline, thinning, and the page.
+Thinning keeps a subset of the stored samples, which makes a page smaller.
 :::
 
 :::{grid-item-card} Gallery
@@ -60,14 +73,16 @@ The reference documents the Python API from its docstrings, and the `<tycho-view
 :link: spec
 :link-type: doc
 
-The format is the contract between pytycho, which writes a scene, and the runtime, which draws it. It consists of the numbered rules, the JSON Schema of the scene, and the conformance corpus, a set of test scenes with the answers that both implementations must give.
+The format is the contract between pytycho, which writes a scene, and the runtime, which draws it.
+It consists of the named rules, the JSON Schema of the scene, and the conformance corpus, a set of test scenes with the answers that both implementations must give.
 :::
 
 :::{grid-item-card} Agents
 :link: agents
 :link-type: doc
 
-The agent skill of TyCHO, one page of instructions in the Agent Skills format, sets out for a coding agent how to write scenes. The Agents page describes how to install the skill.
+The agent skill of TyCHO, one page of instructions in the Agent Skills format, sets out for a coding agent how to write scenes.
+The Agents page describes how to install the skill.
 :::
 ::::
 

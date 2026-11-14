@@ -1,6 +1,6 @@
 /**
- * Where the panels of a layout tree sit on a stage. The placement is a pure function of the tree
- * and the stage rectangle, and both the page and the renderer use it, so that a frame does not
+ * Where the panels of a layout tree sit on a panel area. The placement is a pure function of the tree
+ * and the panel area rectangle, and both the page and the renderer use it, so that a frame does not
  * depend on how the browser lays out the page.
  */
 import type { Layout } from '../scene.js';
@@ -38,7 +38,7 @@ export function tile(layout: Layout, rect: Rect, gutter: number): Tiles {
       return;
     }
     const row = node.dir === 'row';
-    // a split with keys may give one side all of its extent (section 2.11), and it then does not have a gutter
+    // a split with keyframes may give one side all of its extent (section 2.11), and it then does not have a gutter
     const g = node.ratio <= 0 || node.ratio >= 1 ? 0 : gutter;
     const extent = Math.max(0, (row ? r.w : r.h) - g);
     const a = Math.round(extent * Math.min(1, Math.max(0, node.ratio)));

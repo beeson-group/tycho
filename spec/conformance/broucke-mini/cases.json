@@ -3,7 +3,7 @@
   "name": "family-7-periapsis, every derived frame against PyDyLAN",
   "source": "pydylan",
   "state": {
-   "variables": {
+   "inputs": {
     "family": "7",
     "branch": "periapsis"
    },
@@ -12,26 +12,26 @@
    },
    "panels": {
     "rotating": {
-     "view": "main",
-     "variables": {
+     "panel": "main",
+     "inputs": {
       "frame": "rotating"
      }
     },
     "barycentric-inertial": {
-     "view": "main",
-     "variables": {
+     "panel": "main",
+     "inputs": {
       "frame": "barycentric-inertial"
      }
     },
     "inertial-m1": {
-     "view": "main",
-     "variables": {
+     "panel": "main",
+     "inputs": {
       "frame": "inertial-m1"
      }
     },
     "inertial-m2": {
-     "view": "main",
-     "variables": {
+     "panel": "main",
+     "inputs": {
       "frame": "inertial-m2"
      }
     }
@@ -76,7 +76,7 @@
      "frame": "rotating",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "family-7-periapsis",
        "members": [
         {
@@ -1064,7 +1064,7 @@
      "frame": "barycentric-inertial",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "family-7-periapsis",
        "members": [
         {
@@ -2052,7 +2052,7 @@
      "frame": "inertial-m1",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "family-7-periapsis",
        "members": [
         {
@@ -3040,7 +3040,7 @@
      "frame": "inertial-m2",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "family-7-periapsis",
        "members": [
         {
@@ -4031,7 +4031,7 @@
   "name": "family-7-apoapsis, every derived frame against PyDyLAN",
   "source": "pydylan",
   "state": {
-   "variables": {
+   "inputs": {
     "family": "7",
     "branch": "apoapsis"
    },
@@ -4040,26 +4040,26 @@
    },
    "panels": {
     "rotating": {
-     "view": "main",
-     "variables": {
+     "panel": "main",
+     "inputs": {
       "frame": "rotating"
      }
     },
     "barycentric-inertial": {
-     "view": "main",
-     "variables": {
+     "panel": "main",
+     "inputs": {
       "frame": "barycentric-inertial"
      }
     },
     "inertial-m1": {
-     "view": "main",
-     "variables": {
+     "panel": "main",
+     "inputs": {
       "frame": "inertial-m1"
      }
     },
     "inertial-m2": {
-     "view": "main",
-     "variables": {
+     "panel": "main",
+     "inputs": {
       "frame": "inertial-m2"
      }
     }
@@ -4104,7 +4104,7 @@
      "frame": "rotating",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "family-7-apoapsis",
        "members": [
         {
@@ -5092,7 +5092,7 @@
      "frame": "barycentric-inertial",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "family-7-apoapsis",
        "members": [
         {
@@ -6080,7 +6080,7 @@
      "frame": "inertial-m1",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "family-7-apoapsis",
        "members": [
         {
@@ -7068,7 +7068,7 @@
      "frame": "inertial-m2",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "family-7-apoapsis",
        "members": [
         {
@@ -8059,7 +8059,7 @@
   "name": "family-8-periapsis, every derived frame against PyDyLAN",
   "source": "pydylan",
   "state": {
-   "variables": {
+   "inputs": {
     "family": "8",
     "branch": "periapsis"
    },
@@ -8068,26 +8068,26 @@
    },
    "panels": {
     "rotating": {
-     "view": "main",
-     "variables": {
+     "panel": "main",
+     "inputs": {
       "frame": "rotating"
      }
     },
     "barycentric-inertial": {
-     "view": "main",
-     "variables": {
+     "panel": "main",
+     "inputs": {
       "frame": "barycentric-inertial"
      }
     },
     "inertial-m1": {
-     "view": "main",
-     "variables": {
+     "panel": "main",
+     "inputs": {
       "frame": "inertial-m1"
      }
     },
     "inertial-m2": {
-     "view": "main",
-     "variables": {
+     "panel": "main",
+     "inputs": {
       "frame": "inertial-m2"
      }
     }
@@ -8132,7 +8132,7 @@
      "frame": "rotating",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "family-8-periapsis",
        "members": [
         {
@@ -9120,7 +9120,7 @@
      "frame": "barycentric-inertial",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "family-8-periapsis",
        "members": [
         {
@@ -10108,7 +10108,7 @@
      "frame": "inertial-m1",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "family-8-periapsis",
        "members": [
         {
@@ -11096,7 +11096,7 @@
      "frame": "inertial-m2",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "family-8-periapsis",
        "members": [
         {
@@ -12087,7 +12087,7 @@
   "name": "family-8-apoapsis, every derived frame against PyDyLAN",
   "source": "pydylan",
   "state": {
-   "variables": {
+   "inputs": {
     "family": "8",
     "branch": "apoapsis"
    },
@@ -12096,26 +12096,26 @@
    },
    "panels": {
     "rotating": {
-     "view": "main",
-     "variables": {
+     "panel": "main",
+     "inputs": {
       "frame": "rotating"
      }
     },
     "barycentric-inertial": {
-     "view": "main",
-     "variables": {
+     "panel": "main",
+     "inputs": {
       "frame": "barycentric-inertial"
      }
     },
     "inertial-m1": {
-     "view": "main",
-     "variables": {
+     "panel": "main",
+     "inputs": {
       "frame": "inertial-m1"
      }
     },
     "inertial-m2": {
-     "view": "main",
-     "variables": {
+     "panel": "main",
+     "inputs": {
       "frame": "inertial-m2"
      }
     }
@@ -12160,7 +12160,7 @@
      "frame": "rotating",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "family-8-apoapsis",
        "members": [
         {
@@ -13148,7 +13148,7 @@
      "frame": "barycentric-inertial",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "family-8-apoapsis",
        "members": [
         {
@@ -14136,7 +14136,7 @@
      "frame": "inertial-m1",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "family-8-apoapsis",
        "members": [
         {
@@ -15124,7 +15124,7 @@
      "frame": "inertial-m2",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "family-8-apoapsis",
        "members": [
         {

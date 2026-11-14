@@ -2,13 +2,13 @@
  * Readouts and the pure helpers behind the controls (section 2.9). The helpers cover number
  * formatting, the slider's stops, the text of a readout and its split into stat tiles, and the map
  * from wall time to the loop position that playback and a video export draw. They also cover the
- * frame rate shown during playback, the keyboard map, and the colorbar that sets a selector.
+ * frame rate shown during playback, the keyboard map, and the colorbar that sets a parameter input.
  */
 import { fail } from '../errors.js';
-import { driverMember, oneSet, querySets, variableDef, variableValue, type PanelScope } from '../evaluate/resolve.js';
+import { referenceMember, oneSet, querySets, inputDef, inputValue, type PanelScope } from '../evaluate/resolve.js';
 import type { SetCache } from '../evaluate/sets.js';
-import type { Control, Scene, SetQuery, State, TextPart, View } from '../scene.js';
-import { clockValue, timeAt, tweenValue, type Key } from '../evaluate/timeline.js';
+import type { Control, Panel, Scene, SetQuery, State, TextPart } from '../scene.js';
+import { clockValue, timeAt, keyframesValue, type Keyframe } from '../evaluate/timeline.js';
 import { channelAtReading, type GeometryCache } from './geometry.js';
 
 const MINUS = '−';
@@ -38,7 +38,7 @@ export function formatNumber(x: number, digits?: number, decimals?: number, grou
   return s.replace('e+', 'e').replace(/-/g, MINUS);
 }
 
-/** The options of a part that gives a number (rule K7). */
+/** The options of a part that gives a number (rule `timeline-parts`). */
 interface NumberFormat {
   width?: number;
   digits?: number;
@@ -48,20 +48,20 @@ interface NumberFormat {
   offset?: number;
 }
 
-/** A number of a part, scaled by its factor and offset and written by its format (rule K7). */
+/** A number of a part, scaled by its factor and offset and written by its format (rule `timeline-parts`). */
 function formatPart(x: number, p: NumberFormat): string {
   return formatNumber((p.factor ?? 1) * x + (p.offset ?? 0), p.digits, p.decimals, p.grouping ?? false).padStart(p.width ?? 0, ' ');
 }
 
-/** The slider's stops, which are the distinct parameter values of the matched track sets in increasing order (section 2.9). */
+/** The slider's stops, which are the distinct parameter values of the matched trajectory sets in increasing order (section 2.9). */
 export function sliderStops(scope: PanelScope, sets: SetCache, control: Extract<Control, { kind: 'slider' }>): number[] {
-  const sel = variableDef(scope.scene, control.variable);
-  if (sel?.kind !== 'selector' || sel.parameter === undefined) return [];
+  const sel = inputDef(scope.scene, control.input);
+  if (sel?.kind !== 'parameter' || sel.parameter === undefined) return [];
   const values: number[] = [];
   for (const id of querySets(scope, control.domain)) {
     const set = sets.get(id);
-    if (!Object.hasOwn(set.def.parameters ?? {}, sel.parameter)) continue;
-    const p = set.parameter(sel.parameter, '2.9');
+    if (!set.hasParameter(sel.parameter)) continue;
+    const p = set.parameter(sel.parameter, 'control');
     for (let t = 0; t < p.length; t++) values.push(p[t]!);
   }
   values.sort((a, b) => a - b);
@@ -75,27 +75,27 @@ export function nearestStop(stops: readonly number[], value: number): number {
   return best;
 }
 
-export { LAP_SECONDS, loopSeconds } from '../evaluate/timeline.js';
+export { REVOLUTION_SECONDS, loopSeconds } from '../evaluate/timeline.js';
 
 /**
  * The loop position, in frame indices and unwrapped, `time` after a playback showed frame index
- * `start`, with `perSecond` units of time to the second. A loop of `steps` lasts `seconds / speed`
+ * `start`, with `perSecond` units of time to the second. A loop of `frameCount` frames lasts `seconds / speed`
  * seconds. Live playback counts milliseconds and a video export its frames, and one division of
  * exact products keeps a position that should be an integer exact.
  */
-export function loopPosition(start: number, time: number, perSecond: number, steps: number, speed: number, seconds: number): number {
-  return start + (Math.max(0, time) * steps * speed) / (perSecond * seconds);
+export function loopPosition(start: number, time: number, perSecond: number, frameCount: number, speed: number, seconds: number): number {
+  return start + (Math.max(0, time) * frameCount * speed) / (perSecond * seconds);
 }
 
-/** The frame index at a loop position, i.e. its integer part wrapped into [0, steps). */
-export function positionIndex(x: number, steps: number): number {
+/** The frame index at a loop position, i.e. its integer part wrapped into [0, frameCount). */
+export function positionIndex(x: number, frameCount: number): number {
   const i = Math.floor(x);
-  return ((i % steps) + steps) % steps;
+  return ((i % frameCount) + frameCount) % frameCount;
 }
 
 /** The progress q in [0, 1) at a loop position, which lies between two frame indices while playing. */
-export function positionProgress(x: number, steps: number): number {
-  const q = (((x % steps) + steps) % steps) / steps;
+export function positionProgress(x: number, frameCount: number): number {
+  const q = (((x % frameCount) + frameCount) % frameCount) / frameCount;
   return q < 1 ? q : 0;
 }
 
@@ -104,16 +104,16 @@ export interface ReadoutContext {
   scene: Scene;
   geometry: GeometryCache;
   state: State;
-  /** The panel whose driver and values the readout reads. */
+  /** The panel whose reference and values the readout reads. */
   panel: string;
   frameIndex: number;
-  /** The progress at which the channel parts read, between two frame indices while playing. It defaults to frameIndex / steps. */
+  /** The progress at which the channel parts read, between two frame indices while playing. It defaults to frameIndex / frameCount. */
   progress?: number;
 }
 
 type Part = TextPart;
 
-/** The text of a readout. A part that the driver cannot give, because its query does not match any set, reads as a dash. */
+/** The text of a readout. A part that the reference cannot give, because its query does not match any set, reads as a dash. */
 export function readoutText(ctx: ReadoutContext, parts: readonly Part[]): string {
   return readoutPieces(ctx, parts).join('');
 }
@@ -124,17 +124,17 @@ export function readoutPieces(ctx: ReadoutContext, parts: readonly Part[]): stri
   const panel = state.panels[ctx.panel];
   if (panel === undefined || !Object.hasOwn(state.panels, ctx.panel)) return [];
   const scope: PanelScope = { scene, state, panel };
-  const view = scene.views[panel.view]!;
-  const steps = scene.clock.steps;
-  const i = ((ctx.frameIndex % steps) + steps) % steps;
-  const q = ctx.progress ?? i / steps;
-  let driver: { setId: string; track: number } | null | undefined;
-  const getDriver = () => {
-    if (driver === undefined) {
-      const id = oneSet(scope, view.driver.sets);
-      driver = id === null ? null : { setId: id, track: driverMember(scope, view.driver.member, geometry.sets.get(id)) };
+  const declared = scene.panels[panel.panel]!;
+  const frameCount = scene.clock.frame_count;
+  const i = ((ctx.frameIndex % frameCount) + frameCount) % frameCount;
+  const q = ctx.progress ?? i / frameCount;
+  let reference: { setId: string; trajectory: number } | null | undefined;
+  const getReference = () => {
+    if (reference === undefined) {
+      const id = oneSet(scope, declared.reference.sets);
+      reference = id === null ? null : { setId: id, trajectory: referenceMember(scope, declared.reference.member, geometry.sets.get(id)) };
     }
-    return driver;
+    return reference;
   };
   const out: string[] = [];
   const s = timeAt(scene.clock, q);
@@ -142,39 +142,39 @@ export function readoutPieces(ctx: ReadoutContext, parts: readonly Part[]): stri
     if (typeof p === 'string') out.push(p);
     else if ('sub' in p) out.push(p.sub);
     else if ('sup' in p) out.push(p.sup);
-    else if ('steps' in p) {
+    else if ('timed_text' in p) {
       let text = '';
-      for (const [t, v] of p.steps) if ((t as number) <= s) text = String(v);
+      for (const [t, v] of p.timed_text) if ((t as number) <= s) text = String(v);
       out.push(text);
-    } else if ('keys' in p) out.push(formatPart(tweenValue(p.keys as Key[], s), p));
+    } else if ('keyframes' in p) out.push(formatPart(keyframesValue(p.keyframes as Keyframe[], s), p));
     else if ('clock' in p) {
-      if (p.clock === 'index' || p.clock === 'steps') {
-        const n = p.clock === 'index' ? i : steps;
+      if (p.clock === 'frame_index' || p.clock === 'frame_count') {
+        const n = p.clock === 'frame_index' ? i : frameCount;
         const format = p.factor !== undefined || p.offset !== undefined || p.decimals !== undefined || p.grouping;
         out.push(format ? formatPart(n, p) : String(n).padStart(p.width ?? 0, ' '));
       } else if (p.clock === 'time') out.push(formatPart(s, p));
       else out.push(formatPart(scene.clock.mode === 'fraction' ? q : clockValue(scene.clock, q), p));
-    } else if ('var' in p) {
-      const v = variableValue(scope, p.var);
-      const def = variableDef(scene, p.var);
+    } else if ('input' in p) {
+      const v = inputValue(scope, p.input);
+      const def = inputDef(scene, p.input);
       if (typeof v === 'number') out.push(formatPart(v, p));
       else if (typeof v === 'boolean') out.push(v ? 'on' : 'off');
       else if (def?.kind === 'choice' && def.labels !== undefined) out.push(def.labels[def.values.indexOf(v)] ?? v);
       else out.push(v);
     } else {
-      const d = getDriver();
+      const d = getReference();
       if (d === null) {
         out.push('—');
         continue;
       }
       const set = geometry.sets.get(d.setId);
-      if ('member' in p) out.push(formatPart(set.parameter(p.member, '2.9')[d.track]!, p));
+      if ('parameter' in p) out.push(formatPart(set.parameter(p.parameter, 'control')[d.trajectory]!, p));
       else if ('attr' in p) out.push(formatPart(set.attr(p.attr), p));
       else if ('channel' in p) {
-        const tc = geometry.readings(d.setId, state.clock.channel).clocks[d.track]!;
-        if (!set.hasChannel(p.channel)) fail('2.9', `track set ${d.setId} lacks channel ${JSON.stringify(p.channel)}`);
+        const tc = geometry.readings(d.setId, state.clock.channel).clocks[d.trajectory]!;
+        if (!set.hasChannel(p.channel)) fail('control', `trajectory set ${d.setId} lacks channel ${JSON.stringify(p.channel)}`);
         const hold = set.def.channels?.[p.channel]?.interp === 'hold';
-        out.push(formatPart(channelAtReading(set, tc, d.track, p.channel, scene.clock, q, hold), p));
+        out.push(formatPart(channelAtReading(set, tc, d.trajectory, p.channel, scene.clock, q, hold), p));
       }
     }
   }
@@ -221,7 +221,7 @@ export function readoutTiles(parts: readonly Part[]): ReadoutTile[] | null {
     const label = before[before.length - 1]!.replace(/\s*[=:]\s*$/, '').trim();
     if (label === '') return null;
     const p = parts[values[k]!] as Exclude<Part, string>;
-    const width = 'clock' in p || 'keys' in p ? 5 : 'channel' in p ? (p.digits ?? 6) + 5 : null;
+    const width = 'clock' in p || 'keyframes' in p ? 5 : 'channel' in p ? (p.digits ?? 6) + 5 : null;
     tiles.push({ label, part: values[k]!, unit: after[0]!.trim(), width });
   }
   const constant = (t: ReadoutTile) => 'attr' in (parts[t.part] as object);
@@ -299,13 +299,13 @@ export type KeyAction =
  * The action of a key, following common video players. Space or k plays and pauses. The left and right
  * arrows step one frame and pause, and ten with Shift. Home or 0 goes to frame 0, and a digit from 1 to 9
  * goes to as many tenths of the loop. The key f fits every panel. The up and down arrows step the first
- * scene-scoped slider by one stop, or by ten with Shift. In a panel with an orbit camera, x, y, and z show
+ * shared slider by one stop, or by ten with Shift. In a panel with a 3d camera, x, y, and z show
  * the view from the positive side of that axis, and from the negative side with Shift, and "," and "." turn
  * it about the camera's up axis by 15 degrees, where "." turns it as a drag to the right does. Shift with
  * either turns it by 90 degrees. Shift with them gives "<" and ">" on a US keyboard and other characters
  * elsewhere, hence the two keys are then known by `code`, the `code` of the key event.
  */
-export function keyAction(key: string, shift: boolean, steps: number, code = ''): KeyAction | null {
+export function keyAction(key: string, shift: boolean, frameCount: number, code = ''): KeyAction | null {
   const n = shift ? 10 : 1;
   switch (key) {
     case 'x':
@@ -343,7 +343,7 @@ export function keyAction(key: string, shift: boolean, steps: number, code = '')
   }
   if (shift && code === 'Period') return { kind: 'turn', degrees: 90 };
   if (shift && code === 'Comma') return { kind: 'turn', degrees: -90 };
-  return /^[0-9]$/.test(key) ? { kind: 'seek', frame: Math.round((steps * Number(key)) / 10) % steps } : null;
+  return /^[0-9]$/.test(key) ? { kind: 'seek', frame: Math.round((frameCount * Number(key)) / 10) % frameCount } : null;
 }
 
 /** Whether a focused form control takes `key` itself, given the tag name and the `type` of the control. */
@@ -357,9 +357,9 @@ export function controlUsesKey(tag: string, type: string, key: string): boolean 
 
 // a colorbar as a slider
 
-/** The scene-scoped selector that dragging a colorbar sets, with the label of its control and the track sets that its stops come from. */
+/** The shared input of kind parameter that dragging a colorbar sets, with the label of its control and the trajectory sets that its stops come from. */
 export interface ColorbarLink {
-  variable: string;
+  input: string;
   label: string;
   domain: SetQuery;
 }
@@ -367,7 +367,7 @@ export interface ColorbarLink {
 /** The labels a colorbar over a parameter can carry, written as the renderer writes them, with the label or the name, then the unit. */
 function parameterLabels(scene: Scene, param: string): Set<string> {
   const out = new Set<string>([param]);
-  for (const set of Object.values(scene.track_sets)) {
+  for (const set of Object.values(scene.trajectory_sets)) {
     const params = set?.parameters;
     if (params === undefined || !Object.hasOwn(params, param)) continue;
     const def = params[param]!;
@@ -378,20 +378,20 @@ function parameterLabels(scene: Scene, param: string): Set<string> {
 }
 
 /**
- * The selector that a colorbar of `view` sets. It is found from the bar's label, through a track
- * layer colored by a parameter whose label the bar carries and a scene-scoped selector by nearest over the
- * same parameter. The stops come from the selector's slider domain, else from the layer's sets.
- * The result is null when a matching layer or a matching selector does not exist.
+ * The parameter input that a colorbar of the declared panel `panel` sets. It is found from the bar's label, through a trajectory
+ * layer colored by a parameter whose label the bar carries and a shared input of kind parameter over the
+ * same parameter. The stops come from the parameter input's slider domain, else from the layer's sets.
+ * The result is null when a matching layer or a matching parameter input does not exist.
  */
-export function colorbarLink(scene: Scene, view: View, barLabel: string): ColorbarLink | null {
-  for (const layer of view.layers) {
-    if (layer.kind !== 'track' || layer.color === undefined || typeof layer.color === 'string' || !('parameter' in layer.color)) continue;
+export function colorbarLink(scene: Scene, panel: Panel, barLabel: string): ColorbarLink | null {
+  for (const layer of panel.layers) {
+    if (layer.kind !== 'trajectories' || layer.color === undefined || typeof layer.color === 'string' || !('parameter' in layer.color)) continue;
     const param = layer.color.parameter;
     if (!parameterLabels(scene, param).has(barLabel)) continue;
-    for (const [id, v] of Object.entries(scene.variables ?? {})) {
-      if (v === undefined || v.kind !== 'selector' || v.scope === 'panel' || v.by === 'index' || v.parameter !== param) continue;
-      const control = (scene.controls ?? []).find((c): c is Extract<Control, { kind: 'slider' }> => c.kind === 'slider' && c.variable === id);
-      return { variable: id, label: control?.label ?? id, domain: control?.domain ?? layer.sets };
+    for (const [id, v] of Object.entries(scene.inputs ?? {})) {
+      if (v === undefined || v.kind !== 'parameter' || v.scope === 'per_panel' || v.parameter !== param) continue;
+      const control = (scene.controls ?? []).find((c): c is Extract<Control, { kind: 'slider' }> => c.kind === 'slider' && c.input === id);
+      return { input: id, label: control?.label ?? id, domain: control?.domain ?? layer.sets };
     }
   }
   return null;

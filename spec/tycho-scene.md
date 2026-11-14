@@ -1,282 +1,863 @@
 # The TyCHO scene format
 
-This is the contract between `pytycho`, which writes a scene, and the browser runtime, which draws it. It has three parts:
+This file is the contract between `pytycho`, which writes a scene, and the browser runtime, which draws it.
+The contract has three parts:
 
 1. the structure in `scene.schema.json`,
-2. the list of numbered rules in this file (categorized by letter), and
-3. the conformance corpus in `conformance/`, which both the python package and the runtime implementations run.
-Where two conflicting readings of a rule are possible, the corpus has higher priority, and the rule should then be amended and reworded accordingly.
+2. the named rules in this file, and
+3. the conformance corpus in `conformance/`, which both the Python package and the runtime run.
 
-The setup for the animation is split between `data.tyd`, which holds raw data as named typed arrays, and `scene.tys`, which is JSON that contains information about the data for the scene.
+Where two conflicting readings of a rule are possible, the corpus is taken as right, and the rule is then reworded to match it.
+
+Each rule is a bullet that opens with its name in backticks, and an error of the code and a case of the corpus cite a rule by this name.
+Each section that a reader checks as a whole also has a rule named after the section, under which the reader rejects what the other rules of the section do not cover.
+
+A scene is split between `data.tyd`, the data container, in which the raw data is stored as named, typed arrays, and `scene.tys`, the scene document, a JSON file in which what is drawn from these arrays, and how, is described.
 
 ## 1. The data container, `data.tyd`
 
-The data container is at version 1. A reader of a later container version keeps reading version 1, hence files written today stay readable (rule D3).
+The data container is at version 2, and a reader rejects every other version (rule `container-version`).
 
 ```
 bytes 0..3    magic word "TYCD", i.e. the ASCII bytes for the letters T, Y, C, D
-bytes 4..7    u32 little endian, which stores the container's format version (01 00 00 00 for version 1)
+bytes 4..7    u32 little endian, which stores the container's format version (02 00 00 00 for version 2)
 bytes 8..11   u32 little endian, byte length of the JSON header, not counting its padding
 header        UTF-8 encoded JSON (with no "EF BB BF" byte order mark preceding the JSON), then padded with zero bytes up to the payload
 payload       the actual data, starting at a byte number which is the smallest multiple of 8, that is at least 12 plus the header length
 ```
 
-The header is one JSON object, `{"format": "tycho-data", "version": 1, "generator": string, "meta": object, "views": {name: view}}`. The key `format` is always the string `"tycho-data"`, which tells a reader what kind of file it has opened, and `version` repeats the container version of the preamble. The key `generator` is free text specifying the program that wrote the file (e.g. a pytycho version), and `meta` is an object of extra information about the file. Both `generator` and `meta` are optional. The one entry of `meta` that the format defines is `meta.casts`, which maps the name of a view to the dtype, i.e. the element type (such as `float64` or `int32`), that the array had before the writer cast it to the dtype that is actually stored (see below, rule D1 says when a writer casts).
+The header is one JSON object, `{"format": "tycho-data", "version": 2, "generator": string, "meta": object, "arrays": {name: array}}`.
+The key `format` is always the string `"tycho-data"`, which tells a reader what kind of file it has opened, and `version` repeats the container version of the preamble.
+The key `generator` is free text that names the program that wrote the file (e.g. a pytycho version), and `meta` is an object of extra information about the file.
+Both `generator` and `meta` are optional.
+The one entry of `meta` that the format defines is `meta.casts`, which maps the name of an array to the dtype, i.e. the element type (such as `float64` or `int32`), that the array had before the writer cast it to the dtype that is stored (rule `array-dtype` says when a writer casts).
 
-A view is the description of one stored array, and `views` (the variable) maps the name of each array to its view. A view is defined as `{"dtype": string, "shape": [int, ...], "encoding": string, ...}`, in which `dtype` is the element type of the array, `shape` is its size along each axis (e.g. `[1000, 3]` for 1000 rows of three coordinates), and `encoding` specifies how the bytes of the array are stored in the payload. The encoding also determines which further keys the view has:
+The key `arrays` maps the name of each stored array to its entry, `{"dtype": string, "shape": [int, ...], "encoding": string, ...}`.
+In an entry, `dtype` is the element type of the array, `shape` is its size along each axis (e.g. `[1000, 3]` for 1000 rows of three coordinates), and `encoding` names how the bytes of the array are stored in the payload.
+The encoding also determines which further keys the entry has.
 
-- A view with the encoding `"raw"` also has the keys `"offset": int, "length": int`. A raw view holds the bytes of the array as they are in memory, little endian encoded, starting at byte `offset` of the payload and running for `length` bytes. A reader can use these bytes in place, i.e. point a typed array at them without copying them.
-- A view with the encoding `"shuffle-delta-deflate"` also has the keys `"chunk_rows": int, "chunks": [[offset, length], ...]`. This encoding compresses the array. The array is cut along its first axis into chunks of `chunk_rows` rows each, and each chunk is stored as one zlib stream (a compressed sequence of bytes in the zlib format, see rule D5) of `length` bytes starting at byte `offset` of the payload. The list `chunks` gives one `[offset, length]` pair per chunk, in order. Each chunk decodes independently of the others, which means that a reader can decode some rows of the array without decoding the rest.
+- An array with the encoding `"raw"` also has the keys `"offset": int, "length": int`.
+  The bytes of a raw array are stored as they are in memory, little endian, from byte `offset` of the payload and for `length` bytes.
+  A reader can use these bytes in place, i.e. point a typed array at them without copying them.
+- An array with the encoding `"shuffle-delta-deflate"` also has the keys `"chunk_rows": int, "chunks": [[offset, length], ...]`.
+  This encoding compresses the array.
+  The array is cut along its first axis into chunks of `chunk_rows` rows each, and each chunk is stored as one zlib stream (a compressed sequence of bytes in the zlib format, see rule `shuffle-delta-deflate`) of `length` bytes from byte `offset` of the payload.
+  The list `chunks` gives one `[offset, length]` pair per chunk, in order.
+  Each chunk is decoded independently of the others, hence a reader can decode some rows of the array without decoding the rest.
 
-Offsets and lengths are in bytes, and offsets count from the start of the payload (byte 0 of the payload is the first byte after the zero padding of the header), not from the start of the file. A writer stores the views in the order in which they were added (i.e. insertion order), and stores the chunks of a view one after another. It pads the bytes of each view with zeros to a multiple of 8, so that every raw view starts at a byte offset that is a multiple of 8. This alignment is what lets a reader use a raw view in place, because a typed array of 8-byte elements (`float64`) must start at a multiple of 8. A reader rejects a header, a `views` variable, or a view that is not a JSON object, and it never reads the padding bytes.
+Offsets and lengths are in bytes, and offsets count from the start of the payload (byte 0 of the payload is the first byte after the zero padding of the header), not from the start of the file.
+A writer stores the arrays in the order in which they were added, and stores the chunks of an array one after another.
+It pads the bytes of each array with zeros to a multiple of 8, so that every raw array starts at a byte offset that is a multiple of 8.
+This alignment lets a reader use a raw array in place, because a typed array of 8-byte elements (`float64`) must start at a multiple of 8.
+A reader never reads the padding bytes.
 
-The rules for the data container follow (we use the letter "D" as a shorthand for "Data"):
+The rules for the data container follow.
 
-- D1. The dtypes are `int8`, `uint8`, `int16`, `uint16`, `int32`, `uint32`, `float32`, and `float64`, where the number is the width of one element in bits, the prefix `u` marks an unsigned integer, and `float` marks an IEEE 754 floating-point number. Every dtype wider than one byte is little endian. A writer never changes a dtype silently (without reporting it has done so). The stored dtype is either the dtype that the caller (i.e. whoever calls the methods that builds the container) specifies when adding the array or, when the caller does not specify one, the dtype of the array itself, and any other dtype will throw an error (e.g. an array whose dtype is not in the list is refused unless the caller specifies a dtype from the list to cast it to). A cast that the caller specifies is recorded in `meta.casts`, so that a reader can tell what the original dtype was. Since the header is JSON, every number in it is finite, because JSON cannot represent NaN or infinity.
-- D2. A view has the keys `dtype`, `shape`, and `encoding`, plus the further keys of its encoding (`"raw"`, `"shuffle-delta-deflate"`, listed above), and it does not have any other key. A reader rejects a view with an unknown key, a missing key, or an unknown encoding, since a key or an encoding added in a later version may change how the bytes have to be read, and a reader that ignored it would read them wrongly. The `shape` of a view has at least one entry, and a view with a zero in its shape is allowed and is empty, i.e. it does not hold any element. In a raw view, `length` must equal the product of the entries of `shape` times the item size, i.e. the number of elements times the number of bytes per element, computed without rounding, and `offset` must be a multiple of 8. A reader rejects a raw view for which either above condition does not hold, or whose bytes run past the end of the file.
-- D3. A reader of container version 1 rejects a file of any other version. A reader of a later container version keeps reading version 1, so that files written today stay readable. Any change to how the bytes of a view are stored, such as a new encoding, changes the container version, since an older reader could not read such a file correctly.
-- D4. Arrays are stored in "C order" (i.e. row-major order), in which the last index varies fastest. For an array of shape `(S, 3)`, the bytes hold the three coordinates of row 0, then the three coordinates of row 1, and so on. This is the memory order of a C array and the default order of a NumPy array, as opposed to the column-major order of Fortran and MATLAB.
-- D5. This rule defines the `shuffle-delta-deflate` encoding. Consider a view of `n` rows, i.e. `n` is the first entry of its shape. Let `w` be the number of elements in one row, which is the product of the other entries of the shape (and 1 for a one-dimensional view, whose rows are single elements). Let `s` be the item size in bytes (1 for `int8`, 8 for `float64`), and let `r` be `chunk_rows`, a positive integer defining how many rows every chunk except the last one takes up. The view has `ceil(n / r)` chunks, and zero chunks when `n` is 0. Chunk `k`, counted from 0, holds the rows from `k * r` up to but not including `min((k + 1) * r, n)`, so that every chunk has `r` rows apart from the last, which may be shorter. A chunk of `m` rows is encoded in four steps.
-  1. Its `m * w` elements, taken in C order, are read as unsigned little endian integers of `s` bytes each. A float is read as the integer with the same bit pattern, not converted by value, so that NaN payloads, signed zeros, and subnormal numbers (floats that are too small for the number format) survive the round trip bit for bit. The integer at row `i` and column `j` is written `u[i][j]`.
-  2. The delta step replaces each row by its difference from the row before it. The first row stays as it is, `d[0][j] = u[0][j]`, and for `i` from 1 on, `d[i][j] = (u[i][j] - u[i-1][j]) mod 2^(8s)`, i.e. the difference wrapped around to the range of an unsigned integer of `s` bytes. Along a smooth trajectory consecutive rows are close, hence the deltas are small numbers with many zero bytes, which compress well.
-  3. The shuffle step reorders the bytes of the deltas so that the bytes of the same significance in each element at index `e` (where there are `m * w` in total) sit next to each other. Let `b[e*s + q]` be byte `q` of element `e` of `d`, with the elements in C order and the bytes of each element in little endian order. The shuffled bytes are `t[q*m*w + e] = b[e*s + q]`, i.e. first the first byte of every element, then the second byte of every element, and so on up to the last byte. After this step the zero bytes of the deltas lie in long runs, which deflate compresses better than scattered zeros.
-  4. The shuffled bytes `t` are compressed, at any compression level, as one zlib stream in the format that the browser's `DecompressionStream('deflate')` reads. This format, defined in RFC 1950 (which is sophisticated run length encoding), is the deflate algorithm with a two-byte zlib header in front and the Adler-32 checksum (parity check) of `t` appended, without a preset dictionary.
+- `container`. A reader rejects a file that lacks the 12-byte preamble with the magic word `TYCD`, whose header runs past the end of the file or is not a JSON object with the `format` `"tycho-data"`, or whose `generator`, `meta`, `arrays`, or entry of `arrays` is not of the type given above.
+- `array-dtype`. The dtypes are `int8`, `uint8`, `int16`, `uint16`, `int32`, `uint32`, `float32`, and `float64`, where the number is the width of one element in bits, the prefix `u` marks an unsigned integer, and `float` marks an IEEE 754 floating-point number.
+  Every dtype wider than one byte is little endian.
+  A writer never changes a dtype without reporting it.
+  The stored dtype is either the dtype that the caller (i.e. whoever calls the methods that build the container) gives when adding the array or, when the caller does not give one, the dtype of the array itself, and a writer raises an error for any other dtype.
+  An array whose dtype is not in the list is thus refused, unless the caller gives a dtype from the list to cast it to.
+  A cast that the caller gives is recorded in `meta.casts`, so that a reader can tell what the original dtype was.
+  Since the header is JSON, every number in it is finite, because JSON cannot represent NaN or infinity.
+- `array-keys`. An entry of `arrays` has the keys `dtype`, `shape`, and `encoding`, plus the further keys of its encoding (`"raw"` or `"shuffle-delta-deflate"`, listed above), and it does not have any other key.
+  A reader rejects an entry with an unknown key, a missing key, or an unknown encoding, since a key or an encoding added in a later version may change how the bytes have to be read, and a reader that ignored it would read them wrongly.
+  The `shape` of an array has at least one entry, and an array with a zero in its shape is allowed and is empty, i.e. it does not hold any element.
+  In a raw array, `length` must equal the product of the entries of `shape` times the item size, i.e. the number of elements times the number of bytes per element, computed without rounding, and `offset` must be a multiple of 8.
+  A reader rejects a raw array for which either condition does not hold, or whose bytes run past the end of the file.
+- `container-version`. A reader rejects a container of any version but 2.
+  Any change to how the bytes of an array are stored, such as a new encoding, changes the container version, since an older reader could not read such a file correctly.
+- `c-order`. Arrays are stored in C order (i.e. row-major order), in which the last index varies fastest.
+  For an array of shape `(S, 3)`, the bytes hold the three coordinates of row 0, then the three coordinates of row 1, and so on.
+  This order is the memory order of a C array and the default order of a NumPy array, as opposed to the column-major order of Fortran and MATLAB.
+- `shuffle-delta-deflate`. This rule defines the `shuffle-delta-deflate` encoding.
+  Consider an array of `n` rows, i.e. `n` is the first entry of its shape.
+  Let `w` be the number of elements in one row, which is the product of the other entries of the shape (and 1 for a one-dimensional array, whose rows are single elements).
+  Let `s` be the item size in bytes (1 for `int8`, 8 for `float64`), and let `r` be `chunk_rows`, a positive integer, the number of rows of every chunk but the last.
+  The array has `ceil(n / r)` chunks, and zero chunks when `n` is 0.
+  Chunk `k`, counted from 0, holds the rows from `k * r` up to but not including `min((k + 1) * r, n)`, so that every chunk has `r` rows apart from the last, which may be shorter.
+  A chunk of `m` rows is encoded in four steps.
+  1. Its `m * w` elements, taken in C order, are read as unsigned little endian integers of `s` bytes each.
+     A float is read as the integer with the same bit pattern, not converted by value, so that NaN payloads, signed zeros, and subnormal numbers (floats that are too small for the normal form of the number format) survive the round trip bit for bit.
+     The integer at row `i` and column `j` is written `u[i][j]`.
+  2. In the delta step, each row is replaced by its difference from the row before it.
+     The first row stays as it is, `d[0][j] = u[0][j]`, and for `i` from 1 on, `d[i][j] = (u[i][j] - u[i-1][j]) mod 2^(8s)`, i.e. the difference wrapped around to the range of an unsigned integer of `s` bytes.
+     Along a smooth trajectory consecutive rows are close, hence the deltas are small numbers with many zero bytes, which compress well.
+  3. In the shuffle step, the bytes of the deltas are reordered so that the bytes of the same significance in each of the `m * w` elements are next to each other.
+     Let `b[e*s + q]` be byte `q` of element `e` of `d`, with the elements in C order and the bytes of each element in little endian order.
+     The shuffled bytes are `t[q*m*w + e] = b[e*s + q]`, i.e. first the first byte of every element, then the second byte of every element, and so on up to the last byte.
+     After this step the zero bytes of the deltas lie in long runs, which deflate compresses better than scattered zeros.
+  4. The shuffled bytes `t` are compressed, at any compression level, as one zlib stream in the format that the browser's `DecompressionStream('deflate')` reads.
+     This format, defined in RFC 1950, is the deflate algorithm with a two-byte zlib header in front and the Adler-32 checksum of `t` appended, without a preset dictionary.
 
-  Decoding reverses the four steps: it inflates the stream, undoes the shuffle, and sums the deltas down each column modulo `2^(8s)`, which gives back every bit of the original elements. A reader rejects a view whose `chunk_rows` is not a positive integer, whose `chunks` is not a list of `[offset, length]` pairs of nonnegative integers, or whose `chunks` holds a number of chunks other than `ceil(n / r)`. It also rejects a view with a chunk that runs past the end of the file. It rejects a chunk that does not inflate, whose checksum does not match, that has bytes left after its stream ends, or that inflates to a number of bytes other than `m * w * s`. A writer may store any view raw instead. pytycho stores a view shuffle-delta-deflate, in chunks of about 1 MiB of raw bytes and at least one row each, unless the encoded view would not be smaller than the raw view, in which case it stores the view raw.
+  Decoding reverses the four steps: the stream is inflated, the shuffle is undone, and the deltas are summed down each column modulo `2^(8s)`, which gives back every bit of the original elements.
+  A reader rejects an array whose `chunk_rows` is not a positive integer, whose `chunks` is not a list of `[offset, length]` pairs of nonnegative integers, or whose `chunks` holds a number of chunks other than `ceil(n / r)`.
+  It also rejects an array with a chunk that runs past the end of the file.
+  It rejects a chunk that does not inflate, whose checksum does not match, that has bytes left after its stream ends, or that inflates to a number of bytes other than `m * w * s`.
+  A writer may store any array raw instead.
+  pytycho stores an array shuffle-delta-deflate, in chunks of about 1 MiB of raw bytes and at least one row each, unless the encoded array would not be smaller than the raw array, in which case it stores the array raw.
 
 ## 2. The scene document, `scene.tys`
 
-The scene document is the JSON file that specifies what to draw from the arrays of the data container, and how. Its top-level keys are `format` (always the string `"tycho-scene"`), `version` (the version of the scene format, rule S1), `requires` (the features of section 4 that the scene uses), `generator` (the program that wrote it), `title`, `theme` (the background, foreground, and grid colors of the page), `frames` (the coordinate frames, section 2.3), `bodies` (named points such as the primary and the secondary, section 2.4), `track_sets` (the trajectories, section 2.1), `variables` (the state that the viewer can change, section 2.5), `clock` (the animation time, section 2.6), `views` (the templates of the panels, section 2.7), `controls` and `readouts` (the widgets and the numbers shown, section 2.9), and `initial` (the starting state, section 2.8). A key that is not in the schema described above can never be written by the writer. When the `scene.tys` is read, the reader will warn if it detects a key that is not known and it will ignore it, at every level of the document, since keys may be added in a later minor version (rule S1) and an older reader should still draw the parts of the scene that it implements (i.e. "forward compatibility").
+The scene document is the JSON file in which what is drawn from the arrays of the data container, and how, is described.
+Its top-level keys are the following.
 
-The S rules below apply to the scene document only, and not to the data container, which is read by `web/src/container.ts` and `src/pytycho/container.py`. The term "scene reader" means the code that checks `scene.tys` against the schema and the rules below, before any part of the scene is evaluated or drawn, i.e. `web/src/validate.ts` in the browser runtime. `pytycho` does not load a `scene.tys`, and of the S rules its evaluator `src/pytycho/_evaluate.py` checks only S4 (every number it reads is finite), the reserved channel name `@index` of S3, and the layer kinds of S1. The term "renderer" means the code that draws the page, i.e. the `<tycho-viewer>` element and `web/src/runtime/`, and text is put into the page by the renderer alone.
+- `format` is always the string `"tycho-scene"`.
+- `version` is the version of the scene format (rule `version`).
+- `requires` lists the features of section 4 that the scene uses.
+- `generator` names the program that wrote the scene.
+- `title` is the title of the page.
+- `theme` gives the background, foreground, and grid colors of the page.
+- `frames` declares the frames (section 2.3).
+- `bodies` declares named points such as the primary and the secondary (section 2.4).
+- `trajectory_sets` declares the trajectories (section 2.1).
+- `inputs` declares the values that the person at the page can change (section 2.5).
+- `clock` describes the time of the animation (section 2.6).
+- `panels` declares the panels that a page may show (section 2.7).
+- `controls` and `readouts` declare the widgets and the texts of current values (section 2.9).
+- `initial` is the starting state (section 2.8).
+- `steps` and `overlays` belong to the timeline (section 2.11).
 
-The rules for the scene document as a whole follow (we use the letter "S" as a shorthand for "Scene"):
+A writer never writes a key that is not in the schema.
+When `scene.tys` is read, a reader warns about a key that it does not know and ignores it, at every level of the document, so that a reader still draws the parts of a scene that it implements.
 
-- S1. The `version` of a scene is a string `"major.minor"`, e.g. `"0.4"`. A minor version only contains additions, i.e. what an earlier minor version defined is never changed or removed. In the scene reader, a scene is rejected when its major version is unknown, and also when its `requires` lists a feature that is not implemented. When a scene has both faults, both are reported in one message. Until version 1.0, a scene of a newer minor version than the one implemented is rejected as well, i.e. before 1.0 a newer scene is never opened by an older scene reader. A layer kind, a control kind, or a feature of section 4 that is not implemented causes rejection, whether or not `requires` lists the feature.
-- S2. Every string in a scene (i.e. titles, labels, or readout parts) is plain Unicode text. A string is written into the page by the renderer only as DOM text nodes or canvas text, never as HTML, hence a string cannot inject markup or script into the page. The format does not have any markup, i.e. HTML, Markdown, or LaTeX in a string is not interpreted.
-- S3. Identifiers (the keys of `frames`, `bodies`, `track_sets`, `variables`, and `views`, and the ids of the panels) match the regular expression `[A-Za-z0-9_.-]+` as a whole, i.e. they consist only of ASCII letters, digits, underscores, dots, and hyphens, with at least one character. The channel name `@index` is reserved for the built-in channel of rule T4 (see below), and a track set may not declare a channel of this name.
-- S4. Every number in `scene.tys` is finite. NaN (not a number) and infinity are refused when a scene is written, and a document that contains them is rejected by the scene reader. JSON itself cannot represent them, but some JSON writers emit them as nonstandard tokens.
+The rules of this section apply to the scene document only, and not to the data container, which is read by `web/src/container.ts` and `src/pytycho/container.py`.
+The validator is the code that checks `scene.tys` against the schema and the rules below, before any part of the scene is evaluated or drawn, i.e. `web/src/validate.ts` in the runtime.
+`pytycho` does not load a `scene.tys`, and of the rules of this section its evaluator `src/pytycho/_evaluate.py` checks only `finite-number`, the reserved name `@index` of rule `identifier`, and the layer kinds of rule `version`.
+The renderer is the code that draws the page, i.e. the `<tycho-viewer>` element and `web/src/runtime/`, and text is put into the page by the renderer alone.
 
-### 2.1 Track sets
+The rules for the scene document as a whole follow.
 
-A track is one trajectory, i.e. a sequence of samples, where each sample is one stored point of the trajectory together with the other numbers stored for that point. A track set is a collection of `tracks` tracks (the key `tracks` holds the count) that share a frame and a meaning, e.g. the members of one family of periodic orbits. The samples of all the tracks of the set are concatenated into single arrays, one track after another, and the key `offsets` refers to a `uint32` view of shape `(tracks + 1,)` that marks where each track begins, with `offsets[0] = 0`. Track `i` consists of the samples from `offsets[i]` up to but not including `offsets[i + 1]`, hence it has `offsets[i + 1] - offsets[i]` samples. The total number of samples in the set is `S = offsets[tracks]`, the last entry. The data of the set is held by the keys below, of which only `positions` is required.
+- `scene`. A reader rejects a document that is not a JSON object, or that lacks one of the required keys `format`, `version`, `frames`, `trajectory_sets`, `clock`, `panels`, and `initial`.
+- `version`. The `version` of a scene is a string `"major.minor"`, e.g. `"0.5"`.
+  Before version 1.0, a key, a value, or a feature may be renamed or removed from one minor version to the next, without an alias for the old name, and a scene of an older minor version is therefore rejected by the rules on the renamed keys and values.
+  From version 1.0 on, a minor version only adds to the format, i.e. what an earlier minor version defined is never changed or removed.
+  The validator rejects a scene of another major version or of a newer minor version.
+  The validator also rejects a scene whose `requires` lists a feature that it does not implement.
+  When a scene has both faults, both are reported in one message.
+  A layer kind, a control kind, or a feature of section 4 that is not implemented causes rejection, whether or not `requires` lists the feature.
+- `plain-text`. Every string in a scene (i.e. a title, a label, or a part of a readout) is plain Unicode text.
+  A string is written into the page by the renderer only as DOM text nodes or canvas text, never as HTML, hence a string cannot inject markup or script into the page.
+  The format does not have any markup, i.e. HTML, Markdown, or LaTeX in a string is not interpreted.
+- `identifier`. Identifiers (the keys of `frames`, `bodies`, `trajectory_sets`, `inputs`, and `panels`, the ids of the shown panels, and the ids of the steps) match the regular expression `[A-Za-z0-9_.-]+` as a whole, i.e. they consist only of ASCII letters, digits, underscores, dots, and hyphens, with at least one character.
+  The name `@index` is reserved for the built-in channel and the built-in parameter of rule `index-channel`, and a trajectory set may not declare a channel or a parameter of this name.
+- `finite-number`. Every number in `scene.tys` is finite.
+  NaN (not a number) and infinity are refused when a scene is written, and a document that contains them is rejected by the validator.
+  JSON itself cannot represent them, but some JSON writers emit them as nonstandard tokens.
 
-- The key `positions` refers to a view of shape `(S, 2)` or `(S, 3)`, which holds the coordinates of every sample in the set's `frame` (see section 2.3), i.e. the coordinate frame in which the trajectories were computed. A two-component position is planar and has `z = 0`.
-- Each entry of `channels` refers to a view of shape `(S,)`, i.e. one scalar per sample, such as the time or the true anomaly along the trajectory (this is the independent variable of the dynamics). A channel entry also has an `interp`, either `linear`, the default, or `hold`, which is meant to specify how the channel is interpolated between samples. The key `interp` is read by the channel parts of a readout (rule K7), and by no other rule.
-- Each entry of `parameters` refers to a view of shape `(tracks,)`, i.e. one finite scalar per track, such as the Jacobi constant or the period of each orbit.
-- The key `tags` maps names to strings, and `attrs` maps names to numbers. Both hold for the whole set, e.g. a tag `"family": "7"` or an attribute `"mu": 0.01215`.
+### 2.1 Trajectory sets
 
-The rules for track sets follow (we use the letter "T" as a shorthand for "Track"):
+A trajectory is a sequence of samples, where each sample is one stored point of the trajectory together with the value of every channel at this point.
+A trajectory set holds `trajectories` trajectories (the key holds the count) that share a frame and a meaning, e.g. the members of one family of periodic orbits.
+The samples of all the trajectories of the set are concatenated into single arrays, one trajectory after another.
+The key `offsets` names a `uint32` array of shape `(trajectories + 1,)` that marks where each trajectory begins, with `offsets[0] = 0`.
+Trajectory `i` consists of the samples from `offsets[i]` up to but not including `offsets[i + 1]`, hence it has `offsets[i + 1] - offsets[i]` samples.
+The total number of samples in the set is `S = offsets[trajectories]`, the last entry.
+The data of the set is named by the keys below, of which only `positions` is required.
 
-- T1. Every track has at least two samples, so that it has at least one segment to draw.
-- T2. With `periodic: true`, the set declares that each of its tracks is a closed loop: the last sample of every track is declared to be the closing sample, i.e. the first sample again, one period later. The advance of a channel over one period is then its value at the last sample minus its value at the first (e.g. the advance of a time channel is the period). Whether the positions of the last and the first sample coincide is not checked. The key `periodic` defaults to `false` if unspecified.
-- T3. A channel listed in `clock.channels` (see section 2.6) can drive the animation, and it is therefore strictly monotone, increasing or decreasing, along every track of every set that carries it, so that each value of the channel occurs once on a track (i.e. has to be a one to one mapping). On a track of `m` samples, where the channel takes the values `c[0]` to `c[m-1]`, these values are finite, and so is their span `c[m-1] - c[0]`, which is then nonzero. Tracks are always traversed in storage order, i.e. from sample 0 upward, even when the channel decreases. These conditions are checked by the writer before writing, and also checked by the reader at load time or when it takes a reading of some value (rule C2). Rule C5 specifies which sets must carry a clock channel.
-- T4. The built-in channel `@index` has the value `i` at sample `i` of a track, counted from the track's first sample, i.e. it is the sample number itself. It counts stored samples, and thinning a set (dropping samples) therefore changes it. It may serve as a clock channel, but not in a frame edge (the link from a parent frame to a child frame, see section 2.3) or in a readout part (one item of the list from which a line of text on the page is built, see section 2.9), where `{"clock": "index"}` gives the frame index instead.
+- The key `positions` names an array of shape `(S, 2)` or `(S, 3)`, which holds the coordinates of every sample in the set's `frame` (section 2.3), i.e. the frame in which the trajectories were computed.
+  A two-component position is planar and has `z = 0`.
+- Each entry of `channels` is `{"array": name}`, which names an array of shape `(S,)`, i.e. one scalar per sample, such as the time or the true anomaly along the trajectory.
+  A channel entry also has an `interp`, either `linear`, the default, or `hold`, which says how the channel is interpolated between samples.
+  The key `interp` is read by the channel parts of a readout (rule `timeline-parts`), and by no other rule.
+- Each entry of `parameters` is `{"array": name}`, which names an array of shape `(trajectories,)`, i.e. one finite scalar per trajectory, such as the Jacobi constant or the period of each orbit.
+- The key `tags` maps names to strings, and `attrs` maps names to numbers.
+  Both hold for the whole set, e.g. a tag `"family": "7"` or an attribute `"mu": 0.01215`.
+
+The rules for trajectory sets follow.
+
+- `trajectory-set`. A reader rejects a trajectory set that is named but not declared, that lacks `frame`, `trajectories`, `offsets`, or `positions`, whose arrays are missing from the data container or do not have the dtype and the shape given above, or whose parameter is not finite.
+- `two-samples`. Every trajectory has at least two samples, so that it has at least one segment to draw.
+- `periodic`. With `periodic: true`, the set declares that each of its trajectories is periodic, i.e. the last sample of every trajectory is declared to be the closing sample, the first sample again one period later.
+  The advance of a channel over one revolution is then its value at the last sample minus its value at the first (e.g. the advance of a time channel is the period).
+  Whether the positions of the last and the first sample coincide is not checked.
+  The key `periodic` defaults to `false`.
+- `monotone-clock-channel`. A channel listed in `clock.channels` (section 2.6) can be the clock channel, and it is therefore strictly monotone, increasing or decreasing, along every trajectory of every set that carries it, so that each value of the channel occurs once on a trajectory.
+  On a trajectory of `m` samples, where the channel takes the values `c[0]` to `c[m-1]`, these values are finite, and so is their span `c[m-1] - c[0]`, which is then nonzero.
+  Trajectories are always traversed in storage order, i.e. from sample 0 upward, even when the channel decreases.
+  These conditions are checked by the writer, and also by the reader at load or when it computes a fraction along a trajectory (rule `clock-mode`).
+  Rule `clock-channel-carried` says which sets must carry a clock channel.
+- `index-channel`. The built-in channel `@index` has the value `i` at sample `i` of a trajectory, counted from the trajectory's first sample, i.e. it is the sample number itself.
+  It counts stored samples, and thinning a set (dropping samples) therefore changes it.
+  It may serve as a clock channel, but not in a transform (section 2.3) or in a readout part (section 2.9), where `{"clock": "frame_index"}` gives the frame index instead.
+  The built-in parameter `@index` has the value `i` on member `i` of a set, counted from 0, i.e. it is the number of the member in its set.
 
 ### 2.2 Numbers that depend on context
 
-Several fields of a scene take a scalar, i.e. one number, that may depend on which track set, track, and sample is being evaluated. The scalar is given in one of three forms, and the field that takes the form determines whether the form is allowed or not. The three forms are:
+Several fields of a scene take a scalar, i.e. one number, that may depend on which trajectory set, trajectory, and sample is being evaluated.
+The scalar is given in one of three forms, and the field determines which forms it allows.
 
-- A number, i.e. a constant.
-- An attribute, which contains one parameter in `name`, and can express any linear combination of the parameter. The attribute is stored as `{"attr": name, "factor": a, "offset": b}`, and its value is computed as `a * attrs[name] + b`, where `attrs[name]` is the parameter on the track set (see section 2.1), `factor` defaults 1, and `offset` to 0. The factor and the offset let one parameter serve several attributes, e.g. the primary's origin at `-mu` and the secondary's at `1 - mu` from one parameter `mu`.
-- A channel, `{"channel": name}`, whose value is the value of the channel at one sample, so that the scalar changes along the track. The channel `@index` is not allowed here.
+- A number is a constant.
+- An attribute, `{"attr": name, "factor": a, "offset": b}`, has the value `a * attrs[name] + b`, where `attrs[name]` is the attribute of the trajectory set (section 2.1), `factor` defaults to 1, and `offset` to 0.
+  The factor and the offset let one attribute serve several scalars, e.g. the origin of the primary at `-mu` and the origin of the secondary at `1 - mu`, both from one attribute `mu`.
+- A channel, `{"channel": name}`, has the value of the channel at one sample, so that the scalar changes along the trajectory.
+  The channel `@index` is not allowed here.
 
-A scalar given as an attribute (or as a channel) is written in the `scene.tys` file as a name, not as a number, e.g. `{"attr": "mu"}` or `{"channel": "t"}` (but not storing their actual number values of `t` and `mu`), and the number behind the name is found in a track set (in `data.tyd`). The numbers can differ from place to place, for two reasons. First, each track set stores its own attributes, hence two sets of a scene may store different values under the name `mu` (e.g. one set for the Earth–Moon system and one for the Sun–Jupiter system). Second, a channel has one value per sample, i.e. a different value at each stored point of a track. Before the number behind a name is known, it therefore has to be said where it is taken from. This place is called the context, and it is made of three choices: a track set (e.g. a periodic orbit family), one track of the set (e.g. one member of the family), and one sample of the track (one state belonging to one member for some value of `t`). An attribute depends only on the first choice, since it has one value for the whole set (e.g. `mu` stays the same for a whole periodic orbit family, or track set), while a channel depends on all three, since it has one value per sample (`t` changes for each sample of the trajectory, or one track of the set).
+A scalar given as an attribute or as a channel is written in `scene.tys` as a name, e.g. `{"attr": "mu"}` or `{"channel": "t"}`, and the number behind the name is found in a trajectory set in `data.tyd`.
+The number can differ from place to place, for two reasons.
+First, each trajectory set stores its own attributes, hence two sets of a scene may store different values under the name `mu` (e.g. one set for the Earth–Moon system and one for the Sun–Jupiter system).
+Second, a channel has one value per sample, i.e. a different value at each stored point of a trajectory.
+Before the number behind a name is known, it therefore has to be said where it is taken from.
+This place is called the context, and it is made of three choices: a trajectory set (e.g. a family of periodic orbits), one trajectory of the set (e.g. one member of the family), and one sample of the trajectory.
+An attribute depends only on the first choice, since it has one value for the whole set, while a channel depends on all three, since it has one value per sample.
 
-For example, take the context "set `halo`, track 3, sample 42". The attribute `{"attr": "mu"}` then stands for the `mu` stored on the set `halo`, whatever the track and the sample are. The channel `{"channel": "t"}` stands for the value of `t` at sample 42 of track 3 of the set `halo`. When a point of a track is drawn, the context is this point itself, unless its layer is in the driver's context (rule L6). A body, however, does not have samples of its own, and its context is described in rule F4.
+For example, take the context "set `halo`, trajectory 3, sample 42".
+The attribute `{"attr": "mu"}` then stands for the `mu` stored on the set `halo`, whatever the trajectory and the sample are.
+The channel `{"channel": "t"}` stands for the value of `t` at sample 42 of trajectory 3 of the set `halo`.
+When a point of a trajectory is drawn, the context is this point itself, unless its layer reads from the reference trajectory (rule `read-from`).
+A body does not have samples of its own, and its context is described in rule `sample-context`.
+
+The rule for numbers that depend on context follows.
+
+- `context-number`. A reader rejects a scalar in a form that its field does not allow, such as the channel `@index` in a transform.
 
 ### 2.3 Frames
 
-This section describes how TyCHO handles coordinate frames, called "frames" here for short. For instance, examples of frames are the rotating (synodic) frame of the restricted three-body problem and an inertial frame centered on the barycenter. TyCHO will support various frames, and the runtime implements methods to convert between them (this much cheaper than storing the whole dataset `n` times for `n` reference frames, since coordinate conversion methods are only a few lines of code practically). To convert say from frame A to frame B, TyCHO first transitions from frame A to the `origin` frame, and then from the `origin` frame to frame B (instead of connecting every frame with every other frame with a two-way conversion method). Doing so allows us to reduce the number of coordinate transformation methods needed for `n` frames from `n(n-1)/2` to `2(n-1)`. The frames of a scen thus form one tree: every frame but one has a `parent`, and the root is the only frame without a `parent`. The root does not have an `origin`, a `rotation`, or a `scale` either, since it does not have a parent to be defined against. Every other frame is defined against its parent by an `origin` (where the child's origin lies in the parent), a `rotation` (how the child's axes are turned against the parent's), and a `scale` (how many child units one parent unit is), each optional. An edge is the link from a parent frame to a child frame, together with these three quantities.
+This section describes how TyCHO handles reference frames, called frames here for short.
+Examples of frames are the rotating (synodic) frame of the restricted three-body problem and an inertial frame centered on the barycenter.
+A scene stores each trajectory set in one frame, and the runtime converts positions between frames, which is much cheaper than storing the whole data once per frame.
+The frames of a scene form one tree, in which every frame but the root has a `parent`.
+The root does not have an `origin`, a `rotation`, or a `scale` either, since it does not have a parent to be defined against.
+Every other frame is defined against its parent by an `origin` (where the child's origin lies in the parent), a `rotation` (how the child's axes are turned against the parent's), and a `scale` (how many child units one parent unit is), each optional.
+A transform is the map from a parent frame to a child frame that these three quantities define.
+To convert a position from a frame A to a frame B, a reader follows the transforms of the tree through the lowest common ancestor of A and B (rule `frame-path`), hence `n` frames need only the `n - 1` transforms of the tree rather than one per pair of frames.
 
-The rules for frames follow (we use the letter "F" as a shorthand for "Frame"):
+The rules for frames follow.
 
-- F1. The edge equation is `p_child = s * R * (p_parent - o)`, where `p_parent` and `p_child` are the coordinates of one and the same point in the parent and in the child, and `s`, `R`, and `o` are the scale, the rotation matrix, and the origin, respectively. In simple terms, to go from the parent to the child, first subtract the origin, then rotate, then scale. The origin `o` is given in the parent's coordinates. The rotation `R` turns by `angle` radians about the selected axis, in the right-handed sense (counterclockwise when seen from the positive end of the axis), so that a point fixed in the parent appears in the child rotated by `+angle`. Without a rotation, `R` is the identity, i.e. the axes of the child are parallel to those of the parent. Without a scale, `s = 1`, and without an origin, `o = 0`. The inverse, from the child back to the parent, is `p_parent = o + R^T * (p_child / s)`, where `R^T` is the transpose of `R`, which for a rotation matrix is also its inverse. Equivalently, `angle` is the angle of the parent's axes measured in the child. The standard case is a rotating frame (the parent) seen from an inertial frame (the child): the rotating frame turns against the inertial one by the true anomaly `f`. The inertial frame is thus the child with `angle = f`, and `p_inertial = R(f) * p_rotating`.
-- F2. An `origin` is given in one of two ways: either as three scalars (for `x`, `y`, and `z` coordinates, or their transformed equivalents: the three coordinates of the child's origin in the parent frame), each a number, an attribute, or a channel in the forms of section 2.2, or as `{"body": id}`, which places the origin at the position of the specified body (section 2.4), expressed in the parent frame in the same context. A frame's `rotation.angle` and `scale` are each a number, an attribute, or a channel, so that an angle can follow a stored channel such as the true anomaly along the driver's track. An origin given by a channel can follow a stored channel in the same way, e.g. the middle of a window that a magnified frame shows, and a writer lists the feature `frames.origin_channel` in `requires` (section 4) for a scene with such an origin. The scale `s` is never zero, since a zero scale would collapse the frame to a point and the inverse edge would divide by zero. A zero scale is rejected in any context the scene can evaluate. The contexts of the other laps of rules L2 and C6 (the periods before and after the stored one, see following sections) count as well. At load, a reader rejects a zero scale given as a constant or as an attribute, and it reports F2 wherever it meets a zero scale while evaluating.
-- F3. To take a position from frame A to frame B, step along the tree's edges: apply inverse edges (the inverse of rule F1) from A up to the lowest common ancestor of A and B, then forward edges down to B, all evaluated in one and the same context. The lowest common ancestor is the deepest frame that is an ancestor of both A and B, or A or B itself when one lies above the other.
-- F4. The context of a sample of a drawn track is the sample itself, i.e. its set, its track, and its index, unless the track's layer is in the driver's context (rule L6). A body (e.g. the Earth or Moon) does not have any stored samples, hence it takes its context from the view's driver (section 2.7), i.e. from the driver's track at each sample of the driver where that body is needed. This is what lets a body that is fixed in the rotating frame trace its orbit in an inertial frame, since the angle of the edge between the two frames is read from the driver's sample.
-- F5. A track set drawn in a frame must carry every channel used by an edge on the path from the set's frame to the frame it is drawn in, because each such edge is evaluated in the context of the set's samples, where the value of the channel is read. Its `attrs` must likewise carry every attribute used on the same path. The same holds for a view's driver and for the bodies drawn in the view, whose context is the driver's (rule F4). For a track layer in the driver's context (rule L6), the driver's set must carry the channels and attributes of the path from the frame of the layer's set to the display frame, and the layer's set does not need to carry them. For an outline layer (rule L8), the driver's set must likewise carry the channels and attributes of the path from the target frame to the display frame. A writer rejects a scene that breaks this rule for any value its variables (section 2.5) can take, since a variable may change the display frame or the set.
-- F6. An origin at a body (`{"body": id}` in rule F2) must not depend on itself, directly or through other origins at bodies, since its position would then be circular. Any such circular definition is rejected by the reader, which throws an error.
+- `frame`. A reader rejects frames that do not form one tree with one root, a root with an origin, a rotation, or a scale, and a frame that is named but not declared.
+- `transform`. The transform is `p_child = s * R * (p_parent - o)`, where `p_parent` and `p_child` are the coordinates of one and the same point in the parent and in the child, and `s`, `R`, and `o` are the scale, the rotation matrix, and the origin, respectively.
+  To go from the parent to the child, the origin is thus subtracted first, the result is rotated, and it is then scaled.
+  The origin `o` is given in the parent's coordinates.
+  The rotation `R` turns by `angle` radians about the selected axis, in the right-handed sense (counterclockwise when seen from the positive end of the axis), so that a point fixed in the parent appears in the child rotated by `+angle`.
+  Without a rotation, `R` is the identity, i.e. the axes of the child are parallel to those of the parent.
+  Without a scale, `s = 1`, and without an origin, `o = 0`.
+  The inverse, from the child back to the parent, is `p_parent = o + R^T * (p_child / s)`, where `R^T` is the transpose of `R`, which for a rotation matrix is also its inverse.
+  Equivalently, `angle` is the angle of the parent's axes measured in the child.
+  The standard case is a rotating frame (the parent) seen from an inertial frame (the child), where the rotating frame turns against the inertial one by the true anomaly `f`.
+  The inertial frame is thus the child with `angle = f`, and `p_inertial = R(f) * p_rotating`.
+- `origin`. An `origin` is given in one of two ways.
+  It is either three scalars, the coordinates of the child's origin in the parent frame, each a number, an attribute, or a channel in the forms of section 2.2, or `{"body": id}`, which places the origin at the position of the body (section 2.4), expressed in the parent frame in the same context.
+  A frame's `rotation.angle` and `scale` are each a number, an attribute, or a channel, so that an angle can follow a stored channel such as the true anomaly along the reference trajectory.
+  An origin given by a channel can follow a stored channel in the same way, e.g. the middle of a window that a magnified frame shows, and a writer lists the feature `frames.origin_channel` in `requires` (section 4) for a scene with such an origin.
+  The scale `s` is never zero, since a zero scale would collapse the frame to a point and the inverse transform would divide by zero.
+  A zero scale is rejected in any context that the scene can evaluate, including the contexts of the other revolutions of rules `trail-wrap` and `revolutions`.
+  At load, a reader rejects a zero scale given as a constant or as an attribute, and it reports rule `origin` wherever it meets a zero scale while evaluating.
+- `frame-path`. To take a position from frame A to frame B, a reader steps along the transforms of the tree.
+  It applies inverse transforms (the inverse of rule `transform`) from A up to the lowest common ancestor of A and B, then forward transforms down to B, all evaluated in one and the same context.
+  The lowest common ancestor is the deepest frame that is an ancestor of both A and B, or A or B itself when one lies above the other.
+- `sample-context`. The context of a sample of a drawn trajectory is the sample itself, i.e. its set, its trajectory, and its index, unless the trajectory's layer reads from the reference trajectory (rule `read-from`).
+  A body (e.g. the Earth or the Moon) does not have any stored samples, hence it takes its context from the panel's reference trajectory (section 2.7), i.e. from the sample of the reference trajectory at which the body is needed.
+  A body that is fixed in the rotating frame can thus trace its orbit in an inertial frame, since the angle of the transform between the two frames is read from the sample of the reference trajectory.
+- `transform-channels`. A trajectory set drawn in a frame must carry every channel used by a transform on the path from the set's frame to the frame it is drawn in, because each such transform is evaluated in the context of the set's samples, where the value of the channel is read.
+  Its `attrs` must likewise carry every attribute used on the same path.
+  The same holds for a panel's reference trajectory and for the bodies drawn in the panel, whose context is the reference trajectory's (rule `sample-context`).
+  For a `trajectories` layer that reads from the reference trajectory (rule `read-from`), the set of the reference trajectory must carry the channels and attributes of the path from the frame of the layer's set to the display frame, and the layer's set does not need to carry them.
+  For an `inset_box` layer (rule `inset-box`), the set of the reference trajectory must likewise carry the channels and attributes of the path from the target frame to the display frame.
+  A writer rejects a scene that breaks this rule for any value its inputs (section 2.5) can take, since an input may change the display frame or the set.
+- `body-origin-cycle`. An origin at a body (`{"body": id}` in rule `origin`) must not depend on itself, directly or through other origins at bodies, since its position would then be circular.
+  A reader rejects any such circular definition.
 
-A frame also carries a `label` (the name shown for the frame), an `axes` list of three axis labels (e.g. `["x", "y", "z"]`), and a `unit` label (e.g. `"DU"`). They are text only and do not affect any computation.
+A frame also carries a `label` (the name shown for the frame), an `axes` list of three axis labels (e.g. `["x", "y", "z"]`), and a `unit` label (e.g. `"DU"`).
+They are text only and do not affect any computation.
 
 ### 2.4 Bodies
 
-A body, e.g. a primary of the three-body problem, has a `frame` and a `position` (e.g. `["x", "y", "z"]`) in this frame, each a number or an attribute (see section 2.2). We always assume point mass bodies, i.e. the body does not have a radius or a shape. Its `label` and `color` are used only for drawing.
+A body, e.g. a primary of the three-body problem, has a `frame` and a `position` in this frame, three scalars that are each a number or an attribute (section 2.2).
+A body is a point, i.e. it does not have a radius or a shape.
+Its `label` and `color` are used only for drawing.
 
-### 2.5 Variables and references
+The rule for bodies follows.
 
-A variable is a piece of the animation state that the viewer can change through a control (section 2.9), with a `default` value and a `scope`, which is either `scene` (the default) or `panel`. A scene-scoped variable has one value for the whole page. A panel-scoped variable has one value per panel, so that two panels side by side can show, e.g., two different members of a family. There are three kinds of variable.
+- `body`. A reader rejects a body that is named but not declared, whose frame is not declared, or whose position is not three scalars.
 
-- A `selector` holds a finite number and selects one track from a track set. With the `by: "nearest"` option selected, the default, the selector must specify a `parameter` (see section 2.1), and its number is a value of this parameter (e.g. a Jacobi constant). Where a member reference or a highlight (the orbit proximity "glow" effect) refers to the selector, the number is resolved to the track whose parameter value is nearest to it (e.g. the orbit from the periodic orbit family with the closest Jacobi constant). Distances are compared in float64 to resolve ties we pick the track with the lowest index. With the `by: "index"` option selected, the number `x` is a track index itself, rounded to `floor(x + 0.5)` in float64 (i.e. to the nearest integer, with halves rounded up) and then clipped to the range `[0, tracks - 1]`.
-- The `choice` variable contains one of the strings in its `values`, e.g. the name of a frame or of a colormap. Its `labels` variable, when present, has one entry per value, the text shown for the value.
-- The `toggle` variable contains a boolean, e.g. whether a layer is visible or not.
+### 2.5 Inputs and references
 
-A value that is not of its variable's kind (e.g. a boolean or a string for a selector, or a number for a toggle) throws an error, and it is never cast to the right kind.
+An input is a value that the person at the page can change through a control (section 2.9), with a `default` value and a `scope`, which is either `shared` (the default) or `per_panel`.
+A shared input has one value for the whole page.
+A per-panel input has one value per shown panel, so that two panels side by side can show, e.g., two different members of a family.
+There are three kinds of input.
 
-Where a scene needs a value, the value is written either as a literal or as `{"var": id}`, which reads the variable with this id as a key-value pair.
+- An input of kind `parameter` holds a finite number and selects one trajectory from a trajectory set.
+  It names a `parameter` of the set (section 2.1), and its number is a value of this parameter (e.g. a Jacobi constant).
+  Where a member reference or a highlight refers to the input, the number is resolved to the trajectory whose parameter value is nearest to it (e.g. the orbit of the family with the closest Jacobi constant).
+  Distances are compared in float64, and a tie is resolved to the trajectory with the lowest index.
+  With the built-in parameter `@index` (rule `index-channel`), the number is thus the number of a member in its set.
+- An input of kind `choice` holds one of the strings in its `values`, e.g. the name of a frame or of a colormap.
+  Its `labels`, when present, has one entry per value, the text shown for the value.
+- An input of kind `toggle` holds a boolean, e.g. whether a layer is visible.
 
-The rules for variables and references follow (we use the letter "V" as a shorthand for "Variable"):
+A value that is not of its input's kind (e.g. a boolean or a string for an input of kind `parameter`, or a number for a toggle) is an error, and it is never cast to the right kind.
 
-- V1. In a panel, the dictionary `{"var": id}` reads the panel's value when the variable is panel-scoped, and the scene's value otherwise. A missing value is the variable's default. A panel's value for a scene-scoped variable is never read, and a writer rejects such a value in `initial` (see section 2.8).
-- V2. A set query is the way a scene refers to a track set. It is either `{"set": id}`, which refers to a declared set directly, or `{"tags": {name: value, ...}}`, which matches every track set whose tags (see section 2.1) contain all the given key-value pairs (e.g. `{"family": 7}`). Where one set is needed (a layer's `sets`, or a driver), a query that does not match any set makes the layer empty, and more than one match is an error there, which a writer must rule out for every value the variables can take. Where several sets are allowed (a slider's domain, section 2.9), all matches are used.
-- V3. A member reference is the way a layer specifies which tracks of a set to draw. It is `"all"`, `{"index": k}` (the track with number `k`), `{"count": n}` (an evenly spaced selection of `n` tracks, defined below), or `{"var": id}` referring to a selector. A literal index `k` at or past the number of tracks of the set it is resolved in is an error, not clamped (you can not select an index out of bounds). The parameter of a selector by `nearest` must be carried by the same set, under the same condition. A count `{"count": n}`, with `n` an integer of at least 1, denotes a sparse context of a set of `N` tracks, i.e. a selection that keeps every `m`-th track. This sparse context holds the tracks `0, m, 2m, ...` below `N` and also the last track `N - 1`, each once and in increasing order. Its step is `m = floor(N / n + 0.5)`, computed in float64, or `m = 1` when `n` is at least `N`, which then selects every track.
+Where a scene needs a value, the value is written either as a literal or as `{"input": id}`, which reads the input with this id.
+
+The rules for inputs and references follow.
+
+- `input`. A reader rejects an input without a known kind or a default, a reference to an input that is not declared, and a value that is not of its input's kind.
+- `input-scope`. In a shown panel, `{"input": id}` reads the panel's value when the input is per-panel, and the shared value otherwise.
+  A missing value is the input's default.
+  A panel's value for a shared input is never read, and a writer rejects such a value in `initial` (section 2.8).
+- `set-query`. A set query is the way a scene refers to a trajectory set.
+  It is either `{"set": id}`, which refers to a declared set directly, or `{"tags": {name: value, ...}}`, which matches every trajectory set whose tags (section 2.1) contain all the given pairs (e.g. `{"family": "7"}`).
+  Where one set is needed (the `sets` of a layer or of a reference trajectory), a query that does not match any set makes the layer empty, and more than one match is an error there, which a writer must rule out for every value the inputs can take.
+  Where several sets are allowed (the domain of a slider, section 2.9), all matches are used.
+- `members`. A member reference is the way a layer says which trajectories of a set to draw.
+  It is `"all"`, `{"index": k}` (the trajectory with number `k`), `{"evenly_spaced": n}` (an evenly spaced selection of `n` trajectories, defined below), or `{"input": id}`, which refers to an input of kind `parameter`.
+  A literal index `k` at or past the number of trajectories of the set it is resolved in is an error, and it is not clamped.
+  The parameter of an input of kind `parameter` must be carried by the same set, under the same condition, unless it is `@index`.
+  For `{"evenly_spaced": n}`, with `n` an integer of at least 1, in a set of `N` trajectories, the selection keeps every `m`-th trajectory.
+  It holds the trajectories `0, m, 2m, ...` below `N` and also the last trajectory `N - 1`, each once and in increasing order.
+  Its spacing is `m = floor(N / n + 0.5)`, computed in float64, or `m = 1` when `n` is at least `N`, which then selects every trajectory.
 
 ### 2.6 The clock
 
-The clock is the animation time, i.e. one reading shared by every panel, so that all panels move together. Its `steps` is the number of frames in one loop of the animation (in this section, frame refers to one still from the animation, i.e. one drawn picture, not a coordinate frame). A frame index is an integer of either sign (+ or -). The remainder of a frame index modulo `steps`, in the range `[0, steps)`, is denoted as `i`, so that index `-1` has the remainder `steps - 1`, i.e. counting backward from the start wraps around to the end of the loop. The progress index variable is denoted as `q = i / steps`, in the range `[0, 1)`, i.e. the fraction of the loop that has elapsed. During playback, a reader may draw at any progress between frame indices (so that motion is smooth at any frame rate), and the frame index the reader then shows on the animation slider is `floor(q * steps)`. The state (see section 2.8) specifies the active channel (independent variable), one of `clock.channels`, i.e. the channel whose value is read as the animation time, and the transport control (see section 2.9) switches between channel types (e.g. true anomaly `f` and time `t`). The variable `clock.labels` has one entry per channel, the text shown for the channel selected. With `clock.laps`, one loop of a `fraction` clock covers several periods of the periodic sets (rule C6). The key `clock.seconds`, a positive number in either mode, is the length of one loop in seconds at playback speed 1, and when it is absent a loop lasts 8 seconds for each lap. A reading is a function of the frame index alone, and it is the same whatever the length of a loop.
+The clock is the time of the animation, which is shared by every panel, so that all panels move together.
+Its `frame_count` is the number of frame indices in one loop of the animation.
+A frame index is an integer of either sign.
+The remainder of a frame index modulo `frame_count`, in the range `[0, frame_count)`, is written `i`, so that index `-1` has the remainder `frame_count - 1`, i.e. counting backward from the start wraps around to the end of the loop.
+The progress is `q = i / frame_count`, in the range `[0, 1)`, i.e. the fraction of the loop that has elapsed.
+During playback, a reader may draw at any progress between frame indices (so that motion is smooth at any frame rate), and the frame index that it then shows on the animation slider is `floor(q * frame_count)`.
+The state (section 2.8) names the clock channel, one of `clock.channels`, i.e. the channel whose value is read as the time of the animation, and the playback control (section 2.9) switches among them (e.g. between the true anomaly `f` and the time `t`).
+The key `clock.labels` has one entry per channel, the text shown for the channel.
+With `clock.revolutions`, one loop of a `fraction` clock covers several revolutions of the periodic sets (rule `revolutions`).
+The key `clock.seconds`, a positive number in either mode, is the length of one loop in seconds at playback speed 1, and when it is absent a loop lasts 8 seconds per revolution.
+A fraction along a trajectory is a function of the frame index alone, and it is the same whatever the length of a loop.
 
-The clock's `mode` can be either `fraction` or `value`. In `fraction` mode, the animation runs each track from its first sample to its last over one loop, whatever the range of the channel on the track, so that all tracks complete together. In `value` mode, the animation runs the active channel through a common `range` of values, so that the tracks are synchronized by the value of the channel (e.g. all shown at the same time `t`).
+The clock's `mode` is either `fraction` or `epoch`.
+In `fraction` mode, every trajectory runs from its first sample to its last over one loop, whatever the range of the channel on the trajectory, so that all trajectories complete together.
+In `epoch` mode, the clock channel runs through a common `range` of values, so that the trajectories are synchronized by the value of the channel (e.g. all shown at the same time `t`).
 
-The rules for the clock follow (we use the letter "C" as a shorthand for "Clock"):
+The rules for the clock follow.
 
-- C1. Along one track of `m` samples, where the active channel (independent variable selected) takes the values `c[0] .. c[m-1]`, sample `i` is the sample at position `u_i = (c[i] - c[0]) / (c[m-1] - c[0])`, i.e. at the fraction of the channel's span on this track that the sample has reached. The first sample is at reading 0 and the last at reading 1, and since the channel is strictly monotone (see rule T3), the readings increase strictly with `i`. For the `@index` channel, its position is simply `u_i = (i - 0) / (m - 1)`.
-- C2. In `fraction` mode, the track's reading is the progress itself, `u = q`. In `value` mode, the clock has a `range` `[a, b]` or the `keys` of rule K3. With a range, the shared value of the channel is `v = a + q * (b - a)`, and the track's reading is `u = (v - c[0]) / (c[m-1] - c[0])`, i.e. where the value `v` falls on the span of this track, which may be below 0 or above 1 when the value is outside the track's range.
-- C3. In `value` mode, a reading below 0 lies before the track's first stored sample, and a reading above 1 lies after its last, in storage order whatever the direction of the channel. A layer's `before` and `after` specify what is drawn then. Each is `clamp`, the default, which takes the reading as 0 or 1, respectively (the track is shown held at its first or its last sample), or `hidden`, under which the track is not drawn at such a reading.
-- C4. The point at reading `u` lies on segment `k`, where a segment joins two consecutive samples and `k` is the largest index, at most `m - 2`, with `u_k <= u <= u_(k+1)`. Its weight along the segment is `w = (u - u_k) / (u_(k+1) - u_k)`, which is 0 at sample `k` and 1 at sample `k + 1`. Its position in a display frame is `(1 - w) * P_k + w * P_(k+1)`, where `P_k` and `P_(k+1)` are the two samples already transformed into the display frame, each in the context of its sample. In other words, the transform is applied to the two samples first and the two results are then interpolated linearly.
-- C5. A reading is taken on every track that a layer draws with a `reveal` other than `none`, with a `head`, or, in `value` mode, with a `before` or an `after` of `hidden`, on every member of an `arrow` layer (rule L7), and on the driver's track (see section 2.7). A set with such a track carries every channel of `clock.channels` other than `@index`, so that the reading can be computed whichever channel is active. A writer rejects a scene that breaks this rule for any value its variables can take. A set drawn whole and never read, with `reveal: none`, without a head, and never hidden, need not carry these channels, also when its layer is in the driver's context (rule L6). A layer with a clock of its own (rule K4) takes its readings by the channel of that clock, which its set carries instead, unless it is `@index`. A points layer with `reveal` `grow` (rule K8), a label anchored at a member (rule K6), and the target of a camera key (rule K5) take a reading as well.
-- C6. The key `laps` is the number `n` of periods that one loop of the animation covers, an integer of at least 1, and 1 when absent. Only a `fraction` clock has it, and a writer and a reader reject it on a `value` clock. The loop reading is `U = n * u`, where `u` is the reading of rules C2 and C3, so that `U` runs from 0 to `n` over one loop. A loop reading `U` lies in lap `j = min(floor(U), n - 1)` at the within-lap reading `U - j`, both computed in float64. A lap is thus one traversal of a track from its first sample to its closing sample, and lap `j` is the `j`-th period after the stored one. The readings of rules C4 and L1 are within-lap readings. A vertex (a point of a polyline) in lap `j` is evaluated in the context raised by `j` periods, in which the value of every channel is raised by `j` times the advance of the same channel over one period (see rule T2). A time channel, e.g., is raised by `j` periods, so that a frame edge driven by it keeps turning in the later laps. Lap 0 is therefore the stored context, and in a lap below 0 every channel value is lowered. The point at the reading is the point at its within-lap reading in its lap. The polyline between loop readings `U_a <= U_b`, in laps `j_a <= j_b`, joins the polylines of rule L1 in every lap `j` from `j_a` to `j_b`. Each of these polylines runs from `U_a - j_a` in lap `j_a` and from 0 in the other laps, to `U_b - j_b` in lap `j_b` and to 1 in the other laps. In the join, the closing sample of lap `j` and the first sample of lap `j + 1` are the same point, and they are kept as one vertex, the first sample of lap `j + 1` in the context of lap `j + 1`. A set that is not periodic has one lap, lap 0. With `n > 1`, every track on which a reading is taken, by the list of rule C5 with the driver's track included, belongs to a periodic set, since only a periodic set defines what the next lap is. A writer rejects a scene that breaks this rule for any value its variables can take, and a reader rejects it where it takes the reading.
+- `clock`. A reader rejects a clock whose `mode` is not `fraction` or `epoch` or whose `frame_count` is not an integer of at least 1, a state whose clock channel is not one of `clock.channels`, and a frame index that is not an integer.
+- `sample-fraction`. Along one trajectory of `m` samples, where the clock channel takes the values `c[0] .. c[m-1]`, sample `i` lies at the fraction along `u_i = (c[i] - c[0]) / (c[m-1] - c[0])`, i.e. at the fraction of the channel's span on this trajectory that the sample has reached.
+  The first sample is at fraction along 0 and the last at 1, and since the channel is strictly monotone (rule `monotone-clock-channel`), the fractions along increase strictly with `i`.
+  For the channel `@index`, the fraction along is `u_i = i / (m - 1)`.
+- `clock-mode`. In `fraction` mode, the fraction along a trajectory is the progress itself, `u = q`.
+  In `epoch` mode, the clock has a `range` `[a, b]` or the `keyframes` of rule `clock-keyframes`.
+  With a range, the shared value of the channel is `v = a + q * (b - a)`, and the fraction along a trajectory is `u = (v - c[0]) / (c[m-1] - c[0])`, i.e. where the value `v` falls on the span of this trajectory, which may be below 0 or above 1 when the value is outside the trajectory's range.
+- `before-after`. In `epoch` mode, a fraction along below 0 lies before the trajectory's first stored sample, and a fraction along above 1 lies after its last, in storage order whatever the direction of the channel.
+  A layer's `before` and `after` say what is drawn then.
+  Each is `clamp`, the default, which takes the fraction along as 0 or 1, respectively (the trajectory is shown held at its first or its last sample), or `hidden`, under which the trajectory is not drawn.
+- `segment`. The point at the fraction along `u` lies on segment `k`, where a segment joins two consecutive samples and `k` is the largest index, at most `m - 2`, with `u_k <= u <= u_(k+1)`.
+  Its weight along the segment is `w = (u - u_k) / (u_(k+1) - u_k)`, which is 0 at sample `k` and 1 at sample `k + 1`.
+  Its position in a display frame is `(1 - w) * P_k + w * P_(k+1)`, where `P_k` and `P_(k+1)` are the two samples already transformed into the display frame, each in the context of its sample.
+  The transform is thus applied to the two samples first, and the two results are then interpolated linearly.
+- `clock-channel-carried`. A fraction along is computed on every trajectory that a layer draws with a `reveal` other than `none`, with a `head`, or, in `epoch` mode, with a `before` or an `after` of `hidden`, on every member of an `arrow` layer (rule `arrow`), and on the reference trajectory (section 2.7).
+  A set with such a trajectory carries every channel of `clock.channels` other than `@index`, so that the fraction along can be computed whichever channel is the clock channel.
+  A writer rejects a scene that breaks this rule for any value its inputs can take.
+  A set drawn whole and never hidden, with `reveal: none` and without a head, need not carry these channels, also when its layer reads from the reference trajectory (rule `read-from`).
+  A layer with a layer clock (rule `layer-clock`) computes its fractions along by the channel of this clock, which its set carries instead, unless it is `@index`.
+  A `points` layer with `reveal` `grow` (rule `points`), a label anchored at a member (rule `label`), and the target of a camera keyframe (rule `camera-keyframes`) compute a fraction along as well.
+- `revolutions`. The key `revolutions` is the number `n` of revolutions that one loop of the animation covers, an integer of at least 1, and 1 when absent.
+  Only a `fraction` clock has it, and a writer and a reader reject it on an `epoch` clock.
+  The total fraction along is `U = n * u`, where `u` is the fraction along of rules `clock-mode` and `before-after`, so that `U` runs from 0 to `n` over one loop.
+  A total fraction along `U` lies in revolution `j = min(floor(U), n - 1)` at the fraction along `U - j` within the revolution, both computed in float64.
+  A revolution is thus one traversal of a trajectory from its first sample to its closing sample, and revolution `j` is the `j`-th revolution after the stored one.
+  The fractions along of rules `segment` and `polyline` are fractions along within a revolution.
+  A vertex (a point of a polyline) in revolution `j` is evaluated in the context raised by `j` periods, in which the value of every channel is raised by `j` times the advance of the same channel over one revolution (rule `periodic`).
+  A time channel, e.g., is raised by `j` periods, so that a transform driven by it keeps turning in the later revolutions.
+  Revolution 0 is therefore the stored context, and in a revolution below 0 every channel value is lowered.
+  The point at a total fraction along is the point at its fraction along within its revolution.
+  The polyline between total fractions along `U_a <= U_b`, in revolutions `j_a <= j_b`, joins the polylines of rule `polyline` in every revolution `j` from `j_a` to `j_b`.
+  Each of these polylines runs from `U_a - j_a` in revolution `j_a` and from 0 in the other revolutions, to `U_b - j_b` in revolution `j_b` and to 1 in the other revolutions.
+  In the join, the closing sample of revolution `j` and the first sample of revolution `j + 1` are the same point, and they are kept as one vertex, the first sample of revolution `j + 1` in the context of revolution `j + 1`.
+  A set that is not periodic has one revolution, revolution 0.
+  With `n > 1`, every trajectory on which a fraction along is computed, by the list of rule `clock-channel-carried` with the reference trajectory included, belongs to a periodic set, since only a periodic set defines what the next revolution is.
+  A writer rejects a scene that breaks this rule for any value its inputs can take, and a reader rejects it where it computes the fraction along.
 
-### 2.7 Views, drivers and layers
+### 2.7 Declared panels, reference trajectories, and layers
 
-A view is a template for a panel, i.e. for one picture on the page. A page may show several panels at once (section 2.8), and each panel shows one view. A view has a `frame` (the display frame, in which everything is drawn, given as a frame id or as a variable whose values are frame ids), a `camera` (how the frame is looked at, either a `plane` camera for a flat picture of one coordinate plane or an `orbit` camera for a three-dimensional picture that can be turned), a `driver`, and a list of `layers`, each of which draws one thing. The driver is the track that the animation follows: it is a set query and a member reference, `{"index": k}` or a selector, that resolve to one track, and the bodies, the readouts, and the track layers in the driver's context take their context from it (rules F4, L4, and L6, section 2.9). Rules V2, V3, and C5 always apply to the driver, because a reader resolves the driver of every panel whether or not a layer uses it.
+A panel is one picture on the page.
+The key `panels` of a scene declares the panels that a page may show, and a page may show several at once, among them several copies of one declared panel (section 2.8).
+A declared panel has a `frame` (the display frame, in which everything is drawn, given as a frame id or as an input whose values are frame ids), a `camera`, a `reference`, and a list of `layers`, each of which draws one thing.
+The camera is either a `2d` camera, for a flat picture of one coordinate plane, or a `3d` camera, for a three-dimensional picture that can be turned, and what the camera shows is the view of the panel.
+The `reference` names the reference trajectory, the one trajectory that the panel follows, by a set query and a member reference, `{"index": k}` or an input of kind `parameter`, that resolve to one trajectory.
+The bodies, the readouts, and the `trajectories` layers that read from the reference trajectory take their context from it (rules `sample-context`, `body-layer`, and `read-from`, and section 2.9).
+Rules `set-query`, `members`, and `clock-channel-carried` always apply to the reference trajectory, because a reader resolves the reference trajectory of every shown panel whether or not a layer uses it.
 
-A `track` layer draws the members that its `members` (a member reference, rule V3) selects, from the set that its `sets` (a set query, rule V2) resolves to. Its `reveal`, `none` when absent, selects the part of each track that is drawn as the animation advances:
+A `trajectories` layer draws the members that its `members` (a member reference, rule `members`) selects, from the set that its `sets` (a set query, rule `set-query`) resolves to.
+Its `reveal`, `none` when absent, selects the part of each trajectory that is drawn as the animation advances.
 
-- With `none`, the layer draws every sample of the track in every lap of rule C6, transformed and joined as rule C6 specifies, i.e. the whole track is always shown.
-- With `grow`, the layer draws from the first sample of lap 0, at loop reading 0, to the point at the reading, so that the track grows as the animation advances.
-- With `trail`, the layer draws from a tail loop reading `U_t = U - n * fraction` to the point at the reading, both loop readings of rule C6, so that a trail of fixed length follows the moving point. The `fraction` in this formula is `trail.fraction`, the length of the trail as a fraction of the whole loop of `n` periods, in `(0, 1]`, and a reader rejects any other value. The layer must then carry a `trail` key.
+- With `none`, the layer draws every sample of the trajectory in every revolution of rule `revolutions`, transformed and joined as rule `revolutions` says, i.e. the whole trajectory is always shown.
+- With `grow`, the layer draws from the first sample of revolution 0, at total fraction along 0, to the point at the fraction along, so that the trajectory grows as the animation advances.
+- With `trail`, the layer draws from a tail at the total fraction along `U_t = U - n * fraction` to the point at the fraction along, both total fractions along of rule `revolutions`, so that a trail of fixed length follows the moving point.
+  The `fraction` in this formula is `trail.fraction`, the length of the trail as a fraction of the whole loop of `n` revolutions, in `(0, 1]`, and a reader rejects any other value.
+  The layer must then carry a `trail` key.
 
-An `arrow` layer draws a vector stored along each member as an arrow, e.g. the velocity of a spacecraft at its current position. Its members are selected with `sets` and `members`, as on a track layer. Its `vector` lists the names of two or three channels of the set, which hold the components of the vector at each sample in the frame of the set. Its `scale`, a number or an attribute in the forms of section 2.2 and 1 when absent, turns the vector into a displacement, i.e. the arrow of a velocity `v` is `scale * |v|` long in the units of the frame. Rule L7 gives the two ends of the arrow.
+An `arrow` layer draws a vector stored along each member as an arrow, e.g. the velocity of a spacecraft at its current position.
+Its members are selected with `sets` and `members`, as on a `trajectories` layer.
+Its `vector` lists the names of two or three channels of the set, which hold the components of the vector at each sample in the frame of the set.
+Its `scale`, a number or an attribute in the forms of section 2.2 and 1 when absent, turns the vector into a displacement, i.e. the arrow of a velocity `v` is `scale * |v|` long in the units of the frame.
+Rule `arrow` gives the two ends of the arrow.
 
-An `outline` layer draws the outline of the rectangle that another panel currently shows, e.g. a faint box on a large panel around the part that a small panel magnifies. Its `view` names the target view, and the panel that shows it is the target panel. The outline follows the target panel's camera as the viewer pans and zooms it, and rule L8 gives the map that takes the rectangle into the display frame.
+An `inset_box` layer draws the outline of the rectangle that another panel currently shows, e.g. a faint box on a large panel around the part that a small panel magnifies.
+Its `panel` names the target, a declared panel, and the shown panel of this declared panel is the target panel.
+The box follows the camera of the target panel as the person at the page pans and zooms it, and rule `inset-box` gives the map that takes the rectangle into the display frame.
 
-The rules for layers follow (we use the letter "L" as a shorthand for "Layer"):
+The rules for declared panels and layers follow.
 
-- L1. A polyline is a sequence of points joined by straight segments. The polyline between readings `u_a <= u_b` on one track, in one lap, consists of the point at `u_a` (interpolated by rule C4), every stored sample `i` with `u_a < u_i < u_b`, and the point at `u_b`. When `u_a = u_b`, the polyline is the point at `u_a` alone. The polylines of several laps are joined by rule C6.
-- L2. A trail whose tail loop reading `U_t` is negative reaches back before the start of the stored track. When the set is not periodic, the trail is cut at the first sample of lap 0. When the set is periodic, the trail continues below lap 0 into lap -1 (the period before the stored one), and into lower laps when its tail reaches them, each lap evaluated as in rule C6. Lap -1, the case `j = -1` of rule C6, is the shifted context, in which every channel value is lowered by the advance of the same channel over one period. The first sample of lap 0 and the last vertex of lap -1, which is the shifted closing sample, are the same point, and they are kept as one vertex, the first sample of lap 0 in its unshifted context. The tail loop reading `U_t = U - n * fraction` is computed in float64, the product first, so that with one lap the shifted part starts at the within-lap reading `u - fraction + 1`, computed in this order. The order matters because floating-point arithmetic rounds at each operation, and both evaluators must get the same bits.
-- L3. With a `head`, the layer also gives the point at the reading, i.e. the current position of the moving point, drawn as a marker. A `head` is `true`, or `{"color": "#rrggbb", "size": px}` with either key optional, which gives the same point, and an absent `head` is `false`. The head is drawn in `head.color`, by default the layer's color at this point, and `head.size` CSS pixels across, by default a size set by the reader. A CSS pixel is the logical pixel of the web page, which on a high-resolution display covers several physical pixels.
-- L4. A `body` layer draws a body (section 2.4). It gives the body's position at the driver's reading, clamped to `[0, 1]`, since a body layer does not have a `before` or an `after`. The layer transforms the body's position into the display frame in the contexts of the driver's samples `k` and `k + 1` in the driver's lap (the two samples around the reading, rule C4), and blends the two results by the weight `w`, as in rule C4. With a `trail`, which carries a `fraction`, the layer also gives the body's position at every vertex of the trail that rules L1, L2, and C6 define on the driver's track for this fraction, so that a body fixed in the rotating frame leaves a trail of its path in an inertial frame. Each of these positions is taken in the context of its vertex, i.e. the two blended contexts for an end point and the sample's context for a stored sample, each in the vertex's lap.
-- L5. The `visible` of a layer refers to a toggle (section 2.5), and a reader rejects a `visible` that refers to anything else. A layer with a `visible` is omitted while its toggle is false. The references of an omitted layer are still checked at load, so that turning the toggle on cannot uncover an error.
-- L6. The `context` of a track layer is `own`, the default, or `driver`, and a reader rejects any other value. With `own`, each sample of a member is transformed into the display frame in its own context (rule F4). With `driver`, every sample of every member is instead transformed in the context of the driver's reading, as rule L4 transforms a body. The sample is thus transformed in the contexts of the driver's samples `k` and `k + 1` in the driver's lap, at the driver's reading clamped to `[0, 1]`, and the two results are blended by the weight `w` of rule C4. Under `driver`, only the transform of a sample is different. The vertices of a member, its reading, its head, and whether it is hidden are still given by rules L1 to L3, C3, and C6 on the layer's own track, and a vertex between two samples is still the blend of rule C4 of the two samples, each transformed in the driver's context. The position of a vertex is therefore the same in every lap and under the shift of rule L2. A polyline stored in one frame, e.g. a grid line of the rotating-pulsating frame, is thus drawn where this frame lies at the driver's reading, and its set does not need the channels of the path to the display frame. When the driver's set query does not match any set, the line of every member is empty, and its head is `null` when the layer has a head. A writer lists the feature `layers.driver_context` in `requires` (section 4) for a scene with a layer in the driver's context.
+- `panel`. A reader rejects a declared panel that lacks `frame`, `reference`, or `layers`, a reference that lacks `sets` or `member`, a display frame that is not declared, a camera `plane` other than `xy`, `xz`, or `yz`, a `reveal` other than `none`, `grow`, or `trail`, and a trail whose fraction is missing or outside `(0, 1]`.
+- `polyline`. A polyline is a sequence of points joined by straight segments.
+  The polyline between the fractions along `u_a <= u_b` on one trajectory, in one revolution, consists of the point at `u_a` (interpolated by rule `segment`), every stored sample `i` with `u_a < u_i < u_b`, and the point at `u_b`.
+  When `u_a = u_b`, the polyline is the point at `u_a` alone.
+  The polylines of several revolutions are joined by rule `revolutions`.
+- `trail-wrap`. A trail whose tail total fraction along `U_t` is negative reaches back before the start of the stored trajectory.
+  When the set is not periodic, the trail is cut at the first sample of revolution 0.
+  When the set is periodic, the trail continues below revolution 0 into revolution -1 (the revolution before the stored one), and into lower revolutions when its tail reaches them, each revolution evaluated as in rule `revolutions`.
+  Revolution -1, the case `j = -1` of rule `revolutions`, is the shifted context, in which every channel value is lowered by the advance of the same channel over one revolution.
+  The first sample of revolution 0 and the last vertex of revolution -1, which is the shifted closing sample, are the same point, and they are kept as one vertex, the first sample of revolution 0 in its unshifted context.
+  The tail total fraction along `U_t = U - n * fraction` is computed in float64, the product first, so that with one revolution the shifted part starts at the fraction along `u - fraction + 1`, computed in this order.
+  The order matters because floating-point arithmetic rounds at each operation, and both evaluators must get the same bits.
+- `head`. With a `head`, the layer also gives the point at the fraction along, i.e. the current position of the moving point, drawn as a marker.
+  A `head` is `true`, or `{"color": "#rrggbb", "size": px}` with either key optional, which gives the same point, and an absent `head` is `false`.
+  The head is drawn in `head.color`, by default the layer's color at this point, and `head.size` CSS pixels across, by default a size set by the reader.
+  A CSS pixel is the logical pixel of the web page, which on a high-resolution display covers several physical pixels.
+- `body-layer`. A `body` layer draws a body (section 2.4).
+  It gives the body's position at the fraction along the reference trajectory, clamped to `[0, 1]`, since a body layer does not have a `before` or an `after`.
+  The layer transforms the body's position into the display frame in the contexts of the samples `k` and `k + 1` of the reference trajectory in its revolution (the two samples around the fraction along, rule `segment`), and blends the two results by the weight `w`, as in rule `segment`.
+  With a `trail`, which carries a `fraction`, the layer also gives the body's position at every vertex of the trail that rules `polyline`, `trail-wrap`, and `revolutions` define on the reference trajectory for this fraction, so that a body fixed in the rotating frame leaves a trail of its path in an inertial frame.
+  Each of these positions is taken in the context of its vertex, i.e. the two blended contexts for an end point and the sample's context for a stored sample, each in the vertex's revolution.
+- `visible`. The `visible` of a layer refers to a toggle (section 2.5), and a reader rejects a `visible` that refers to anything else.
+  A layer with a `visible` is omitted while its toggle is false.
+  The references of an omitted layer are still checked at load, so that turning the toggle on cannot uncover an error.
+- `read-from`. The `read_from` of a `trajectories` layer is `own`, the default, or `reference`, and a reader rejects any other value.
+  With `own`, each sample of a member is transformed into the display frame in its own context (rule `sample-context`).
+  With `reference`, every sample of every member is instead transformed in the context of the fraction along the reference trajectory, as rule `body-layer` transforms a body.
+  The sample is thus transformed in the contexts of the samples `k` and `k + 1` of the reference trajectory in its revolution, at its fraction along clamped to `[0, 1]`, and the two results are blended by the weight `w` of rule `segment`.
+  Under `reference`, only the transform of a sample is different.
+  The vertices of a member, its fraction along, its head, and whether it is hidden are still given by rules `polyline` to `head`, `before-after`, and `revolutions` on the layer's own trajectory, and a vertex between two samples is still the blend of rule `segment` of the two samples, each transformed in the context of the reference trajectory.
+  The position of a vertex is therefore the same in every revolution and under the shift of rule `trail-wrap`.
+  A polyline stored in one frame, e.g. a grid line of the rotating-pulsating frame, is thus drawn where this frame lies at the fraction along the reference trajectory, and its set does not need the channels of the path to the display frame.
+  When the set query of the reference trajectory does not match any set, the line of every member is empty, and its head is `null` when the layer has a head.
+  A writer lists the feature `layers.read_from` in `requires` (section 4) for a scene with a layer that reads from the reference trajectory.
 
-For example, the layer below draws every line of a track set `grid`, stored in the rotating-pulsating frame of the elliptic problem, in the display frame of its view. In the rotating frame, whose scale is the separation `rho` of the primary and the secondary, the grid then breathes as the driver moves. In the inertial frame it also turns with the true anomaly. The channels `rho` and `true_anomaly` are read from the driver's track alone, and the set `grid` carries neither.
+  For example, the layer below draws every line of a trajectory set `grid`, stored in the rotating-pulsating frame of the elliptic problem, in the display frame of its panel.
+  In the rotating frame, whose scale is the separation `rho` of the primary and the secondary, the grid then breathes as the reference trajectory moves.
+  In the inertial frame it also turns with the true anomaly.
+  The channels `rho` and `true_anomaly` are read from the reference trajectory alone, and the set `grid` carries neither.
 
-```json
-{"kind": "track", "sets": {"set": "grid"}, "members": "all", "context": "driver", "color": "#3a4150"}
-```
+  ```json
+  {"kind": "trajectories", "sets": {"set": "grid"}, "members": "all", "read_from": "reference", "color": "#3a4150"}
+  ```
 
-- L7. The arrow of a member of an `arrow` layer runs from its base to its tip. The base is the point at the reading of rule C4, in the lap of rule C6, i.e. the point that a head of a track layer gives (rule L3). The tip of sample `i` is the point `p_i + scale * v_i` in the frame of the set, where `p_i` is the position of the sample and `v_i` its vector. The vector is read from the stored values of the channels of `vector`, with a third component of 0 when `vector` lists two channels. The values of these channels are not raised by the lap of rule C6. The tip of the member is the blend of rule C4 of the tips of samples `k` and `k + 1`, with the same `k`, weight `w`, and lap as the base. Each of the two tips is transformed into the display frame in the context of its sample in the lap. A reading is taken on every member, and its `before` and `after` hide the arrow as they hide a track (rule C3), in which case both its base and its tip are `null`. In `value` mode, a member of two samples whose clock channel runs from `a` to `b`, with `before: "hidden"` and `after: "hidden"`, is thus an arrow that is shown from the moment the shared value reaches `a` until it passes `b`. The channel `@index` is not allowed in `vector`, and the set carries every channel of `vector`, for every value the variables can take. The `scale` is constant per set, and a reader rejects a channel there. The feature `layers.arrows` is listed in `requires` (section 4) by the writer of a scene with an arrow layer.
+- `arrow`. The arrow of a member of an `arrow` layer runs from its base to its tip.
+  The base is the point at the fraction along of rule `segment`, in the revolution of rule `revolutions`, i.e. the point that a head of a `trajectories` layer gives (rule `head`).
+  The tip of sample `i` is the point `p_i + scale * v_i` in the frame of the set, where `p_i` is the position of the sample and `v_i` its vector.
+  The vector is read from the stored values of the channels of `vector`, with a third component of 0 when `vector` lists two channels.
+  The values of these channels are not raised by the revolution of rule `revolutions`.
+  The tip of the member is the blend of rule `segment` of the tips of samples `k` and `k + 1`, with the same `k`, weight `w`, and revolution as the base.
+  Each of the two tips is transformed into the display frame in the context of its sample in the revolution.
+  A fraction along is computed on every member, and its `before` and `after` hide the arrow as they hide a trajectory (rule `before-after`), in which case both its base and its tip are `null`.
+  In `epoch` mode, a member of two samples whose clock channel runs from `a` to `b`, with `before: "hidden"` and `after: "hidden"`, is thus an arrow that is shown from the moment the shared value reaches `a` until it passes `b`.
+  The channel `@index` is not allowed in `vector`, and the set carries every channel of `vector`, for every value the inputs can take.
+  The `scale` is constant per set, and a reader rejects a channel there.
+  The feature `layers.arrows` is listed in `requires` (section 4) by the writer of a scene with an arrow layer.
 
-In the example below, the velocity of the selected member of a set `halo` is drawn as an arrow from the current position of the member. The channels `vx`, `vy`, and `vz` of the set hold the velocity, and the arrow is 0.1 times as long as the speed.
+  In the example below, the velocity of the selected member of a set `halo` is drawn as an arrow from the current position of the member.
+  The channels `vx`, `vy`, and `vz` of the set hold the velocity, and the arrow is 0.1 times as long as the speed.
 
-```json
-{"kind": "arrow", "sets": {"set": "halo"}, "members": {"var": "member"}, "vector": ["vx", "vy", "vz"], "scale": 0.1, "color": "#ffffff", "width": 2, "head": {"size": 12}}
-```
+  ```json
+  {"kind": "arrow", "sets": {"set": "halo"}, "members": {"input": "member"}, "vector": ["vx", "vy", "vz"], "scale": 0.1, "color": "#ffffff", "width": 2, "head": {"size": 12}}
+  ```
 
-- L8. The `view` of an `outline` layer names a declared view other than the view that holds the layer, with a plane camera, and a reader rejects any other view. The target panel is the first panel in layout order (section 2.8) that shows the target view. When the layout does not show the target view, the layer does not have a target panel and nothing is drawn. The target frame is the display frame of the target panel, read with the target panel's values of the variables (rule V1). The layer gives the affine map from the target frame into the display frame of its own panel. It takes this map in the context of its own driver's reading, as rule L6 transforms a sample, i.e. in the contexts of the driver's samples `k` and `k + 1` in the driver's lap, at the driver's reading clamped to `[0, 1]`, and it blends the two maps by the weight `w` of rule C4. The map is given by `origin`, the image of the point `(0, 0, 0)` of the target frame, and by `axes`, three vectors, where `axes[j]` is the image of the unit point along axis `j` minus `origin`. A point `p` of the target frame thus lands at `origin + p_x * axes[0] + p_y * axes[1] + p_z * axes[2]`. Every edge of rule F1 is affine in the point for a fixed context, and so is a blend of two affine maps, hence this formula gives the blended transform of every point. When the driver's set query does not match any set, `origin` and `axes` are `null`. The feature `layers.outline` is listed in `requires` (section 4) by the writer of a scene with an outline layer.
+- `inset-box`. The `panel` of an `inset_box` layer names a declared panel other than the declared panel that holds the layer, with a `2d` camera, and a reader rejects any other target.
+  The target panel is the first shown panel in layout order (section 2.8) whose declared panel is the target.
+  When the layout does not show the target, the layer does not have a target panel and nothing is drawn.
+  The target frame is the display frame of the target panel, read with the target panel's values of the inputs (rule `input-scope`).
+  The layer gives the affine map from the target frame into the display frame of its own panel.
+  It takes this map in the context of the fraction along its own reference trajectory, as rule `read-from` transforms a sample, i.e. in the contexts of the samples `k` and `k + 1` of the reference trajectory in its revolution, at its fraction along clamped to `[0, 1]`, and it blends the two maps by the weight `w` of rule `segment`.
+  The map is given by `origin`, the image of the point `(0, 0, 0)` of the target frame, and by `axes`, three vectors, where `axes[j]` is the image of the unit point along axis `j` minus `origin`.
+  A point `p` of the target frame thus lands at `origin + p_x * axes[0] + p_y * axes[1] + p_z * axes[2]`.
+  Every transform of rule `transform` is affine in the point for a fixed context, and so is a blend of two affine maps, hence this formula gives the blended transform of every point.
+  When the set query of the reference trajectory does not match any set, `origin` and `axes` are `null`.
+  The feature `layers.inset_box` is listed in `requires` (section 4) by the writer of a scene with an `inset_box` layer.
 
-In the example below, a frame `zoom` is a magnified copy of the rotating frame `rot` about the middle `(mx, my)` of a window of half width `1 / k`, where the driver's set carries the channels `mx`, `my`, and `k`. A point `p` of `rot` lies at `u = k * (p - m)` in `zoom` (rule F1), and the corners `u = (±1, ±1, 0)` of the window lie at `m ± 1 / k` in `rot`. A view `orbit` in the frame `rot` draws the rectangle that a panel of the view `closeup`, drawn in `zoom`, shows.
+  In the example below, a frame `zoom` is a magnified copy of the rotating frame `rot` about the middle `(mx, my)` of a window of half width `1 / k`, where the set of the reference trajectory carries the channels `mx`, `my`, and `k`.
+  A point `p` of `rot` lies at `u = k * (p - m)` in `zoom` (rule `transform`), and the corners `u = (±1, ±1, 0)` of the window lie at `m ± 1 / k` in `rot`.
+  A declared panel `orbit` in the frame `rot` draws the rectangle that a shown panel of the declared panel `closeup`, drawn in `zoom`, shows.
 
-```json
-{"frames": {"rot": {}, "zoom": {"parent": "rot", "origin": [{"channel": "mx"}, {"channel": "my"}, 0], "scale": {"channel": "k"}}}}
-{"kind": "outline", "view": "closeup", "color": "#ffffff", "opacity": 0.5, "width": 1, "dash": [4, 3], "min_size": 12}
-```
+  ```json
+  {"frames": {"rot": {}, "zoom": {"parent": "rot", "origin": [{"channel": "mx"}, {"channel": "my"}, 0], "scale": {"channel": "k"}}}}
+  {"kind": "inset_box", "panel": "closeup", "color": "#ffffff", "opacity": 0.5, "width": 1, "dash": [4, 3], "min_size": 12}
+  ```
 
-The remaining properties are for drawing only, and they do not change any position: the `axes` and `grid` layers, and a layer's `color`, `highlight`, `opacity`, `width`, `size`, `trail.taper`, the head's color and size, the arrowhead's size, the drawing of an outline, a track layer's `fit`, and the camera with its `aspect`. The `stretch` and the `turn` of an orbit camera are for drawing only as well. They are not read in the evaluation of section 3, hence they are not covered by any case of the conformance corpus.
+The remaining properties are for drawing only, and they do not change any position.
+They are the `axes` and `grid` layers, and a layer's `color`, `highlight`, `opacity`, `width`, `size`, `trail.taper`, the head's color and size, the arrowhead's size, the drawing of an inset box, a `trajectories` layer's `fit`, and the camera with its `aspect`.
+The `stretch` and the `auto_rotate` of a `3d` camera are for drawing only as well.
+They are not read in the evaluation of section 3, hence they are not covered by any case of the conformance corpus.
 
-A `color` is either a fixed color, written `#rrggbb` (two hexadecimal digits each for red, green, and blue), or a colormap over a `channel` (one color per sample, varying along the track) or over a `parameter` (one color per track). The layer's set must carry the channel or the parameter, as it must carry the channel of an edge under rule F5. The `colormap` is one of the names in the schema (e.g. `viridis`), or `{"var": id, "map": {value: name, ...}}`, where `id` refers to a choice variable. In this form, `map` gives a colormap name to every value of the choice and only to these values, and a writer and a reader reject any other map. The panel's value of the choice, read by rule V1, picks the name. A colormap's `range` is the interval of values that is mapped onto the part `[clip[0], clip[1]]` of the colormap, where the whole colormap runs from 0 to 1. By default, `range` is the extent of the values over the set, i.e. their minimum and maximum, and `clip` is `[0, 1]`, i.e. the whole map. A range of zero width gives the middle of the map.
+A `color` is either a fixed color, written `#rrggbb` (two hexadecimal digits each for red, green, and blue), or a colormap over a `channel` (one color per sample, varying along the trajectory) or over a `parameter` (one color per trajectory).
+The layer's set must carry the channel or the parameter, as it must carry the channel of a transform under rule `transform-channels`.
+The `colormap` is one of the names in the schema (e.g. `viridis`), or `{"input": id, "map": {value: name, ...}}`, where `id` refers to an input of kind `choice`.
+In this form, `map` gives a colormap name to every value of the choice and only to these values, and a writer and a reader reject any other map.
+The panel's value of the choice, read by rule `input-scope`, picks the name.
+A colormap's `range` is the interval of values that is mapped onto the part `[truncate[0], truncate[1]]` of the colormap, where the whole colormap runs from 0 to 1.
+By default, `range` is the extent of the values over the set, i.e. their minimum and maximum, and `truncate` is `[0, 1]`, i.e. the whole map.
+A range of zero width gives the middle of the map.
 
-Both `width` and `highlight.width` are in CSS pixels, and the `size` of a body is its diameter in CSS pixels. A `highlight` refers to a selector, held to rule V3 like a member reference, and it draws one member of the layer's set more prominently, e.g. the orbit that a slider currently selects among a whole family. The member that this selector resolves to in the layer's set is drawn with the highlight's `width`, by default the layer's, and the highlight's `opacity`, by default 1. A highlight may carry a `kernel`, `{"width": w, "opacity": a}`, which also brightens the neighbors of the highlighted member according to how close their parameter values are, with the kernel width `w` in `(0, 1]` and the kernel opacity `a` in `[0, 1]`, and its selector must then be by `nearest`. A member whose value of the selector's parameter lies at a distance `d` from the value of the highlighted member is drawn with opacity `max(o, a * exp(-(d / (w * extent))^2))`, i.e. with a Gaussian falloff in the parameter. In this formula, `o` is the layer's opacity, which stays the floor, and `extent` is the width of the parameter's range over the layer's set. The ratio `d / (w * extent)` is 0 when the extent is zero.
+Both `width` and `highlight.width` are in CSS pixels, and the `size` of a body is its diameter in CSS pixels.
+A `highlight` refers to an input of kind `parameter`, held to rule `members` like a member reference, and it draws one member of the layer's set more prominently, e.g. the orbit that a slider currently selects among a whole family.
+The member that this input resolves to in the layer's set is drawn with the highlight's `width`, by default the layer's, and the highlight's `opacity`, by default 1.
+A highlight may carry a `kernel`, `{"width": w, "opacity": a}`, which also brightens the neighbors of the highlighted member according to how close their parameter values are, with the kernel width `w` in `(0, 1]` and the kernel opacity `a` in `[0, 1]`.
+A member whose value of the input's parameter lies at a distance `d` from the value of the highlighted member is drawn with opacity `max(o, a * exp(-(d / (w * extent))^2))`, i.e. with a Gaussian falloff in the parameter.
+In this formula, `o` is the layer's opacity, which stays the floor, and `extent` is the width of the parameter's range over the layer's set.
+The ratio `d / (w * extent)` is 0 when the extent is zero.
 
-An arrow is drawn in its layer's `color`, a fixed `#rrggbb` color, by default the foreground of the theme, and in its `opacity`, by default 1. Its shaft is a line of `width` CSS pixels from the base toward the tip. It ends in an arrowhead at the tip, a filled triangle `head.size` CSS pixels long and 0.8 times as wide, by default 10 pixels long. The arrowhead keeps its size in CSS pixels at any zoom, as the head of a track does, and it is shrunk to the length of the arrow on the screen when the arrow is shorter. An arrow whose base and tip coincide on the screen is not drawn, since it does not have a direction there.
+An arrow is drawn in its layer's `color`, a fixed `#rrggbb` color, by default the foreground of the theme, and in its `opacity`, by default 1.
+Its shaft is a line of `width` CSS pixels from the base toward the tip.
+It ends in an arrowhead at the tip, a filled triangle `head.size` CSS pixels long and 0.8 times as wide, by default 10 pixels long.
+The arrowhead keeps its size in CSS pixels at any zoom, as the head of a trajectory does, and it is shrunk to the length of the arrow on the screen when the arrow is shorter.
+An arrow whose base and tip coincide on the screen is not drawn, since it does not have a direction there.
 
-An outline is drawn from the visible rectangle of the target panel's camera, i.e. the part of its plane that the target panel shows at the current frame after the viewer's pan and zoom, at 0 along the normal of the plane. The four corners of this rectangle are taken through the map of rule L8, and they are joined into a closed line in the layer's `color`, by default the foreground of the theme, and in its `opacity`, by default 1. The line is `width` CSS pixels wide, by default 1, and it is dashed when the layer has a `dash`, `[on, off]`, which gives the lengths of a dash and of a gap in CSS pixels. On the screen, the outline is at least `min_size` CSS pixels wide and tall, by default 8. Along a screen axis on which it is narrower, it is stretched about its center until it is `min_size` across, so that the window of a deep close-up stays visible. An outline is not drawn while one of its corners lies behind a perspective camera.
+An inset box is drawn from the visible rectangle of the target panel's camera, i.e. the part of its plane that the target panel shows at the current frame index after the pan and the zoom of the person at the page, at 0 along the normal of the plane.
+The four corners of this rectangle are taken through the map of rule `inset-box`, and they are joined into a closed line in the layer's `color`, by default the foreground of the theme, and in its `opacity`, by default 1.
+The line is `width` CSS pixels wide, by default 1, and it is dashed when the layer has a `dash`, `[on, off]`, which gives the lengths of a dash and of a gap in CSS pixels.
+On the screen, the box is at least `min_size` CSS pixels wide and tall, by default 8.
+Along a screen axis on which it is narrower, it is stretched about its center until it is `min_size` across, so that the window of a deep close-up stays visible.
+An inset box is not drawn while one of its corners lies behind a perspective camera.
 
-Along a `trail`, the layer's `width` and `opacity` hold at the head, and they fall linearly in the loop reading to `taper.width` times the width and `taper.opacity` times the opacity at the tail, so that the trail thins and fades toward its end. Both `taper.width` and `taper.opacity` lie in `[0, 1]`, with defaults of 0.25 and 0.35, respectively, and a value of 0 makes the width or the opacity fall to zero at the tail.
+Along a `trail`, the layer's `width` and `opacity` hold at the head, and they fall linearly in the total fraction along to `taper.width` times the width and `taper.opacity` times the opacity at the tail, so that the trail thins and fades toward its end.
+Both `taper.width` and `taper.opacity` lie in `[0, 1]`, with defaults of 0.25 and 0.35, respectively, and a value of 0 makes the width or the opacity fall to zero at the tail.
 
-An `axes` layer draws the coordinate axes of the display frame. With `span: "full"`, it draws both directions of each axis through the origin across the whole view, and with `span: "positive"` it draws only the positive half-axes from the origin. Under a `plane` camera, a full axis carries tick numbers and the frame's `axes` titles with its `unit` appended, and a `grid` layer with `labels: true` follows the visible rectangle and numbers its lines. Under a free aspect, a grid without numbers follows the visible rectangle too, laid out per axis and not numbered. Under an `orbit` camera, the axes carry their names at their tips, and the grid is not numbered, whatever the value of `labels`. Under a `plane` camera, `span` defaults to `full` and `labels` to true, and under any other camera to `positive` and false.
+An `axes` layer draws the coordinate axes of the display frame.
+With `span: "full"`, it draws both directions of each axis through the origin across the whole panel, and with `span: "positive"` it draws only the positive half-axes from the origin.
+Under a `2d` camera, a full axis carries tick numbers and the frame's `axes` titles with its `unit` appended, and a `grid` layer with `labels: true` follows the visible rectangle and numbers its lines.
+Under a free aspect, a grid without numbers follows the visible rectangle too, laid out per axis.
+Under a `3d` camera, the axes carry their names at their tips, and the grid is not numbered, whatever the value of `labels`.
+Under a `2d` camera, `span` defaults to `full` and `labels` to true, and under a `3d` camera to `positive` and false.
 
-When a panel's view, frame, or sets change, a reader fits the panel's camera to the track layers it draws, i.e. it pans and zooms so that they fill the panel, or to its bodies when it does not draw a track. A track layer with `"fit": false` is drawn but left out of the fit, and the default is `true`, e.g. for a whole curve on a close-up whose camera is fitted to a window that another track layer gives. A reader that ignored `fit` would draw the same tracks at another zoom, hence `fit` is not a feature of section 4. A track layer in the driver's context is fitted as it is drawn at every sample of the driver's track, in every lap. Arrow and outline layers are not part of the fit, since their arrows change with the reading and an outline changes with another panel's camera. Otherwise, the reader keeps the pan and zoom that the viewer has set. A `plane` camera has an `aspect`, which is `equal`, the default, or `free`. Under `equal`, one unit of the display frame is as long across the panel as up it, hence a drawing much wider than it is tall is confined to a strip of a square panel. Under `free`, the reader scales the two axes of the plane separately in the fit, so that the drawing fills the panel in both directions with a small margin, e.g. for a diagram of a residual against an iteration count. Along an axis on which the extent of the drawing is within the rounding of its values, i.e. below a billionth of their magnitude, e.g. the vertical axis under a horizontal line, the reader takes the scale of the equal fit instead. The viewer then zooms both axes by one factor with the wheel and pans along both with a drag. The reader lays out the lines of the `axes` and `grid` layers along each axis at a step chosen for its scale, numbers them where the paragraph above says, and keeps widths, heads, and bodies at their sizes in CSS pixels. A reader that ignored `aspect` would draw the same tracks at an equal scale, hence `aspect` is not a feature of section 4, and a scene does not list it in `requires`.
+When the declared panel, the display frame, or the sets of a shown panel change, a reader fits the panel's camera to the `trajectories` layers it draws, i.e. it pans and zooms so that they fill the panel, or to its bodies when it does not draw a trajectory.
+A `trajectories` layer with `"fit": false` is drawn but left out of the fit, and the default is `true`, e.g. for a whole curve on a close-up whose camera is fitted to a window that another layer gives.
+A reader that ignored `fit` would draw the same trajectories at another zoom, hence `fit` is not a feature of section 4.
+A `trajectories` layer that reads from the reference trajectory is fitted as it is drawn at every sample of the reference trajectory, in every revolution.
+Arrow and inset box layers are not part of the fit, since their arrows change with the fraction along and an inset box changes with another panel's camera.
+Otherwise, the reader keeps the pan and the zoom that the person at the page has set.
+A `2d` camera has an `aspect`, which is `equal`, the default, or `free`.
+Under `equal`, one unit of the display frame is as long across the panel as up it, hence a drawing much wider than it is tall is confined to a strip of a square panel.
+Under `free`, the reader scales the two axes of the plane separately in the fit, so that the drawing fills the panel in both directions with a small margin, e.g. for a diagram of a residual against an iteration count.
+Along an axis on which the extent of the drawing is within the rounding of its values, i.e. below a billionth of their magnitude, e.g. the vertical axis under a horizontal line, the reader takes the scale of the equal fit instead.
+The person at the page then zooms both axes by one factor with the wheel and pans along both with a drag.
+The reader lays out the lines of the `axes` and `grid` layers along each axis at a spacing chosen for its scale, numbers them where the paragraph above says, and keeps widths, heads, and bodies at their sizes in CSS pixels.
+A reader that ignored `aspect` would draw the same trajectories at an equal scale, hence `aspect` is not a feature of section 4, and a scene does not list it in `requires`.
 
-An `orbit` camera has a `stretch`, three positive factors along the `x`, `y`, and `z` axes of the display frame, which are 1 when absent. A reader multiplies every position that the panel draws by these factors, and fits the camera to the stretched drawing. With a stretch of `[1, 1, 5]`, e.g. the out-of-plane motion of a drawing that is nearly flat in `z` is shown five times taller. The `grid` layer is laid out from the drawing before the stretch and stretched with it, while every axis of the `axes` layer is drawn at one length, a round fraction of the largest side of the stretched drawing. The title at the tip of a stretched axis carries the factor, as in `z ×5`. An `orbit` camera also has a `turn`, a number of degrees, which is 0 when absent. At the progress `q` of section 2.6, a reader turns the camera about its up axis through the point that it looks at, by `turn * q` degrees, counterclockwise seen from the tip of the up axis when `turn` is positive. The view thus turns at a constant rate through each loop, and it is back at the fit at the start of the next loop. The turn is added to any turn that the viewer has made by hand. A reader that ignored `stretch` or `turn` would draw the same tracks unstretched or from a fixed side, hence neither is a feature of section 4.
+A `3d` camera has a `stretch`, three positive factors along the `x`, `y`, and `z` axes of the display frame, which are 1 when absent.
+A reader multiplies every position that the panel draws by these factors, and fits the camera to the stretched drawing.
+With a stretch of `[1, 1, 5]`, e.g., the out-of-plane motion of a drawing that is nearly flat in `z` is shown five times taller.
+The `grid` layer is laid out from the drawing before the stretch and stretched with it, while every axis of the `axes` layer is drawn at one length, a round fraction of the largest side of the stretched drawing.
+The title at the tip of a stretched axis carries the factor, as in `z ×5`.
+A `3d` camera also has an `auto_rotate`, a number of degrees, which is 0 when absent.
+At the progress `q` of section 2.6, a reader turns the camera about its up axis through the point that it looks at, by `auto_rotate * q` degrees, counterclockwise seen from the tip of the up axis when `auto_rotate` is positive.
+The view thus turns at a constant rate through each loop, and it is back at the fit at the start of the next loop.
+The rotation is added to any rotation that the person at the page has made by hand.
+A reader that ignored `stretch` or `auto_rotate` would draw the same trajectories unstretched or from a fixed side, hence neither is a feature of section 4.
 
 ### 2.8 State
 
-The state of a page is everything the viewer can change: which panels are shown, what each of them shows, and the current values of the variables and the clock. It is `{"variables": {id: value}, "clock": {"channel": name}, "panels": {panel id: {"view": id, "variables": {id: value}}}, "layout": node}`. The values of the scene-scoped variables are in `variables`, the active channel of the clock in `clock`, and the view and the panel-scoped variable values of each panel in `panels`. The `layout` specifies how the panels are arranged on the page, as a tree of nodes. A layout node is either `{"kind": "panel", "id": string}`, a leaf that shows one panel, or `{"kind": "split", "dir": "row" | "col", "ratio": number, "a": node, "b": node}`, which splits its area into two parts, side by side (`row`) or one above the other (`col`), with the first part `a` taking the fraction `ratio` of the space. The starting state is carried in `scene.tys` as `initial`.
+The state of a page is everything that the person at the page can change: which panels are shown, what each of them shows, and the current values of the inputs and of the clock.
+A shown panel is a panel on the page, and each shown panel shows one declared panel of section 2.7.
+The id of a shown panel is often the id of its declared panel, and a copy of a declared panel that is already shown gets a new id.
+The state is
 
-A state is valid when every panel shows a declared view, the layout shows every panel of the state once and does not repeat any, the clock channel is one of `clock.channels`, and every value fits its variable (section 2.5). Variable ids that the scene does not declare are ignored. A reader's checks and its evaluator take a valid state, and they report 2.8 or 2.5 for any other state.
+```json
+{"inputs": {id: value}, "clock": {"channel": name}, "panels": {shown id: {"panel": declared id, "inputs": {id: value}}}, "layout": node}
+```
 
-A reader that restores a stored state (e.g. one saved in the browser on a previous visit) keys it on a hash of `scene.tys`, so that a state saved for one scene is not applied to another, and it repairs the state before use rather than rejecting it. It drops a panel whose view the scene does not declare or whose id is not an identifier (rule S3), together with the panel's layout leaf. It also drops a panel that the layout does not show, a layout leaf that does not refer to a panel, and a repeated leaf. It drops a value that does not fit its variable or does not belong to any variable, a panel value of a scene-scoped variable, and a scene value of a panel-scoped one. It replaces a split ratio outside `(0, 1)` by one half, and keeps the keys of a split (section 2.11) when they are valid, dropping them otherwise, so that the split then stays at its ratio. The reader falls back to `initial` when the repaired state does not have any panel, when the clock channel is unknown, or when the stored data is not a state at all.
+where `inputs` holds the values of the shared inputs, `clock` names the clock channel, and `panels` maps each shown panel to its declared panel and its values of the per-panel inputs.
+The `layout` says how the shown panels are arranged on the page, as a tree of nodes.
+A layout node is either `{"kind": "panel", "id": string}`, a leaf that holds one shown panel, or `{"kind": "split", "dir": "row" | "col", "ratio": number, "a": node, "b": node}`, which splits its area into two parts, side by side (`row`) or one above the other (`col`), with the first part `a` taking the fraction `ratio` of the space.
+The starting state is carried in `scene.tys` as `initial`, and its layout names the panels shown at the start.
+
+A reader that restores a stored state (e.g. one saved in the browser on a previous visit) keys it on a hash of `scene.tys`, so that a state saved for one scene is not applied to another, and it repairs the state before use rather than rejecting it.
+It drops a shown panel whose declared panel the scene does not declare or whose id is not an identifier (rule `identifier`), together with the panel's layout leaf.
+It also drops a shown panel that the layout does not hold, a layout leaf that does not refer to a shown panel, and a repeated leaf.
+It drops a value that does not fit its input or does not belong to any input, a panel's value of a shared input, and a shared value of a per-panel input.
+It replaces a split ratio outside `(0, 1)` by one half, and keeps the keyframes of a split (section 2.11) when they are valid, dropping them otherwise, so that the split then stays at its ratio.
+The reader falls back to `initial` when the repaired state does not have any shown panel, when the clock channel is unknown, or when the stored data is not a state at all.
+
+The rule for the state follows.
+
+- `state`. A state is valid when every shown panel names a declared panel, the layout holds every shown panel of the state once and does not repeat any, the clock channel is one of `clock.channels`, and every value fits its input (section 2.5).
+  Input ids that the scene does not declare are ignored.
+  The checks of a reader and its evaluator take a valid state, and they reject any other state under rule `state`, rule `clock`, or rule `input`.
 
 ### 2.9 Controls and readouts
 
-A control is a widget on the page that binds a variable or the clock to an input. Its kind is `slider` (which drives a selector by `nearest`, with a `domain` set query that specifies which sets the slider ranges over), `tabs` (which drives a choice, with one tab per value), `toggle` (which drives a toggle), or `transport` (which drives the clock, with play, pause, and the switch of the active channel). Every control but the transport has a `label`. A scene without a `transport` control is static, i.e. it shows the initial frame index and does not animate, unless the viewer element has the `autoplay` attribute, which plays the clock without a transport control, or the `kiosk` attribute (for a page written for a slide), which also hides the bars. Under `prefers-reduced-motion: reduce`, neither `autoplay` nor `kiosk` starts the clock. A control over a panel-scoped variable appears in every panel and sets the value of the panel in which it appears. A control over a scene-scoped variable appears once on the page.
+A control is a widget on the page that sets an input or drives the clock.
+Its kind is one of the following.
 
-The sets that a slider's `domain` matches must each carry the selector's parameter, for every value the variables can take, and a writer rejects a slider that breaks this rule. A slider's stops are the distinct parameter values of the matched sets in increasing order, one stop per value, so that the slider snaps from one existing member to the next, and moving the slider to a stop writes the stop's value into the selector. When the domain does not match any set, the slider is disabled. A change of the domain (e.g. through a choice variable that the query depends on) never changes the value of the variable.
+- A `slider` sets an input of kind `parameter`, with a `domain`, a set query that says which sets the slider ranges over.
+- A `tabs` control sets an input of kind `choice`, with one tab per value.
+- A `toggle` control sets an input of kind `toggle`, drawn as a checkbox.
+- A `playback` control plays and pauses the clock and switches the clock channel.
 
-A readout is a piece of text on the page that shows current values. It is made of a `place`, which is `panel` (shown inside each panel) or `caption` (shown once below the panels), and a list of `parts`, which are concatenated. Each part is a string (shown as it is) or one of `{"var": id}` (the value of a variable), `{"member": parameter}` (the value of the named parameter for the current track), `{"attr": name, "factor": a, "offset": b}` (an attribute, as in section 2.2), `{"channel": name}` (the value of the named channel at the current reading), `{"clock": "index"}` (the frame index, i.e. the remainder `i` in `[0, steps)`), and `{"clock": "steps"}` (the number of frames per loop), with an optional `digits`, a number of significant digits. In a panel, the member, the attribute, and the channel are the driver's, at the reading. The channel is blended between the two samples of rule C4 in the context of the driver's lap (rule C6), and the reading is clamped to `[0, 1]` as in rule L4. In the caption they are those of the first panel in layout order, and so is the value of a panel-scoped `{"var"}`. A `{"var"}` part shows a choice by its label, a toggle as on or off, and a number to `digits` significant digits. Without `digits`, it shows an integer as it is and any other number to six significant digits. A writer rejects a part that refers to a parameter, an attribute, or a channel that the driver's set does not carry, for every value the variables can take. Readouts do not have a template language, i.e. a readout is the list of its parts, without a format string.
+Every control but the playback control has a `label`, and every control but the playback control names its `input`.
+A scene without a `playback` control is static, i.e. it shows the initial frame index and does not animate, unless the viewer element has the `autoplay` attribute, which plays the clock without a playback control, or the `kiosk` attribute (for a page written for a slide), which also hides the bars.
+Under `prefers-reduced-motion: reduce`, neither `autoplay` nor `kiosk` starts the clock.
+A control over a per-panel input appears in every shown panel and sets the value of the panel in which it appears.
+A control over a shared input appears once on the page.
+
+The sets that a slider's `domain` matches must each carry the input's parameter, for every value the inputs can take, and a writer rejects a slider that breaks this rule.
+A slider's stops are the distinct parameter values of the matched sets in increasing order, one stop per value, so that the slider snaps from one existing member to the next, and moving the slider to a stop writes the stop's value into the input.
+When the domain does not match any set, the slider is disabled.
+A change of the domain (e.g. through an input of kind `choice` that the query depends on) never changes the value of the input.
+
+A readout is a piece of text on the page that shows current values.
+It is made of a `place`, which is `panel` (shown inside each shown panel) or `caption` (shown once below the panels), and a list of `parts`, which are concatenated.
+Each part is a string, shown as it is, or one of the following, each with an optional `digits`, a number of significant digits.
+
+- `{"input": id}` is the value of an input.
+- `{"parameter": name}` is the value of the named parameter for the current trajectory, and `@index` is accepted as the name.
+- `{"attr": name, "factor": a, "offset": b}` is an attribute, as in section 2.2.
+- `{"channel": name}` is the value of the named channel at the current fraction along.
+- `{"clock": "frame_index"}` is the frame index, i.e. the remainder `i` in `[0, frame_count)`.
+- `{"clock": "frame_count"}` is the frame count, the number of frame indices per loop.
+
+In a shown panel, the parameter, the attribute, and the channel are those of the reference trajectory, at its fraction along.
+The channel is blended between the two samples of rule `segment` in the context of the revolution of the reference trajectory (rule `revolutions`), and the fraction along is clamped to `[0, 1]` as in rule `body-layer`.
+In the caption they are those of the first shown panel in layout order, and so is the value of a per-panel `{"input"}` part.
+An `{"input"}` part shows a choice by its label, a toggle as on or off, and a number to `digits` significant digits.
+Without `digits`, it shows an integer as it is and any other number to six significant digits.
+A writer rejects a part that refers to a parameter, an attribute, or a channel that the set of the reference trajectory does not carry, for every value the inputs can take.
+Readouts do not have a template language, i.e. a readout is the list of its parts, without a format string.
+
+The rule for controls follows.
+
+- `control`. A reader rejects a control of an unknown kind, a control whose `input` is not declared, and a control whose input is of a kind that the control does not set.
 
 ### 2.10 Export
 
-A reader that exports a video (the runtime records the animation to an MP4 file) freezes the state for the whole recording, and starts at frame index 0. At each video frame, it samples the progress that live playback at the viewer's playback speed would reach at the time of this video frame, so that a lap lasts as long in the video as it does live on screen. The export runs through one or more loops. Every video frame is drawn at a fixed logical size and pixel ratio (the number of physical pixels per CSS pixel), through the same camera fit that the panels start with, so that the video does not depend on the size of the viewer's window. An orbit camera with a `turn` is turned by the clock in the video as it is live (section 2.7). The picture holds the panels with their layers, axis titles, body labels, colorbars, and panel readouts, as well as the caption, which a kiosk viewer leaves out, as it does on the page. It leaves out the title, the panel headers, and every control. A 1080p export is the 720p layout at a pixel ratio of 1.5, i.e. the same picture rendered at 1.5 times the pixel density rather than a larger layout. An export has a stated ceiling in frames and seconds, and it is refused beyond this ceiling. The picture also holds the labels, the points, and the overlays of section 2.11, and a camera with keys moves in the video as it does live.
+A reader that exports a video (the runtime records the animation to an MP4 file) freezes the state for the whole recording, and starts at frame index 0.
+At each video frame, it samples the progress that live playback at the current playback speed would reach at the time of this video frame, so that a revolution lasts as long in the video as it does live on screen.
+The export runs through one or more loops.
+Every video frame is drawn at a fixed logical size and pixel ratio (the number of physical pixels per CSS pixel), through the same camera fit that the panels start with, so that the video does not depend on the size of the window.
+A `3d` camera with an `auto_rotate` is turned by the clock in the video as it is live (section 2.7).
+The picture holds the panels with their layers, axis titles, body labels, colorbars, and panel readouts, as well as the caption, which a kiosk viewer leaves out, as it does on the page.
+It leaves out the title, the panel headers, and every control.
+A 1080p export is the 720p layout at a pixel ratio of 1.5, i.e. the same picture rendered at 1.5 times the pixel density rather than a larger layout.
+The picture also holds the labels, the points, and the overlays of section 2.11, and a camera with keyframes moves in the video as it does live.
+
+The rule for export follows.
+
+- `export`. A reader refuses an export beyond its stated ceiling in video frames and seconds.
 
 ### 2.11 The timeline
 
-The timeline is the time of one loop of the clock in seconds, at playback speed 1. At the progress `q` of section 2.6 it is `s = q * L`, computed in float64, where `L` is the length of a loop, i.e. `clock.seconds`, or 8 seconds per lap when `seconds` is absent. Everything that a scene moves by the time of the video rather than by a stored channel, e.g. a camera that zooms in after seven seconds, a caption that changes at the start of a step, or a cloud of tracks that fades out, is given by _keys_, i.e. values at times of the timeline. A key is written `[t, v]` or `[t, v, ease]`, where `t` is a time in seconds, `v` is a number, and `ease` names how the value travels to `v` from the key before. A _tween_ is `{"keys": [key, ...]}`, the value that its keys give at each time. The rules for the timeline follow (we use the letter "K" as a shorthand for "Key").
+The timeline is the time of one loop of the clock in seconds, at playback speed 1.
+At the progress `q` of section 2.6 it is `s = q * L`, computed in float64, where `L` is the length of a loop, i.e. `clock.seconds`, or 8 seconds per revolution when `seconds` is absent.
+Everything that a scene moves by the time of the video rather than by a stored channel, e.g. a camera that zooms in after seven seconds, a caption that changes at the start of a step, or a cloud of trajectories that fades out, is given by keyframes, i.e. values at times of the timeline.
+A keyframe is written `[t, v]` or `[t, v, ease]`, where `t` is a time in seconds, `v` is a number, and `ease` names how the value travels to `v` from the keyframe before.
+A keyframed value is `{"keyframes": [keyframe, ...]}`, the value that its keyframes give at each time.
 
-- K1. A tween has at least one key, and the times of its keys are finite and nondecreasing. Its value at time `s` is found as follows. Let `i` be the last key with `t_i <= s`. When there is no such key, the value is `v_0`, and when `i` is the last key, the value is `v_i`. Otherwise `t_i <= s < t_(i+1)`, and the value is `v_i + E(x) * (v_(i+1) - v_i)`, where `x = (s - t_i) / (t_(i+1) - t_i)`, computed in float64 in this order, and `E` is the ease of key `i + 1`. Two keys at the same time thus make a jump, to the value of the later key, at that time.
-- K2. The ease of a key is `linear`, the default, with `E(x) = x`, or `smooth`, with `E(x) = x * x * (3 - 2 * x)`, or `in`, with `E(x) = x * x * x`, or `out`, with `E(x) = 1 - y * y * y` for `y = 1 - x`, or `in-out`, with `E(x) = 4 * x * x * x` for `x < 0.5` and `E(x) = 1 - y * y * y / 2` for `y = 2 - 2 * x` otherwise, or `hold`, with `E(x) = 0`, which keeps the value of key `i` until the time of key `i + 1`. Each product is computed from the left. A reader rejects any other name, and the ease of the first key is never used.
-- K3. A clock in `value` mode gives the shared value of its active channel either by its `range` (rule C2) or by its `keys`, and a reader rejects a clock with both or with neither. With keys, the shared value at progress `q` is `v`, the value of the tween at `s = q * L`, and the reading of a track is `u = (v - c[0]) / (c[m-1] - c[0])`, as in rule C2. The clock can therefore pause (two keys of one value), run at several speeds, and ease in and out of a move. A clock in `fraction` mode does not have keys. A writer lists the feature `clock.keys` in `requires` for a scene whose clock has keys.
-- K4. A track, arrow, points, or label layer may carry a clock of its own, `{"channel": name, "range": [a, b]}` or `{"channel": name, "keys": [key, ...]}`. The layer then takes every reading on its members in `value` mode, with this channel and with the shared value that `range` (rule C2) or `keys` (rule K3) gives at the progress, whatever the mode and the active channel of the scene's clock. Its readings are in one lap, i.e. rule C6 reads them with `n = 1`. Rule C5 then asks the layer's set to carry the layer's channel, unless it is `@index`, rather than the channels of the scene's clock, and rule T3 holds for this channel on every track on which the layer takes a reading. Different layers can thus run on different channels and at different times, e.g. a cloud that grows backward in a backward time while the transfer it came from stays whole, or a costate history in days beside a trajectory in canonical time. A writer lists the feature `layers.clock` in `requires` for a scene with a layer clock.
-- K5. A plane camera may carry `keys`, a list of camera keys, each `{"at": t, "width": w, "height": h, "center": [a, b], "follow": [target, ...], "offset": [da, db], "ease": name}`, whose times `at` are finite and nondecreasing. A key gives the window that the panel shows at its time: its center, two coordinates along the axes of the camera's plane (`x` and `y` for `xy`, `x` and `z` for `xz`, and `y` and `z` for `yz`), and its width `w > 0`, the extent of the window along the first of the two axes in units of the display frame. Its `height`, the extent along the second axis, is given only under `"aspect": "free"`, by every key of the camera or by none, and the panel's aspect ratio gives it otherwise. The center is `center`, or, with `follow`, a point that moves: a target `{"layer": i, "member": k}` is the point at the reading of member `k` of the track layer at index `i` of the same view's `layers`, i.e. the point of rule C4 in its lap of rule C6, under the layer's clock (rule K4) and in the layer's context (rule L6), with the reading clamped to `[0, 1]` as for a body (rule L4). The member `k` is a track of the set that the layer's set query resolves to, and it is an error when `k` is at or past the number of its tracks. The center of a follow key is the mean of the points of its targets, projected onto the plane's two axes, plus `offset`, which is `[0, 0]` when absent. A target whose layer's set query does not match any set is left out, and a key whose targets are all left out takes its `center`, or does not have a center when it lacks one. The camera at time `s` blends two keys as rule K1 blends two values, with the ease of the later key: the center is `(1 - E) * c_i + E * c_(i+1)`, and the width is `exp((1 - E) * ln(w_i) + E * ln(w_(i+1)))`, as is the height, so that a zoom by a factor runs at a steady rate. Both centers are taken at time `s`, hence a blend from a fixed window to a follow key ends on the moving point. Before its first key and after its last, the camera shows the window of that key, and when a key it needs lacks a center, the camera does not have a window at `s`. The layer at index `i` is a track layer and `k` is an integer, and a reader rejects any other target. A writer lists the feature `camera.keys` in `requires` for a scene with a camera with keys. A viewer that lets the user pan or zoom a panel leaves a camera with keys where the user left it, and gives the user a way to hand it back to its keys: TyCHO's viewer does so with the key `f`, for every panel, and with a button that a panel shows while it is off its keys.
+The rules for the timeline follow.
 
-The evaluator gives the window of a camera with keys (section 3). A reader shows this window in the panel, i.e. it sets the center and the width of a plane camera to the window at every frame, the height to the window's or the width divided by the panel's aspect ratio, and the window to its fit when the camera does not have one at `s`. When the viewer pans or zooms the panel, the reader keeps where the viewer left it, until the camera is fitted again, which returns it to the keys. A camera with keys is not fitted to its layers.
+- `timeline`. A reader rejects a keyframed value whose values lie outside the range of the key that holds it, e.g. an opacity outside `[0, 1]`.
+- `keyframes`. A keyframed value has at least one keyframe, and the times of its keyframes are finite and nondecreasing.
+  Its value at time `s` is found as follows.
+  Let `i` be the last keyframe with `t_i <= s`.
+  When there is no such keyframe, the value is `v_0`, and when `i` is the last keyframe, the value is `v_i`.
+  Otherwise `t_i <= s < t_(i+1)`, and the value is `v_i + E(x) * (v_(i+1) - v_i)`, where `x = (s - t_i) / (t_(i+1) - t_i)`, computed in float64 in this order, and `E` is the ease of keyframe `i + 1`.
+  Two keyframes at the same time thus make a jump, to the value of the later keyframe, at this time.
+- `ease`. The ease of a keyframe is one of the following, and each product is computed from the left.
+  - `linear`, the default, has `E(x) = x`.
+  - `smooth` has `E(x) = x * x * (3 - 2 * x)`.
+  - `in` has `E(x) = x * x * x`.
+  - `out` has `E(x) = 1 - y * y * y` for `y = 1 - x`.
+  - `in-out` has `E(x) = 4 * x * x * x` for `x < 0.5`, and `E(x) = 1 - y * y * y / 2` for `y = 2 - 2 * x` otherwise.
+  - `hold` has `E(x) = 0`, which keeps the value of keyframe `i` until the time of keyframe `i + 1`.
 
-The other values that move by the timeline are for drawing only, and the evaluator does not read them. The `opacity` of a layer of any kind, of a head or a marker, of a view, and of an overlay may be a tween instead of a number, each of whose values lies in `[0, 1]`, and so may a marker's `size`, whose values are positive, and its `edge_width`, whose values are not negative, e.g. the ring of a pulse that grows and thins. A view's opacity fades every panel that shows it, its layers and its labels together, as if the panel were covered by the background with the opacity `1 - o`. A split of the layout (section 2.8) may carry `keys`, a tween of its `ratio`, whose values lie in `[0, 1]`, and a side of the split whose share is 0 is not drawn. A reader that ignored these tweens would draw every track at another opacity or every panel at another size, hence none of them is a feature of section 4.
+  A reader rejects any other name, and the ease of the first keyframe is never used.
+- `clock-keyframes`. A clock in `epoch` mode gives the shared value of its clock channel either by its `range` (rule `clock-mode`) or by its `keyframes`, and a reader rejects a clock with both or with neither.
+  With keyframes, the shared value at progress `q` is `v`, the value of the keyframes at `s = q * L`, and the fraction along a trajectory is `u = (v - c[0]) / (c[m-1] - c[0])`, as in rule `clock-mode`.
+  The clock can therefore pause (two keyframes of one value), run at several speeds, and ease in and out of a move.
+  A clock in `fraction` mode does not have keyframes.
+  A writer lists the feature `clock.keyframes` in `requires` for a scene whose clock has keyframes.
+- `layer-clock`. A `trajectories`, `arrow`, `points`, or `label` layer may carry a layer clock, `{"channel": name, "range": [a, b]}` or `{"channel": name, "keyframes": [keyframe, ...]}`.
+  The layer then computes every fraction along on its members in `epoch` mode, with this channel and with the shared value that `range` (rule `clock-mode`) or `keyframes` (rule `clock-keyframes`) gives at the progress, whatever the mode and the clock channel of the scene's clock.
+  Its fractions along are in one revolution, i.e. rule `revolutions` reads them with `n = 1`.
+  Rule `clock-channel-carried` then asks the layer's set to carry the layer's channel, unless it is `@index`, rather than the channels of the scene's clock, and rule `monotone-clock-channel` holds for this channel on every trajectory on which the layer computes a fraction along.
+  Different layers can thus run on different channels and at different times, e.g. a cloud that grows backward in a backward time while the transfer it came from stays whole, or a costate history in days beside a trajectory in canonical time.
+  A writer lists the feature `layers.clock` in `requires` for a scene with a layer clock.
+- `camera-keyframes`. A `2d` camera may carry `keyframes`, a list of camera keyframes, each `{"at": t, "width": w, "height": h, "center": [a, b], "follow": [target, ...], "offset": [da, db], "ease": name}`, whose times `at` are finite and nondecreasing.
+  A camera keyframe gives the window that the panel shows at its time.
+  The window has a center, two coordinates along the axes of the camera's plane (`x` and `y` for `xy`, `x` and `z` for `xz`, and `y` and `z` for `yz`), and a width `w > 0`, the extent of the window along the first of the two axes in units of the display frame.
+  Its `height`, the extent along the second axis, is given only under `"aspect": "free"`, by every keyframe of the camera or by none, and the panel's aspect ratio gives it otherwise.
+  The center is `center`, or, with `follow`, a point that moves.
+  A target `{"layer": i, "member": k}` is the point at the fraction along of member `k` of the `trajectories` layer at index `i` of the same declared panel's `layers`, i.e. the point of rule `segment` in its revolution of rule `revolutions`, under the layer's clock (rule `layer-clock`) and in the layer's `read_from` (rule `read-from`), with the fraction along clamped to `[0, 1]` as for a body (rule `body-layer`).
+  The member `k` is a trajectory of the set that the layer's set query resolves to, and it is an error when `k` is at or past the number of its trajectories.
+  The center of a follow keyframe is the mean of the points of its targets, projected onto the plane's two axes, plus `offset`, which is `[0, 0]` when absent.
+  A target whose layer's set query does not match any set is left out, and a keyframe whose targets are all left out takes its `center`, or does not have a center when it lacks one.
+  The camera at time `s` blends two keyframes as rule `keyframes` blends two values, with the ease of the later keyframe.
+  The center is `(1 - E) * c_i + E * c_(i+1)`, and the width is `exp((1 - E) * ln(w_i) + E * ln(w_(i+1)))`, as is the height, so that a zoom by a factor runs at a steady rate.
+  Both centers are taken at time `s`, hence a blend from a fixed window to a follow keyframe ends on the moving point.
+  Before its first keyframe and after its last, the camera shows the window of this keyframe, and when a keyframe it needs lacks a center, the camera does not have a window at `s`.
+  The layer at index `i` is a `trajectories` layer and `k` is an integer, and a reader rejects any other target.
+  A writer lists the feature `camera.keyframes` in `requires` for a scene with a camera with keyframes.
+  A viewer that lets the person at the page pan or zoom a panel leaves a camera with keyframes where the person left it, and gives the person a way to hand the view back to its keyframes.
+  TyCHO's viewer does so with the key `f`, for every panel, and with a button that a panel shows while it is off its keyframes.
 
-- K6. A `label` layer writes a text at an anchor. Its `text` is a string or a list of parts, the parts of a readout of section 2.9 and those of rule K7, read in the layer's panel. Its `at` is the anchor, one of `{"point": [x, y, z]}`, a point in the display frame, `{"point": [x, y, z], "frame": id}`, a point in the frame `id` taken into the display frame in the contexts of the driver's reading as rule L4 takes a body, `{"sets": query, "member": k}`, the point at the reading of member `k` of the set that `query` resolves to, under the layer's clock and with the reading clamped to `[0, 1]`, and `{"screen": [fx, fy]}`, a fixed place in the panel, at the fractions `fx` of the width from the left and `fy` of the height from the top of the part of the panel inside the view's margin, where its camera draws. The evaluator gives the anchor's position in the display frame, and `null` for an anchor on the screen, for a set query that does not match any set, and for a driver whose set query does not match any set. It is an error when `k` is at or past the number of tracks of the set. The text is drawn `offset` CSS pixels from the anchor, `[dx, dy]` with `dy` pointing down the screen and `[0, 0]` when absent, aligned there by `align` (`start`, `center`, or `end` along the line, by default `start`) and by `baseline` (`top`, `middle`, or `bottom` of the text's box, by default `middle`, or `alphabetic`, the baseline of its last line). A newline character starts a new line. The box of a line is 0.984 times the size tall, its baseline lies 0.227 times the size above its bottom, and the lines of a text are 1.15 times the size apart, as in matplotlib's layout, or `1.15 + 0.757 * (linespacing - 1.2)` times the size apart with a `linespacing`, matplotlib's spacing of lines, 1.2 by default, so that a scene written from a matplotlib figure places its text where the figure did. The text is `size` CSS pixels high, by default 13, in its `color`, by default the foreground of the theme, at its `weight`, `normal` or `bold`, and in its `opacity`, by default 1. With a `leader`, `true` or `{"color": c, "width": px}`, a line runs from the anchor toward the center of the text's box, from where it leaves the box (its `box`'s padding included), and stops short of both ends by a seventh of the text's size, as an annotation of matplotlib does. A label anchored at a point or at a member is not drawn while its anchor lies outside the part of the panel that the camera draws, as matplotlib clips an annotation, and neither is a body drawn as an image. With a `box`, `{"fill": c, "edge": c, "edge_width": px, "pad": px, "radius": px, "opacity": o}`, the text sits on a rectangle that `pad` pixels surround it with, by default 4. A label is drawn above every other layer of its panel. A writer lists the feature `layers.label` in `requires` for a scene with a label layer.
-- K7. Section 2.9 gains the following parts, in readouts, labels, and overlays. The part `{"clock": "value"}` is the shared value of the active channel of the scene's clock at the progress, by rule C2 or K3, and the progress `q` itself under a `fraction` clock. The part `{"clock": "time"}` is the time `s` of the timeline. The part `{"keys": [key, ...]}` is the value of the tween (rule K1) at `s`, e.g. a counter that runs from 0 to 1000 during the burst of a sampling step. The part `{"steps": [[t, text], ...]}` is the text of the last of its pairs with `t <= s`, and the empty string before the first, i.e. a caption that changes from step to step. Its times are finite and nondecreasing. The parts `{"sub": text}` and `{"sup": text}` are a subscript and a superscript, e.g. the `f` of `t_f`, set at 0.7 times the size and lowered by 0.18 or raised by 0.42 times the size in a label or an overlay, and written as plain text in a readout. They are parts rather than markup, which a string never holds (rule S2). A part that gives a number, i.e. `var` of a selector, `member`, `attr`, `channel`, `clock`, and `keys`, may carry `factor` and `offset`, which show `factor * x + offset`, computed in float64 in this order with defaults 1 and 0. It may carry `decimals`, a count of digits after the decimal point from 0 to 17, in place of `digits`, `grouping: true`, which separates the thousands of its integer part by commas, as in `3,000`, and `width`, a count of characters to which the number is padded with spaces on the left, as matplotlib's `%4.1f` pads it. A channel part reads its channel with `"interp": "hold"` (section 2.1) at sample `k` of rule C4, without the blend, so that a count stored per sample steps from one value to the next.
-- K8. A `points` layer draws the stored samples of the members that `sets` and `members` select as markers, e.g. a scatter of terminal states, or the epochs along an extremal at which a dataset takes its samples. With `reveal` `none`, the default, it draws every sample of every member. With `reveal` `grow`, it takes the reading `u` of each member (rule C2, or rule K4 with a layer clock) and draws the samples whose readings `u_i` (rule C1) are at most `u`, none when `u < 0` and all when `u > 1`, so that the points appear one after another as the clock passes them. Its `before` and `after` hide a member as they hide a track (rule C3). Each sample is transformed into the display frame in its own context (rule F4), in lap 0. The evaluator gives the positions of the drawn samples of each member, in storage order. A writer lists the feature `layers.points` in `requires` for a scene with a points layer.
-- K9. A scene may carry `stages`, a list of `{"id": id, "at": t, "label": text}`, the named times of its timeline at which a presentation stops, e.g. one stage per click on a slide. The ids are identifiers (rule S3) and differ from each other, the times are finite, nondecreasing, and lie in `[0, L]`, and `label` is optional. Stages are not evaluated. The viewer element gives the methods `seek(t)`, which shows time `t` paused, `goto(stage)`, which shows the time of a stage, given by its id or its index, paused, `playTo(stage)`, which plays from where the clock is and pauses at the time of the stage, and `next()` and `previous()`, which play to the next stage and go back to the stage before. It fires the event `tycho-stage` when playback reaches a stage. A clock with `"end": "stop"` stops at the end of its loop rather than starting the next, as a video does, and playing it from this end starts the loop again. The default is `"end": "loop"`.
+The evaluator gives the window of a camera with keyframes (section 3).
+A reader shows this window in the panel, i.e. it sets the center and the width of a `2d` camera to the window at every frame index, the height to the window's or to the width divided by the panel's aspect ratio, and the window to its fit when the camera does not have one at `s`.
+When the person at the page pans or zooms the panel, the reader keeps the view where the person left it, until the camera is fitted again, which returns it to the keyframes.
+A camera with keyframes is not fitted to its layers.
 
-The marker of a `points` layer and the head of a track layer (rule L3) share one form, `{"shape": s, "size": px, "color": c, "edge": c, "edge_width": px, "opacity": o}`, all keys optional. The `shape` is `disc`, the default, `ring`, `square`, `diamond`, `triangle`, `star`, `cross` (×), or `plus` (+). A filled shape is filled with `color`, by default the layer's color, and outlined `edge_width` CSS pixels wide in `edge`, when `edge` is given, and a `ring`, a `cross`, and a `plus` are stroked in `color` alone, `edge_width` wide, by default a sixth of the size. The `size` is the width of the shape in CSS pixels, and a stroke or an outline is centered on the shape's edge, as matplotlib draws a marker. A head may also carry a `glow`, `{"channel": name, "color": c, "size": px, "opacity": o}`, a disc drawn behind the head while the channel of the head's member at sample `k` of rule C4, or at sample `k + 1` when the weight `w` is 1, is positive, e.g. the plume of a thruster that fires while the switching function is positive. Its set then carries the channel. A track layer with `"line": false` draws its heads alone, e.g. a cloud of moving points. A track layer with `"flat": true` blends each pixel that its lines cover once, at the layer's opacity, as a plot draws one translucent path, where otherwise each segment blends on its own and the overlaps of a translucent layer build up. A cloud of many lines at opacity 0.2 then keeps one shade where its lines overlap, and over an orbit beneath it blends the orbit's color with its own by that much. The highlight and the heads are drawn over a flat layer as over any other.
+The other values that move by the timeline are for drawing only, and the evaluator does not read them.
+The `opacity` of a layer of any kind, of a head or a marker, of a declared panel, and of an overlay may be a keyframed value instead of a number, each of whose values lies in `[0, 1]`, and so may a marker's `size`, whose values are positive, and its `edge_width`, whose values are not negative, e.g. the ring of a pulse that grows and thins.
+The opacity of a declared panel fades every shown panel of it, its layers and its labels together, as if the panel were covered by the background with the opacity `1 - o`.
+A split of the layout (section 2.8) may carry `keyframes`, a keyframed value of its `ratio`, whose values lie in `[0, 1]`, and a side of the split whose share is 0 is not drawn.
+A reader that ignored these keyframed values would draw every trajectory at another opacity or every panel at another size, hence none of them is a feature of section 4.
 
-A track layer may also carry `dash`, `[on, off]`, which dashes its line with dashes of `on` and gaps of `off` CSS pixels along the screen, the pattern of each track starting at its first sample when that lies on the stage, and again wherever the track enters the stage, as matplotlib clips a line to its figure before it dashes it, so that the dashes of a line that a camera follows stay where they are on the screen, and `fill`, `{"base": b, "color": c, "opacity": o}`, which shades the area between the drawn line and the line at the value `b` of the second axis of a plane camera, where the line lies above it, e.g. the part of a switching function above zero. A color may be given in steps of a channel, `{"channel": name, "steps": [s_1, ..., s_n], "colors": [c_0, ..., c_n]}`, with increasing steps and one color more than steps: a sample whose channel has the value `x` takes the color `c_j`, where `j` counts the steps below `x`, i.e. with `s_j < x`. A track switched between thrust and coast is thus drawn in two colors, by `{"channel": "S", "steps": [0], "colors": ["#000000", "#d62728"]}`. The color varies linearly along a segment between the colors of its two samples.
+- `label`. A `label` layer writes a text at an anchor.
+  Its `text` is a string or a list of parts, the parts of a readout of section 2.9 and those of rule `timeline-parts`, read in the layer's panel.
+  Its `at` is the anchor, one of the following.
+  - `{"point": [x, y, z]}` is a point in the display frame.
+  - `{"point": [x, y, z], "frame": id}` is a point in the frame `id`, taken into the display frame in the contexts of the fraction along the reference trajectory as rule `body-layer` takes a body.
+  - `{"sets": query, "member": k}` is the point at the fraction along of member `k` of the set that `query` resolves to, under the layer's clock and with the fraction along clamped to `[0, 1]`.
+  - `{"screen": [fx, fy]}` is a fixed place in the panel, at the fractions `fx` of the width from the left and `fy` of the height from the top of the part of the panel inside the declared panel's margin, where its camera draws.
 
-An `axes` layer with `"span": "box"` draws a box around the part of the panel that the camera shows, under a plane camera only, as a plot does. Its ticks point out of the box, and the tick numbers and the axis titles of the frame sit outside it, on the left and at the bottom. Its `ticks` lists the axes, `x` and `y`, i.e. the first and the second axis of the plane, that carry tick numbers, by default both, and its `size` is the height of the numbers in CSS pixels, by default 12. Its `titles`, two texts of parts (rule K7), replace the titles of the frame's axes, e.g. a title with a subscript. A view may carry a `margin`, `{"top": f, "right": f, "bottom": f, "left": f}`, fractions of the panel's height or width, each 0 when absent, that the camera does not draw into. The plot of a view with a box therefore lies inside its margin, where the tick numbers and the titles have room, and a band of a single panel can be kept free for a legend.
+  The evaluator gives the anchor's position in the display frame, and `null` for an anchor on the screen, for a set query that does not match any set, and for a reference trajectory whose set query does not match any set.
+  It is an error when `k` is at or past the number of trajectories of the set.
+  The text is drawn `offset` CSS pixels from the anchor, `[dx, dy]` with `dy` pointing down the screen and `[0, 0]` when absent.
+  It is aligned there by `align` (`start`, `center`, or `end` along the line, by default `start`) and by `baseline` (`top`, `middle`, or `bottom` of the text's box, by default `middle`, or `alphabetic`, the baseline of its last line).
+  A newline character starts a new line.
+  The box of a line is 0.984 times the size tall, and its baseline lies 0.227 times the size above its bottom.
+  The lines of a text are 1.15 times the size apart, as in matplotlib's layout, or `1.15 + 0.757 * (linespacing - 1.2)` times the size apart with a `linespacing`, matplotlib's spacing of lines, 1.2 by default, so that a scene written from a matplotlib figure places its text where the figure did.
+  The text is `size` CSS pixels high, by default 13, in its `color`, by default the foreground of the theme, at its `weight`, `normal` or `bold`, and in its `opacity`, by default 1.
+  With a `leader`, `true` or `{"color": c, "width": px}`, a line runs from the anchor toward the center of the text's box, from where it leaves the box (its `box`'s padding included), and stops short of both ends by a seventh of the text's size, as an annotation of matplotlib does.
+  A label anchored at a point or at a member is not drawn while its anchor lies outside the part of the panel that the camera draws, as matplotlib clips an annotation, and neither is a body drawn as an image.
+  With a `box`, `{"fill": c, "edge": c, "edge_width": px, "pad": px, "radius": px, "opacity": o}`, the text is drawn on a rectangle that surrounds it by `pad` pixels, by default 4.
+  A label is drawn above every other layer of its panel.
+  A writer lists the feature `layers.label` in `requires` for a scene with a label layer.
+- `timeline-parts`. The parts of section 2.9 are joined by the following parts, in readouts, labels, and overlays.
+  - `{"clock": "value"}` is the shared value of the clock channel of the scene's clock at the progress, by rule `clock-mode` or `clock-keyframes`, and the progress `q` itself under a `fraction` clock.
+  - `{"clock": "time"}` is the time `s` of the timeline.
+  - `{"keyframes": [keyframe, ...]}` is the value of the keyframes (rule `keyframes`) at `s`, e.g. a counter that runs from 0 to 1000 during the burst of a sampling step.
+  - `{"timed_text": [[t, text], ...]}` is the text of the last of its pairs with `t <= s`, and the empty string before the first, i.e. a caption that changes from step to step.
+    Its times are finite and nondecreasing.
+  - `{"sub": text}` and `{"sup": text}` are a subscript and a superscript, e.g. the `f` of `t_f`, set at 0.7 times the size and lowered by 0.18 or raised by 0.42 times the size in a label or an overlay, and written as plain text in a readout.
+    They are parts rather than markup, which a string never holds (rule `plain-text`).
 
-A body may carry an `image`, the name of a view of `uint8` bytes in the data container that holds an image file in the PNG, JPEG, or WebP format, e.g. a photograph of the Earth. A body layer of such a body draws the image `size` CSS pixels across, centered on the body's position, in place of its disc. The theme may carry a `font`, a CSS font family for every text of the page and of a video, and a `gutter`, the color of the gutters between panels in a video, by default a blend of the foreground and the background. When the viewer replaces the scene's theme by a palette (the `theme` attribute of the viewer element), a fixed color of the scene that equals the foreground or the background of the scene's theme is drawn in the palette's foreground or background, so that the black lines and the white marker fills of a scene written for a white page follow a dark slide. Every other color is drawn as it is.
+  A part that gives a number, i.e. an `input` of kind `parameter`, `parameter`, `attr`, `channel`, `clock`, and `keyframes`, may carry `factor` and `offset`, which show `factor * x + offset`, computed in float64 in this order with defaults 1 and 0.
+  It may carry `decimals`, a count of digits after the decimal point from 0 to 17, in place of `digits`, `grouping: true`, which separates the thousands of its integer part by commas, as in `3,000`, and `width`, a count of characters to which the number is padded with spaces on the left, as matplotlib's `%4.1f` pads it.
+  A channel part reads its channel with `"interp": "hold"` (section 2.1) at sample `k` of rule `segment`, without the blend, so that a count stored per sample steps from one value to the next.
+- `points`. A `points` layer draws the stored samples of the members that `sets` and `members` select as markers, e.g. a scatter of terminal states, or the epochs along an extremal at which a dataset takes its samples.
+  With `reveal` `none`, the default, it draws every sample of every member.
+  With `reveal` `grow`, it computes the fraction along `u` of each member (rule `clock-mode`, or rule `layer-clock` with a layer clock) and draws the samples whose fractions along `u_i` (rule `sample-fraction`) are at most `u`, none when `u < 0` and all when `u > 1`, so that the points appear one after another as the clock passes them.
+  Its `before` and `after` hide a member as they hide a trajectory (rule `before-after`).
+  Each sample is transformed into the display frame in its own context (rule `sample-context`), in revolution 0.
+  The evaluator gives the positions of the drawn samples of each member, in storage order.
+  A writer lists the feature `layers.points` in `requires` for a scene with a points layer.
+- `steps`. A scene may carry `steps`, a list of `{"id": id, "at": t, "label": text}`, the named times of its timeline at which a presentation stops, e.g. one step per click on a slide.
+  The ids are identifiers (rule `identifier`) and differ from each other, the times are finite, nondecreasing, and lie in `[0, L]`, and `label` is optional.
+  Steps are not evaluated.
+  The viewer element gives the methods `seek(t)`, which shows time `t` paused, `goto(step)`, which shows the time of a step, given by its id or its index, paused, `playTo(step)`, which plays from where the clock is and pauses at the time of the step, and `next()` and `previous()`, which play to the next step and go back to the step before.
+  It fires the event `tycho-step` when playback reaches a step.
+  A clock with `"end": "stop"` stops at the end of its loop rather than starting the next, as a video does, and playing it from this end starts the loop again.
+  The default is `"end": "loop"`.
 
-A scene may carry `overlays`, a list of texts and legends drawn over the whole stage rather than in one panel, e.g. a title above two panels or a legend across the top. A text overlay is `{"kind": "text", "text": parts, "at": [fx, fy]}`, placed at the fractions of the stage's width and height, with the `align`, `baseline`, `size`, `color`, `weight`, `linespacing`, `box`, and `opacity` of a label. A legend overlay is `{"kind": "legend", "at": [fx, fy], "entries": [entry, ...]}`, with `columns`, the number of entries per row, by default all, `size`, `color`, `align`, `baseline`, and `opacity`, and the spacing of matplotlib's legend: `handle_length`, the length of an entry's line, `handle_pad`, the gap between the line and the label, and `column_spacing`, the gap between columns, each in units of `size`, by default 2, 0.8, and 2. Matplotlib fills the columns of a legend from the top down, and so does a legend overlay. Each entry lies a text's height and half a size below the one above it in its column, and a label with a `sub` part reaches further down, as its mathtext does in matplotlib, so that the entries below it in its column move down by as much. An entry is `{"label": text}`, a string or a list of strings and `sub` and `sup` parts (rule K7), with a `line`, `{"color": c, "width": px, "dash": [on, off], "opacity": o}`, a `marker` of the form above, or `colors`, a list of colors drawn as short lines side by side, e.g. one per anchor of a family of extremals. The texts of labels and overlays are written as canvas text, never as markup (rule S2).
+The marker of a `points` layer and the head of a `trajectories` layer (rule `head`) share one form, `{"shape": s, "size": px, "color": c, "edge": c, "edge_width": px, "opacity": o}`, all keys optional.
+The `shape` is `disc`, the default, `ring`, `square`, `diamond`, `triangle`, `star`, `cross` (×), or `plus` (+).
+A filled shape is filled with `color`, by default the layer's color, and outlined `edge_width` CSS pixels wide in `edge`, when `edge` is given.
+A `ring`, a `cross`, and a `plus` are stroked in `color` alone, `edge_width` wide, by default a sixth of the size.
+The `size` is the width of the shape in CSS pixels, and a stroke or an outline is centered on the shape's edge, as matplotlib draws a marker.
+A head may also carry a `glow`, `{"channel": name, "color": c, "size": px, "opacity": o}`, a disc drawn behind the head while the channel of the head's member at sample `k` of rule `segment`, or at sample `k + 1` when the weight `w` is 1, is positive, e.g. the plume of a thruster that fires while the switching function is positive.
+Its set then carries the channel.
+A `trajectories` layer with `"line": false` draws its heads alone, e.g. a cloud of moving points.
+A `trajectories` layer with `"group_opacity": true` blends each pixel that its lines cover once, at the layer's opacity, as a plot draws one translucent path, where otherwise each segment blends on its own and the overlaps of a translucent layer build up.
+A cloud of many lines at opacity 0.2 then keeps one shade where its lines overlap, and over an orbit beneath it blends the orbit's color with its own by this much.
+The highlight and the heads are drawn over a layer with group opacity as over any other.
+
+A `trajectories` layer may also carry `dash`, `[on, off]`, which dashes its line with dashes of `on` and gaps of `off` CSS pixels along the screen.
+The pattern of each trajectory starts at its first sample when this sample lies in the panel area, and again wherever the trajectory enters the panel area, as matplotlib clips a line to its figure before it dashes it, so that the dashes of a line that a camera follows stay where they are on the screen.
+It may also carry `fill`, `{"base": b, "color": c, "opacity": o}`, which shades the area between the drawn line and the line at the value `b` of the second axis of a `2d` camera, where the line lies above it, e.g. the part of a switching function above zero.
+A color may be given by thresholds of a channel, `{"channel": name, "thresholds": [s_1, ..., s_n], "colors": [c_0, ..., c_n]}`, with increasing thresholds and one color more than thresholds.
+A sample whose channel has the value `x` takes the color `c_j`, where `j` counts the thresholds below `x`, i.e. with `s_j < x`.
+A trajectory switched between thrust and coast is thus drawn in two colors, by `{"channel": "S", "thresholds": [0], "colors": ["#000000", "#d62728"]}`.
+The color varies linearly along a segment between the colors of its two samples.
+
+An `axes` layer with `"span": "box"` draws a box around the part of the panel that the camera shows, under a `2d` camera only, as a plot does.
+Its ticks point out of the box, and the tick numbers and the axis titles of the frame are drawn outside it, on the left and at the bottom.
+Its `ticks` lists the axes, `x` and `y`, i.e. the first and the second axis of the plane, that carry tick numbers, by default both, and its `size` is the height of the numbers in CSS pixels, by default 12.
+Its `titles`, two texts of parts (rule `timeline-parts`), replace the titles of the frame's axes, e.g. a title with a subscript.
+A declared panel may carry a `margin`, `{"top": f, "right": f, "bottom": f, "left": f}`, fractions of the panel's height or width, each 0 when absent, that the camera does not draw into.
+The plot of a declared panel with a box therefore lies inside its margin, where the tick numbers and the titles have room, and a band of a single panel can be kept free for a legend.
+
+A body may carry an `image`, the name of a `uint8` array of the data container that holds an image file in the PNG, JPEG, or WebP format, e.g. a photograph of the Earth.
+A body layer of such a body draws the image `size` CSS pixels across, centered on the body's position, in place of its disc.
+The theme may carry a `font`, a CSS font family for every text of the page and of a video, and a `gutter`, the color of the gutters between panels in a video, by default a blend of the foreground and the background.
+When the person at the page replaces the scene's theme by a palette (the `theme` attribute of the viewer element), a fixed color of the scene that equals the foreground or the background of the scene's theme is drawn in the palette's foreground or background, so that the black lines and the white marker fills of a scene written for a white page follow a dark slide.
+Every other color is drawn as it is.
+
+A scene may carry `overlays`, a list of texts and legends drawn over the whole panel area rather than in one panel, e.g. a title above two panels or a legend across the top.
+A text overlay is `{"kind": "text", "text": parts, "at": [fx, fy]}`, placed at the fractions of the width and the height of the panel area, with the `align`, `baseline`, `size`, `color`, `weight`, `linespacing`, `box`, and `opacity` of a label.
+A legend overlay is `{"kind": "legend", "at": [fx, fy], "entries": [entry, ...]}`, with `columns`, the number of entries per row, by default all, `size`, `color`, `align`, `baseline`, and `opacity`.
+It also has the spacing of matplotlib's legend, i.e. `handle_length`, the length of an entry's line, `handle_pad`, the gap between the line and the label, and `column_spacing`, the gap between columns, each in units of `size`, by default 2, 0.8, and 2.
+Matplotlib fills the columns of a legend from the top down, and so does a legend overlay.
+Each entry lies a text's height and half a size below the one above it in its column, and a label with a `sub` part reaches further down, as its mathtext does in matplotlib, so that the entries below it in its column move down by as much.
+An entry is `{"label": text}`, a string or a list of strings and `sub` and `sup` parts (rule `timeline-parts`), with a `line`, `{"color": c, "width": px, "dash": [on, off], "opacity": o}`, a `marker` of the form above, or `colors`, a list of colors drawn as short lines side by side, e.g. one per anchor of a family of extremals.
+The texts of labels and overlays are written as canvas text, never as markup (rule `plain-text`).
 
 ## 3. What an evaluator returns
 
-Both implementations expose the same evaluator, a function `evaluate(scene, data, state, frame_index)` that is pure, i.e. its result depends only on its four arguments and it does not have side effects, which is what makes the two implementations comparable case by case through the corpus. For every panel in the state, it returns the display frame and one entry per layer, in the order of the view's layers. All positions have three components and are float64.
+Both implementations expose the same evaluator, a function `evaluate(scene, data, state, frame_index)` that is pure, i.e. its result depends only on its four arguments and it does not have side effects.
+The two implementations can thus be compared case by case through the corpus.
+For every shown panel in the state, the evaluator returns the display frame and one entry per layer, in the order of the layers of the declared panel.
+All positions have three components and are float64.
 
 ```json
 {"panels": {"p1": {"frame": "inertial", "layers": [
-  {"kind": "track", "set": "family-7-periapsis", "members": [
+  {"kind": "trajectories", "set": "family-7-periapsis", "members": [
     {"index": 3, "line": [[x, y, z], ...], "head": [x, y, z]}]},
   {"kind": "body", "body": "m1", "position": [x, y, z], "trail": [[x, y, z], ...]},
   {"kind": "arrow", "set": "family-7-periapsis", "members": [
     {"index": 3, "base": [x, y, z], "tip": [x, y, z]}]},
-  {"kind": "outline", "view": "closeup", "panel": "p2", "frame": "zoom",
+  {"kind": "inset_box", "panel": "closeup", "shown_panel": "p2", "frame": "zoom",
     "origin": [x, y, z], "axes": [[x, y, z], [x, y, z], [x, y, z]]},
   {"kind": "axes"}
 ]}}}
 ```
 
-A panel whose view's camera has keys (rule K5) also has the key `camera`, `{"center": [a, b], "width": w, "height": h}`, the window at the frame index, with `height` `null` unless the keys give it, or `null` when the camera does not have a window then. A label layer (rule K6) gives `{"kind": "label", "position": [x, y, z]}`, the position of its anchor in the display frame or `null`. A points layer (rule K8) gives `{"kind": "points", "set": id, "members": [{"index": 3, "points": [[x, y, z], ...]}]}`, the drawn samples of each member, with `set` `null` and `members` empty when its set query does not match any set.
+A shown panel whose camera has keyframes (rule `camera-keyframes`) also has the key `camera`, `{"center": [a, b], "width": w, "height": h}`, the window at the frame index, with `height` `null` unless the keyframes give it, or `null` when the camera does not have a window then.
+A label layer (rule `label`) gives `{"kind": "label", "position": [x, y, z]}`, the position of its anchor in the display frame or `null`.
+A points layer (rule `points`) gives `{"kind": "points", "set": id, "members": [{"index": 3, "points": [[x, y, z], ...]}]}`, the drawn samples of each member, with `set` `null` and `members` empty when its set query does not match any set.
 
-The example shows one panel `p1` in the frame `inertial` with five layers: a track layer that draws member 3 of the set `family-7-periapsis` as the polyline `line` with a `head`, a body layer that gives the position of the body `m1` and its trail, an arrow layer that gives the base and the tip of the arrow of member 3 (rule L7), an outline layer that gives the map from the frame `zoom` of panel `p2` (rule L8), and an axes layer, for which the evaluator does not compute anything. When the layout does not show the view of an outline layer, its `panel`, `frame`, `origin`, and `axes` are `null`, and when only the driver's set query does not match any set, its `origin` and `axes` are `null`. When the set query of an arrow layer does not match any set, the layer's `set` is `null` and its `members` is empty, and the `base` and `tip` of a hidden member are `null`. When the set query of a track layer does not match any set, the layer's `set` is `null` and its `members` is empty. A member's `line` is the polyline that the layer's `reveal` defines, and it is empty when the track is hidden (rule C3). The `head` and `trail` keys are present only when the layer carries a head or a trail, respectively, and `head` is `null` when the track is hidden. When the driver's set query does not match any set, a body layer's `position` is `null` and its `trail` is empty, and a track layer in the driver's context gives an empty `line` and a `null` head for every member (rule L6). A layer omitted by rule L5 does not appear in the list.
+The example shows one shown panel `p1` in the frame `inertial` with five layers.
+The `trajectories` layer draws member 3 of the set `family-7-periapsis` as the polyline `line` with a `head`.
+The body layer gives the position of the body `m1` and its trail.
+The arrow layer gives the base and the tip of the arrow of member 3 (rule `arrow`).
+The `inset_box` layer gives the map from the frame `zoom` of the shown panel `p2`, which shows the declared panel `closeup` (rule `inset-box`).
+The evaluator does not compute anything for the axes layer.
+When the layout does not show the target of an `inset_box` layer, its `shown_panel`, `frame`, `origin`, and `axes` are `null`, and when only the set query of the reference trajectory does not match any set, its `origin` and `axes` are `null`.
+When the set query of an arrow layer does not match any set, the layer's `set` is `null` and its `members` is empty, and the `base` and `tip` of a hidden member are `null`.
+When the set query of a `trajectories` layer does not match any set, the layer's `set` is `null` and its `members` is empty.
+A member's `line` is the polyline that the layer's `reveal` defines, and it is empty when the trajectory is hidden (rule `before-after`).
+The `head` and `trail` keys are present only when the layer carries a head or a trail, respectively, and `head` is `null` when the trajectory is hidden.
+When the set query of the reference trajectory does not match any set, a body layer's `position` is `null` and its `trail` is empty, and a `trajectories` layer that reads from the reference trajectory gives an empty `line` and a `null` head for every member (rule `read-from`).
+A layer omitted by rule `visible` does not appear in the list.
 
 ## 4. Features
 
-A feature is a named part of the format that is listed in `requires` (rule S1) by a scene that uses it, so that a reader that does not implement the part rejects the scene instead of drawing it wrongly. The `arrow` layer (rule L7) is added in version 0.3 as the feature `layers.arrows`, the `outline` layer (rule L8) as the feature `layers.outline`, and an origin given by a channel (rule F2) as the feature `frames.origin_channel`. Five keys are added in the same version, of which the `context` of a track layer (rule L6) is the feature `layers.driver_context`. The other four are the `aspect` of a plane camera, the `stretch` and the `turn` of an orbit camera, and the `seconds` of the clock. None of the four is a feature, since a reader that ignores one of them still draws every track, only at another scale, from another side, or at another pace (sections 2.6 and 2.7).
+A feature is a named part of the format that is listed in `requires` (rule `version`) by a scene that uses it, so that a reader that does not implement the part rejects the scene instead of drawing it wrongly.
+The features of version 0.5 are the following.
 
-Version 0.4 adds the timeline of section 2.11, with five features: the keys of a clock (rule K3) as `clock.keys`, the clock of a layer (rule K4) as `layers.clock`, the keys of a camera (rule K5) as `camera.keys`, the `label` layer (rule K6) as `layers.label`, and the `points` layer (rule K8) as `layers.points`. The other additions of version 0.4 are for drawing only, and none of them is a feature: tweens of opacity, of a marker's size, and of a split's ratio, the parts of rule K7, `stages` and the clock's `end` (rule K9), the markers, glows, dashes, fills, and stepped colors of a track layer, the box of an axes layer, the margin and the opacity of a view, the image of a body, the font and the gutter of the theme, and the overlays.
+- `layers.arrows` is the `arrow` layer (rule `arrow`).
+- `layers.inset_box` is the `inset_box` layer (rule `inset-box`).
+- `layers.read_from` is the `read_from` of a `trajectories` layer (rule `read-from`).
+- `frames.origin_channel` is an origin given by a channel (rule `origin`).
+- `clock.keyframes` is the keyframes of a clock (rule `clock-keyframes`).
+- `layers.clock` is a layer clock (rule `layer-clock`).
+- `camera.keyframes` is the keyframes of a camera (rule `camera-keyframes`).
+- `layers.label` is the `label` layer (rule `label`).
+- `layers.points` is the `points` layer (rule `points`).
 
-The following features do not exist yet. They are reserved here so that they can be listed in `requires` once they exist. They are `panels.plot`, `frames.quaternion` (an orientation from a quaternion channel), `frames.body_axis` (an axis from one body to another), `bodies.track`, `bodies.radius`, and `clock.epoch`. They are not part of version 0.4.
+Several keys are not features, since a reader that ignores one of them still draws every trajectory, only at another scale, from another side, at another pace, or at another opacity (sections 2.6, 2.7, and 2.11).
+They are the `aspect` of a `2d` camera, the `stretch` and the `auto_rotate` of a `3d` camera, the `seconds` and the `end` of the clock, the keyframed values of opacity, of a marker's size, and of a split's ratio, the parts of rule `timeline-parts`, the `steps` (rule `steps`), the markers, glows, dashes, fills, and threshold colors of a `trajectories` layer, the box of an axes layer, the margin and the opacity of a declared panel, the image of a body, the font and the gutter of the theme, and the overlays.
 
-A range loader is planned for the container, i.e. a reader that fetches the header first and then only the byte ranges of the views and chunks to be decoded, through the offsets of rules D2 and D5, instead of downloading the whole file. It is meant for a `data.tyd` served as a separate file beside the page rather than embedded in it. Container version 1 can stay unchanged for a range loader, because the offsets stored in a version 1 container are enough.
+The following features do not exist yet.
+They are reserved here so that they can be listed in `requires` once they exist.
+They are `panels.plot`, `frames.quaternion` (an orientation from a quaternion channel), `frames.body_axis` (an axis from one body to another), `bodies.trajectory`, and `bodies.radius`.
+They are not part of version 0.5.
+
+A range loader is planned for the container, i.e. a reader that fetches the header first and then only the byte ranges of the arrays and chunks to be decoded, through the offsets of rules `array-keys` and `shuffle-delta-deflate`, instead of downloading the whole file.
+It is meant for a `data.tyd` served as a separate file beside the page rather than embedded in it.
+Container version 2 can stay unchanged for a range loader, because the offsets stored in a version 2 container are enough.

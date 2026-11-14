@@ -1,7 +1,7 @@
 /**
  * Paints a laid-out element tree onto a 2D canvas, for a video frame that shows what the page shows. The browser lays the tree out,
  * and `rasterize` draws every box, text run, and canvas where the layout put it, in the colors, fonts, and shadows of its computed
- * style. The painter covers the CSS that the viewer uses over its stage: background colors and linear gradients, solid borders (also
+ * style. The painter covers the CSS that the viewer uses over its panel area: background colors and linear gradients, solid borders (also
  * a triangle made of borders), box and text shadows, opacity, overflow clipping, 2D transforms, absolutely positioned `::before` and
  * `::after` boxes without text, and canvases. Boxes are painted in tree order, which is the order of their z-index in the viewer.
  * Visibility is not read, since the tree is hidden while it is painted.

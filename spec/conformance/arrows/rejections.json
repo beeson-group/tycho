@@ -1,9 +1,9 @@
 [
  {
-  "name": "L7: @index in the vector of an arrow layer",
-  "rule": "L7",
+  "name": "arrow: @index in the vector of an arrow layer",
+  "rule": "arrow",
   "scene": {
-   "views": {
+   "panels": {
     "rot": {
      "layers": [
       {
@@ -110,10 +110,10 @@
   }
  },
  {
-  "name": "L7: a vector channel that the set lacks",
-  "rule": "L7",
+  "name": "arrow: a vector channel that the set lacks",
+  "rule": "arrow",
   "scene": {
-   "views": {
+   "panels": {
     "rot": {
      "layers": [
       {
@@ -220,10 +220,10 @@
   }
  },
  {
-  "name": "L7: a channel as the scale of an arrow layer",
-  "rule": "L7",
+  "name": "arrow: a channel as the scale of an arrow layer",
+  "rule": "arrow",
   "scene": {
-   "views": {
+   "panels": {
     "rot": {
      "layers": [
       {
@@ -330,10 +330,10 @@
   }
  },
  {
-  "name": "C5: an arrow layer on a set without the clock channel",
-  "rule": "C5",
+  "name": "clock-channel-carried: an arrow layer on a set without the clock channel",
+  "rule": "clock-channel-carried",
   "scene": {
-   "track_sets": {
+   "trajectory_sets": {
     "sticks": {
      "channels": {
       "t": null

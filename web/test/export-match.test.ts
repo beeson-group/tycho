@@ -20,13 +20,13 @@ async function testScene(): Promise<{ scene: Scene; data: Uint8Array }> {
   const dir = join(root, 'spec/conformance/broucke-mini');
   const scene = JSON.parse(readFileSync(join(dir, 'scene.tys'), 'utf-8')) as Scene;
   const data = new Uint8Array(readFileSync(join(dir, 'data.tyd')));
-  const layers = scene.views.main!.layers;
-  layers[0] = { ...layers[0]!, color: { colormap: 'viridis', parameter: 'eccentricity' }, highlight: { var: 'e' } } as (typeof layers)[0];
+  const layers = scene.panels.main!.layers;
+  layers[0] = { ...layers[0]!, color: { colormap: 'viridis', parameter: 'eccentricity' }, highlight: { input: 'e' } } as (typeof layers)[0];
   scene.readouts = [
     { place: 'panel', parts: ['true anomaly ', { channel: 'true_anomaly', digits: 4 }] },
-    { place: 'caption', parts: ['frame ', { clock: 'index' }, ' of ', { clock: 'steps' }] },
+    { place: 'caption', parts: ['frame ', { clock: 'frame_index' }, ' of ', { clock: 'frame_count' }] },
   ];
-  scene.initial.panels = { p1: { view: 'main' }, p2: { view: 'main', variables: { frame: 'inertial-m1' } } };
+  scene.initial.panels = { p1: { panel: 'main' }, p2: { panel: 'main', inputs: { frame: 'inertial-m1' } } };
   scene.initial.layout = { kind: 'split', dir: 'row', ratio: 0.5, a: { kind: 'panel', id: 'p1' }, b: { kind: 'panel', id: 'p2' } };
   validate(scene, await Container.parse(data));
   return { scene, data };
@@ -82,7 +82,9 @@ tycho-viewer { position: absolute; left: 0; top: 0; width: 480px; height: 360px;
       v.seek(${index} / 64 * 8);
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     })()`);
-    const shot = (await chrome.send('Page.captureScreenshot', { format: 'png', clip: { x: 0, y: 0, width: 480, height: 360, scale: 1 } })) as { data: string };
+    const shot = (await chrome.send('Page.captureScreenshot', { format: 'png', clip: { x: 0, y: 0, width: 480, height: 360, scale: 1 } })) as {
+      data: string;
+    };
     return chrome.evaluate(`(async () => {
       const v = document.querySelector('tycho-viewer');
       const stop = new AbortController();

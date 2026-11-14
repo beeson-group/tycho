@@ -4,7 +4,7 @@ import { colormapPosition, hexRgb, mixHex } from '../src/runtime/colors';
 import { GeometryCache } from '../src/runtime/geometry';
 import {
   formatNumber,
-  LAP_SECONDS,
+  REVOLUTION_SECONDS,
   loopPosition,
   loopSeconds,
   nearestStop,
@@ -13,7 +13,7 @@ import {
   readoutText,
   sliderStops,
 } from '../src/runtime/readouts';
-import { withVariable } from '../src/runtime/state';
+import { withInput } from '../src/runtime/state';
 import { ratioAt, tile, withRatio } from '../src/runtime/tiles';
 import type { Layout, Readout, Scene } from '../src/scene';
 import { validate } from '../src/validate';
@@ -43,14 +43,14 @@ describe('formatNumber', () => {
 describe('slider stops (section 2.9)', () => {
   const scene = (): Scene => {
     const s = baseScene({
-      variables: {
-        c: { kind: 'selector', parameter: 'C', default: 2.9 },
+      inputs: {
+        c: { kind: 'parameter', parameter: 'C', default: 2.9 },
         fam: { kind: 'choice', values: ['x', 'y', 'none'], default: 'x' },
       },
-      controls: [{ kind: 'slider', variable: 'c', label: 'C', domain: { tags: { kind: 'orbit' } } }],
+      controls: [{ kind: 'slider', input: 'c', label: 'C', domain: { tags: { kind: '3d' } } }],
     });
-    s.track_sets.s = { ...s.track_sets.s!, tracks: 2, tags: { kind: 'orbit', fam: 'x' }, parameters: { C: { view: 'c1' } } };
-    s.track_sets.u = { frame: 'a', tracks: 2, offsets: 'off', positions: 'pos', tags: { kind: 'orbit', fam: 'y' }, parameters: { C: { view: 'c2' } } };
+    s.trajectory_sets.s = { ...s.trajectory_sets.s!, trajectories: 2, tags: { kind: '3d', fam: 'x' }, parameters: { C: { array: 'c1' } } };
+    s.trajectory_sets.u = { frame: 'a', trajectories: 2, offsets: 'off', positions: 'pos', tags: { kind: '3d', fam: 'y' }, parameters: { C: { array: 'c2' } } };
     return s;
   };
   const data = () =>
@@ -65,15 +65,22 @@ describe('slider stops (section 2.9)', () => {
       .add('time', [0, 1, 0, 1])
       .add('c1', [3, 1])
       .add('c2', [2, 3]);
-  it('are the distinct parameter values of the matched track sets, in increasing order', () => {
+  it('are the distinct parameter values of the matched trajectory sets, in increasing order', () => {
     const s = scene();
     const scope = { scene: s, state: s.initial, panel: s.initial.panels.p1! };
     const control = s.controls![0] as Extract<NonNullable<Scene['controls']>[number], { kind: 'slider' }>;
     expect(sliderStops(scope, new SetCache(s, data()), control)).toEqual([1, 2, 3]);
-    control.domain = { tags: { fam: { var: 'fam' } } };
+    control.domain = { tags: { fam: { input: 'fam' } } };
     expect(sliderStops(scope, new SetCache(s, data()), control)).toEqual([1, 3]);
-    const none = { ...scope, state: withVariable(s, s.initial, 'fam', 'none') };
+    const none = { ...scope, state: withInput(s, s.initial, 'fam', 'none') };
     expect(sliderStops(none, new SetCache(s, data()), control)).toEqual([]);
+  });
+  it('stop at every member number of the matched trajectory sets for a parameter input on @index', () => {
+    const s = scene();
+    s.inputs!.k = { kind: 'parameter', parameter: '@index', default: 0 };
+    const scope = { scene: s, state: s.initial, panel: s.initial.panels.p1! };
+    const control = { kind: 'slider', input: 'k', label: 'member', domain: { tags: { kind: '3d' } } } as const;
+    expect(sliderStops(scope, new SetCache(s, data()), control)).toEqual([0, 1]);
   });
   it('nearestStop picks the nearest stop, the lowest index winning a tie', () => {
     expect(nearestStop([1, 2, 3], 2.9)).toBe(2);
@@ -83,20 +90,20 @@ describe('slider stops (section 2.9)', () => {
 });
 
 describe('wall time to loop position', () => {
-  // `at` models live playback, with milliseconds since the anchor, 64 steps, and one lap
+  // `at` models live playback, with milliseconds since the anchor, 64 steps, and one revolution
   const at = (start: number, ms: number, speed = 1, seconds = 8) => loopPosition(start, ms, 1000, 64, speed, seconds);
-  it('runs a lap in 8 s at speed 1, and a loop of n laps in 8 n s', () => {
-    expect(LAP_SECONDS).toBe(8);
-    expect(loopSeconds({ mode: 'fraction', channels: ['@index'], steps: 64 })).toBe(8);
-    expect(loopSeconds({ mode: 'fraction', channels: ['@index'], steps: 4320, laps: 9 })).toBe(72);
+  it('runs a revolution in 8 s at speed 1, and a loop of n revolutions in 8 n s', () => {
+    expect(REVOLUTION_SECONDS).toBe(8);
+    expect(loopSeconds({ mode: 'fraction', channels: ['@index'], frame_count: 64 })).toBe(8);
+    expect(loopSeconds({ mode: 'fraction', channels: ['@index'], frame_count: 4320, revolutions: 9 })).toBe(72);
     expect(at(0, 1000)).toBe(8);
     expect(at(0, 1000, 0.5)).toBe(4);
     expect(at(0, 1000, 1, 72)).toBeCloseTo(64 / 72, 15);
     expect(at(3, -50)).toBe(3);
   });
-  it('runs a loop in the seconds of the clock when it gives them, whatever its laps', () => {
-    expect(loopSeconds({ mode: 'value', channels: ['time'], steps: 960, range: [-8, 11], seconds: 24 })).toBe(24);
-    expect(loopSeconds({ mode: 'fraction', channels: ['@index'], steps: 4320, laps: 9, seconds: 30 })).toBe(30);
+  it('runs a loop in the seconds of the clock when it gives them, whatever its revolutions', () => {
+    expect(loopSeconds({ mode: 'epoch', channels: ['time'], frame_count: 960, range: [-8, 11], seconds: 24 })).toBe(24);
+    expect(loopSeconds({ mode: 'fraction', channels: ['@index'], frame_count: 4320, revolutions: 9, seconds: 30 })).toBe(30);
   });
   it('lies between two frame indices, the index its integer part and the progress its exact place', () => {
     const x = at(0, 1062.5, 0.25);
@@ -161,28 +168,28 @@ describe('readouts (section 2.9)', () => {
     const c = loadCorpus('two-panels');
     const parts: Readout['parts'] = [
       'e=',
-      { member: 'e', digits: 3 },
+      { parameter: 'e', digits: 3 },
       ' d=',
       { attr: 'd', factor: 2, offset: 1 },
       ' t=',
       { channel: 't', digits: 4 },
       ' i=',
-      { clock: 'index' },
+      { clock: 'frame_index' },
       '/',
-      { clock: 'steps' },
+      { clock: 'frame_count' },
       ' ',
-      { var: 'frame' },
+      { input: 'frame' },
       ' ',
-      { var: 'e' },
+      { input: 'e' },
     ];
     c.scene.readouts = [{ place: 'panel', parts }];
     validate(c.scene, c.data);
     return { ...c, parts, geometry: new GeometryCache(c.scene, c.data) };
   };
-  it('reads the driver, its channel at the reading, the clock, and the variables', () => {
+  it('reads the reference trajectory, its channel at the reading, the clock, and the inputs', () => {
     const c = corpus();
     const st = c.scene.initial;
-    // p1 drives orbits track 1 (k = 0.5 rounds to 1)
+    // p1 drives orbits trajectory 1 (k = 0.5 rounds to 1)
     const set = c.geometry.sets.get('orbits');
     const e = set.parameter('e')[1]!;
     const tc = c.geometry.readings('orbits', 't').clocks[1]!;
@@ -193,15 +200,15 @@ describe('readouts (section 2.9)', () => {
     const text = readoutText({ scene: c.scene, geometry: c.geometry, state: st, panel: 'p1', frameIndex: 8 }, c.parts);
     expect(text).toBe(`e=${formatNumber(e, 3)} d=2 t=${formatNumber(tv, 4)} i=2/6 shift ${formatNumber(0.2)}`);
   });
-  it('gives a dash for a part that a driver without a matching track set cannot give', () => {
+  it('gives a dash for a part that a reference trajectory without a matching trajectory set cannot give', () => {
     const c = corpus();
-    const st = withVariable(c.scene, c.scene.initial, 'group', 'absent');
+    const st = withInput(c.scene, c.scene.initial, 'group', 'absent');
     const text = readoutText({ scene: c.scene, geometry: c.geometry, state: st, panel: 'p2', frameIndex: 0 }, c.parts);
     expect(text).toBe('e=— d=— t=— i=0/6 tilt 0.2');
   });
   it('shows a choice by its label and a toggle as on or off', () => {
     const s = baseScene({
-      variables: { f: { kind: 'choice', values: ['a', 'b'], labels: ['first', 'second'], default: 'b' }, show: { kind: 'toggle', default: true } },
+      inputs: { f: { kind: 'choice', values: ['a', 'b'], labels: ['first', 'second'], default: 'b' }, show: { kind: 'toggle', default: true } },
     });
     const data = new MemoryStore()
       .add('off', [0, 2], 'uint32')
@@ -211,26 +218,26 @@ describe('readouts (section 2.9)', () => {
       ])
       .add('time', [0, 1]);
     const text = readoutText({ scene: s, geometry: new GeometryCache(s, data), state: state(), panel: 'p1', frameIndex: 0 }, [
-      { var: 'f' },
+      { input: 'f' },
       ' ',
-      { var: 'show' },
+      { input: 'show' },
     ]);
     expect(text).toBe('second on');
   });
-  it("reads a channel in the driver's lap (C6)", () => {
-    // the laps scene runs 3 laps of 24 steps over a loop whose channel a is 0, 0.5, 1, 1.5, 2.5, an advance of 2.5 per lap
-    const c = loadCorpus('laps');
+  it("reads a channel in the reference trajectory's revolution (revolutions)", () => {
+    // the revolutions scene runs 3 revolutions of 24 steps over a loop whose channel a is 0, 0.5, 1, 1.5, 2.5, an advance of 2.5 per revolution
+    const c = loadCorpus('revolutions');
     c.scene.readouts = [{ place: 'panel', parts: [{ channel: 'a' }] }];
     validate(c.scene, c.data);
     const geometry = new GeometryCache(c.scene, c.data);
     const read = (channel: string, frameIndex: number) =>
       readoutText({ scene: c.scene, geometry, state: { ...c.scene.initial, clock: { channel } }, panel: 'p1', frameIndex }, c.scene.readouts![0]!.parts);
-    // by @index, lap 2 runs from frame 16, and frame 21 is halfway between samples 2 and 3 of lap 2
+    // by @index, revolution 2 runs from frame 16, and frame 21 is halfway between samples 2 and 3 of revolution 2
     expect([4, 8, 12, 16, 20, 21, 22, 23].map((i) => read('@index', i))).toEqual(['1', '2.5', '3.5', '5', '6', '6.25', '6.5', '7']);
     // read by channel a itself, the readout is the loop value 2.5 U = 7.5 q, with loop reading U and progress q
     for (const i of [17, 20, 23]) expect(read('a', i)).toBe(formatNumber((7.5 * i) / 24));
     // during playback, the channel is read at the progress between frames 20 and 21, and the clock part shows the frame index
-    const parts: Readout['parts'] = [{ channel: 'a' }, ' at ', { clock: 'index' }];
+    const parts: Readout['parts'] = [{ channel: 'a' }, ' at ', { clock: 'frame_index' }];
     const st = { ...c.scene.initial, clock: { channel: '@index' } };
     expect(readoutText({ scene: c.scene, geometry, state: st, panel: 'p1', frameIndex: 20, progress: 20.5 / 24 }, parts)).toBe('6.125 at 20');
   });

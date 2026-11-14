@@ -39,7 +39,7 @@ describe('frame schedule', () => {
     const late = frameSchedule(6, 30, 1, 1, 5);
     expect([late.index(30), late.progress(30), late.index(50), late.progress(50)]).toEqual([5, 5.75 / 6, 0, 0.25 / 6]);
   });
-  it('lasts 8 s a lap, so that nine laps take 72 s at speed 1', () => {
+  it('lasts 8 s a revolution, so that nine revolutions take 72 s at speed 1', () => {
     const nine = frameSchedule(4320, 30, 1, 1, 0, 72);
     expect([nine.count, nine.duration, nine.index(1), nine.progress(1)]).toEqual([2160, 72, 2, 2 / 4320]);
     expect(checkExport(nine.count, 30)).toMatch(/2160 frames is more than the 2000 an export may have: lower the frame rate or the loops, or raise the speed/);
@@ -48,10 +48,10 @@ describe('frame schedule', () => {
     expect(checkExport(frameSchedule(4320, 30, 1, 2, 0, 72).count, 30)).toBeNull();
   });
   it('starts the export row at the highest rate whose one loop fits the ceiling', () => {
-    // nine laps of 480 steps, 72 s a loop at speed 1
+    // nine revolutions of 480 steps, 72 s a loop at speed 1
     expect([1, 2, 4].map((speed) => defaultExportFps(4320, speed, 72))).toEqual([24, 30, 60]);
     expect([0.25, 0.5].map((speed) => defaultExportFps(4320, speed, 72))).toEqual([null, null]);
-    // the Broucke example has one lap of 480 steps, 8 s a loop
+    // the Broucke example has one revolution of 480 steps, 8 s a loop
     expect([0.25, 0.5, 1, 2, 4].map((speed) => defaultExportFps(480, speed, 8))).toEqual([60, 60, 60, 60, 60]);
   });
   it('is refused past 2000 frames or 90 s, or past the limits a caller gives', () => {
@@ -74,9 +74,9 @@ describe('export size and codec', () => {
   it('lays 720p and 1080p out alike, and keeps the stage even', () => {
     expect(sizePreset('720p')).toEqual({ width: 1280, height: 720, pixelRatio: 1 });
     expect(sizePreset('1080p')).toEqual({ width: 1920, height: 1080, pixelRatio: 1.5 });
-    expect(sizePreset('stage', { w: 801, h: 451 }, 1)).toEqual({ width: 800, height: 450, pixelRatio: 1 });
-    expect(sizePreset('stage', { w: 801, h: 451 }, 2)).toEqual({ width: 1600, height: 900, pixelRatio: 2 });
-    expect(sizePreset('stage', { w: 1, h: 1 }, 3)).toEqual({ width: 4, height: 4, pixelRatio: 2 });
+    expect(sizePreset('panels', { w: 801, h: 451 }, 1)).toEqual({ width: 800, height: 450, pixelRatio: 1 });
+    expect(sizePreset('panels', { w: 801, h: 451 }, 2)).toEqual({ width: 1600, height: 900, pixelRatio: 2 });
+    expect(sizePreset('panels', { w: 1, h: 1 }, 3)).toEqual({ width: 4, height: 4, pixelRatio: 2 });
   });
   it('takes the lowest H.264 level that holds the size and the rate', () => {
     expect(avcCodec(1280, 720, 30)).toBe('avc1.64001f');
@@ -105,20 +105,20 @@ describe('export size and codec', () => {
   });
   it('keeps the stage within H.264 on a wide pane at a pixel ratio of 2', () => {
     // an export of a stage of 2952 by 1462 CSS pixels at a pixel ratio of 2 and 60 fps was refused by QuickTime
-    const s = sizePreset('stage', { w: 2952, h: 1462 }, 2, 60);
+    const s = sizePreset('panels', { w: 2952, h: 1462 }, 2, 60);
     expect(avcCodec(s.width, s.height, 60)).not.toBeNull();
     expect(Math.max(s.width, s.height)).toBeLessThanOrEqual(4096);
     expect(s).toEqual({ width: 4058, height: 2010, pixelRatio: 1.375 });
-    expect(sizePreset('stage', { w: 1500, h: 900 }, 2, 60)).toEqual({ width: 3000, height: 1800, pixelRatio: 2 });
+    expect(sizePreset('panels', { w: 1500, h: 900 }, 2, 60)).toEqual({ width: 3000, height: 1800, pixelRatio: 2 });
     // past 4096 CSS pixels the ratio goes below 1, and the size still fits
-    const huge = sizePreset('stage', { w: 9000, h: 3000 }, 1, 30);
+    const huge = sizePreset('panels', { w: 9000, h: 3000 }, 1, 30);
     expect(huge.pixelRatio).toBe(0.375);
     expect(avcFits(huge.width, huge.height, 30)).toBe(true);
     for (const fps of [24, 30, 60])
       for (const dpr of [1, 1.5, 2, 3])
         // prettier-ignore
         for (const [w, h] of [[800, 600], [1500, 900], [2560, 1300], [2952, 1462], [3840, 2000], [1200, 2400]] as const) {
-          const s = sizePreset('stage', { w, h }, dpr, fps);
+          const s = sizePreset('panels', { w, h }, dpr, fps);
           expect(avcFits(s.width, s.height, fps), `${w}x${h} at ${dpr} and ${fps} fps`).toBe(true);
         }
   });
@@ -261,7 +261,7 @@ describe('MP4 muxing of synthetic frames, without a codec', () => {
   });
 
   it('H.264 at the stage size of a wide pane has what QuickTime needs, i.e. moov before mdat and even sides in tkhd and avc1', () => {
-    const { width, height } = sizePreset('stage', { w: 2952, h: 1462 }, 2, 60);
+    const { width, height } = sizePreset('panels', { w: 2952, h: 1462 }, 2, 60);
     const w = new Mp4Writer(width, height, 60);
     frames.forEach((f, k) =>
       w.add(

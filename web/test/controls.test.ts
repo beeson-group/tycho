@@ -1,7 +1,7 @@
 // Tests the controls of a panel's camera under Node, with a stand-in for the element they listen on.
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { StageRenderer } from '../src/runtime/renderer';
+import { PanelAreaRenderer } from '../src/runtime/renderer';
 import type { Camera } from '../src/scene';
 
 /** An element that takes the listeners of the controls and never calls them. */
@@ -12,7 +12,7 @@ function element(): object {
 
 /** A panel with a camera of `spec` and its controls, aimed at `target` from `from`, as a fit aims it, and its renderer. */
 function panel(spec: Camera, from: [number, number, number], target: [number, number, number] = [0, 0, 0]) {
-  const stage = Object.assign(Object.create(StageRenderer.prototype), { panels: new Map(), onChange() {} });
+  const stage = Object.assign(Object.create(PanelAreaRenderer.prototype), { panels: new Map(), onChange() {} });
   const p = stage.panel('p');
   p.element = element();
   stage.setCamera(p, spec);
@@ -21,7 +21,7 @@ function panel(spec: Camera, from: [number, number, number], target: [number, nu
   p.controls.target.set(...target);
   p.controls.update();
   return Object.assign(p as { camera: THREE.Camera; controls: { rotateLeft(a: number): void; rotateUp(a: number): void } }, {
-    stage: stage as StageRenderer,
+    stage: stage as PanelAreaRenderer,
   });
 }
 
@@ -34,11 +34,11 @@ function onScreen(camera: THREE.Camera, x: number, y: number, z: number): THREE.
 const along = (v: THREE.Vector3, axis: 'x' | 'y' | 'z') => v[axis];
 const around = (v: THREE.Vector3, axis: 'x' | 'y' | 'z') => Math.hypot(...(['x', 'y', 'z'] as const).filter((a) => a !== axis).map((a) => v[a]));
 
-describe('the controls of an orbit camera', () => {
+describe('the controls of an 3d camera', () => {
   for (const up of ['x', 'y', 'z'] as const) {
     it(`turn a drag across the panel about the up axis ${up}, as a turntable`, () => {
       const from: [number, number, number] = up === 'x' ? [2.7, 3, -4.8] : up === 'y' ? [-4.8, 2.7, 3] : [3, -4.8, 2.7];
-      const p = panel({ kind: 'orbit', up }, from);
+      const p = panel({ kind: '3d', up }, from);
       expect(p.camera.up.toArray()).toEqual(['x', 'y', 'z'].map((a) => (a === up ? 1 : 0)));
       const before = p.camera.position.clone();
       p.controls.rotateLeft(0.7);
@@ -51,7 +51,7 @@ describe('the controls of an orbit camera', () => {
   }
 
   it('tilt a drag up the panel toward the up axis, at the azimuth where the camera was', () => {
-    const p = panel({ kind: 'orbit', up: 'z' }, [3, -4.8, 2.7]);
+    const p = panel({ kind: '3d', up: 'z' }, [3, -4.8, 2.7]);
     const azimuth = (v: THREE.Vector3) => Math.atan2(v.y, v.x);
     const before = p.camera.position.clone();
     p.controls.rotateUp(0.3);
@@ -62,9 +62,9 @@ describe('the controls of an orbit camera', () => {
   });
 });
 
-describe('the keys of an orbit camera', () => {
+describe('the keys of an 3d camera', () => {
   it('show the view from the side of an axis, at the distance of the camera, with the up axis up the screen', () => {
-    const p = panel({ kind: 'orbit', up: 'z' }, [3, -4.8, 2.7], [1, 1, 0]);
+    const p = panel({ kind: '3d', up: 'z' }, [3, -4.8, 2.7], [1, 1, 0]);
     const distance = p.camera.position.distanceTo(new THREE.Vector3(1, 1, 0));
     p.stage.viewFrom('p', 'x', 1);
     expect(p.camera.position.x).toBeCloseTo(1 + distance, 9);
@@ -79,7 +79,7 @@ describe('the keys of an orbit camera', () => {
   });
 
   it('show the view along the up axis as a plot of the other two, with the first to the right and the second up', () => {
-    const p = panel({ kind: 'orbit', up: 'z' }, [3, -4.8, 2.7]);
+    const p = panel({ kind: '3d', up: 'z' }, [3, -4.8, 2.7]);
     p.stage.viewFrom('p', 'z', 1);
     const o = onScreen(p.camera, 0, 0, 0);
     expect(onScreen(p.camera, 1, 0, 0).x - o.x).toBeCloseTo(1, 3);
@@ -92,8 +92,8 @@ describe('the keys of an orbit camera', () => {
   });
 
   it('turn the view about the up axis, as a drag to the right turns it', () => {
-    const a = panel({ kind: 'orbit', up: 'z' }, [3, -4.8, 2.7]);
-    const b = panel({ kind: 'orbit', up: 'z' }, [3, -4.8, 2.7]);
+    const a = panel({ kind: '3d', up: 'z' }, [3, -4.8, 2.7]);
+    const b = panel({ kind: '3d', up: 'z' }, [3, -4.8, 2.7]);
     a.stage.turnBy('p', 90);
     b.controls.rotateLeft(Math.PI / 2);
     expect(a.camera.position.toArray().map((v) => +v.toFixed(9))).toEqual(b.camera.position.toArray().map((v) => +v.toFixed(9)));
@@ -101,8 +101,8 @@ describe('the keys of an orbit camera', () => {
     expect(Math.hypot(a.camera.position.x, a.camera.position.y)).toBeCloseTo(Math.hypot(3, -4.8), 9);
   });
 
-  it('leave a panel of a plane camera as it is', () => {
-    const p = panel({ kind: 'plane', plane: 'xy' }, [0, 0, 5]);
+  it('leave a panel of a 2d camera as it is', () => {
+    const p = panel({ kind: '2d', plane: 'xy' }, [0, 0, 5]);
     const before = p.camera.position.clone();
     p.stage.viewFrom('p', 'x', 1);
     p.stage.turnBy('p', 90);

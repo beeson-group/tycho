@@ -11,9 +11,9 @@ from itertools import pairwise
 import numpy as np
 
 
-def _extent(tracks: Sequence[np.ndarray]) -> float:
-    """The diagonal of the bounding box of every track of the track set, in one frame."""
-    allpoints = np.vstack(tracks)
+def _extent(trajectories: Sequence[np.ndarray]) -> float:
+    """The diagonal of the bounding box of every trajectory of the trajectory set, in one frame."""
+    allpoints = np.vstack(trajectories)
     if not np.all(np.isfinite(allpoints)):
         raise ValueError("the positions are not all finite")
     return float(np.linalg.norm(allpoints.max(axis=0) - allpoints.min(axis=0)))
@@ -27,7 +27,7 @@ def _forced(m: int, keep: Sequence[int] | None) -> set[int]:
             raise ValueError(f"kept index {k!r} is not an integer")  # noqa: TRY004
         i = int(k)
         if not 0 <= i < m:
-            raise ValueError(f"kept index {i} is outside a track of {m} samples")
+            raise ValueError(f"kept index {i} is outside a trajectory of {m} samples")
         forced.add(i)
     return forced
 
@@ -39,9 +39,9 @@ def select(
     tolerance: float | None = None,
     keep: Sequence[Sequence[int]] | Callable[[int], Sequence[int]] | None = None,
 ) -> list[np.ndarray]:
-    """Returns, for every track, the strictly increasing indices of the samples to keep.
+    """Returns, for every trajectory, the strictly increasing indices of the samples to keep.
 
-    ``frames[f][t]`` holds the positions of track ``t`` in frame ``f``, of shape ``(m, 3)``. One of ``n`` and
+    ``frames[f][t]`` holds the positions of trajectory ``t`` in frame ``f``, of shape ``(m, 3)``. One of ``n`` and
     ``tolerance`` is given, but not both. ``n`` selects count mode, by blended arclength, and ``tolerance``
     selects the Douglas-Peucker algorithm, relative to the extent of each frame. Both endpoints and every
     index in ``keep`` are always kept, even when they number more than ``n``.
@@ -53,15 +53,15 @@ def select(
     if tolerance is not None and not (np.isfinite(tolerance) and tolerance >= 0.0):
         raise ValueError(f"tolerance is {tolerance!r}, not a finite number of at least 0")
     if keep is not None and not callable(keep) and len(keep) != len(frames[0]):
-        raise ValueError(f"keep has {len(keep)} entries for {len(frames[0])} tracks")
-    extents = [_extent(tracks) for tracks in frames]
+        raise ValueError(f"keep has {len(keep)} entries for {len(frames[0])} trajectories")
+    extents = [_extent(trajectories) for trajectories in frames]
     out = []
     for t in range(len(frames[0])):
         m = len(frames[0][t])
         k = keep(t) if callable(keep) else (keep[t] if keep is not None else None)
         # the ty type checker types keep(t) as object when keep is a sequence that is also callable. _forced checks every index anyway
         forced = _forced(m, k)  # ty: ignore[invalid-argument-type]
-        pts = [tracks[t] for tracks in frames]
+        pts = [trajectories[t] for trajectories in frames]
         if n is not None:
             out.append(_count(pts, extents, m, n, forced))
         elif tolerance is not None:

@@ -1,9 +1,9 @@
-// Tests the screen geometry of an outline layer (rule L8), which is drawn only, hence it is not covered by the conformance corpus.
+// Tests the screen geometry of an inset box layer (rule `inset-box`), which is drawn only, hence it is not covered by the conformance corpus.
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { outlinePaths, outlineTriangles, strokeTriangles, widen } from '../src/runtime/outline';
-import { outlineCorners, planeView } from '../src/runtime/renderer';
-import type { OutlineLayerResult, Vec3 } from '../src/evaluate/types';
+import { insetBoxShownPanel, outlineCorners, planeView } from '../src/runtime/renderer';
+import type { InsetBoxLayerResult, Vec3 } from '../src/evaluate/types';
 
 type Vec2 = [number, number];
 const square = (x0: number, y0: number, x1: number, y1: number): [Vec2, Vec2, Vec2, Vec2] => [
@@ -85,10 +85,10 @@ describe('the stroke of an outline', () => {
 });
 
 describe('the corners of an outline', () => {
-  const map = (scale: number): OutlineLayerResult & { origin: Vec3; axes: [Vec3, Vec3, Vec3] } => ({
-    kind: 'outline',
-    view: 'closeup',
-    panel: 'b',
+  const map = (scale: number): InsetBoxLayerResult & { origin: Vec3; axes: [Vec3, Vec3, Vec3] } => ({
+    kind: 'inset_box',
+    panel: 'closeup',
+    shown_panel: 'b',
     frame: 'zoom',
     origin: [0, 0, 0],
     axes: [
@@ -97,7 +97,12 @@ describe('the corners of an outline', () => {
       [0, 0, scale],
     ],
   });
-  const plane = { kind: 'plane', plane: 'xy' } as const;
+  const plane = { kind: '2d', plane: 'xy' } as const;
+  it('outlines the shown panel of the target, whose id differs from the declared id of a copy', () => {
+    expect(insetBoxShownPanel(map(0.5))).toBe('b');
+    expect(insetBoxShownPanel({ ...map(0.5), origin: null })).toBeNull();
+    expect(insetBoxShownPanel(null)).toBeNull();
+  });
   it('maps the target camera rectangle into the host camera panel', () => {
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
     camera.position.set(0, 0, 10);
@@ -115,7 +120,7 @@ describe('the corners of an outline', () => {
     camera.position.set(0, 0, 0.5);
     camera.lookAt(0, 0, 0);
     const view = planeView(new THREE.OrthographicCamera(-1, 1, 1, -1), plane, 200, 100);
-    const orbit = { kind: 'orbit' } as const;
+    const orbit = { kind: '3d' } as const;
     expect(outlineCorners(map(1), { ...view, x0: -1, x1: 1, y0: -1, y1: 1 }, plane, camera, orbit, 200, 100)).not.toBeNull();
     camera.position.set(0, 0, -0.5);
     camera.lookAt(0, 0, -1);

@@ -1,18 +1,18 @@
 [
  {
-  "name": "L7: at value 0.0, the arrow at the reading of a track, and the sticks shown in their windows of t (C3)",
+  "name": "arrow: at value 0.0, the arrow at the reading of a trajectory, and the sticks shown in their windows of t (before-after)",
   "source": "analytic",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "t"
    },
    "panels": {
     "rot": {
-     "view": "rot"
+     "panel": "rot"
     },
     "inertial": {
-     "view": "inertial"
+     "panel": "inertial"
     }
    },
    "layout": {
@@ -127,19 +127,19 @@
   }
  },
  {
-  "name": "L7: at value 0.25, the arrow at the reading of a track, and the sticks shown in their windows of t (C3)",
+  "name": "arrow: at value 0.25, the arrow at the reading of a trajectory, and the sticks shown in their windows of t (before-after)",
   "source": "analytic",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "t"
    },
    "panels": {
     "rot": {
-     "view": "rot"
+     "panel": "rot"
     },
     "inertial": {
-     "view": "inertial"
+     "panel": "inertial"
     }
    },
    "layout": {
@@ -254,19 +254,19 @@
   }
  },
  {
-  "name": "L7: at value 0.5, the arrow at the reading of a track, and the sticks shown in their windows of t (C3)",
+  "name": "arrow: at value 0.5, the arrow at the reading of a trajectory, and the sticks shown in their windows of t (before-after)",
   "source": "analytic",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "t"
    },
    "panels": {
     "rot": {
-     "view": "rot"
+     "panel": "rot"
     },
     "inertial": {
-     "view": "inertial"
+     "panel": "inertial"
     }
    },
    "layout": {
@@ -397,19 +397,19 @@
   }
  },
  {
-  "name": "L7: at value 0.75, the arrow at the reading of a track, and the sticks shown in their windows of t (C3)",
+  "name": "arrow: at value 0.75, the arrow at the reading of a trajectory, and the sticks shown in their windows of t (before-after)",
   "source": "analytic",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "t"
    },
    "panels": {
     "rot": {
-     "view": "rot"
+     "panel": "rot"
     },
     "inertial": {
-     "view": "inertial"
+     "panel": "inertial"
     }
    },
    "layout": {
@@ -540,19 +540,19 @@
   }
  },
  {
-  "name": "L7: at value 1.0, the arrow at the reading of a track, and the sticks shown in their windows of t (C3)",
+  "name": "arrow: at value 1.0, the arrow at the reading of a trajectory, and the sticks shown in their windows of t (before-after)",
   "source": "analytic",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "t"
    },
    "panels": {
     "rot": {
-     "view": "rot"
+     "panel": "rot"
     },
     "inertial": {
-     "view": "inertial"
+     "panel": "inertial"
     }
    },
    "layout": {
@@ -683,19 +683,19 @@
   }
  },
  {
-  "name": "L7: at value 1.25, the arrow at the reading of a track, and the sticks shown in their windows of t (C3)",
+  "name": "arrow: at value 1.25, the arrow at the reading of a trajectory, and the sticks shown in their windows of t (before-after)",
   "source": "analytic",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "t"
    },
    "panels": {
     "rot": {
-     "view": "rot"
+     "panel": "rot"
     },
     "inertial": {
-     "view": "inertial"
+     "panel": "inertial"
     }
    },
    "layout": {
@@ -810,19 +810,19 @@
   }
  },
  {
-  "name": "L7: at value 1.5, the arrow at the reading of a track, and the sticks shown in their windows of t (C3)",
+  "name": "arrow: at value 1.5, the arrow at the reading of a trajectory, and the sticks shown in their windows of t (before-after)",
   "source": "analytic",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "t"
    },
    "panels": {
     "rot": {
-     "view": "rot"
+     "panel": "rot"
     },
     "inertial": {
-     "view": "inertial"
+     "panel": "inertial"
     }
    },
    "layout": {
@@ -953,19 +953,19 @@
   }
  },
  {
-  "name": "L7: at value 1.75, the arrow at the reading of a track, and the sticks shown in their windows of t (C3)",
+  "name": "arrow: at value 1.75, the arrow at the reading of a trajectory, and the sticks shown in their windows of t (before-after)",
   "source": "analytic",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "t"
    },
    "panels": {
     "rot": {
-     "view": "rot"
+     "panel": "rot"
     },
     "inertial": {
-     "view": "inertial"
+     "panel": "inertial"
     }
    },
    "layout": {

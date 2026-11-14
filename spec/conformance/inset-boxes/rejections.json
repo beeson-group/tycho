@@ -1,0 +1,109 @@
+[
+ {
+  "name": "inset-box: an inset box layer names a panel that is not declared",
+  "rule": "inset-box",
+  "scene": {
+   "panels": {
+    "rot": {
+     "layers": [
+      {
+       "kind": "trajectories",
+       "sets": {
+        "set": "drv"
+       },
+       "members": "all"
+      },
+      {
+       "kind": "inset_box",
+       "panel": "nowhere",
+       "color": "#ffffff",
+       "opacity": 0.5,
+       "width": 1.5,
+       "dash": [
+        4,
+        3
+       ],
+       "min_size": 12
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "inset-box: an inset box layer names the panel that holds it",
+  "rule": "inset-box",
+  "scene": {
+   "panels": {
+    "rot": {
+     "layers": [
+      {
+       "kind": "trajectories",
+       "sets": {
+        "set": "drv"
+       },
+       "members": "all"
+      },
+      {
+       "kind": "inset_box",
+       "panel": "rot",
+       "color": "#ffffff",
+       "opacity": 0.5,
+       "width": 1.5,
+       "dash": [
+        4,
+        3
+       ],
+       "min_size": 12
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "inset-box: an inset box layer names a panel with an 3d camera",
+  "rule": "inset-box",
+  "scene": {
+   "panels": {
+    "closeup": {
+     "camera": {
+      "kind": "3d"
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "transform-channels: the reference trajectory's set lacks a channel of the origin of the frame zoom",
+  "rule": "transform-channels",
+  "scene": {
+   "trajectory_sets": {
+    "drv": {
+     "channels": {
+      "my": null
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "context-number: @index in the origin of a frame",
+  "rule": "context-number",
+  "scene": {
+   "frames": {
+    "zoom": {
+     "origin": [
+      {
+       "channel": "@index"
+      },
+      {
+       "channel": "my"
+      },
+      0.0
+     ]
+    }
+   }
+  }
+ }
+]

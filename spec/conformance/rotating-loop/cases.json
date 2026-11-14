@@ -3,14 +3,14 @@
   "name": "edge equation, inertial, reveal none",
   "source": "analytic",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "@index"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "inertial"
      }
     }
@@ -28,7 +28,7 @@
      "frame": "inertial",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -77,14 +77,14 @@
   "name": "edge equation, scaled, reveal none",
   "source": "analytic",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "@index"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "scaled"
      }
     }
@@ -102,7 +102,7 @@
      "frame": "scaled",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -151,14 +151,14 @@
   "name": "periodic trail wrap in a rotating frame, angle advance 2.5 rad, @index",
   "source": "analytic",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "@index"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "inertial"
      }
     }
@@ -177,7 +177,7 @@
      "layers": [
       null,
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -255,14 +255,14 @@
   "name": "rot, @index, frame -1",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "@index"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "rot"
      }
     }
@@ -280,7 +280,7 @@
      "frame": "rot",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -316,7 +316,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -394,14 +394,14 @@
   "name": "rot, @index, frame 0",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "@index"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "rot"
      }
     }
@@ -419,7 +419,7 @@
      "frame": "rot",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -455,7 +455,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -523,14 +523,14 @@
   "name": "rot, @index, frame 1",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "@index"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "rot"
      }
     }
@@ -548,7 +548,7 @@
      "frame": "rot",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -584,7 +584,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -662,14 +662,14 @@
   "name": "rot, @index, frame 2",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "@index"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "rot"
      }
     }
@@ -687,7 +687,7 @@
      "frame": "rot",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -723,7 +723,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -791,14 +791,14 @@
   "name": "rot, @index, frame 3",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "@index"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "rot"
      }
     }
@@ -816,7 +816,7 @@
      "frame": "rot",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -852,7 +852,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -930,14 +930,14 @@
   "name": "rot, @index, frame 4",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "@index"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "rot"
      }
     }
@@ -955,7 +955,7 @@
      "frame": "rot",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -991,7 +991,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -1059,14 +1059,14 @@
   "name": "rot, @index, frame 5",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "@index"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "rot"
      }
     }
@@ -1084,7 +1084,7 @@
      "frame": "rot",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -1120,7 +1120,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -1198,14 +1198,14 @@
   "name": "rot, @index, frame 6",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "@index"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "rot"
      }
     }
@@ -1223,7 +1223,7 @@
      "frame": "rot",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -1259,7 +1259,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -1327,14 +1327,14 @@
   "name": "rot, @index, frame 7",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "@index"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "rot"
      }
     }
@@ -1352,7 +1352,7 @@
      "frame": "rot",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -1388,7 +1388,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -1466,14 +1466,14 @@
   "name": "rot, @index, frame 8",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "@index"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "rot"
      }
     }
@@ -1491,7 +1491,7 @@
      "frame": "rot",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -1527,7 +1527,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -1595,14 +1595,14 @@
   "name": "rot, a, frame -1",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "a"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "rot"
      }
     }
@@ -1620,7 +1620,7 @@
      "frame": "rot",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -1656,7 +1656,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -1734,14 +1734,14 @@
   "name": "rot, a, frame 0",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "a"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "rot"
      }
     }
@@ -1759,7 +1759,7 @@
      "frame": "rot",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -1795,7 +1795,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -1863,14 +1863,14 @@
   "name": "rot, a, frame 1",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "a"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "rot"
      }
     }
@@ -1888,7 +1888,7 @@
      "frame": "rot",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -1924,7 +1924,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -1992,14 +1992,14 @@
   "name": "rot, a, frame 2",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "a"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "rot"
      }
     }
@@ -2017,7 +2017,7 @@
      "frame": "rot",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -2053,7 +2053,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -2131,14 +2131,14 @@
   "name": "rot, a, frame 3",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "a"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "rot"
      }
     }
@@ -2156,7 +2156,7 @@
      "frame": "rot",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -2192,7 +2192,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -2270,14 +2270,14 @@
   "name": "rot, a, frame 4",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "a"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "rot"
      }
     }
@@ -2295,7 +2295,7 @@
      "frame": "rot",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -2331,7 +2331,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -2409,14 +2409,14 @@
   "name": "rot, a, frame 5",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "a"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "rot"
      }
     }
@@ -2434,7 +2434,7 @@
      "frame": "rot",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -2470,7 +2470,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -2558,14 +2558,14 @@
   "name": "rot, a, frame 6",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "a"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "rot"
      }
     }
@@ -2583,7 +2583,7 @@
      "frame": "rot",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -2619,7 +2619,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -2697,14 +2697,14 @@
   "name": "rot, a, frame 7",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "a"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "rot"
      }
     }
@@ -2722,7 +2722,7 @@
      "frame": "rot",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -2758,7 +2758,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -2836,14 +2836,14 @@
   "name": "rot, a, frame 8",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "a"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "rot"
      }
     }
@@ -2861,7 +2861,7 @@
      "frame": "rot",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -2897,7 +2897,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -2965,14 +2965,14 @@
   "name": "inertial, @index, frame -1",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "@index"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "inertial"
      }
     }
@@ -2990,7 +2990,7 @@
      "frame": "inertial",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -3026,7 +3026,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -3104,14 +3104,14 @@
   "name": "inertial, @index, frame 0",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "@index"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "inertial"
      }
     }
@@ -3129,7 +3129,7 @@
      "frame": "inertial",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -3165,7 +3165,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -3233,14 +3233,14 @@
   "name": "inertial, @index, frame 1",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "@index"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "inertial"
      }
     }
@@ -3258,7 +3258,7 @@
      "frame": "inertial",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -3294,7 +3294,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -3372,14 +3372,14 @@
   "name": "inertial, @index, frame 2",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "@index"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "inertial"
      }
     }
@@ -3397,7 +3397,7 @@
      "frame": "inertial",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -3433,7 +3433,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -3501,14 +3501,14 @@
   "name": "inertial, @index, frame 3",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "@index"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "inertial"
      }
     }
@@ -3526,7 +3526,7 @@
      "frame": "inertial",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -3562,7 +3562,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -3640,14 +3640,14 @@
   "name": "inertial, @index, frame 4",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "@index"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "inertial"
      }
     }
@@ -3665,7 +3665,7 @@
      "frame": "inertial",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -3701,7 +3701,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -3769,14 +3769,14 @@
   "name": "inertial, @index, frame 5",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "@index"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "inertial"
      }
     }
@@ -3794,7 +3794,7 @@
      "frame": "inertial",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -3830,7 +3830,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -3908,14 +3908,14 @@
   "name": "inertial, @index, frame 6",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "@index"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "inertial"
      }
     }
@@ -3933,7 +3933,7 @@
      "frame": "inertial",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -3969,7 +3969,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -4037,14 +4037,14 @@
   "name": "inertial, @index, frame 7",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "@index"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "inertial"
      }
     }
@@ -4062,7 +4062,7 @@
      "frame": "inertial",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -4098,7 +4098,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -4176,14 +4176,14 @@
   "name": "inertial, @index, frame 8",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "@index"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "inertial"
      }
     }
@@ -4201,7 +4201,7 @@
      "frame": "inertial",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -4237,7 +4237,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -4305,14 +4305,14 @@
   "name": "inertial, a, frame -1",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "a"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "inertial"
      }
     }
@@ -4330,7 +4330,7 @@
      "frame": "inertial",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -4366,7 +4366,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -4444,14 +4444,14 @@
   "name": "inertial, a, frame 0",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "a"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "inertial"
      }
     }
@@ -4469,7 +4469,7 @@
      "frame": "inertial",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -4505,7 +4505,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -4573,14 +4573,14 @@
   "name": "inertial, a, frame 1",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "a"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "inertial"
      }
     }
@@ -4598,7 +4598,7 @@
      "frame": "inertial",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -4634,7 +4634,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -4702,14 +4702,14 @@
   "name": "inertial, a, frame 2",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "a"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "inertial"
      }
     }
@@ -4727,7 +4727,7 @@
      "frame": "inertial",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -4763,7 +4763,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -4841,14 +4841,14 @@
   "name": "inertial, a, frame 3",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "a"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "inertial"
      }
     }
@@ -4866,7 +4866,7 @@
      "frame": "inertial",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -4902,7 +4902,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -4980,14 +4980,14 @@
   "name": "inertial, a, frame 4",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "a"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "inertial"
      }
     }
@@ -5005,7 +5005,7 @@
      "frame": "inertial",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -5041,7 +5041,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -5119,14 +5119,14 @@
   "name": "inertial, a, frame 5",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "a"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "inertial"
      }
     }
@@ -5144,7 +5144,7 @@
      "frame": "inertial",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -5180,7 +5180,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -5268,14 +5268,14 @@
   "name": "inertial, a, frame 6",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "a"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "inertial"
      }
     }
@@ -5293,7 +5293,7 @@
      "frame": "inertial",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -5329,7 +5329,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -5407,14 +5407,14 @@
   "name": "inertial, a, frame 7",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "a"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "inertial"
      }
     }
@@ -5432,7 +5432,7 @@
      "frame": "inertial",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -5468,7 +5468,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -5546,14 +5546,14 @@
   "name": "inertial, a, frame 8",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "a"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "inertial"
      }
     }
@@ -5571,7 +5571,7 @@
      "frame": "inertial",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -5607,7 +5607,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -5675,14 +5675,14 @@
   "name": "scaled, @index, frame -1",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "@index"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "scaled"
      }
     }
@@ -5700,7 +5700,7 @@
      "frame": "scaled",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -5736,7 +5736,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -5814,14 +5814,14 @@
   "name": "scaled, @index, frame 0",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "@index"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "scaled"
      }
     }
@@ -5839,7 +5839,7 @@
      "frame": "scaled",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -5875,7 +5875,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -5943,14 +5943,14 @@
   "name": "scaled, @index, frame 1",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "@index"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "scaled"
      }
     }
@@ -5968,7 +5968,7 @@
      "frame": "scaled",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -6004,7 +6004,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -6082,14 +6082,14 @@
   "name": "scaled, @index, frame 2",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "@index"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "scaled"
      }
     }
@@ -6107,7 +6107,7 @@
      "frame": "scaled",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -6143,7 +6143,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -6211,14 +6211,14 @@
   "name": "scaled, @index, frame 3",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "@index"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "scaled"
      }
     }
@@ -6236,7 +6236,7 @@
      "frame": "scaled",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -6272,7 +6272,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -6350,14 +6350,14 @@
   "name": "scaled, @index, frame 4",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "@index"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "scaled"
      }
     }
@@ -6375,7 +6375,7 @@
      "frame": "scaled",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -6411,7 +6411,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -6479,14 +6479,14 @@
   "name": "scaled, @index, frame 5",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "@index"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "scaled"
      }
     }
@@ -6504,7 +6504,7 @@
      "frame": "scaled",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -6540,7 +6540,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -6618,14 +6618,14 @@
   "name": "scaled, @index, frame 6",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "@index"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "scaled"
      }
     }
@@ -6643,7 +6643,7 @@
      "frame": "scaled",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -6679,7 +6679,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -6747,14 +6747,14 @@
   "name": "scaled, @index, frame 7",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "@index"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "scaled"
      }
     }
@@ -6772,7 +6772,7 @@
      "frame": "scaled",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -6808,7 +6808,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -6886,14 +6886,14 @@
   "name": "scaled, @index, frame 8",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "@index"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "scaled"
      }
     }
@@ -6911,7 +6911,7 @@
      "frame": "scaled",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -6947,7 +6947,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -7015,14 +7015,14 @@
   "name": "scaled, a, frame -1",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "a"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "scaled"
      }
     }
@@ -7040,7 +7040,7 @@
      "frame": "scaled",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -7076,7 +7076,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -7154,14 +7154,14 @@
   "name": "scaled, a, frame 0",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "a"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "scaled"
      }
     }
@@ -7179,7 +7179,7 @@
      "frame": "scaled",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -7215,7 +7215,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -7283,14 +7283,14 @@
   "name": "scaled, a, frame 1",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "a"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "scaled"
      }
     }
@@ -7308,7 +7308,7 @@
      "frame": "scaled",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -7344,7 +7344,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -7412,14 +7412,14 @@
   "name": "scaled, a, frame 2",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "a"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "scaled"
      }
     }
@@ -7437,7 +7437,7 @@
      "frame": "scaled",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -7473,7 +7473,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -7551,14 +7551,14 @@
   "name": "scaled, a, frame 3",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "a"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "scaled"
      }
     }
@@ -7576,7 +7576,7 @@
      "frame": "scaled",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -7612,7 +7612,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -7690,14 +7690,14 @@
   "name": "scaled, a, frame 4",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "a"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "scaled"
      }
     }
@@ -7715,7 +7715,7 @@
      "frame": "scaled",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -7751,7 +7751,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -7829,14 +7829,14 @@
   "name": "scaled, a, frame 5",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "a"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "scaled"
      }
     }
@@ -7854,7 +7854,7 @@
      "frame": "scaled",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -7890,7 +7890,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -7978,14 +7978,14 @@
   "name": "scaled, a, frame 6",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "a"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "scaled"
      }
     }
@@ -8003,7 +8003,7 @@
      "frame": "scaled",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -8039,7 +8039,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -8117,14 +8117,14 @@
   "name": "scaled, a, frame 7",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "a"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "scaled"
      }
     }
@@ -8142,7 +8142,7 @@
      "frame": "scaled",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -8178,7 +8178,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -8256,14 +8256,14 @@
   "name": "scaled, a, frame 8",
   "source": "reference",
   "state": {
-   "variables": {},
+   "inputs": {},
    "clock": {
     "channel": "a"
    },
    "panels": {
     "p1": {
-     "view": "v",
-     "variables": {
+     "panel": "v",
+     "inputs": {
       "frame": "scaled"
      }
     }
@@ -8281,7 +8281,7 @@
      "frame": "scaled",
      "layers": [
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {
@@ -8317,7 +8317,7 @@
        ]
       },
       {
-       "kind": "track",
+       "kind": "trajectories",
        "set": "loop",
        "members": [
         {

@@ -17,9 +17,9 @@
                    src=examples/broucke/broucke
     plain          the scene as it is. A corpus scene does not have controls or readouts, and
                    one without controls gets dev controls unless this parameter is given. Dev
-                   controls also color every track layer of all members by the parameter of the
-                   first selector and highlight the selected member, so that the colorbar of the
-                   layer can be dragged to set the selector.
+                   controls also color every trajectories layer of all members by the parameter of the
+                   first parameter input and highlight the member shown, so that the colorbar of the
+                   layer can be dragged to set this input.
     kiosk          the kiosk attribute, which hides the controls and plays automatically
 -->
 <style>
@@ -41,7 +41,7 @@
 <script src="../dist/tycho.dev.js"></script>
 <script>
 (async () => {
-  const CORPUS = ['two-panels', 'rotating-loop', 'broucke-mini', 'edge-fraction', 'edge-value', 'value-clock'];
+  const CORPUS = ['two-panels', 'rotating-loop', 'broucke-mini', 'edge-fraction', 'edge-epoch', 'epoch-clock'];
   const params = new URLSearchParams(location.search);
   const name = params.get('scene') || 'two-panels';
   const nav = document.getElementById('nav');
@@ -82,9 +82,9 @@
     return fail(`cannot fetch the corpus scene: ${e.message}\nServe the checkout root, not web/.`);
   }
 
-  // withControls adds controls and readouts to a corpus scene, which does not have any. It adds a transport,
-  // tabs for every choice, a toggle for every toggle, a slider for every selector by nearest, and readouts of
-  // the driver, each kept only while the scene still validates.
+  // withControls adds controls and readouts to a corpus scene, which does not have any. It adds a playback control,
+  // tabs for every choice, a toggle for every toggle, a slider for every parameter input other than @index, and readouts of
+  // the reference trajectory, each kept only while the scene still validates.
   let data;
   try {
     data = await tycho.Container.parse(dataBytes);
@@ -101,14 +101,14 @@
   };
   const withControls = (original) => {
     const scene = structuredClone(original);
-    const controls = [{ kind: 'transport' }];
+    const controls = [{ kind: 'playback' }];
     const params = [];
-    for (const [id, v] of Object.entries(scene.variables || {})) {
-      if (v.kind === 'choice') controls.push({ kind: 'tabs', variable: id, label: id });
-      else if (v.kind === 'toggle') controls.push({ kind: 'toggle', variable: id, label: id });
-      else if (v.kind === 'selector' && v.by !== 'index') {
-        const set = Object.keys(scene.track_sets).find((k) => Object.hasOwn(scene.track_sets[k].parameters || {}, v.parameter));
-        if (set !== undefined) controls.push({ kind: 'slider', variable: id, label: id, domain: { set } });
+    for (const [id, v] of Object.entries(scene.inputs || {})) {
+      if (v.kind === 'choice') controls.push({ kind: 'tabs', input: id, label: id });
+      else if (v.kind === 'toggle') controls.push({ kind: 'toggle', input: id, label: id });
+      else if (v.kind === 'parameter' && v.parameter !== '@index') {
+        const set = Object.keys(scene.trajectory_sets).find((k) => Object.hasOwn(scene.trajectory_sets[k].parameters || {}, v.parameter));
+        if (set !== undefined) controls.push({ kind: 'slider', input: id, label: id, domain: { set } });
         params.push(v.parameter);
       }
     }
@@ -116,15 +116,15 @@
       const trial = { ...scene, controls: [...(scene.controls || []), c] };
       if (valid(trial)) scene.controls = trial.controls;
     }
-    // for a colorbar to drag, the tracks of all members are colored by the parameter of the first selector
-    const selector = Object.entries(scene.variables || {}).find(([, v]) => v.kind === 'selector' && v.by !== 'index' && v.scope !== 'panel' && v.parameter);
-    if (selector !== undefined) {
-      for (const view of Object.values(scene.views)) {
-        view.layers.forEach((layer, i) => {
-          if (layer.kind !== 'track' || layer.members !== 'all' || layer.color !== undefined) return;
-          const before = view.layers[i];
-          view.layers[i] = { ...layer, color: { colormap: 'viridis', parameter: selector[1].parameter }, highlight: { var: selector[0] } };
-          if (!valid(scene)) view.layers[i] = before;
+    // for a colorbar to drag, the trajectories of all members are colored by the parameter of the first parameter input
+    const first = Object.entries(scene.inputs || {}).find(([, v]) => v.kind === 'parameter' && v.parameter !== '@index' && v.scope !== 'per_panel' && v.parameter);
+    if (first !== undefined) {
+      for (const panel of Object.values(scene.panels)) {
+        panel.layers.forEach((layer, i) => {
+          if (layer.kind !== 'trajectories' || layer.members !== 'all' || layer.color !== undefined) return;
+          const before = panel.layers[i];
+          panel.layers[i] = { ...layer, color: { colormap: 'viridis', parameter: first[1].parameter }, highlight: { input: first[0] } };
+          if (!valid(scene)) panel.layers[i] = before;
         });
       }
     }
@@ -132,8 +132,8 @@
       const trial = { ...scene, readouts: [...(scene.readouts || []), r] };
       if (valid(trial)) scene.readouts = trial.readouts;
     };
-    tryReadout({ place: 'caption', parts: ['frame ', { clock: 'index' }, ' of ', { clock: 'steps' }] });
-    for (const p of params) tryReadout({ place: 'caption', parts: [`${p} = `, { member: p, digits: 4 }] });
+    tryReadout({ place: 'caption', parts: ['frame ', { clock: 'frame_index' }, ' of ', { clock: 'frame_count' }] });
+    for (const p of params) tryReadout({ place: 'caption', parts: [`${p} = `, { parameter: p, digits: 4 }] });
     for (const c of scene.clock.channels) if (c !== '@index') tryReadout({ place: 'panel', parts: [`${c} = `, { channel: c, digits: 4 }] });
     return scene;
   };

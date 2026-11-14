@@ -17,18 +17,18 @@ const root = fileURLToPath(new URL('../..', import.meta.url));
 const chromePath = findChrome();
 if (chromePath === null && process.env.CI) throw new Error('the panel layout test needs Google Chrome, which CI provides at /usr/bin/google-chrome');
 
-/** The corpus scene broucke-mini under a plane camera with axes and a colormap, in the five panels of the Broucke example. */
+/** The corpus scene broucke-mini under a 2d camera with axes and a colormap, in the five panels of the Broucke example. */
 async function testScene(): Promise<{ scene: Scene; data: Uint8Array }> {
   const dir = join(root, 'spec/conformance/broucke-mini');
   const scene = JSON.parse(readFileSync(join(dir, 'scene.tys'), 'utf-8')) as Scene;
   const data = new Uint8Array(readFileSync(join(dir, 'data.tyd')));
-  const view = scene.views.main!;
-  view.camera = { kind: 'plane', plane: 'xy' };
+  const view = scene.panels.main!;
+  view.camera = { kind: '2d', plane: 'xy' };
   const layers = view.layers;
-  layers[0] = { ...layers[0]!, color: { colormap: 'viridis', parameter: 'eccentricity' }, highlight: { var: 'e' } } as (typeof layers)[0];
+  layers[0] = { ...layers[0]!, color: { colormap: 'viridis', parameter: 'eccentricity' }, highlight: { input: 'e' } } as (typeof layers)[0];
   layers.push({ kind: 'axes' } as (typeof layers)[0], { kind: 'grid' } as (typeof layers)[0]);
   const frames = ['rotating-pulsating', 'barycentric-inertial', 'rotating', 'inertial-m1', 'inertial-m2'];
-  scene.initial.panels = Object.fromEntries(frames.map((f, i) => [`p${i}`, { view: 'main', variables: { frame: f } }]));
+  scene.initial.panels = Object.fromEntries(frames.map((f, i) => [`p${i}`, { panel: 'main', inputs: { frame: f } }]));
   const leaf = (i: number) => ({ kind: 'panel' as const, id: `p${i}` });
   const split = (dir: 'row' | 'col', ratio: number, a: unknown, b: unknown) => ({ kind: 'split', dir, ratio, a, b });
   scene.initial.layout = split(
@@ -82,7 +82,7 @@ describe.skipIf(chromePath === null)('the overlay of a panel', () => {
 html, body { margin: 0; height: 100%; background: #000; }
 tycho-viewer { display: block; width: 100%; height: 100%; }
 </style><script src="tycho.js"></script></head><body>
-<tycho-viewer lean theme="dark">${block('scene', new TextEncoder().encode(JSON.stringify(scene)))}${block('data', data)}</tycho-viewer>
+<tycho-viewer minimal theme="dark">${block('scene', new TextEncoder().encode(JSON.stringify(scene)))}${block('data', data)}</tycho-viewer>
 </body></html>`,
     );
     chrome = await Chrome.launch(chromePath!);
@@ -112,7 +112,7 @@ tycho-viewer { display: block; width: 100%; height: 100%; }
       return [...v.shadowRoot.querySelectorAll('.panel')].map((p, i) => ({
         panel: 'p' + i,
         body: box(p.querySelector('.pbody')),
-        head: box(p.querySelector('.phead')),
+        head: box(p.querySelector('.pheader')),
         bars: [...p.querySelectorAll('.cbar')].map(box),
         labels: [...p.querySelectorAll('.labels span')].filter((s) => !s.hidden).map((s) => ({
           text: s.textContent,

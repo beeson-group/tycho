@@ -14,8 +14,8 @@ and is downloaded next to this script::
 
 or from ``https://github.com/beeson-group/tycho/releases/download/v0.3.0/broucke-input.tyd``, with the
 version of the checkout in place of 0.3.0. The trajectories in it were computed with PyDyLAN and thinned
-to at most 1920 samples a member in the same five frames. The file is a TyCHO data container. For each track
-set ``family-<family>-<branch>``, it holds the view ``offsets`` (uint32) and the float64 views ``positions``,
+to at most 1920 samples a member in the same five frames. The file is a TyCHO data container. For each trajectory
+set ``family-<family>-<branch>``, it holds the array ``offsets`` (uint32) and the float64 arrays ``positions``,
 ``channels/true_anomaly``, ``channels/rho``, ``channels/time``, ``parameters/eccentricity``, ``parameters/period``,
 and ``parameters/closure_error``. Its meta holds the mass ratio, the tags, and the member count of every set, and
 the provenance.
@@ -31,9 +31,9 @@ Clock channels: the page opens on the elapsed nondimensional time, and the true 
 of the elliptic problem, is offered as well, so that playback can be uniform in either. The stored sample index
 is the third clock channel.
 
-Look: each frame has a separate colormap over the eccentricity, selected by the frame of the panel, as in
-Broucke's figures. A sparse context of about 40 members is drawn under the whole family, which is faint except
-near the selected member, where a kernel in eccentricity raises the opacity of its neighbors. The trail of the
+Look: each frame is a declared panel with a separate colormap over the eccentricity, as in Broucke's figures, and
+Add panel offers the five frames. A sparse subset of about 40 members is drawn under the whole family, which is faint
+except near the selected member, where a kernel in eccentricity raises the opacity of its neighbors. The trail of the
 selected member is a glow and a comet in the member's colormap color, under a white line with a yellow head.
 
 With ``--members N``, only the first, middle, and last N members of every family branch are kept, for a quick run.
@@ -54,7 +54,7 @@ import pytycho as ty
 HERE = Path(__file__).resolve().parent
 # the SHA-256 of the released broucke-input.tyd, set in each release as described in .agents/skills/release/SKILL.md.
 # read_input() checks the file against it if set
-INPUT_SHA256: str | None = "763334cf42d7dd1712de1954c3318eab5ec7e3b4d060623e09bee824ed86dba5"
+INPUT_SHA256: str | None = "70fd39da1c62ee08102020fd61f6a6801c7f7a3dd930e3585aca4d1b5fbc441a"
 FAMILIES = [("7", 0.012155), ("8", 0.5), ("11", 0.5)]
 # each frame maps to its axis titles and its colormap
 FRAMES = {
@@ -64,11 +64,20 @@ FRAMES = {
     "inertial-m1": (("ξ₁", "η₁", "ζ₁"), "reds"),
     "inertial-m2": (("ξ₂", "η₂", "ζ₂"), "cividis"),
 }
+# each declared panel maps to its frame and its label, which equals the label of the frame, hence a panel header
+# shows the frame chip alone
+PANELS = {
+    "pulsating": ("rotating-pulsating", "rotating-pulsating"),
+    "inertial": ("barycentric-inertial", "barycentric inertial"),
+    "rotating": ("rotating", "rotating"),
+    "inertial-m1": ("inertial-m1", "inertial, centered on m1"),
+    "inertial-m2": ("inertial-m2", "inertial, centered on m2"),
+}
 BRANCHES = [("periapsis", 0.0), ("apoapsis", float(np.pi))]
 CHANNELS = ("true_anomaly", "rho", "time")
 PARAMETERS = ("eccentricity", "period", "closure_error")
 SAMPLES = 480
-STEPS = 480
+FRAME_COUNT = 480
 
 
 def declare_frames(scene: ty.Scene):
@@ -90,9 +99,9 @@ def declare_frames(scene: ty.Scene):
     return pulsating, m1, m2
 
 
-def declare_set(scene: ty.Scene, pulsating, family: str, branch: str, mu: float) -> ty.TrackSet:
-    """Declares the track set of one family branch."""
-    return scene.track_set(
+def declare_set(scene: ty.Scene, pulsating, family: str, branch: str, mu: float) -> ty.TrajectorySet:
+    """Declares the trajectory set of one family branch."""
+    return scene.trajectory_set(
         f"family-{family}-{branch}",
         frame=pulsating,
         tags={"family": family, "branch": branch},
@@ -133,11 +142,11 @@ def build(input_path: Path, out_dir: Path, members_per_family: int | None, write
         for branch, _ in BRANCHES:
             ts = declare_set(scene, pulsating, family, branch, mu)
             if ts.id not in meta or meta[ts.id].get("mu") != mu:
-                raise SystemExit(f"{input_path} does not have a track set {ts.id!r} at mass ratio {mu}")
-            offsets = source.view(f"{ts.id}/offsets")
-            positions = source.view(f"{ts.id}/positions")
-            channels = {n: source.view(f"{ts.id}/channels/{n}") for n in CHANNELS}
-            parameters = {n: source.view(f"{ts.id}/parameters/{n}") for n in PARAMETERS}
+                raise SystemExit(f"{input_path} does not have a trajectory set {ts.id!r} at mass ratio {mu}")
+            offsets = source.array(f"{ts.id}/offsets")
+            positions = source.array(f"{ts.id}/positions")
+            channels = {n: source.array(f"{ts.id}/channels/{n}") for n in CHANNELS}
+            parameters = {n: source.array(f"{ts.id}/parameters/{n}") for n in PARAMETERS}
             members = subset(len(offsets) - 1, members_per_family)
             for i in members:
                 rows = slice(int(offsets[i]), int(offsets[i + 1]))
@@ -160,43 +169,44 @@ def build(input_path: Path, out_dir: Path, members_per_family: int | None, write
 
     family = scene.choice("family", ["7", "8", "11"], default="11", labels=["family 7", "family 8", "family 11"])
     branch = scene.choice("branch", ["periapsis", "apoapsis"], default="periapsis")
-    frame = scene.choice(
-        "frame", frames, labels=["rotating-pulsating", "rotating", "barycentric inertial", "inertial, m1", "inertial, m2"], scope="panel"
+    e = scene.parameter("e", parameter="eccentricity", default=0.25)
+    members_of = ty.by_tags(family=family, branch=branch)
+    scene.clock(
+        "fraction",
+        channels=["time", "true_anomaly", "@index"],
+        labels=["time", "true anomaly", "sample"],
+        frame_count=FRAME_COUNT,
+        revolutions=1,
     )
-    e = scene.selector("e", parameter="eccentricity", default=0.25)
-    members_of = ty.sets(family=family, branch=branch)
-    by_frame = {"parameter": "eccentricity", "colormap": {"var": frame, "map": {f: cmap for f, (_, cmap) in FRAMES.items()}}}
-    scene.clock("fraction", channels=["time", "true_anomaly", "@index"], labels=["time", "true anomaly", "sample"], steps=STEPS, laps=1)
-    scene.view(
-        "main",
-        frame=frame,
-        driver=ty.driver(members_of, e),
-        camera={"kind": "plane", "plane": "xy"},
-        layers=[
-            ty.track(members_of, ty.every(40), color=by_frame, opacity=0.4),
-            ty.track(
-                members_of,
-                "all",
-                color=by_frame,
-                opacity=0.05,
-                highlight={"var": e, "width": 2.5, "opacity": 1.0, "kernel": {"width": 0.05, "opacity": 0.55}},
-            ),
-            ty.track(members_of, e, trail=0.3, taper=(0, 0), color=by_frame, width=22.0, opacity=0.3),
-            ty.track(members_of, e, trail=0.3, taper=(0, 0), color=by_frame, width=6.0),
-            ty.track(members_of, e, trail=0.3, head={"color": "#f0e442", "size": 9}, color="#ffffff", width=2.0),
-            ty.body(m1, trail=1.0, size=6.0),
-            ty.body(m2, trail=1.0, size=4.0),
-            ty.axes(),
-            ty.grid(),
-        ],
-    )
-    # each frame gets one panel. the left 60% holds the pulsating and the barycentric frame over the rotating
-    # frame, and the right 40% holds the two inertial frames centered on the primary and on the secondary
-    scene.panel("pulsating", "main", {frame: "rotating-pulsating"})
-    scene.panel("inertial", "main", {frame: "barycentric-inertial"})
-    scene.panel("rotating", "main", {frame: "rotating"})
-    scene.panel("inertial-m1", "main", {frame: "inertial-m1"})
-    scene.panel("inertial-m2", "main", {frame: "inertial-m2"})
+    # each frame gets one declared panel, with the colormap of the frame. the left 60% holds the pulsating and the
+    # barycentric frame over the rotating frame, and the right 40% holds the two inertial frames centered on the
+    # primary and on the secondary
+    for panel, (frame, label) in PANELS.items():
+        by_frame = {"parameter": "eccentricity", "colormap": FRAMES[frame][1]}
+        scene.panel(
+            panel,
+            label=label,
+            frame=frame,
+            reference=ty.reference(members_of, e),
+            camera={"kind": "2d", "plane": "xy"},
+            layers=[
+                ty.trajectories(members_of, ty.evenly_spaced(40), color=by_frame, opacity=0.4),
+                ty.trajectories(
+                    members_of,
+                    "all",
+                    color=by_frame,
+                    opacity=0.05,
+                    highlight={"input": e, "width": 2.5, "opacity": 1.0, "kernel": {"width": 0.05, "opacity": 0.55}},
+                ),
+                ty.trajectories(members_of, e, trail=0.3, taper=(0, 0), color=by_frame, width=22.0, opacity=0.3),
+                ty.trajectories(members_of, e, trail=0.3, taper=(0, 0), color=by_frame, width=6.0),
+                ty.trajectories(members_of, e, trail=0.3, head={"color": "#f0e442", "size": 9}, color="#ffffff", width=2.0),
+                ty.body(m1, trail=1.0, size=6.0),
+                ty.body(m2, trail=1.0, size=4.0),
+                ty.axes(),
+                ty.grid(),
+            ],
+        )
     scene.layout(
         ty.split(
             "row",
@@ -208,16 +218,15 @@ def build(input_path: Path, out_dir: Path, members_per_family: int | None, write
     scene.tabs(family, label="family")
     scene.tabs(branch, label="branch")
     scene.slider(e, label="eccentricity", domain=members_of)
-    scene.tabs(frame, label="frame")
-    scene.transport()
+    scene.playback()
     scene.readout(
         "caption",
         "e = ",
-        {"member": "eccentricity", "digits": 4},
+        {"parameter": "eccentricity", "digits": 4},
         ", period ",
-        {"member": "period", "digits": 5},
+        {"parameter": "period", "digits": 5},
         " rad, closure error ",
-        {"member": "closure_error", "digits": 2},
+        {"parameter": "closure_error", "digits": 2},
         " DU, mu = ",
         {"attr": "mu", "digits": 6},
     )

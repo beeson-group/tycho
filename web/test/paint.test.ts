@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { loopSeconds } from '../src/evaluate/timeline';
-import { paintStage } from '../src/runtime/paint';
-import type { StageRenderer } from '../src/runtime/renderer';
+import { paintPanelArea } from '../src/runtime/paint';
+import type { PanelAreaRenderer } from '../src/runtime/renderer';
 import { loadCorpus } from './corpus';
 
 /** A stand-in for a 2D context, which records the alpha of every stroked rectangle and ignores what else is drawn. */
@@ -25,7 +25,7 @@ function recorder(): { g: CanvasRenderingContext2D; alphas: number[] } {
 }
 
 describe('the paint of the stage (section 2.11)', () => {
-  it('fades the box of an axes layer by the opacity of the layer, a number or a tween', () => {
+  it('fades the box of an axes layer by the opacity of the layer, a number or a keyframes', () => {
     const c = loadCorpus('two-panels');
     const pid = Object.keys(c.scene.initial.panels)[0]!;
     const L = loopSeconds(c.scene.clock);
@@ -35,11 +35,11 @@ describe('the paint of the stage (section 2.11)', () => {
       const box = { rect, x0: 0, x1: 1, y0: 0, y1: 1, ticks: { x: true, y: true }, size: 14, titles: ['x', 'y'], opacity };
       const renderer = { paintInfo: (id: string) => (id === pid ? { outer: rect, rect, opacity: undefined, labels: [], box } : null) };
       const { g, alphas } = recorder();
-      paintStage(g, renderer as unknown as StageRenderer, c.scene, c.scene.initial, theme, q, 200, 100, () => []);
+      paintPanelArea(g, renderer as unknown as PanelAreaRenderer, c.scene, c.scene.initial, theme, q, 200, 100, () => []);
       return alphas;
     };
     const fadeIn = {
-      keys: [
+      keyframes: [
         [0, 0],
         [L, 1, 'linear'],
       ],

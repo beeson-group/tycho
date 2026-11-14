@@ -1,7 +1,7 @@
 {
  "format": "tycho-scene",
- "version": "0.2",
- "generator": "pytycho 0.2.0, spec/conformance/generate.py",
+ "version": "0.5",
+ "generator": "pytycho 0.3.0, spec/conformance/generate.py",
  "frames": {
   "rot": {
    "label": "rotating"
@@ -45,15 +45,15 @@
    ]
   }
  },
- "track_sets": {
+ "trajectory_sets": {
   "loop": {
    "frame": "rot",
-   "tracks": 1,
+   "trajectories": 1,
    "offsets": "loop/offsets",
    "positions": "loop/positions",
    "channels": {
     "a": {
-     "view": "loop/a",
+     "array": "loop/a",
      "interp": "linear"
     }
    },
@@ -64,7 +64,7 @@
    "periodic": true
   }
  },
- "variables": {
+ "inputs": {
   "frame": {
    "kind": "choice",
    "values": [
@@ -73,7 +73,7 @@
     "scaled"
    ],
    "default": "rot",
-   "scope": "panel"
+   "scope": "per_panel"
   }
  },
  "clock": {
@@ -82,14 +82,14 @@
    "@index",
    "a"
   ],
-  "steps": 8
+  "frame_count": 8
  },
- "views": {
+ "panels": {
   "v": {
    "frame": {
-    "var": "frame"
+    "input": "frame"
    },
-   "driver": {
+   "reference": {
     "sets": {
      "set": "loop"
     },
@@ -99,7 +99,7 @@
    },
    "layers": [
     {
-     "kind": "track",
+     "kind": "trajectories",
      "sets": {
       "set": "loop"
      },
@@ -107,7 +107,7 @@
      "reveal": "none"
     },
     {
-     "kind": "track",
+     "kind": "trajectories",
      "sets": {
       "set": "loop"
      },
@@ -132,13 +132,13 @@
   }
  },
  "initial": {
-  "variables": {},
+  "inputs": {},
   "clock": {
    "channel": "@index"
   },
   "panels": {
    "p1": {
-    "view": "v"
+    "panel": "v"
    }
   },
   "layout": {

@@ -10,18 +10,22 @@ permissions: {}
 
 concurrency:
   # the issue number of a pull request is its number, so a comment-triggered run shares the
-  # group with the synchronize runs of the same pull request
-  group: pr-agent-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
+  # group with the synchronize runs of the same pull request. The group is evaluated before the
+  # condition of the job, hence a comment without a command lands in a group of its own, so that
+  # the run it starts cannot cancel the review that is running
+  group: >-
+    ${{ (github.event_name == 'issue_comment' && !startsWith(github.event.comment.body, '/'))
+    && format('pr-agent-comment-{0}', github.run_id)
+    || format('pr-agent-{0}', github.event.pull_request.number || github.event.issue.number || github.run_id) }}
   cancel-in-progress: true
 
 jobs:
   pr_agent_job:
     # a bot does not review the work of a bot, and a run is started by a comment only on a pull
     # request, only when it opens with a command, and only from an owner, a member, or a
-    # collaborator, since anyone can comment on a public repository. A comment without a command
-    # starts nothing, hence it does not cancel the review that is running either. A pull request
-    # from a fork is skipped as well, because its events run without the repository secrets, so
-    # no key for the model reaches the job
+    # collaborator, since anyone can comment on a public repository. A pull request from a fork
+    # is skipped as well, because its events run without the repository secrets, so no key for
+    # the model reaches the job
     if: >-
       ${{ github.event.sender.type != 'Bot' &&
       (github.event_name != 'issue_comment' ||

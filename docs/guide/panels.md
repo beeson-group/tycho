@@ -120,6 +120,8 @@ The keys that play, step, and seek require a transport, except on a kiosk page, 
 A drag across a panel with an orbit camera turns the view about the camera's up axis, as a turntable does.
 A drag up or down the panel tilts the view toward this axis, so that the up axis stays up the screen.
 Shift with a drag, or a drag with the right button, pans the view, and the wheel or a pinch zooms it.
-While the pointer is over such a panel, a line at its foot lists these moves and the keys above.
+While the pointer is over such a panel, the keys of an orbit camera are listed at its foot, as key caps over what they do.
+The list is hidden under `lean` and `kiosk`, i.e. on a slide, and on a device whose pointer does not hover, such as a phone.
+The keys act there all the same.
 
 A panel whose camera has keys stops following them once it is panned or zoomed, so that it stays where it was moved while the scene plays on. It then shows a button, Timeline view, in its lower right corner, which hands the camera back to the keys, as `F` does for every panel.

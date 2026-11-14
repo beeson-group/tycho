@@ -106,8 +106,13 @@ const MAX_PANELS = 8;
 /** The height in CSS pixels between a panel's head and its tick row below which its colorbars are hidden, since their title and two ends would not fit. */
 const BAR_ROOM = 56;
 const SPEEDS = [0.25, 0.5, 1, 2, 4];
-/** How the view of a panel with an orbit camera is moved, shown in the panel while the pointer is over it. */
-const HINT_3D = 'Drag: turn · Shift+drag: pan · Scroll: zoom · X Y Z: view from an axis (Shift: other side) · , .: turn 15° (Shift: 90°) · F: reset';
+/** The keys that move the view of a panel with an orbit camera, in groups, each with what its keys do. The keys of the group `turn` turn the view to the left and to the right. */
+const ORBIT_KEYS: readonly { keys: readonly string[]; does: string; turn?: true }[] = [
+  { keys: ['X', 'Y', 'Z'], does: 'view from axis' },
+  { keys: [',', '.'], does: 'turn 15°', turn: true },
+  { keys: ['Shift'], does: 'other side · 90°' },
+  { keys: ['F'], does: 'reset' },
+];
 
 const STYLE = `
 :host { display: block; position: relative; background: var(--bg); color: var(--fg);
@@ -245,10 +250,20 @@ input[type=range]:disabled { opacity: 0.4; cursor: default; }
 .drop { position: absolute; inset: 0; z-index: 3; display: grid; place-items: center; background: var(--accent-2-tint); border: 2px solid var(--accent-2); }
 .pbody .follow { position: absolute; right: 8px; bottom: 8px; z-index: 2; padding: 3px 10px 3px 8px; font: inherit; font-size: 12px; cursor: pointer; }
 .pbody .follow[hidden] { display: none; }
-.pbody .hint { position: absolute; left: 50%; bottom: 8px; z-index: 2; max-width: calc(100% - 16px); translate: -50% 0; padding: 2px 8px;
-  border-radius: 4px; background: var(--head); color: var(--dim); font-size: 11px; line-height: 1.4; text-align: center;
+.pbody .hint { position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 2; width: fit-content; margin: 0 auto; display: flex; flex-wrap: wrap;
+  justify-content: center; gap: 6px 18px; padding: 5px 9px; border-radius: 6px; background: color-mix(in srgb, var(--surface) 80%, transparent); color: var(--dim);
+  font-size: 11px; line-height: 1.3;
   pointer-events: none; opacity: 0; transition: opacity 0.2s; }
-.pbody:hover .hint { opacity: 1; }
+.hint .g { display: grid; justify-items: center; gap: 3px; white-space: nowrap; }
+.hint .keys { display: inline-flex; align-items: center; gap: 3px; }
+.hint kbd { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 4px; border: 1px solid var(--track); border-bottom-width: 2px;
+  border-radius: 4px; background: var(--raised); color: var(--fg); font: inherit; font-weight: 600; line-height: 1; }
+/* a comma and a period are too small to tell apart at the size of the letters */
+.hint kbd.mark { align-items: end; padding-bottom: 7px; font-size: 17px; font-weight: 800; }
+.hint svg { width: 13px; height: 13px; color: var(--fg); }
+/* the keys are listed only where a pointer hovers, and not on a slide, where the audience would read them */
+@media (hover: hover) { .pbody:hover .hint { opacity: 1; } }
+.root.kiosk .hint, .root.lean .hint, .root.picture .hint { display: none; }
 .drop span { font-size: 11px; color: var(--fg); background: var(--raised); border-radius: 4px; padding: 1px 6px; }
 .gutter { position: absolute; z-index: 2; touch-action: none; background: var(--gutter); }
 .gutter.row { cursor: col-resize; }
@@ -366,6 +381,23 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: 
   if (cls !== undefined) e.className = cls;
   if (text !== undefined) e.textContent = text;
   return e;
+}
+
+/** The keys of an orbit camera as key caps, each group over what its keys do, which a panel shows while the pointer is over it. */
+function buildHint(): HTMLElement {
+  const hint = el('div', 'hint');
+  for (const g of ORBIT_KEYS) {
+    const keys = el('span', 'keys');
+    keys.append(...g.keys.map((k) => el('kbd', g.turn ? 'mark' : undefined, k)));
+    if (g.turn) {
+      keys.prepend(icon('turnLeft'));
+      keys.append(icon('turnRight'));
+    }
+    const group = el('div', 'g');
+    group.append(keys, el('span', undefined, g.does));
+    hint.append(group);
+  }
+  return hint;
 }
 
 function setText(e: HTMLElement, text: string): void {
@@ -2003,7 +2035,7 @@ export class TychoViewerElement extends Base {
     follow.addEventListener('click', () => this.fitPanel(pid));
     body.append(preadout, error, bars, drop, follow);
     // the keys of an orbit camera act on the panel under the pointer
-    if (scene.views[panel.view]?.camera?.kind === 'orbit') body.append(el('div', 'hint', HINT_3D));
+    if (scene.views[panel.view]?.camera?.kind === 'orbit') body.append(buildHint());
     body.addEventListener('pointerenter', () => (this.hovered = pid));
     body.addEventListener('pointerleave', () => {
       if (this.hovered === pid) this.hovered = null;

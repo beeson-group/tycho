@@ -1,6 +1,6 @@
 {
   "name": "tycho",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Write TyCHO scenes with pytycho from NumPy arrays and render them as one self-contained HTML page",
   "author": {
     "name": "Claudio Vestini"

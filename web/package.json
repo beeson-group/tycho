@@ -1,6 +1,6 @@
 {
   "name": "@beeson-group/tycho",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "The browser runtime of TyCHO, with the scene format reader, its pure evaluator, and the <tycho-viewer> element",
   "keywords": [
     "astrodynamics",

@@ -75,7 +75,7 @@ A scene that breaks a rule is not written. Every builder checks its arguments at
 The script imports only NumPy, pytycho, and the standard library. It reads the trajectories from `broucke-input.tyd`, a TyCHO data container of about 85 MB, which is attached to each [GitHub Release](https://github.com/beeson-group/tycho/releases) rather than kept in the repository. The trajectories cover one period of each of the 1877 members, which are the periodic orbits of the three families. They were computed with PyDyLAN and thinned to at most 1920 samples a member, by keeping a subset of the samples that PyDyLAN computed. Download the input file next to the script, from the release of the version you have installed, and build the page. For version 0.2.0 the commands are the following, in which `gh` is the GitHub command-line tool.
 
 ```sh
-gh release download v0.2.0 --repo beeson-group/tycho --pattern broucke-input.tyd --dir examples/broucke
+gh release download v0.3.0 --repo beeson-group/tycho --pattern broucke-input.tyd --dir examples/broucke
 python examples/broucke/build.py
 ```
 

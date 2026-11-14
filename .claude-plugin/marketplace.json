@@ -11,7 +11,7 @@
       "name": "tycho",
       "source": "./",
       "description": "Write TyCHO scenes with pytycho and render them as one self-contained HTML page",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "category": "visualization"
     }
   ]

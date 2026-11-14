@@ -2735,6 +2735,8 @@ export class StageRenderer {
     p.controls?.dispose();
     p.controls = null;
     if (p.element === null) return;
+    // the controls take the axis they turn about from the camera's up when they are made, and three makes a camera with up +y
+    p.camera.up.copy(cameraBasis(p.cameraSpec).up);
     const c = new OrbitControls(p.camera, p.element);
     c.enableDamping = false;
     c.screenSpacePanning = true;

@@ -39,10 +39,26 @@ jobs:
           COMMENT_BODY: ${{ github.event.comment.body }}
         run: |
           authorized=false
-          if [ "$GITHUB_EVENT_NAME" = "issue_comment" ]; then
-            trimmed="$(printf '%s' "$COMMENT_BODY" | sed -z 's/^[[:space:]]*//')"
-            case "$trimmed" in
-              /*) ;;
+          if [ "$GITHUB_EVENT_NAME" = issue_comment ]; then
+            # Match the parser and command registry of the pinned PR-Agent 0.50.0.
+            command="$(python3 - <<'PY'
+          import os
+          import shlex
+
+          body = os.environ["COMMENT_BODY"].strip()
+          lexer = shlex.shlex(body, posix=True)
+          lexer.whitespace_split = True
+          lexer.quotes = '"'
+          lexer.commenters = ''
+          try:
+              action, *args = list(lexer)
+          except ValueError:
+              action = ''
+          print(action.lstrip('/').lower() if body.startswith('/') else '')
+          PY
+            )"
+            case "$command" in
+              auto_review|answer|review|review_pr|describe|describe_pr|improve|improve_code|ask|ask_question|ask_line|update_changelog|config|settings|help|similar_issue|add_docs|generate_labels) ;;
               *) echo "authorized=false" >> "$GITHUB_OUTPUT"; exit 0 ;;
             esac
           fi

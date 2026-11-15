@@ -21,6 +21,10 @@ authors:
   - given-names: Jack Sydney
     family-names: Schwartz
     affiliation: Princeton University
+  - given-names: Ryne
+    family-names: Beeson
+    affiliation: Princeton University
+    orcid: "https://orcid.org/0000-0003-2176-0976"
 keywords:
   - astrodynamics
   - visualization

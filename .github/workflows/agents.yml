@@ -1,0 +1,14 @@
+name: agents
+
+# the shared blocks of AGENTS.md are checked against beeson-group/.github. This check is skipped
+# in forks
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  shared:
+    if: ${{ github.repository == 'beeson-group/tycho' }}
+    uses: beeson-group/.github/.github/workflows/agents.yml@6d1069bdf9dc1329ac4eff34370747786b23e6a4 # main

@@ -11,4 +11,4 @@ permissions:
 jobs:
   shared:
     if: ${{ github.repository == 'beeson-group/tycho' }}
-    uses: beeson-group/.github/.github/workflows/agents.yml@6d1069bdf9dc1329ac4eff34370747786b23e6a4 # main
+    uses: beeson-group/.github/.github/workflows/agents.yml@e475db4770452c9d936c106760da2a55f9d8fb10 # main

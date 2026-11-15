@@ -2,17 +2,19 @@
 
 With TyCHO, users turn trajectories computed by other libraries into pages. A page is one HTML file with an animated, interactive picture of them. Users write scenes from NumPy arrays with pytycho (Python, in `src/`). pytycho writes each scene into a page together with the runtime (TypeScript, in `web/`, published on npm as `@beeson-group/tycho`), which draws it in the browser. The two packages are released together at one version.
 
+<!-- shared:begin -->
 ## Hard invariants
 
 Hard invariants are never traded away for other goals. When a change would break one, stop and ask the person you work for. Conventions may be argued with.
 
-1. Physics is not computed in the runtime. Stored samples are only rotated, scaled, translated, or blended linearly in pairs.
-2. Pages are single files that work offline. The data and the runtime are embedded, and nothing is fetched while a page is viewed.
-3. Dependencies are not added to the runtime beyond three.js and mp4-muxer.
-4. Every feature is supported in all browsers. Pages can be viewed and presented, and every control can be used, in current Chrome, Firefox, and Safari, on desktops and phones. Extras such as the video export may be missing in one browser. The user is then told so in a message.
-5. Phones are supported.
-6. Great performance on slow machines is always an objective.
-7. The best part is no part. Complexity is never favored when a simpler solution exists.
+1. Phones are supported.
+2. Great performance on slow machines is always an objective.
+3. The best part is no part. Complexity is never favored when a simpler solution exists.
+<!-- shared:end -->
+4. Physics is not computed in the runtime. Stored samples are only rotated, scaled, translated, or blended linearly in pairs.
+5. Pages are single files that work offline. The data and the runtime are embedded, and nothing is fetched while a page is viewed.
+6. Dependencies are not added to the runtime beyond three.js and mp4-muxer.
+7. Every feature is supported in all browsers. Pages can be viewed and presented, and every control can be used, in current Chrome, Firefox, and Safari, on desktops and phones. Extras such as the video export may be missing in one browser. The user is then told so in a message.
 
 ## Where things are
 

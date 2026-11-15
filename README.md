@@ -85,4 +85,4 @@ Before you open a pull request, please also read our group's [contributing guide
 
 ## License
 
-TyCHO is licensed under [Apache-2.0](https://github.com/beeson-group/tycho/blob/main/LICENSE). We also bundle two libraries under the MIT license into every page: three.js (for the renderer), and mp4-muxer (for video exports). See [NOTICE](https://github.com/beeson-group/tycho/blob/main/NOTICE) and [THIRD_PARTY_NOTICES.md](https://github.com/beeson-group/tycho/blob/main/THIRD_PARTY_NOTICES.md) for more information.
+TyCHO is licensed under [Apache-2.0](https://github.com/beeson-group/tycho/blob/main/LICENSE). We also bundle two MIT libraries: three.js (for the renderer), and mp4-muxer (for video exports). See [NOTICE](https://github.com/beeson-group/tycho/blob/main/NOTICE) and [THIRD_PARTY_NOTICES.md](https://github.com/beeson-group/tycho/blob/main/THIRD_PARTY_NOTICES.md) for more information.

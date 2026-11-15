@@ -76,7 +76,7 @@ node web/scripts/frame-profile.mjs <page.html>      # the cost of playback, in h
 
 PR-Agent reviews PRs in the workflow `pr-agent`. A person needs effective write access to start a review. Authorized commands review any PR, one opened by a bot included.
 
-- Treat the hard invariants above as the review criteria, and name the invariant that a finding breaks. A change that breaks one is a finding that blocks the PR, not a suggestion.
+- Treat the hard invariants above as the review criteria, and name the invariant that a finding breaks. A change that breaks one is a finding to fix before the PR is merged, not a suggestion.
 <!-- shared:end -->
 - Do not suggest changes in `web/src/scene.gen.ts`. It is generated from `spec/scene.schema.json`. Review the schema instead.
 - Changes to expected answers in the conformance corpus are right only together with the change that justifies them. The corpus is taken as right where the two evaluators disagree.

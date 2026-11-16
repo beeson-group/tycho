@@ -822,6 +822,17 @@ def _color_spec(value: Any, what: str) -> Any:
     return out
 
 
+def _color_data(ts: Any, color: Any, where: str) -> list[str]:
+    """The faults of a color over a channel or a parameter, or by thresholds of a channel, on a trajectory set that lacks it."""
+    out = []
+    if isinstance(color, Mapping):
+        if "channel" in color and color["channel"] not in ts.channels[0]:
+            out.append(f"panel: {where}: trajectory set {ts.id!r} lacks channel {color['channel']!r} for a layer's color")
+        if "parameter" in color and color["parameter"] not in ts.parameters[0]:
+            out.append(f"panel: {where}: trajectory set {ts.id!r} lacks parameter {color['parameter']!r} for a layer's color")
+    return out
+
+
 def threshold_color(channel: str, thresholds: Sequence[float], colors: Sequence[str]) -> dict[str, Any]:
     """A color by thresholds of a channel (section 2.7). A sample whose channel is ``x`` takes ``colors[j]``, where ``j`` counts the
     thresholds below ``x``, e.g. ``threshold_color("S", [0.0], ["#000000", "#d62728"])`` for coast and thrust by the sign of a
@@ -2712,14 +2723,7 @@ class Scene:
                         name = head["glow"]["channel"]
                         if name != INDEX and name not in ts.channels[0]:
                             out.append(f"timeline: {where}: trajectory set {ts.id!r} lacks channel {name!r} for a head's glow")
-                    color = layer.get("color")
-                    if isinstance(color, Mapping):
-                        if "channel" in color and color["channel"] not in ts.channels[0]:
-                            out.append(f"panel: {where}: trajectory set {ts.id!r} lacks channel {color['channel']!r} for a layer's color")
-                        if "parameter" in color and color["parameter"] not in ts.parameters[0]:
-                            out.append(
-                                f"panel: {where}: trajectory set {ts.id!r} lacks parameter {color['parameter']!r} for a layer's color"
-                            )
+                    out += _color_data(ts, layer.get("color"), where)
             elif layer["kind"] == "arrow":
                 matched = self._match(layer["sets"], values)
                 if len(matched) > 1:

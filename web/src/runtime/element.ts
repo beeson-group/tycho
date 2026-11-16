@@ -83,6 +83,7 @@ import {
   type ReadoutTile,
 } from './readouts.js';
 import { GUTTER, layoutAt, PanelAreaRenderer } from './renderer.js';
+import { viewerContexts } from './contexts.js';
 import { paintPanelArea } from './paint.js';
 import { rasterize } from './raster.js';
 import { loopSeconds as timelineSeconds } from '../evaluate/timeline.js';
@@ -630,6 +631,11 @@ export class TychoViewerElement extends Base {
   /** Whether the animation loop may run, i.e. the element intersects the viewport and the page is visible. */
   private shown = false;
   private viewObserver: IntersectionObserver | null = null;
+  /**
+   * Whether the viewer made a new WebGL context for one that the browser took after the viewer was last shown. It does so once until
+   * it is shown again, so that viewers beyond the browser's limit of contexts do not take them from each other without end.
+   */
+  private retook = false;
   private readonly onVisibility = () => this.syncShown();
   private dirty = true;
   private anchor = { index: 0, time: 0 };
@@ -801,15 +807,16 @@ export class TychoViewerElement extends Base {
     this.panelArea.insertBefore(this.canvas, this.panelsEl);
     this.paintCanvas = el('canvas', 'paint');
     this.panelArea.insertBefore(this.paintCanvas, this.panelsEl);
-    try {
-      // a twin's frames are read back from its canvas after each draw
-      const twin = this.twin === null ? {} : { preserveDrawingBuffer: true, coarseDrags: false };
-      this.renderer = new PanelAreaRenderer(this.canvas, this.scene, this.geometry!, { theme: this.theme!, ...twin });
-    } catch (e) {
-      this.fail(`WebGL is not available: ${(e as Error).message}`);
-      return;
-    }
+    // a twin's frames are read back from its canvas after each draw
+    const twin = this.twin === null ? {} : { preserveDrawingBuffer: true, coarseDrags: false };
+    this.renderer = new PanelAreaRenderer(this.canvas, this.scene, this.geometry!, { theme: this.theme!, ...twin });
     this.renderer.onChange = () => this.invalidate();
+    this.renderer.onContext = () => {
+      viewerContexts.settle();
+      this.invalidate();
+    };
+    // an export draws a twin at once, and needs to know whether it can
+    if (this.twin !== null && !this.connect()) return;
     this.unsubscribe = this.store.subscribe((change) => this.onChange(change));
     this.measurePanelArea();
     if (this.twin !== null) {
@@ -870,12 +877,37 @@ export class TychoViewerElement extends Base {
     this.resizeObserver = null;
     this.overlayObserver?.disconnect();
     this.overlayObserver = null;
-    this.renderer?.dispose();
-    this.renderer = null;
+    this.dropRenderer();
     this.canvas?.remove();
     this.canvas = null;
     this.paintCanvas?.remove();
     this.paintCanvas = null;
+  }
+
+  /**
+   * Gives the renderer a WebGL context, on a new canvas when it held one before, and shows the error in place of the panels when
+   * the browser cannot make one. The renderer of a viewer on the page joins the pool of contexts, which may release it while the
+   * viewer is not shown.
+   */
+  private connect(): boolean {
+    const renderer = this.renderer!;
+    try {
+      renderer.connect();
+    } catch (e) {
+      this.dropRenderer();
+      this.fail(`WebGL is not available: ${(e as Error).message}`);
+      return false;
+    }
+    this.canvas = renderer.canvas;
+    if (this.twin === null) viewerContexts.use(renderer, this.shown);
+    return true;
+  }
+
+  private dropRenderer(): void {
+    if (this.renderer === null) return;
+    viewerContexts.drop(this.renderer);
+    this.renderer.dispose();
+    this.renderer = null;
   }
 
   /** The computed value of a custom property on the host, or an empty string when it is not set. */
@@ -989,6 +1021,13 @@ export class TychoViewerElement extends Base {
     const shown = this.intersecting && !document.hidden;
     if (shown === this.shown) return;
     this.shown = shown;
+    const renderer = this.renderer;
+    if (shown) this.retook = false;
+    if (renderer !== null && renderer.connected && this.twin === null) {
+      // a context that the browser took while the viewer was not shown is made again at the next draw, which joins the pool again
+      if (shown && !renderer.live) renderer.release();
+      else viewerContexts.use(renderer, shown);
+    }
     if (!shown) {
       cancelAnimationFrame(this.raf);
       this.raf = 0;
@@ -1071,6 +1110,10 @@ export class TychoViewerElement extends Base {
     const st = store.state;
     const { w, h } = this.panelAreaSize;
     if (w < 1 || h < 1) return;
+    // a viewer makes its context when it first draws, and again after the pool released it, or after the browser took it once there is room
+    const retake = renderer.connected && !renderer.live && this.twin === null && !this.retook && viewerContexts.room(renderer);
+    if (retake) this.retook = true;
+    if ((!renderer.connected || retake) && !this.connect()) return;
     const q = store.playing && this.playProgress !== null ? this.playProgress : (this.heldProgress ?? store.frame / scene.clock.frame_count);
     const errors = renderer.renderAt(st, q, w, h, ratio);
     this.paint(q, w, h, ratio);

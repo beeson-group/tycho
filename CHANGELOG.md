@@ -15,6 +15,7 @@ The two file formats are versioned apart from the packages, i.e. either format v
 - A points layer whose marker does not give a color is drawn in the foreground of the theme, as the scene reference says. Such a layer was drawn in white, which hardly shows on a light page.
 - A points layer whose member is selected by a parameter input is drawn again when the input changes, e.g. when its slider is moved. Such a layer kept the member of the loaded page, unless it was revealed or given `before` or `after`.
 - A row of tabs that is wider than the page is wrapped onto further lines, and a label wider than the page is wrapped within its tab, so that every tab can be reached on a phone. Such a row stayed on one line, ran off the screen, and widened the panels past it.
+- Every viewer on a page with more viewers than the browser keeps WebGL contexts, i.e. more than 16 in Chrome, draws its scene when it is shown (#44). A viewer makes its context when it first draws, rather than when its scene loads. Once more than eight viewers of a page hold a context, the contexts of the viewers shown least recently are released, and a released viewer makes a new one when it is shown again, with its cameras and its time as they were. Chrome took the contexts of the first viewers of such a page for good, which then stayed blank.
 
 ## [0.3.0] - 2026-11-14
 

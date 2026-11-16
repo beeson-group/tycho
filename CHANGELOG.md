@@ -6,6 +6,10 @@ The two file formats are versioned apart from the packages, i.e. either format v
 
 ## [Unreleased]
 
+### Added
+
+- The color of the marker of a points layer takes the forms of the color of a trajectories layer, i.e. a colormap over a parameter, which colors each member, and a colormap over a channel or `ty.threshold_color`, which color each sample, e.g. `ty.marker("disc", 1.6, {"colormap": "plasma", "channel": "height", "range": (0.0, 0.8)})`. A cloud of samples is thus colored by a stored value, as `c=` colors a matplotlib scatter plot, in one layer. The colormap `magma` is added, and a `truncate` of `(1, 0)` reads a colormap in reverse.
+
 ### Fixed
 
 - A points layer whose marker does not give a color is drawn in the foreground of the theme, as the scene reference says. Such a layer was drawn in white, which hardly shows on a light page.

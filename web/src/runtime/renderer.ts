@@ -1894,7 +1894,7 @@ class PointsDraw implements Draw {
     this.layer = layer;
     const m = layer.marker ?? {};
     this.rgb = hexRgb(m.color !== undefined ? themed(m.color, ctx.theme) : ctx.theme.foreground);
-    this.sprites = new MarkerSprites(themedMarker(m, ctx.theme), typeof m.size === 'number' ? m.size : 4, false);
+    this.sprites = new MarkerSprites(themedMarker({ ...m, color: m.color ?? ctx.theme.foreground }, ctx.theme), typeof m.size === 'number' ? m.size : 4, false);
     this.group.add(this.sprites.points);
     this.isStatic =
       (layer.reveal ?? 'none') === 'none' &&

@@ -2148,10 +2148,9 @@ def inset_boxes():
 
 
 def timeline():
-    """Clock keyframes with every ease, a jump and a hold, a layer clock on another channel, points revealed by two clocks, labels at a
-    point,
-    at a point of a turning frame, at members and on the screen, and two cameras with keyframes, one following the midpoint of two members
-    and a member under a layer clock, and one of a free aspect with heights (section 2.11)."""
+    """Clock keyframes with every ease, a jump and a hold, a layer clock on another channel, points revealed by two clocks and colored by
+    a channel, labels at a point, at a point of a turning frame, at members and on the screen, and two cameras with keyframes, one
+    following the midpoint of two members and a member under a layer clock, and one of a free aspect with heights (section 2.11)."""
     import pytycho as ty
 
     scene = ty.Scene(title="the timeline")
@@ -2170,8 +2169,15 @@ def timeline():
     layers = [
         ty.trajectories(a, reveal="grow", head=True),
         ty.trajectories(a, reveal="grow", head=True, clock=tau),
-        ty.points(pts, reveal="grow", before="hidden"),
-        ty.points(pts, reveal="grow", clock=ty.layer_clock("@index", range=[0.0, 4.0])),
+        ty.points(
+            pts, reveal="grow", before="hidden", marker=ty.marker(color={"colormap": "magma", "channel": "t", "truncate": [1.0, 0.0]})
+        ),
+        ty.points(
+            pts,
+            reveal="grow",
+            clock=ty.layer_clock("@index", range=[0.0, 4.0]),
+            marker=ty.marker(color=ty.threshold_color("t", [2.5], ["#3b0f70", "#febb81"])),
+        ),
         ty.label("fixed", ty.at_point(1.0, 2.0)),
         ty.label("turning", ty.at_point(1.0, 0.0, frame="spin")),
         ty.label("member 1", ty.at_member(a, 1)),

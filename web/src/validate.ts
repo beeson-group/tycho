@@ -34,6 +34,8 @@ import {
   type PointsLayer,
   type LayerClock,
   type Marker,
+  type ColorSpec,
+  type TrajectorySet,
   type TextPart,
   type Box,
 } from './scene.js';
@@ -41,7 +43,7 @@ import {
 const LAYER_KINDS = ['trajectories', 'arrow', 'inset_box', 'body', 'axes', 'grid', 'label', 'points'];
 const SHAPES = ['disc', 'ring', 'square', 'diamond', 'triangle', 'star', 'cross', 'plus'];
 const CONTROL_KINDS = ['slider', 'tabs', 'toggle', 'playback'];
-const COLORMAPS = ['viridis', 'plasma', 'cividis', 'blues', 'reds'];
+const COLORMAPS = ['viridis', 'plasma', 'magma', 'cividis', 'blues', 'reds'];
 
 const checkId = (id: string, what: string): void => {
   if (!ID_PATTERN.test(id)) fail('identifier', `${what} ${JSON.stringify(id)} does not match [A-Za-z0-9_.-]+`);
@@ -268,7 +270,11 @@ function checkPointsLayer(scene: Scene, id: string, layer: PointsLayer): void {
     if (layer[key] !== undefined && layer[key] !== 'clamp' && layer[key] !== 'hidden')
       fail('before-after', `panel ${id}: a points layer's ${key} is ${JSON.stringify(layer[key])}, not clamp or hidden`);
   }
-  if (layer.marker !== undefined) checkMarker(id, layer.marker, 'points');
+  if (layer.marker !== undefined) {
+    const { color, ...rest } = layer.marker;
+    checkMarker(id, typeof color === 'object' ? rest : { ...rest, color }, 'points');
+    checkColor(scene, id, color);
+  }
   checkKeyframed(layer.opacity, `panel ${id}: a points layer's opacity`, isOpacity);
   checkLayerClock(id, layer.clock);
 }
@@ -365,15 +371,22 @@ function checkTrajectoryLayer(scene: Scene, id: string, layer: TrajectoriesLayer
     fail('read-from', `panel ${id}: a trajectories layer's read_from is ${JSON.stringify(layer.read_from)}, not own or reference`);
   checkKeyframed(layer.opacity, `panel ${id}: a trajectories layer's opacity`, isOpacity);
   if (layer.width !== undefined && !(layer.width > 0)) fail('panel', `panel ${id}: a trajectories layer's width is ${layer.width}, not positive`);
-  if (layer.color !== undefined && typeof layer.color === 'object' && 'thresholds' in layer.color) {
-    const c = layer.color;
+  checkColor(scene, id, layer.color);
+}
+
+/** Checks the color of a trajectories layer or of a points layer's marker (section 2.7). */
+function checkColor(scene: Scene, id: string, color: ColorSpec | undefined): void {
+  if (typeof color !== 'object') return;
+  if (color === null) fail('panel', `panel ${id}: a color is null, not a #rrggbb color or a colormap`);
+  if ('thresholds' in color) {
+    const c = color;
     const t = c.thresholds;
     if (!Array.isArray(t) || t.length === 0 || !t.every(finite) || t.some((x, i) => i > 0 && !(x > t[i - 1]!)))
       fail('timeline', `panel ${id}: a threshold color's thresholds are ${JSON.stringify(t)}, not increasing finite numbers`);
     if (!Array.isArray(c.colors) || c.colors.length !== t.length + 1 || !c.colors.every((x) => COLOR.test(x)))
       fail('timeline', `panel ${id}: a threshold color has ${JSON.stringify(c.colors)} for ${t.length} thresholds, not one #rrggbb color more than thresholds`);
-  } else if (layer.color !== undefined && typeof layer.color === 'object') {
-    const cmap = layer.color.colormap;
+  } else {
+    const cmap = color.colormap;
     if (typeof cmap === 'object' && cmap !== null) {
       // a colormap keyed on a choice gives a colormap for every value of the choice, and only for these values
       checkInputRef(scene, cmap.input, 'choice', 'panel');
@@ -386,8 +399,17 @@ function checkTrajectoryLayer(scene: Scene, id: string, layer: TrajectoriesLayer
       for (const k of keys)
         if (!COLORMAPS.includes(cmap.map[k]!)) fail('panel', `panel ${id}: the colormap ${JSON.stringify(cmap.map[k])} is not one of ${COLORMAPS.join(', ')}`);
     } else if (!COLORMAPS.includes(cmap)) fail('panel', `panel ${id}: the colormap ${JSON.stringify(cmap)} is not one of ${COLORMAPS.join(', ')}`);
-    if ('parameter' in layer.color === 'channel' in layer.color) fail('panel', `panel ${id}: a colormap color names both or neither of parameter and channel`);
+    if ('parameter' in color === 'channel' in color) fail('panel', `panel ${id}: a colormap color names both or neither of parameter and channel`);
   }
+}
+
+/** Checks that a trajectory set carries the channel or the parameter of a color over it (section 2.7). */
+function colorData(pid: string, id: string, set: TrajectorySet, color: ColorSpec | undefined): void {
+  if (typeof color !== 'object') return;
+  if ('channel' in color && !Object.hasOwn(set.channels ?? {}, color.channel))
+    fail('panel', `panel ${pid}: trajectory set ${id} lacks channel ${color.channel} for a layer's color`);
+  if ('parameter' in color && !Object.hasOwn(set.parameters ?? {}, color.parameter))
+    fail('panel', `panel ${pid}: trajectory set ${id} lacks parameter ${color.parameter} for a layer's color`);
 }
 
 /** Checks a scene, and its data and a state when given. Returns the warnings. */
@@ -748,14 +770,7 @@ function validateState(scene: Scene, frames: Frames, state: State, warnings: str
         member(id, layer.members);
         if (layer.highlight !== undefined) member(id, { input: layer.highlight.input });
         const set = scene.trajectory_sets[id]!;
-        if (layer.color !== undefined && typeof layer.color === 'object') {
-          if ('channel' in layer.color && !Object.hasOwn(set.channels ?? {}, layer.color.channel))
-            fail('panel', `panel ${pid}: trajectory set ${id} lacks channel ${layer.color.channel} for a layer's color`);
-          if ('parameter' in layer.color && !Object.hasOwn(set.parameters ?? {}, layer.color.parameter))
-            fail('panel', `panel ${pid}: trajectory set ${id} lacks parameter ${layer.color.parameter} for a layer's color`);
-        }
-        if (typeof layer.color === 'object' && 'thresholds' in layer.color && !Object.hasOwn(set.channels ?? {}, layer.color.channel))
-          fail('panel', `panel ${pid}: trajectory set ${id} lacks channel ${layer.color.channel} for a layer's color`);
+        colorData(pid, id, set, layer.color);
         const glow = typeof layer.head === 'object' ? layer.head.glow : undefined;
         if (glow !== undefined && !Object.hasOwn(set.channels ?? {}, glow.channel))
           fail('timeline', `panel ${pid}: trajectory set ${id} lacks channel ${glow.channel} for a head's glow`);
@@ -780,6 +795,7 @@ function validateState(scene: Scene, frames: Frames, state: State, warnings: str
         if (id === null) continue;
         need(id, scene.trajectory_sets[id]!.frame, 'its points');
         member(id, layer.members);
+        colorData(pid, id, scene.trajectory_sets[id]!, layer.marker?.color);
         const hides = (layer.clock !== undefined || scene.clock.mode === 'epoch') && (layer.before === 'hidden' || layer.after === 'hidden');
         if ((layer.reveal ?? 'none') === 'grow' || hides) clocked(id, 'on which a reading is taken', layer.clock);
       } else if (layer.kind === 'label') {

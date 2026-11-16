@@ -30,7 +30,7 @@ from .container import ContainerWriter
 
 ID = re.compile(r"[A-Za-z0-9_.-]+")
 HEX = re.compile(r"#[0-9a-fA-F]{6}")
-COLORMAPS = ("viridis", "plasma", "cividis", "blues", "reds")
+COLORMAPS = ("viridis", "plasma", "magma", "cividis", "blues", "reds")
 INDEX = "@index"
 EASES = ("linear", "smooth", "in", "out", "in-out", "hold")
 SHAPES = ("disc", "ring", "square", "diamond", "triangle", "star", "cross", "plus")
@@ -525,8 +525,9 @@ def layer_clock(channel: str, *, range: Sequence[float] | None = None, keyframes
     return _layer_clock(spec, "a layer")
 
 
-def _marker(value: Any, what: str, *, extra: Sequence[str] = ()) -> dict[str, Any]:
-    """A marker ``{"shape", "size", "color", "edge", "edge_width", "opacity"}``, all keys optional."""
+def _marker(value: Any, what: str, *, extra: Sequence[str] = (), color_spec: bool = False) -> dict[str, Any]:
+    """A marker ``{"shape", "size", "color", "edge", "edge_width", "opacity"}``, all keys optional. With ``color_spec``, the color may
+    be any color of a trajectories layer, as on a points layer."""
     if not isinstance(value, Mapping):
         raise SceneError(f"timeline: {what} is a dict of shape, size, color, edge, edge_width, and opacity, not {value!r}")
     if unknown := set(value) - {"shape", "size", "color", "edge", "edge_width", "opacity", *extra}:
@@ -537,7 +538,7 @@ def _marker(value: Any, what: str, *, extra: Sequence[str] = ()) -> dict[str, An
     if "size" in value:
         out["size"] = _size(value["size"], f"the size of {what}")
     if "color" in value:
-        out["color"] = _color(value["color"], f"the color of {what}")
+        out["color"] = (_color_spec if color_spec else _color)(value["color"], f"the color of {what}")
     if "edge" in value:
         out["edge"] = _color(value["edge"], f"the edge of {what}")
     if "edge_width" in value:
@@ -556,14 +557,19 @@ def _marker(value: Any, what: str, *, extra: Sequence[str] = ()) -> dict[str, An
 def marker(
     shape: str | None = None,
     size: Any = None,
-    color: str | None = None,
+    color: Any = None,
     edge: str | None = None,
     edge_width: Any = None,
     opacity: Any = None,
 ) -> dict[str, Any]:
-    """A marker for a points layer, a head, or a legend entry. ``size`` and ``opacity`` may be keyframes."""
+    """A marker for a points layer, a head, or a legend entry. ``size`` and ``opacity`` may be keyframes.
+
+    On a points layer, ``color`` may also be any color of a trajectories layer, i.e. a colormap over a parameter, which colors each
+    member, or a colormap over a channel or :func:`threshold_color`, which color each sample, e.g. ``{"colormap": "magma", "channel":
+    "height", "range": (0.0, 0.8)}``. A head and a legend entry take a fixed color only.
+    """
     spec = (("shape", shape), ("size", size), ("color", color), ("edge", edge), ("edge_width", edge_width), ("opacity", opacity))
-    return _marker({k: v for k, v in spec if v is not None}, "a marker")
+    return _marker({k: v for k, v in spec if v is not None}, "a marker", color_spec=True)
 
 
 def _box(value: Any, what: str) -> dict[str, Any]:
@@ -819,6 +825,17 @@ def _color_spec(value: Any, what: str) -> Any:
                 raise SceneError(f"panel: the truncate of {what} is outside [0, 1]")
     if extra := set(value) - {"colormap", key, "range", "truncate"}:
         raise SceneError(f"panel: {what} has unknown keys {sorted(extra)}")
+    return out
+
+
+def _color_data(ts: Any, color: Any, where: str) -> list[str]:
+    """The faults of a color over a channel or a parameter, or by thresholds of a channel, on a trajectory set that lacks it."""
+    out = []
+    if isinstance(color, Mapping):
+        if "channel" in color and color["channel"] not in ts.channels[0]:
+            out.append(f"panel: {where}: trajectory set {ts.id!r} lacks channel {color['channel']!r} for a layer's color")
+        if "parameter" in color and color["parameter"] not in ts.parameters[0]:
+            out.append(f"panel: {where}: trajectory set {ts.id!r} lacks parameter {color['parameter']!r} for a layer's color")
     return out
 
 
@@ -1078,7 +1095,7 @@ def _check_layer(layer: Any) -> dict[str, Any]:
         out["sets"] = _query(layer.get("sets"))
         out["members"] = _member(layer.get("members", "all"), "a points layer's members")
         if "marker" in layer:
-            out["marker"] = _marker(layer["marker"], "a points layer's marker")
+            out["marker"] = _marker(layer["marker"], "a points layer's marker", color_spec=True)
         if "reveal" in layer:
             out["reveal"] = _enum(layer["reveal"], ("none", "grow"), "points: a points layer's reveal")
         for key in ("before", "after"):
@@ -2487,6 +2504,9 @@ class Scene:
                 out += self._check_query(layer["sets"], f"set-query: a points layer of {where}")
                 if isinstance(layer["members"], Mapping) and "input" in layer["members"]:
                     out += self._check_input(layer["members"]["input"], "parameter", f"members: a points layer of {where}")
+                color = layer.get("marker", {}).get("color")
+                if isinstance(color, Mapping) and isinstance(color.get("colormap"), Mapping):
+                    out += self._check_colormap(color["colormap"], where)
             elif layer["kind"] == "label":
                 at = layer["at"]
                 if "sets" in at:
@@ -2712,14 +2732,7 @@ class Scene:
                         name = head["glow"]["channel"]
                         if name != INDEX and name not in ts.channels[0]:
                             out.append(f"timeline: {where}: trajectory set {ts.id!r} lacks channel {name!r} for a head's glow")
-                    color = layer.get("color")
-                    if isinstance(color, Mapping):
-                        if "channel" in color and color["channel"] not in ts.channels[0]:
-                            out.append(f"panel: {where}: trajectory set {ts.id!r} lacks channel {color['channel']!r} for a layer's color")
-                        if "parameter" in color and color["parameter"] not in ts.parameters[0]:
-                            out.append(
-                                f"panel: {where}: trajectory set {ts.id!r} lacks parameter {color['parameter']!r} for a layer's color"
-                            )
+                    out += _color_data(ts, layer.get("color"), where)
             elif layer["kind"] == "arrow":
                 matched = self._match(layer["sets"], values)
                 if len(matched) > 1:
@@ -2759,6 +2772,7 @@ class Scene:
                     ts = matched[0]
                     through(ts, ts.frame, "its points")
                     member(ts, layer["members"], "a points layer")
+                    out += _color_data(ts, layer.get("marker", {}).get("color"), where)
                     hides = (clock["mode"] == "epoch" or "clock" in layer) and "hidden" in (layer.get("before"), layer.get("after"))
                     if layer.get("reveal", "none") == "grow" or hides:
                         clocked(ts, "on which a reading is taken", layer)

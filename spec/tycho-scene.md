@@ -404,6 +404,7 @@ The other keys of a declared panel and of its layers, such as a color, a width, 
 They are not read in the evaluation of section 3, hence they are not covered by any case of the conformance corpus.
 A few of them still bind the data, as follows.
 A color over a `channel` or a `parameter`, and a color by thresholds of a channel, need the layer's set to carry the channel or the parameter, as rule `transform-channels` asks for the channel of a transform.
+This holds for the `color` of a `trajectories` layer and for the color of the marker of a `points` layer, which takes the same forms.
 The thresholds of a color by thresholds increase strictly, and the color has one entry in `colors` more than there are thresholds.
 A colormap given by an input of kind `choice` maps every value of the choice to a colormap name, and only these values, and a writer and a reader reject any other map.
 A `highlight` refers to an input of kind `parameter`, held to rule `members` like a member reference.
@@ -550,6 +551,7 @@ The rules for the timeline follow.
   Its `before` and `after` hide a member as they hide a trajectory (rule `before-after`).
   Each sample is transformed into the display frame in its own context (rule `sample-context`), in revolution 0.
   The evaluator gives the positions of the given samples of each member, in storage order.
+  The color of its marker is a fixed color or any color of a `trajectories` layer, and it is for drawing only.
   A writer lists the feature `layers.points` in `requires` for a scene with a points layer.
 - `steps`. The `steps` of a scene are the named times of its timeline at which a presentation stops.
   The ids of the steps are identifiers (rule `identifier`) and differ from each other, and their times are finite, nondecreasing, and lie in `[0, L]`.
@@ -611,7 +613,7 @@ The features of version 0.5 are the following.
 - `layers.points` is the `points` layer (rule `points`).
 
 Several keys are not features, since a reader that ignores one of them still draws every trajectory, only at another scale, from another side, at another pace, or at another opacity.
-They are the `aspect` of a `2d` camera, the `fit` of a `trajectories` layer, the `stretch` and the `auto_rotate` of a `3d` camera, the `seconds` and the `end` of the clock, the keyframed values of opacity, of a marker's size, and of a split's ratio, the parts of rule `timeline-parts`, the `steps` (rule `steps`), the markers, glows, dashes, fills, and threshold colors of a `trajectories` layer, the box of an axes layer, the margin and the opacity of a declared panel, the image of a body, the font and the gutter of the theme, and the overlays.
+They are the `aspect` of a `2d` camera, the `fit` of a `trajectories` layer, the `stretch` and the `auto_rotate` of a `3d` camera, the `seconds` and the `end` of the clock, the keyframed values of opacity, of a marker's size, and of a split's ratio, the parts of rule `timeline-parts`, the `steps` (rule `steps`), the markers, glows, dashes, fills, and threshold colors of a `trajectories` layer, the color of the marker of a `points` layer, the box of an axes layer, the margin and the opacity of a declared panel, the image of a body, the font and the gutter of the theme, and the overlays.
 
 The following features do not exist yet.
 They are reserved here so that they can be listed in `requires` once they exist.

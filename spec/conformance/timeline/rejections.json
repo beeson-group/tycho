@@ -106,6 +106,16 @@
         "set": "pts"
        },
        "members": "all",
+       "marker": {
+        "color": {
+         "colormap": "magma",
+         "channel": "t",
+         "truncate": [
+          1.0,
+          0.0
+         ]
+        }
+       },
        "reveal": "grow",
        "before": "hidden"
       },
@@ -115,6 +125,18 @@
         "set": "pts"
        },
        "members": "all",
+       "marker": {
+        "color": {
+         "channel": "t",
+         "thresholds": [
+          2.5
+         ],
+         "colors": [
+          "#3b0f70",
+          "#febb81"
+         ]
+        }
+       },
        "reveal": "grow",
        "clock": {
         "channel": "@index",
@@ -234,6 +256,16 @@
         "set": "pts"
        },
        "members": "all",
+       "marker": {
+        "color": {
+         "colormap": "magma",
+         "channel": "t",
+         "truncate": [
+          1.0,
+          0.0
+         ]
+        }
+       },
        "reveal": "grow",
        "before": "hidden"
       },
@@ -243,6 +275,18 @@
         "set": "pts"
        },
        "members": "all",
+       "marker": {
+        "color": {
+         "channel": "t",
+         "thresholds": [
+          2.5
+         ],
+         "colors": [
+          "#3b0f70",
+          "#febb81"
+         ]
+        }
+       },
        "reveal": "grow",
        "clock": {
         "channel": "@index",
@@ -617,6 +661,16 @@
         "set": "pts"
        },
        "members": "all",
+       "marker": {
+        "color": {
+         "colormap": "magma",
+         "channel": "t",
+         "truncate": [
+          1.0,
+          0.0
+         ]
+        }
+       },
        "reveal": "grow",
        "before": "hidden"
       },
@@ -626,6 +680,18 @@
         "set": "pts"
        },
        "members": "all",
+       "marker": {
+        "color": {
+         "channel": "t",
+         "thresholds": [
+          2.5
+         ],
+         "colors": [
+          "#3b0f70",
+          "#febb81"
+         ]
+        }
+       },
        "reveal": "grow",
        "clock": {
         "channel": "@index",
@@ -760,6 +826,18 @@
         "set": "pts"
        },
        "members": "all",
+       "marker": {
+        "color": {
+         "channel": "t",
+         "thresholds": [
+          2.5
+         ],
+         "colors": [
+          "#3b0f70",
+          "#febb81"
+         ]
+        }
+       },
        "reveal": "grow",
        "clock": {
         "channel": "@index",

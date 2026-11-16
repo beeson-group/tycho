@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { sceneTheme } from '../src/runtime/colors';
 import { GeometryCache } from '../src/runtime/geometry';
 import { overlaps, Shared, PanelAreaRenderer } from '../src/runtime/renderer';
-import type { Keyframes, Layout, Scene, State } from '../src/scene';
+import type { Keyframes, Layout, PointsLayer, Scene, State } from '../src/scene';
 import { baseScene, MemoryStore } from './helpers';
 
 /** Copies a panel's region `r` into a target of 782 by 600 px, and returns where the copy ends. */
@@ -237,13 +237,14 @@ describe('a points layer that the clock does not change', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   /** A stage whose panel p1 draws, as points, the member of a set of two rows that the parameter input k selects, and the positions of the points it draws. */
-  function rowStage() {
+  function rowStage(layer: Partial<PointsLayer> = {}) {
     // the texture of a marker is drawn on a canvas, which Node does not have
     const context = new Proxy({}, { get: () => () => undefined, set: () => true });
     vi.stubGlobal('document', { createElement: () => ({ getContext: () => context }) });
     const scene = baseScene({ version: '0.4', inputs: { k: { kind: 'parameter', parameter: '@index', default: 0 } } });
     scene.trajectory_sets.s!.trajectories = 2;
-    scene.panels.main!.layers = [{ kind: 'points', sets: { set: 's' }, members: { input: 'k' } }];
+    scene.trajectory_sets.s!.parameters = { e: { array: 'e' } };
+    scene.panels.main!.layers = [{ kind: 'points', sets: { set: 's' }, members: { input: 'k' }, ...layer }];
     const data = new MemoryStore()
       .add('off', [0, 2, 4], 'uint32')
       .add('pos', [
@@ -252,16 +253,20 @@ describe('a points layer that the clock does not change', () => {
         [0, 1],
         [1, 1],
       ])
-      .add('time', [0, 1, 0, 1]);
+      .add('time', [0, 1, 0, 1])
+      .add('e', [0, 1]);
     const { at, panels } = stageOf(scene, data, { kind: 'panel', id: 'p1' });
     const sprites = () => panels.get('p1').draws.get(0).sprites;
     const drawn = (): number[] => Array.from(sprites().position.array.subarray(0, 3 * sprites().points.geometry.drawRange.count));
-    /** The number of times the points were filled, since three.js counts the uploads that a fill asks for. */
+    /** The colors of the points it draws, rounded to two decimals, and whether the sprites take them. */
+    const colors = (): number[] =>
+      Array.from(sprites().color.array.subarray(0, 3 * sprites().points.geometry.drawRange.count) as Float32Array, (c) => Math.round(100 * c) / 100);
     const tinted = (): boolean => sprites().points.material.vertexColors;
     /** The marker that the texture of the sprites is drawn from. */
     const marker = (): { color?: string } => sprites().marker;
+    /** The number of times the points were filled, since three.js counts the uploads that a fill asks for. */
     const fills = (): number => sprites().position.version;
-    return { at, drawn, tinted, marker, fills };
+    return { at, drawn, colors, tinted, marker, fills };
   }
 
   it('draws the member that a parameter input selects again when the input moves', () => {
@@ -281,6 +286,50 @@ describe('a points layer that the clock does not change', () => {
     expect(fills()).toBe(once);
     at(4, { k: 1 });
     expect(fills()).toBe(once + 1);
+  });
+
+  it('takes the color of each sample from a colormap over a channel, for the member that the input selects', () => {
+    const { at, colors, tinted } = rowStage({ marker: { color: { colormap: 'blues', channel: 'time', range: [0, 1] } } });
+    at(0, { k: 1 });
+    expect(tinted()).toBe(true);
+    expect(colors()).toEqual([0.19, 0.42, 0.71, 0.85, 0.93, 0.98]);
+  });
+
+  it('takes the color of each member from a colormap over a parameter, read in reverse with a truncation from 1 to 0', () => {
+    const { at, colors } = rowStage({ marker: { color: { colormap: 'blues', parameter: 'e', truncate: [1, 0] } } });
+    at(0, { k: 0 });
+    expect(colors()).toEqual([0.85, 0.93, 0.98, 0.85, 0.93, 0.98]);
+    at(0, { k: 1 });
+    expect(colors()).toEqual([0.19, 0.42, 0.71, 0.19, 0.42, 0.71]);
+  });
+
+  it('takes the color of each sample by thresholds of a channel', () => {
+    const { at, colors } = rowStage({ marker: { color: { channel: 'time', thresholds: [0.5], colors: ['#ff0000', '#0000ff'] } } });
+    at(0, { k: 0 });
+    expect(colors()).toEqual([1, 0, 0, 0, 0, 1]);
+  });
+
+  it('colors only the samples that a reveal by growth draws', () => {
+    const { at, drawn, colors } = rowStage({ reveal: 'grow', marker: { color: { channel: 'time', thresholds: [0.5], colors: ['#ff0000', '#0000ff'] } } });
+    at(0, { k: 0 });
+    expect(drawn()).toEqual([0, 0, 0]);
+    expect(colors()).toEqual([1, 0, 0]);
+    at(8, { k: 0 });
+    expect(colors()).toEqual([1, 0, 0, 0, 0, 1]);
+  });
+
+  it('is filled once while it is colored by a channel and the input selects the same member', () => {
+    const { at, fills } = rowStage({ marker: { color: { colormap: 'magma', channel: 'time' } } });
+    at(0, { k: 0 });
+    const once = fills();
+    at(4, { k: 0 });
+    expect(fills()).toBe(once);
+  });
+
+  it('draws a fixed color into the texture of its marker, without a color per point', () => {
+    const { at, tinted } = rowStage({ marker: { color: '#ff0000' } });
+    at(0, { k: 0 });
+    expect(tinted()).toBe(false);
   });
 
   it('draws a marker without a color in the foreground of the theme', () => {

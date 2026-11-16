@@ -331,6 +331,27 @@ describe('revolutions, counts, and the options for drawing (revolutions, members
     expect(rule(() => validate(withLayer(color({ x: 'viridis', y: 'jet' }))))).toBe('panel');
     expect(rule(() => validate(withLayer(color({ x: 'viridis', y: 'reds' }, 'e'))))).toBe('panel');
   });
+  it("a points layer's marker takes the colors of a trajectories layer, on a set that carries their channel or parameter (2.7, points)", () => {
+    const points = (color: unknown) => {
+      const scene = withLayer({});
+      scene.panels.main!.layers = [{ kind: 'points', sets: { set: 's' }, members: 'all', marker: { color } } as Layer];
+      return scene;
+    };
+    for (const color of [
+      '#ff0000',
+      { colormap: 'magma', channel: 'time', range: [0, 2], truncate: [1, 0] },
+      { colormap: { input: 'look', map: { x: 'viridis', y: 'reds' } }, parameter: 'e' },
+      { channel: 'time', thresholds: [1], colors: ['#000000', '#ffffff'] },
+    ])
+      expect(validate(points(color), data(), state())).toEqual([]);
+    expect(rule(() => validate(points('red')))).toBe('points');
+    expect(rule(() => validate(points({ colormap: 'jet', channel: 'time' })))).toBe('panel');
+    expect(rule(() => validate(points({ colormap: { input: 'look', map: { x: 'viridis' } }, parameter: 'e' })))).toBe('panel');
+    expect(rule(() => validate(points({ channel: 'time', thresholds: [1, 0], colors: ['#000000', '#ffffff', '#ff0000'] })))).toBe('timeline');
+    expect(rule(() => validate(points({ colormap: 'magma', channel: 'height' }), data(), state()))).toBe('panel');
+    expect(rule(() => validate(points({ colormap: 'magma', parameter: 'C' }), data(), state()))).toBe('panel');
+    expect(rule(() => validate(points({ channel: 'height', thresholds: [1], colors: ['#000000', '#ffffff'] }), data(), state()))).toBe('panel');
+  });
   it('the kernel, taper, head, span, and labels are checked (2.7, head)', () => {
     expect(
       validate(

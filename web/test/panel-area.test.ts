@@ -1,10 +1,10 @@
 // Tests the copy of a panel's static layers under Node, with a stub in place of the WebGL renderer.
 import * as THREE from 'three';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { sceneTheme } from '../src/runtime/colors';
 import { GeometryCache } from '../src/runtime/geometry';
 import { overlaps, Shared, PanelAreaRenderer } from '../src/runtime/renderer';
-import type { Keyframes, Layout, State } from '../src/scene';
+import type { Keyframes, Layout, Scene, State } from '../src/scene';
 import { baseScene, MemoryStore } from './helpers';
 
 /** Copies a panel's region `r` into a target of 782 by 600 px, and returns where the copy ends. */
@@ -129,6 +129,11 @@ function pixelStage(layout: Layout) {
       [10, 1],
     ])
     .add('time', [0, 1]);
+  return stageOf(scene, data, layout);
+}
+
+/** A stage of 100 by 40 CSS pixels whose panels p1 and p2 show the panel `main` of `scene`, without WebGL, laid out by `layout`. */
+function stageOf(scene: Scene, data: MemoryStore, layout: Layout) {
   const geometry = new GeometryCache(scene, data);
   const ctx = { scene, geometry, shared: new Shared(), theme: sceneTheme(scene), disc: new THREE.Texture() };
   const blit = { scene: new THREE.Scene(), camera: new THREE.Camera(), material: { uniforms: { uUnderlay: { value: null } } } };
@@ -159,8 +164,8 @@ function pixelStage(layout: Layout) {
     onChange: () => undefined,
   });
   const state: State = { clock: { channel: 'time' }, panels: { p1: { panel: 'main' }, p2: { panel: 'main' } }, layout };
-  // the timeline of the default clock lasts 8 s
-  const at = (s: number) => stage.renderAt(state, s / 8, 100, 40, 1);
+  // the timeline of the default clock lasts 8 s. a frame with shared inputs is drawn from a new state, as a frame after a slider moved is
+  const at = (s: number, inputs?: State['inputs']) => stage.renderAt(inputs === undefined ? state : { ...state, inputs }, s / 8, 100, 40, 1);
   /** The numbers of the panels that the canvas shows in panel `pid`'s region. */
   const shows = (pid: string): number[] => gl.seen(panels.get(pid).underlay);
   return { at, shows, panels };
@@ -225,5 +230,53 @@ describe('the underlay shared by the panels', () => {
     const rebuilt = [...panels.values()].map((p) => p.rebuiltAt);
     at(2);
     expect([...panels.values()].map((p) => p.rebuiltAt)).toEqual(rebuilt);
+  });
+});
+
+describe('a points layer that the clock does not change', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  /** A stage whose panel p1 draws, as points, the member of a set of two rows that the parameter input k selects, and the positions of the points it draws. */
+  function rowStage() {
+    // the texture of a marker is drawn on a canvas, which Node does not have
+    const context = new Proxy({}, { get: () => () => undefined, set: () => true });
+    vi.stubGlobal('document', { createElement: () => ({ getContext: () => context }) });
+    const scene = baseScene({ version: '0.4', inputs: { k: { kind: 'parameter', parameter: '@index', default: 0 } } });
+    scene.trajectory_sets.s!.trajectories = 2;
+    scene.panels.main!.layers = [{ kind: 'points', sets: { set: 's' }, members: { input: 'k' } }];
+    const data = new MemoryStore()
+      .add('off', [0, 2, 4], 'uint32')
+      .add('pos', [
+        [0, 0],
+        [1, 0],
+        [0, 1],
+        [1, 1],
+      ])
+      .add('time', [0, 1, 0, 1]);
+    const { at, panels } = stageOf(scene, data, { kind: 'panel', id: 'p1' });
+    const sprites = () => panels.get('p1').draws.get(0).sprites;
+    const drawn = (): number[] => Array.from(sprites().position.array.subarray(0, 3 * sprites().points.geometry.drawRange.count));
+    /** The number of times the points were filled, since three.js counts the uploads that a fill asks for. */
+    const fills = (): number => sprites().position.version;
+    return { at, drawn, fills };
+  }
+
+  it('draws the member that a parameter input selects again when the input moves', () => {
+    const { at, drawn } = rowStage();
+    at(0, { k: 0 });
+    expect(drawn()).toEqual([0, 0, 0, 1, 0, 0]);
+    at(0, { k: 1 });
+    expect(drawn()).toEqual([0, 1, 0, 1, 1, 0]);
+  });
+
+  it('is filled once while the input selects the same member, across frames and values of the input', () => {
+    const { at, fills } = rowStage();
+    at(0, { k: 0 });
+    const once = fills();
+    at(4, { k: 0 });
+    at(4, { k: 0.2 });
+    expect(fills()).toBe(once);
+    at(4, { k: 1 });
+    expect(fills()).toBe(once + 1);
   });
 });

@@ -8,7 +8,7 @@ The two file formats are versioned apart from the packages, i.e. either format v
 
 ### Fixed
 
-- A row of tabs that is wider than the page is wrapped onto further lines, so that every tab can be reached on a phone. Such a row stayed on one line, ran off the screen, and widened the panels past it.
+- A row of tabs that is wider than the page is wrapped onto further lines, and a label wider than the page is wrapped within its tab, so that every tab can be reached on a phone. Such a row stayed on one line, ran off the screen, and widened the panels past it.
 
 ## [0.3.0] - 2026-11-14
 

@@ -90,6 +90,7 @@ import {
   type Rgb,
   type Theme,
 } from './colors.js';
+import type { ContextHolder } from './contexts.js';
 import { markerCanvas, markerStroke, TICK_SIZE, type BoxPaint } from './paint.js';
 import {
   EMPTY_RANGE,
@@ -2637,11 +2638,21 @@ const cameraKey = (c: Camera): string => JSON.stringify(c);
 /** A 3d camera turns with the clock when it has a nonzero turn. */
 const turns = (c: Camera): boolean => c.kind === '3d' && (c.auto_rotate ?? 0) !== 0;
 
-export class PanelAreaRenderer {
-  readonly canvas: HTMLCanvasElement;
-  /** Called when the user moves a camera, so that the page redraws. */
+export class PanelAreaRenderer implements ContextHolder {
+  /**
+   * The canvas drawn on. A canvas keeps its first WebGL context for good, hence a later context is made on a new canvas, which
+   * takes this one's place in the page.
+   */
+  canvas: HTMLCanvasElement;
+  /** Called when the panel area should be drawn again, e.g. when the user moves a camera. */
   onChange: () => void = () => undefined;
-  private readonly gl: THREE.WebGLRenderer;
+  /** Called when the browser takes the WebGL context, or gives back one that it took. */
+  onContext: () => void = () => undefined;
+  /** three's renderer on the WebGL context of `canvas`, or null before the first draw and after a release. */
+  private gl: THREE.WebGLRenderer | null = null;
+  /** Whether `canvas` was given a WebGL context. */
+  private canvasUsed = false;
+  private readonly preserveDrawingBuffer: boolean;
   private readonly ctx: DrawContext;
   private readonly panels = new Map<string, PanelRender>();
   private lastState: State | null = null;
@@ -2690,20 +2701,78 @@ export class PanelAreaRenderer {
     this.canvas = canvas;
     // colors are sRGB as the page gives them, written unconverted
     THREE.ColorManagement.enabled = false;
-    // the stencil serves flat layers (section 2.11)
-    this.gl = new THREE.WebGLRenderer({ canvas, antialias: true, stencil: true, preserveDrawingBuffer: options.preserveDrawingBuffer ?? false });
+    this.preserveDrawingBuffer = options.preserveDrawingBuffer ?? false;
     this.cacheStatic = options.cacheStatic ?? true;
     this.coarseDrags = options.coarseDrags ?? true;
     this.blit = blitPass();
-    // a lost context takes its textures with it, and every underlay is therefore drawn again
-    canvas.addEventListener('webglcontextrestored', () => {
-      for (const p of this.panels.values()) p.underlayDirty = true;
-    });
-    this.gl.outputColorSpace = THREE.LinearSRGBColorSpace;
-    this.gl.autoClear = false;
     const theme = options.theme ?? sceneTheme(scene);
     this.background = new THREE.Color(...hexRgb(theme.background));
     this.ctx = { scene, geometry, shared: new Shared(), theme, disc: discTexture() };
+  }
+
+  /** Whether the renderer holds a WebGL context, which may be lost. */
+  get connected(): boolean {
+    return this.gl !== null;
+  }
+
+  /** Whether the renderer holds a WebGL context that is not lost, i.e. whether a draw reaches the canvas. */
+  get live(): boolean {
+    return this.gl !== null && !this.gl.getContext().isContextLost();
+  }
+
+  /**
+   * Makes a WebGL context to draw on, unless the renderer holds one that is not lost. The panels keep their cameras, their controls,
+   * and their draws, which three uploads to the new context at the next draw. Throws when the browser cannot make a WebGL context.
+   */
+  connect(): void {
+    if (this.live) return;
+    this.release();
+    if (this.canvasUsed) {
+      const fresh = this.canvas.cloneNode(false) as HTMLCanvasElement;
+      this.canvas.replaceWith(fresh);
+      this.canvas = fresh;
+    }
+    this.canvasUsed = true;
+    // the stencil serves flat layers (section 2.11)
+    const gl = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, stencil: true, preserveDrawingBuffer: this.preserveDrawingBuffer });
+    gl.outputColorSpace = THREE.LinearSRGBColorSpace;
+    gl.autoClear = false;
+    const canvas = this.canvas;
+    // the browser may take the context, e.g. for a newer one beyond its limit
+    canvas.addEventListener('webglcontextlost', () => {
+      if (this.canvas === canvas && this.gl !== null) this.onContext();
+    });
+    // The browser may give a context back, e.g. once another one on the page is collected. three restores it without the targets made
+    // on it, hence every underlay is drawn again. A context given back after the renderer let go of it would be held until collection.
+    canvas.addEventListener('webglcontextrestored', () => {
+      if (this.canvas !== canvas || this.gl === null) {
+        canvas.getContext('webgl2')?.getExtension('WEBGL_lose_context')?.loseContext();
+        return;
+      }
+      this.dropTargets();
+      this.onContext();
+      this.onChange();
+    });
+    this.gl = gl;
+    this.size = { w: 0, h: 0, ratio: 0 };
+  }
+
+  /** Frees the WebGL context, and with it everything the panels hold on the GPU, for `connect` to make a new one. */
+  release(): void {
+    const gl = this.gl;
+    if (gl === null) return;
+    this.gl = null;
+    this.dropTargets();
+    gl.dispose();
+    // free the context now rather than at collection, since a page may hold only a few
+    if (!gl.getContext().isContextLost()) gl.forceContextLoss();
+  }
+
+  /** Forgets the underlay and the scratch target, which went with the context, so that the next draw makes them and every panel's static layers again. */
+  private dropTargets(): void {
+    this.underlay = null;
+    this.scratch = null;
+    for (const p of this.panels.values()) p.underlayDirty = true;
   }
 
   /** Draws with `theme` from the next frame on. The cameras stay, and the next plan rebuilds only the draws that take a color from the theme. */
@@ -2841,20 +2910,21 @@ export class PanelAreaRenderer {
    */
   private drawStatic(p: PanelRender): void {
     if (p.staticScene.children.length === 0) return;
+    const gl = this.gl!;
     // a camera that the clock turns moves at every frame, which would draw the underlay coarse as during a drag
     if (!this.cacheStatic || turns(p.cameraSpec)) {
-      this.gl.render(p.staticScene, p.camera);
+      gl.render(p.staticScene, p.camera);
       return;
     }
-    const size = this.gl.getDrawingBufferSize(this.buffer);
+    const size = gl.getDrawingBufferSize(this.buffer);
     if (this.underlay === null || this.underlay.width !== size.x || this.underlay.height !== size.y) {
       this.underlay?.dispose();
       this.underlay = pixelTarget(size.x, size.y, 0);
       // the texture of the underlay must exist before a copy into it
-      this.gl.initRenderTarget(this.underlay);
+      gl.initRenderTarget(this.underlay);
       for (const q of this.panels.values()) q.underlayDirty = true;
     }
-    const vp = this.gl.getCurrentViewport(this.viewport);
+    const vp = gl.getCurrentViewport(this.viewport);
     if (!vp.equals(p.underlay)) {
       p.underlay.copy(vp);
       p.underlayDirty = true;
@@ -2876,22 +2946,23 @@ export class PanelAreaRenderer {
       // Leaving a render target, three floors the canvas's viewport and scissor in device pixels, where setViewport and setScissor
       // round them. At a fractional pixel ratio the rest of the panel would then be drawn a pixel shorter, and shifted by half a
       // pixel, at every frame that draws the underlay again, hence the panel's own viewport and scissor are set once more.
-      this.gl.setViewport(this.gl.getViewport(this.cssViewport));
-      this.gl.setScissor(this.gl.getScissor(this.cssScissor));
+      gl.setViewport(gl.getViewport(this.cssViewport));
+      gl.setScissor(gl.getScissor(this.cssScissor));
     }
     this.blit.material.uniforms.uUnderlay!.value = this.underlay.texture;
-    this.gl.render(this.blit.scene, this.blit.camera);
+    gl.render(this.blit.scene, this.blit.camera);
   }
 
   /** Draws a panel's static layers straight into its region of `target`, which is not multisampled. */
   private drawCoarse(p: PanelRender, target: THREE.WebGLRenderTarget, r: THREE.Vector4): void {
+    const gl = this.gl!;
     target.viewport.copy(r);
     target.scissor.copy(r);
     target.scissorTest = true;
-    this.gl.setRenderTarget(target);
-    this.gl.clear(true, false, true);
-    this.gl.render(p.staticScene, p.camera);
-    this.gl.setRenderTarget(null);
+    gl.setRenderTarget(target);
+    gl.clear(true, false, true);
+    gl.render(p.staticScene, p.camera);
+    gl.setRenderTarget(null);
   }
 
   /** Draws every coarse underlay again with antialiasing once REFINE_MS pass without a coarse one. */
@@ -2913,6 +2984,7 @@ export class PanelAreaRenderer {
    * after the draw, and copies them into the panel's region `r` of `target`.
    */
   private drawFine(p: PanelRender, target: THREE.WebGLRenderTarget, r: THREE.Vector4): void {
+    const gl = this.gl!;
     let s = this.scratch;
     if (s === null || s.width < r.z || s.height < r.w) {
       s?.dispose();
@@ -2921,14 +2993,14 @@ export class PanelAreaRenderer {
     s.viewport.set(0, 0, r.z, r.w);
     s.scissor.set(0, 0, r.z, r.w);
     s.scissorTest = true;
-    this.gl.setRenderTarget(s);
-    this.gl.clear(true, false, true);
-    this.gl.render(p.staticScene, p.camera);
-    this.gl.setRenderTarget(null);
+    gl.setRenderTarget(s);
+    gl.clear(true, false, true);
+    gl.render(p.staticScene, p.camera);
+    gl.setRenderTarget(null);
     this.region.min.set(0, 0);
     // at a fractional pixel ratio, the viewport is rounded up past the end of the drawing buffer
     this.region.max.set(Math.min(r.z, target.width - r.x), Math.min(r.w, target.height - r.y));
-    this.gl.copyTextureToTexture(s.texture, target.texture, this.region, this.corner.set(r.x, r.y));
+    gl.copyTextureToTexture(s.texture, target.texture, this.region, this.corner.set(r.x, r.y));
   }
 
   private disposePanel(p: PanelRender): void {
@@ -3171,11 +3243,13 @@ export class PanelAreaRenderer {
    * message of every panel that could not be drawn.
    */
   renderAt(state: State, q: number, width: number, height: number, pixelRatio: number): Map<string, string> {
+    const gl = this.gl;
+    if (gl === null) return new Map();
     const w = Math.max(1, Math.floor(width));
     const h = Math.max(1, Math.floor(height));
     if (w !== this.size.w || h !== this.size.h || pixelRatio !== this.size.ratio) {
-      this.gl.setPixelRatio(pixelRatio);
-      this.gl.setSize(w, h, false);
+      gl.setPixelRatio(pixelRatio);
+      gl.setSize(w, h, false);
       this.size = { w, h, ratio: pixelRatio };
     }
     const s = timeAt(this.ctx.scene.clock, q);
@@ -3185,10 +3259,10 @@ export class PanelAreaRenderer {
     this.lastState = state;
     const errors = new Map<string, string>();
 
-    this.gl.setScissorTest(false);
-    this.gl.setClearColor(this.background, 1);
-    this.gl.clear();
-    this.gl.setScissorTest(true);
+    gl.setScissorTest(false);
+    gl.setClearColor(this.background, 1);
+    gl.clear();
+    gl.setScissorTest(true);
     // every camera is moved before any panel is drawn, since an outline on one panel shows what another panel's camera shows at this frame
     for (const [pid, outer] of tiles.panels) {
       const p = this.panel(pid);
@@ -3224,13 +3298,13 @@ export class PanelAreaRenderer {
       for (const d of p.draws.values()) d.resize?.(rect.w, rect.h);
       for (const d of p.draws.values()) if (d instanceof InsetBoxDraw) d.place(p, d.target === null ? undefined : this.panels.get(d.target));
       const y = h - rect.y - rect.h;
-      this.gl.setViewport(rect.x, y, rect.w, rect.h);
-      this.gl.setScissor(rect.x, y, rect.w, rect.h);
+      gl.setViewport(rect.x, y, rect.w, rect.h);
+      gl.setScissor(rect.x, y, rect.w, rect.h);
       this.drawStatic(p);
-      this.gl.render(p.scene, p.camera);
+      gl.render(p.scene, p.camera);
       this.placeLabels(p);
     }
-    this.gl.setScissorTest(false);
+    gl.setScissorTest(false);
     return errors;
   }
 
@@ -3458,12 +3532,8 @@ export class PanelAreaRenderer {
     for (const p of [...this.panels.values()]) this.disposePanel(p);
     if (this.refineTimer !== null) clearTimeout(this.refineTimer);
     this.blit.material.dispose();
-    this.underlay?.dispose();
-    this.scratch?.dispose();
     this.ctx.disc.dispose();
-    this.gl.dispose();
-    // free the context now rather than at collection, since a page may hold only a few
-    this.gl.forceContextLoss();
+    this.release();
   }
 }
 

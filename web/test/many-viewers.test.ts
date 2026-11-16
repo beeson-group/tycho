@@ -118,4 +118,29 @@ ${viewer.repeat(VIEWERS)}
     }
     expect(wrong).toEqual([]);
   }, 120000);
+
+  it('keeps the camera and the time of a viewer whose context was released while the viewer was out of view', async () => {
+    const last = VIEWERS - 1;
+    await show(last);
+    // the last viewer is paused at 3 s of its timeline, and zoomed in at the middle of its panel
+    const at = await chrome.evaluate<{ x: number; y: number }>(`(() => {
+      const v = document.querySelectorAll('tycho-viewer')[${last}];
+      v.seek(3);
+      const r = v.shadowRoot.querySelector('.panel').getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    })()`);
+    await chrome.send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: at.x, y: at.y, deltaX: 0, deltaY: -300 });
+    await chrome.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 790, y: 10 });
+    const before = await show(last);
+    expect(await differ(before.shot, (await show(last - 1)).shot), 'the zoom changed the picture').toBeGreaterThan(0.01);
+    for (let i = last - 2; i >= 0; i--) await show(i);
+    const released = await chrome.evaluate<boolean>(
+      `document.querySelectorAll('tycho-viewer')[${last}].shadowRoot.querySelector('canvas[data-engine]').getContext('webgl2').isContextLost()`,
+    );
+    expect(released, 'the context of the last viewer was released while 19 others were shown').toBe(true);
+    const after = await show(last);
+    expect(after.lost).toBe(false);
+    expect(await differ(after.shot, before.shot)).toBeLessThan(0.002);
+    expect(await chrome.evaluate<number>(`document.querySelectorAll('tycho-viewer')[${last}].time`)).toBeCloseTo(3, 6);
+  }, 120000);
 });

@@ -656,14 +656,14 @@ describe('a viewer embedded on a page, under a DOM stand-in', () => {
     return { v, host };
   }
 
-  /** A loaded viewer with a stand-in for its renderer and the subscription that start() makes. */
+  /** A loaded viewer with a stand-in for its renderer, which holds a live WebGL context, and the subscription that start() makes. */
   async function live(attributes: Record<string, string> = {}, text = dressedBroucke().text) {
     const { bytes } = dressedBroucke();
     const { v, host } = viewer(attributes);
     await v.load(text, bytes);
     v.unsubscribe = v.store.subscribe((c: string) => v.onChange(c));
     v.onChange('state');
-    v.renderer = { setTheme: vi.fn(), renderAt: () => new Map(), refitAll: () => undefined };
+    v.renderer = { connected: true, live: true, release() {}, onChange() {}, setTheme: vi.fn(), renderAt: () => new Map(), refitAll: () => undefined };
     v.syncShown();
     return { v, host };
   }

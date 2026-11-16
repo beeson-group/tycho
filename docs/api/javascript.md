@@ -267,7 +267,7 @@ It follows three rules.
 
 The function `colormap(name, t)` returns the color of one of the viewer's colormaps at the position `t` in [0, 1], clamped, meaning that a `t` outside [0, 1] is moved to the nearer end.
 The color is returned as three numbers in [0, 1], its red, green, and blue components.
-The colormaps are `'viridis'`, `'plasma'`, `'cividis'`, `'blues'`, and `'reds'` (the scene type `ColormapName`).
+The colormaps are `'viridis'`, `'plasma'`, `'magma'`, `'cividis'`, `'blues'`, and `'reds'` (the scene type `ColormapName`).
 The color is written into the optional third argument when one is given.
 The function `colormapCss(name, t)` gives the same color as a CSS `rgb()` string.
 A legend or a plot outside the viewer drawn with these functions thus matches the colors of the viewer.

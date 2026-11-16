@@ -30,7 +30,7 @@ from .container import ContainerWriter
 
 ID = re.compile(r"[A-Za-z0-9_.-]+")
 HEX = re.compile(r"#[0-9a-fA-F]{6}")
-COLORMAPS = ("viridis", "plasma", "cividis", "blues", "reds")
+COLORMAPS = ("viridis", "plasma", "magma", "cividis", "blues", "reds")
 INDEX = "@index"
 EASES = ("linear", "smooth", "in", "out", "in-out", "hold")
 SHAPES = ("disc", "ring", "square", "diamond", "triangle", "star", "cross", "plus")

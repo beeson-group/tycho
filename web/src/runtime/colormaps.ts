@@ -4,7 +4,7 @@
  * restricted to their brighter half so that the low end stays visible on black.
  */
 
-export type ColormapId = 'viridis' | 'plasma' | 'cividis' | 'blues' | 'reds';
+export type ColormapId = 'viridis' | 'plasma' | 'magma' | 'cividis' | 'blues' | 'reds';
 
 // prettier-ignore
 const STOPS: Record<ColormapId, number[][]> = {
@@ -17,6 +17,11 @@ const STOPS: Record<ColormapId, number[][]> = {
     [0.05, 0.03, 0.528], [0.294, 0.012, 0.615], [0.492, 0.012, 0.658], [0.665, 0.139, 0.586],
     [0.798, 0.28, 0.47], [0.902, 0.418, 0.36], [0.973, 0.585, 0.252], [0.993, 0.771, 0.155],
     [0.94, 0.975, 0.131],
+  ],
+  magma: [
+    [0.001, 0.0, 0.014], [0.079, 0.054, 0.212], [0.232, 0.06, 0.438], [0.39, 0.1, 0.502],
+    [0.55, 0.161, 0.506], [0.716, 0.215, 0.475], [0.869, 0.288, 0.409], [0.968, 0.44, 0.36],
+    [0.995, 0.624, 0.427], [0.996, 0.813, 0.573], [0.987, 0.991, 0.75],
   ],
   cividis: [
     [0.0, 0.135, 0.304], [0.086, 0.218, 0.396], [0.243, 0.301, 0.42], [0.365, 0.383, 0.432],

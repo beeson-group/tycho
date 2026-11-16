@@ -41,7 +41,7 @@ import {
 const LAYER_KINDS = ['trajectories', 'arrow', 'inset_box', 'body', 'axes', 'grid', 'label', 'points'];
 const SHAPES = ['disc', 'ring', 'square', 'diamond', 'triangle', 'star', 'cross', 'plus'];
 const CONTROL_KINDS = ['slider', 'tabs', 'toggle', 'playback'];
-const COLORMAPS = ['viridis', 'plasma', 'cividis', 'blues', 'reds'];
+const COLORMAPS = ['viridis', 'plasma', 'magma', 'cividis', 'blues', 'reds'];
 
 const checkId = (id: string, what: string): void => {
   if (!ID_PATTERN.test(id)) fail('identifier', `${what} ${JSON.stringify(id)} does not match [A-Za-z0-9_.-]+`);

@@ -717,6 +717,7 @@
       "enum": [
         "viridis",
         "plasma",
+        "magma",
         "cividis",
         "blues",
         "reds"

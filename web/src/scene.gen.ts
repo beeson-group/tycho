@@ -1065,7 +1065,7 @@ export type MemberRef =
  * This interface was referenced by `Scene`'s JSON-Schema
  * via the `definition` "colormapName".
  */
-export type ColormapName = 'viridis' | 'plasma' | 'cividis' | 'blues' | 'reds';
+export type ColormapName = 'viridis' | 'plasma' | 'magma' | 'cividis' | 'blues' | 'reds';
 /**
  * A color is a fixed color, a colormap over a parameter or a channel, or a color by thresholds of a channel.
  *

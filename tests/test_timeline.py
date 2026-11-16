@@ -251,6 +251,43 @@ def test_points_appear_as_the_reading_passes_them():
         ty.points("a", reveal="trail")
 
 
+def test_points_take_the_colors_of_a_trajectories_layer():
+    by_height = {"colormap": "magma", "channel": "t", "range": (0.0, 4.0), "truncate": (1.0, 0.0)}
+    cuts = ty.threshold_color("S", [0.0], ["#3b0f70", "#febb81"])
+    scene, _ = base(
+        layers=[
+            ty.points("a", marker=ty.marker("disc", 1.6, by_height)),
+            ty.points("a", 0, reveal="grow", marker=ty.marker(color=cuts)),
+            ty.points("a", after="hidden", marker=ty.marker(color=ty.threshold_color("t", [2.0], ["#000000", "#ffffff"]))),
+        ]
+    )
+    layers = scene.to_document()["panels"]["v"]["layers"]
+    assert layers[0]["marker"]["color"] == {"colormap": "magma", "channel": "t", "range": [0.0, 4.0], "truncate": [1.0, 0.0]}
+    assert layers[1]["marker"]["color"] == {"channel": "S", "thresholds": [0.0], "colors": ["#3b0f70", "#febb81"]}
+    with pytest.raises(ty.SceneError, match=r"panel: .*lacks channel 'height' for a layer's color"):
+        base(layers=[ty.points("a", marker=ty.marker(color={"colormap": "magma", "channel": "height"}))])[0].to_document()
+    with pytest.raises(ty.SceneError, match=r"panel: .*lacks parameter 'C' for a layer's color"):
+        base(layers=[ty.points("a", marker=ty.marker(color={"colormap": "magma", "parameter": "C"}))])[0].to_document()
+    scene = ty.Scene(title="members")
+    root = scene.frame("root")
+    fam = scene.trajectory_set("fam", frame=root)
+    for c in (0.0, 1.0):
+        fam.add(np.array([[c, 0.0], [c, 1.0]]), channels={"t": np.array([0.0, 1.0])}, parameters={"C": c})
+    pick = scene.parameter("pick", parameter="C")
+    scene.clock("fraction", channels=["t"], frame_count=4)
+    layer = ty.points(fam, pick, marker=ty.marker(color={"colormap": "viridis", "parameter": "C"}))
+    scene.panel("v", frame=root, reference=ty.reference(fam, 0), layers=[layer])
+    scene.show("p", panel="v")
+    assert scene.to_document()["panels"]["v"]["layers"][0]["marker"]["color"] == {"colormap": "viridis", "parameter": "C"}
+    with pytest.raises(ty.SceneError, match=r"^panel:"):
+        ty.marker(color={"colormap": "jet", "channel": "t"})
+    # a head and a legend entry take a fixed color only
+    with pytest.raises(ty.SceneError):
+        ty.trajectories("a", head={"color": by_height})
+    with pytest.raises(ty.SceneError):
+        ty.entry("a", marker=ty.marker(color=by_height))
+
+
 # drawing only
 
 

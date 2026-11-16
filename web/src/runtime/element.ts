@@ -143,7 +143,8 @@ header h1 { font-size: 17px; font-weight: 600; margin: 0; letter-spacing: 0.01em
 .field output { font-size: 12px; font-variant-numeric: lining-nums tabular-nums; min-width: 7ch; color: var(--fg); }
 
 .seg { display: inline-flex; flex-wrap: wrap; gap: 1px; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--line); }
-.seg button { flex: 1 0 auto; background: var(--surface); color: var(--dim); border: 0; padding: 4px 10px; cursor: pointer; white-space: nowrap; }
+.seg button { flex: 1 1 auto; background: var(--surface); color: var(--dim); border: 0; padding: 4px 10px; cursor: pointer; white-space: normal;
+  overflow-wrap: anywhere; }
 .seg button:hover { background: var(--raised); color: var(--fg); }
 .seg button[aria-pressed="true"] { background: var(--accent-tint); color: var(--fg); box-shadow: inset 0 -2px var(--accent); }
 .seg button:focus-visible { outline-offset: -2px; }

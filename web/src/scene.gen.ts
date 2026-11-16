@@ -1091,7 +1091,7 @@ export type ColorSpec =
        */
       range?: [number, number];
       /**
-       * The part [a, b] of the colormap onto which the range is mapped lies within [0, 1], and it is [0, 1] by default.
+       * The part [a, b] of the colormap onto which the range is mapped lies within [0, 1], and it is [0, 1] by default. With a > b, the colormap is read in reverse.
        *
        * @minItems 2
        * @maxItems 2
@@ -1115,7 +1115,7 @@ export type ColorSpec =
        */
       range?: [number, number];
       /**
-       * The part [a, b] of the colormap onto which the range is mapped lies within [0, 1], and it is [0, 1] by default.
+       * The part [a, b] of the colormap onto which the range is mapped lies within [0, 1], and it is [0, 1] by default. With a > b, the colormap is read in reverse.
        *
        * @minItems 2
        * @maxItems 2

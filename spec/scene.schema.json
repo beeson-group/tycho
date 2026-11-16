@@ -899,7 +899,7 @@
               "maxItems": 2
             },
             "truncate": {
-              "description": "The part [a, b] of the colormap onto which the range is mapped lies within [0, 1], and it is [0, 1] by default.",
+              "description": "The part [a, b] of the colormap onto which the range is mapped lies within [0, 1], and it is [0, 1] by default. With a > b, the colormap is read in reverse.",
               "type": "array",
               "items": {
                 "type": "number",
@@ -945,7 +945,7 @@
               "maxItems": 2
             },
             "truncate": {
-              "description": "The part [a, b] of the colormap onto which the range is mapped lies within [0, 1], and it is [0, 1] by default.",
+              "description": "The part [a, b] of the colormap onto which the range is mapped lies within [0, 1], and it is [0, 1] by default. With a > b, the colormap is read in reverse.",
               "type": "array",
               "items": {
                 "type": "number",

@@ -257,8 +257,11 @@ describe('a points layer that the clock does not change', () => {
     const sprites = () => panels.get('p1').draws.get(0).sprites;
     const drawn = (): number[] => Array.from(sprites().position.array.subarray(0, 3 * sprites().points.geometry.drawRange.count));
     /** The number of times the points were filled, since three.js counts the uploads that a fill asks for. */
+    const tinted = (): boolean => sprites().points.material.vertexColors;
+    /** The marker that the texture of the sprites is drawn from. */
+    const marker = (): { color?: string } => sprites().marker;
     const fills = (): number => sprites().position.version;
-    return { at, drawn, fills };
+    return { at, drawn, tinted, marker, fills };
   }
 
   it('draws the member that a parameter input selects again when the input moves', () => {
@@ -278,5 +281,12 @@ describe('a points layer that the clock does not change', () => {
     expect(fills()).toBe(once);
     at(4, { k: 1 });
     expect(fills()).toBe(once + 1);
+  });
+
+  it('draws a marker without a color in the foreground of the theme', () => {
+    const { at, marker, tinted } = rowStage();
+    at(0, { k: 0 });
+    expect(tinted()).toBe(false);
+    expect(marker().color).toBe('#d8d8d8');
   });
 });

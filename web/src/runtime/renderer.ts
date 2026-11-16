@@ -534,6 +534,8 @@ export interface PointsPlan {
   layer: PointsLayer;
   /** Null when the set query does not match any trajectory set. */
   set: SetData | null;
+  /** The members of rule `members`, in increasing order. */
+  members: number[];
 }
 
 export interface LabelPlan {
@@ -618,7 +620,8 @@ export function planPanel(scene: Scene, geometry: GeometryCache, state: State, p
     else if (layer.kind === 'body') layers.push({ kind: 'body', index, layer });
     else if (layer.kind === 'points') {
       const id = oneSet(scope, layer.sets);
-      layers.push({ kind: 'points', index, layer, set: id === null ? null : geometry.sets.get(id) });
+      const set = id === null ? null : geometry.sets.get(id);
+      layers.push({ kind: 'points', index, layer, set, members: set === null ? [] : resolveMembers(scope, layer.members, set) });
     } else if (layer.kind === 'label') {
       const at = layer.at as { sets?: unknown };
       const id = at !== null && typeof at === 'object' && 'sets' in at ? oneSet(scope, at.sets as never) : null;
@@ -1883,7 +1886,8 @@ class PointsDraw implements Draw {
   private readonly rgb: Rgb;
   /** True when what the layer draws does not change with the clock. */
   readonly isStatic: boolean;
-  private done = false;
+  /** The members that the points were filled for, or null before the first fill. */
+  private members: number[] | null = null;
 
   constructor(ctx: DrawContext, layer: PointsLayer, key: string) {
     this.key = key;
@@ -1908,7 +1912,10 @@ class PointsDraw implements Draw {
     this.sprites.setOpacity(opacityAt(this.layer.opacity, s) * opacityAt(m.opacity, s));
     if (typeof m.size === 'object' || typeof m.edge_width === 'object')
       this.sprites.setSize(sizeAt(m.size, s, 4), m.edge_width === undefined ? undefined : numberAt(m.edge_width, s, 0));
-    if (this.isStatic && this.done) return;
+    // a layer that the clock does not change is filled again only for new members, e.g. after a slider moved the member that an input selects
+    const old = this.members;
+    const same = old !== null && (plan.members === old || (plan.members.length === old.length && plan.members.every((t, i) => t === old[i])));
+    if (this.isStatic && same) return;
     const result = pointsLayer(env, this.layer, plan.set);
     let n = 0;
     for (const mem of result.members) n += mem.points.length;
@@ -1924,7 +1931,7 @@ class PointsDraw implements Draw {
       }
     }
     this.sprites.show(n);
-    this.done = true;
+    this.members = plan.members;
   }
 
   extend(box: THREE.Box3): void {

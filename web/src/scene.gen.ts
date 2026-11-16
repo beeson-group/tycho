@@ -527,7 +527,7 @@ export type Layer =
       /**
        * The samples are drawn with this marker, 4 CSS pixels wide in the foreground of the theme by default.
        */
-      marker?: Marker;
+      marker?: PointsMarker;
       /**
        * With "none", the default, every sample is drawn. With "grow", the samples appear one after another as the clock passes them. (rule `points`)
        */
@@ -2041,15 +2041,47 @@ export interface Marker {
    */
   shape?: 'disc' | 'ring' | 'square' | 'diamond' | 'triangle' | 'star' | 'cross' | 'plus';
   /**
-   * The width of the shape is given in CSS pixels, or keyframed. It is 9 for a head and 4 for a points layer by default.
+   * The width of the shape is given in CSS pixels, or keyframed. It is 0.6 times the size of the text for a legend entry by default.
    */
   size?: Size;
   /**
-   * A filled shape is filled with this color, and a ring, a cross, or a plus is stroked with it. It is the color of the layer for a head, and the foreground of the theme for a points layer, by default.
+   * A filled shape is filled with this color, and a ring, a cross, or a plus is stroked with it. It is the foreground of the theme by default.
    */
   color?: Color;
   /**
    * A filled shape is outlined in this color when it is given.
+   */
+  edge?: Color;
+  /**
+   * The width of the outline, or of the stroke of a ring, a cross, or a plus, is given in CSS pixels, or keyframed. By default it is 1 for a filled shape with an edge, and a sixth of the size, at least 1, for a ring, a cross, or a plus.
+   */
+  edge_width?: number | Keyframed;
+  /**
+   * The opacity is in [0, 1], or keyframed, and 1 by default.
+   */
+  opacity?: Opacity;
+}
+/**
+ * The marker of a points layer is written in the form of a marker, and its color may also be any color of a trajectories layer.
+ *
+ * This interface was referenced by `Scene`'s JSON-Schema
+ * via the `definition` "pointsMarker".
+ */
+export interface PointsMarker {
+  /**
+   * The shape is "disc", the default, "ring", "square", "diamond", "triangle", "star", "cross", or "plus".
+   */
+  shape?: 'disc' | 'ring' | 'square' | 'diamond' | 'triangle' | 'star' | 'cross' | 'plus';
+  /**
+   * The width of the shape is given in CSS pixels, or keyframed, and it is 4 by default.
+   */
+  size?: Size;
+  /**
+   * A filled shape is filled with this color, and a ring, a cross, or a plus is stroked with it. It is the foreground of the theme by default. A colormap over a parameter colors each member, and a colormap over a channel or a color by thresholds of a channel colors each sample.
+   */
+  color?: ColorSpec;
+  /**
+   * A filled shape is outlined in this color when it is given. With a color per member or per sample, the outline is tinted by that color, hence only a black outline keeps its color.
    */
   edge?: Color;
   /**

@@ -1686,7 +1686,7 @@
             },
             "marker": {
               "description": "The samples are drawn with this marker, 4 CSS pixels wide in the foreground of the theme by default.",
-              "$ref": "#/$defs/marker"
+              "$ref": "#/$defs/pointsMarker"
             },
             "reveal": {
               "description": "With \"none\", the default, every sample is drawn. With \"grow\", the samples appear one after another as the clock passes them. (rule `points`)",
@@ -2349,15 +2349,63 @@
           ]
         },
         "size": {
-          "description": "The width of the shape is given in CSS pixels, or keyframed. It is 9 for a head and 4 for a points layer by default.",
+          "description": "The width of the shape is given in CSS pixels, or keyframed. It is 0.6 times the size of the text for a legend entry by default.",
           "$ref": "#/$defs/size"
         },
         "color": {
-          "description": "A filled shape is filled with this color, and a ring, a cross, or a plus is stroked with it. It is the color of the layer for a head, and the foreground of the theme for a points layer, by default.",
+          "description": "A filled shape is filled with this color, and a ring, a cross, or a plus is stroked with it. It is the foreground of the theme by default.",
           "$ref": "#/$defs/color"
         },
         "edge": {
           "description": "A filled shape is outlined in this color when it is given.",
+          "$ref": "#/$defs/color"
+        },
+        "edge_width": {
+          "description": "The width of the outline, or of the stroke of a ring, a cross, or a plus, is given in CSS pixels, or keyframed. By default it is 1 for a filled shape with an edge, and a sixth of the size, at least 1, for a ring, a cross, or a plus.",
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "$ref": "#/$defs/keyframed"
+            }
+          ]
+        },
+        "opacity": {
+          "description": "The opacity is in [0, 1], or keyframed, and 1 by default.",
+          "$ref": "#/$defs/opacity"
+        }
+      }
+    },
+    "pointsMarker": {
+      "description": "The marker of a points layer is written in the form of a marker, and its color may also be any color of a trajectories layer.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "shape": {
+          "description": "The shape is \"disc\", the default, \"ring\", \"square\", \"diamond\", \"triangle\", \"star\", \"cross\", or \"plus\".",
+          "enum": [
+            "disc",
+            "ring",
+            "square",
+            "diamond",
+            "triangle",
+            "star",
+            "cross",
+            "plus"
+          ]
+        },
+        "size": {
+          "description": "The width of the shape is given in CSS pixels, or keyframed, and it is 4 by default.",
+          "$ref": "#/$defs/size"
+        },
+        "color": {
+          "description": "A filled shape is filled with this color, and a ring, a cross, or a plus is stroked with it. It is the foreground of the theme by default. A colormap over a parameter colors each member, and a colormap over a channel or a color by thresholds of a channel colors each sample.",
+          "$ref": "#/$defs/colorSpec"
+        },
+        "edge": {
+          "description": "A filled shape is outlined in this color when it is given. With a color per member or per sample, the outline is tinted by that color, hence only a black outline keeps its color.",
           "$ref": "#/$defs/color"
         },
         "edge_width": {

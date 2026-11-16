@@ -536,6 +536,8 @@ export interface PointsPlan {
   set: SetData | null;
   /** The members of rule `members`, in increasing order. */
   members: number[];
+  /** The marker's color, where a colormap keyed on a choice is resolved as for a trajectories layer. */
+  color: ColorSpec | undefined;
 }
 
 export interface LabelPlan {
@@ -621,7 +623,8 @@ export function planPanel(scene: Scene, geometry: GeometryCache, state: State, p
     else if (layer.kind === 'points') {
       const id = oneSet(scope, layer.sets);
       const set = id === null ? null : geometry.sets.get(id);
-      layers.push({ kind: 'points', index, layer, set, members: set === null ? [] : resolveMembers(scope, layer.members, set) });
+      const members = set === null ? [] : resolveMembers(scope, layer.members, set);
+      layers.push({ kind: 'points', index, layer, set, members, color: resolveColor(scope, layer.marker?.color) });
     } else if (layer.kind === 'label') {
       const at = layer.at as { sets?: unknown };
       const id = at !== null && typeof at === 'object' && 'sets' in at ? oneSet(scope, at.sets as never) : null;
@@ -1883,18 +1886,23 @@ class PointsDraw implements Draw {
   readonly group = new THREE.Group();
   private readonly sprites: MarkerSprites;
   private readonly layer: PointsLayer;
-  private readonly rgb: Rgb;
+  /** The color of every point, or of each sample of the set by its index in storage, three floats per sample. */
+  private readonly coloring: Coloring;
   /** True when what the layer draws does not change with the clock. */
   readonly isStatic: boolean;
   /** The members that the points were filled for, or null before the first fill. */
   private members: number[] | null = null;
 
-  constructor(ctx: DrawContext, layer: PointsLayer, key: string) {
+  constructor(ctx: DrawContext, plan: PointsPlan & { set: SetData }, key: string) {
     this.key = key;
+    const layer = plan.layer;
     this.layer = layer;
     const m = layer.marker ?? {};
-    this.rgb = hexRgb(m.color !== undefined ? themed(m.color, ctx.theme) : ctx.theme.foreground);
-    this.sprites = new MarkerSprites(themedMarker({ ...m, color: m.color ?? ctx.theme.foreground }, ctx.theme), typeof m.size === 'number' ? m.size : 4, false);
+    this.coloring = coloring(themedSpec(plan.color, ctx.theme), plan.set, hexRgb(ctx.theme.foreground));
+    // a fixed color is drawn into the texture, and a color per sample tints a white texture
+    const fill = plan.color === undefined ? ctx.theme.foreground : typeof plan.color === 'string' ? plan.color : undefined;
+    const tinted = this.coloring.kind === 'sample';
+    this.sprites = new MarkerSprites(themedMarker({ ...m, color: fill }, ctx.theme), typeof m.size === 'number' ? m.size : 4, tinted);
     this.group.add(this.sprites.points);
     this.isStatic =
       (layer.reveal ?? 'none') === 'none' &&
@@ -1922,11 +1930,13 @@ class PointsDraw implements Draw {
     this.sprites.grow(n);
     const pos = this.sprites.position.array as Float32Array;
     const col = this.sprites.color.array as Float32Array;
+    const c = this.coloring;
     let i = 0;
     for (const mem of result.members) {
-      for (const p of mem.points) {
-        pos.set(p, 3 * i);
-        col.set(this.rgb, 3 * i);
+      const start = plan.set!.start(mem.index);
+      for (let j = 0; j < mem.points.length; j++) {
+        pos.set(mem.points[j]!, 3 * i);
+        if (c.kind === 'sample') for (let k = 0; k < 3; k++) col[3 * i + k] = c.rgb[3 * (start + j) + k]!;
         i++;
       }
     }
@@ -2971,7 +2981,8 @@ export class PanelAreaRenderer {
           key = `inset_box\0${plan.declaredId}\0${lp.index}\0${JSON.stringify([lp.layer, theme])}`;
         } else if (lp.kind === 'points' || lp.kind === 'label') {
           if (lp.kind === 'points' && lp.set === null) continue;
-          key = `${lp.kind}\0${plan.declaredId}\0${lp.index}\0${lp.set?.id ?? ''}\0${plan.display}\0${JSON.stringify(lp.layer)}\0${theme}`;
+          const color = lp.kind === 'points' ? JSON.stringify(lp.color ?? null) : '';
+          key = `${lp.kind}\0${plan.declaredId}\0${lp.index}\0${lp.set?.id ?? ''}\0${plan.display}\0${JSON.stringify(lp.layer)}\0${color}\0${theme}`;
         } else key = `${lp.kind}\0${plan.declaredId}\0${lp.index}\0${plan.display}\0${theme}`;
         keep.add(lp.index);
         const old = p.draws.get(lp.index);
@@ -2997,7 +3008,7 @@ export class PanelAreaRenderer {
                       this.onChange();
                     })
                   : lp.kind === 'points'
-                    ? new PointsDraw(this.ctx, lp.layer, key)
+                    ? new PointsDraw(this.ctx, lp as PointsPlan & { set: SetData }, key)
                     : lp.kind === 'label'
                       ? new LabelDraw(lp.layer, key)
                       : new MarkDraw(this.ctx, lp.layer, p.cameraSpec, key);

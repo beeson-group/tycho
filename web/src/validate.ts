@@ -270,7 +270,11 @@ function checkPointsLayer(scene: Scene, id: string, layer: PointsLayer): void {
     if (layer[key] !== undefined && layer[key] !== 'clamp' && layer[key] !== 'hidden')
       fail('before-after', `panel ${id}: a points layer's ${key} is ${JSON.stringify(layer[key])}, not clamp or hidden`);
   }
-  if (layer.marker !== undefined) checkMarker(id, layer.marker, 'points');
+  if (layer.marker !== undefined) {
+    const { color, ...rest } = layer.marker;
+    checkMarker(id, typeof color === 'object' ? rest : { ...rest, color }, 'points');
+    checkColor(scene, id, color);
+  }
   checkKeyframed(layer.opacity, `panel ${id}: a points layer's opacity`, isOpacity);
   checkLayerClock(id, layer.clock);
 }
@@ -791,6 +795,7 @@ function validateState(scene: Scene, frames: Frames, state: State, warnings: str
         if (id === null) continue;
         need(id, scene.trajectory_sets[id]!.frame, 'its points');
         member(id, layer.members);
+        colorData(pid, id, scene.trajectory_sets[id]!, layer.marker?.color);
         const hides = (layer.clock !== undefined || scene.clock.mode === 'epoch') && (layer.before === 'hidden' || layer.after === 'hidden');
         if ((layer.reveal ?? 'none') === 'grow' || hides) clocked(id, 'on which a reading is taken', layer.clock);
       } else if (layer.kind === 'label') {

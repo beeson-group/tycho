@@ -6,6 +6,10 @@ The two file formats are versioned apart from the packages, i.e. either format v
 
 ## [Unreleased]
 
+### Fixed
+
+- A points layer whose member is selected by a parameter input is drawn again when the input changes, e.g. when its slider is moved. Such a layer kept the member of the loaded page, unless it was revealed or given `before` or `after`.
+
 ## [0.3.0] - 2026-11-14
 
 Scene format 0.5 and data container version 2 are written and read at this version, and a scene or a container of an older version is rejected and is written again with this version of pytycho. Format 0.5 differs from format 0.2, the format of 0.2.0, by the arrow and inset box layers, layers that read their trajectories with the attributes and channels of the reference trajectory (`layers.read_from`), origins given by channels, and the timeline, with the features `clock.keyframes`, `layers.clock`, `camera.keyframes`, `layers.label`, and `layers.points`. It also renames keys and values of format 0.2 without aliases, as listed under Changed.

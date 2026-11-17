@@ -194,13 +194,25 @@ function snapY(g: G, y: number): number {
   return m.b !== 0 || m.c !== 0 || m.d === 0 ? y : (Math.round(y * m.d + m.f) - m.f) / m.d;
 }
 
+/**
+ * A baseline at `y` moved to a whole device pixel from `from`, the top of the nearest transformed box, since the page sets text in the
+ * coordinates of that box before it moves the box.
+ */
+function settle(g: G, y: number, from: number): number {
+  const m = g.getTransform();
+  const k = Math.hypot(m.a, m.b) || 1;
+  return from + Math.round((y - from) * k) / k;
+}
+
 /** The corner of the painted root on the page, and the page's scale of it, e.g. under a CSS transform of a slide. */
 interface Origin {
   x: number;
   y: number;
   scale: number;
-  /** The baseline of the first line of a text node, in the CSS pixels of the root, where a probe measured it. */
-  baselines: Map<Text, number>;
+  /** The start of the baseline of the first line of a text node, in the CSS pixels of the root, where a probe measured it. */
+  baselines: Map<Text, { x: number; y: number }>;
+  /** The transform of the canvas at the corner of the root, by which a point of the root is mapped into a transformed box. */
+  base: DOMMatrix;
 }
 
 /**
@@ -210,11 +222,11 @@ interface Origin {
 export function rasterize(g: G, root: HTMLElement): void {
   const r = root.getBoundingClientRect();
   const width = root.offsetWidth || r.width;
-  const o: Origin = { x: r.left, y: r.top, scale: width > 0 ? r.width / width : 1, baselines: new Map() };
+  const o: Origin = { x: r.left, y: r.top, scale: width > 0 ? r.width / width : 1, baselines: new Map(), base: g.getTransform() };
   const probes = new Map<Text, HTMLElement>();
   placeProbes(root, probes);
   try {
-    for (const [n, p] of probes) o.baselines.set(n, local(o, p.getBoundingClientRect()).y);
+    for (const [n, p] of probes) o.baselines.set(n, local(o, p.getBoundingClientRect()));
     paintElement(g, root, o, null);
   } finally {
     for (const p of probes.values()) p.remove();
@@ -222,15 +234,13 @@ export function rasterize(g: G, root: HTMLElement): void {
 }
 
 /**
- * Puts an empty inline block before each text node of the tree outside a transform, since the top of an empty inline block lies on
- * the baseline of its line, which the DOM does not give otherwise. A text node in a flex or grid container is left out, since a
- * probe there would be an item of its own.
+ * Puts an empty inline block before each text node of the tree, since the top of an empty inline block lies on the baseline of its
+ * line, which the DOM does not give otherwise. A text node in a flex or grid container is left out, since a probe there would be an
+ * item of its own.
  */
 function placeProbes(e: HTMLElement, probes: Map<Text, HTMLElement>): void {
   if (!e.checkVisibility()) return;
-  const cs = getComputedStyle(e);
-  if (turns(cs.transform)) return;
-  const item = /flex|grid/.test(cs.display);
+  const item = /flex|grid/.test(getComputedStyle(e).display);
   for (const n of [...(e.shadowRoot ?? e).childNodes]) {
     if (n.nodeType === Node.TEXT_NODE && !item && (n as Text).data.trim() !== '') {
       const p = document.createElement('tycho-probe');
@@ -247,10 +257,11 @@ function local(o: Origin, r: DOMRect): { x: number; y: number; w: number; h: num
 }
 
 /**
- * Paints one element. Outside a transform, the box of `e` is its client rect. Inside one, `at` is the corner of the offset parent of
- * `e` in the coordinates of the transformed ancestor, and its text is laid out as one line.
+ * Paints one element. Outside a transform, the box of `e` is its client rect, and `from` is the top of the nearest box that a
+ * transform moves. Inside one, `at` is the corner of the offset parent of `e` in the coordinates of the transformed ancestor, and its
+ * text is laid out as one line.
  */
-function paintElement(g: G, e: HTMLElement, o: Origin, at: { x: number; y: number } | null): void {
+function paintElement(g: G, e: HTMLElement, o: Origin, at: { x: number; y: number } | null, from = 0): void {
   if (!e.checkVisibility()) return;
   const cs = getComputedStyle(e);
   const transformed = turns(cs.transform);
@@ -282,6 +293,7 @@ function paintElement(g: G, e: HTMLElement, o: Origin, at: { x: number; y: numbe
     }
   }
   const inside = transformed || at !== null;
+  if (!inside && cs.transform !== 'none') from = y;
   g.globalAlpha *= px(cs.opacity);
   if (!transformed) [x, y, w, h] = snap(g, x, y, w, h);
   if (e instanceof HTMLCanvasElement) {
@@ -296,19 +308,29 @@ function paintElement(g: G, e: HTMLElement, o: Origin, at: { x: number; y: numbe
   }
   pseudo(g, e, '::before', x, y, w, h, cs);
   for (const n of (e.shadowRoot ?? e).childNodes) {
-    if (n.nodeType === Node.TEXT_NODE) text(g, n as Text, o, cs, inside ? { x, y } : null);
+    if (n.nodeType === Node.TEXT_NODE) text(g, n as Text, o, cs, inside ? { x, y } : null, from);
     else if (n instanceof HTMLElement && !(n instanceof HTMLStyleElement) && !(n instanceof HTMLScriptElement)) {
-      paintElement(g, n, o, inside ? (n.offsetParent === e ? { x, y } : at) : null);
+      paintElement(g, n, o, inside ? (n.offsetParent === e ? { x, y } : at) : null, from);
     }
   }
   pseudo(g, e, '::after', x, y, w, h, cs);
   g.restore();
 }
 
-/** Paints a text node. Inside a transform, `inside` is the corner of the parent's box, in which the text is one line. */
-function text(g: G, n: Text, o: Origin, cs: CSSStyleDeclaration, inside: { x: number; y: number } | null): void {
+/**
+ * Paints a text node. Inside a transform, `inside` is the corner of the parent's box, in which the text is one line. Outside one,
+ * `from` is the top of the nearest box that a transform moves.
+ */
+function text(g: G, n: Text, o: Origin, cs: CSSStyleDeclaration, inside: { x: number; y: number } | null, from: number): void {
   const s = n.data;
   if (s.trim() === '') return;
+  const probe = o.baselines.get(n);
+  if (inside !== null && probe !== undefined) {
+    // the probe's point on the page, mapped back through the transforms of the boxes around the text
+    const p = g.getTransform().inverse().multiply(o.base).transformPoint(new DOMPoint(probe.x, probe.y));
+    run(g, s, p.x, settle(g, p.y, 0), cs);
+    return;
+  }
   const [a, d] = metrics(g, cs);
   if (inside !== null) {
     // the line box puts half the leading above the content area
@@ -322,8 +344,7 @@ function text(g: G, n: Text, o: Origin, cs: CSSStyleDeclaration, inside: { x: nu
   const first = range.getClientRects()[0];
   if (first === undefined) return;
   const top = local(o, first).y;
-  const probe = o.baselines.get(n);
-  const base = (y: number) => (probe === undefined ? y + a : probe + y - top);
+  const base = (y: number) => (probe === undefined ? y + a : settle(g, probe.y + y - top, from));
   const at = (i: number, j: number) => {
     range.setStart(n, i);
     range.setEnd(n, j);

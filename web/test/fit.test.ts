@@ -20,6 +20,7 @@ import {
   labelBox,
   labelOver,
   labelsOverlap,
+  axisTitle,
   orthoFit,
   planeLabels,
   planeView,
@@ -28,9 +29,11 @@ import {
   PanelAreaRenderer,
   TrajectoryDraw,
   type TrajectoryPlan,
+  writeLabel,
 } from '../src/runtime/renderer';
+import { installDom } from './dom-shim';
 import { withInput } from '../src/runtime/state';
-import type { Camera, Layer, State, TrajectoriesLayer } from '../src/scene';
+import type { Camera, Layer, Scene, State, TrajectoriesLayer } from '../src/scene';
 import { loadCorpus } from './corpus';
 import { baseScene, MemoryStore } from './helpers';
 
@@ -149,11 +152,12 @@ function widePanel(camera: Camera, layers: Layer[] = []) {
   return { stage, p, ends };
 }
 
-/** A panel of 400 by 400 CSS pixels under `camera` that draws one trajectory from (0, 0, 0) to (10, 1, 1) and the axes, planned and fitted without WebGL. */
-function boxPanel(camera: Camera) {
+/** A panel of 400 by 400 CSS pixels under `camera` that draws one trajectory from (0, 0, 0) to (10, 1, 1) and the axes, planned and fitted without WebGL. `edit` changes the scene first. */
+function boxPanel(camera: Camera, edit: (scene: Scene) => void = () => {}) {
   const scene = baseScene({ version: '0.3' });
   scene.panels.main!.camera = camera;
   scene.panels.main!.layers.push({ kind: 'axes' });
+  edit(scene);
   const data = new MemoryStore()
     .add('off', [0, 2], 'uint32')
     .add('pos', [
@@ -204,6 +208,23 @@ describe("an 3d camera's stretch and turn (2.7)", () => {
     expect(items[2].y).toBeCloseTo(((1 - tip.y) / 2) * 400, 9);
     const plain = boxPanel({ kind: '3d' });
     expect(plain.stage.labelItems(plain.p).map((l: { text: string }) => l.text)).toEqual(['x', 'y', 'z']);
+  });
+  it('titles a stretched axis whose frame title has parts with the runs of the title and its factor', () => {
+    const { stage, p } = boxPanel({ kind: '3d', stretch: [1, 1, 2.5] }, (scene) => {
+      scene.frames.a!.axes = ['x', 'y', ['z', { sub: '0' }]];
+    });
+    expect(stage.labelItems(p)[2].text).toEqual([{ text: 'z' }, { text: '0', shift: 'sub' }, { text: ' ×2.5' }]);
+  });
+  it('hands the frame titles of a box axes layer to the box painter as runs with the unit after them', () => {
+    const { stage, p } = boxPanel({ kind: '2d', plane: 'xy' }, (scene) => {
+      scene.frames.a = { axes: [['x', { sub: '0' }], ['y', { sup: '2' }], 'z'], unit: 'km' };
+      scene.panels.main!.layers[1] = { kind: 'axes', span: 'box' };
+    });
+    stage.follow(p);
+    expect(stage.paintInfo('p1').box.titles).toEqual([
+      [{ text: 'x' }, { text: '0', shift: 'sub' }, { text: ' [km]' }],
+      [{ text: 'y' }, { text: '2', shift: 'sup' }, { text: ' [km]' }],
+    ]);
   });
   it('turns the camera about the up axis through its target by turn degrees times the progress, and back at the start of a loop', () => {
     const { stage, p } = boxPanel({ kind: '3d', auto_rotate: 90 });
@@ -475,6 +496,42 @@ describe("a 2d camera's axes and grid follow the visible rectangle", () => {
         .map((l) => l.text);
     expect([kinds(880, 160), kinds(880, 159), kinds(159, 440), kinds(150, 150)]).toEqual([['x', 'y'], ['y'], ['x'], []]);
     expect(planeLabels(planeView(camera(0, 0, 1.1, 2), { kind: '2d', plane: 'xy' }, 880, 150), true, ['x', 'y']).some((l) => l.kind === 'tick')).toBe(true);
+  });
+  it('titles an axis from a static text of a frame, with the unit after it, and sets its sub and sup runs as scripts (rule `timeline-parts`)', () => {
+    expect(axisTitle('x', 'DU')).toBe('x [DU]');
+    expect(axisTitle('', 'DU')).toBe('');
+    expect(axisTitle(undefined, 'DU')).toBe('');
+    const x0 = axisTitle(['initial x', { sub: '0' }], undefined);
+    expect(x0).toEqual([{ text: 'initial x' }, { text: '0', shift: 'sub' }]);
+    expect(axisTitle(['t', { sup: '2' }], 'TU')).toEqual([{ text: 't' }, { text: '2', shift: 'sup' }, { text: ' [TU]' }]);
+    const v = planeView(camera(0, 0, 1.1, 2), { kind: '2d', plane: 'xy' }, 880, 440);
+    const titles = planeLabels(v, false, [x0, []]);
+    // an empty title is left out as an empty string is, and the box of a title is estimated from its plain text
+    expect(titles).toEqual([{ text: x0, x: 440, y: 430, align: 'center', kind: 'title' }]);
+    expect(labelBox(titles[0]!)).toEqual(labelBox({ ...titles[0]!, text: 'initial x0' }));
+  });
+  it('writes a label into its span once per change of text, with a sub or a sup run as a smaller span shifted off the baseline', () => {
+    const { doc, uninstall } = installDom();
+    try {
+      const span = doc.createElement('span') as unknown as HTMLElement;
+      writeLabel(span, [{ text: 'initial x' }, { text: '0', shift: 'sub' }, { text: '2', shift: 'sup' }]);
+      const runs = [...span.children] as HTMLElement[];
+      expect(runs.map((r) => r.textContent)).toEqual(['initial x', '0', '2']);
+      expect(runs.map((r) => [r.style.fontSize ?? '', r.style.position ?? '', r.style.top ?? ''])).toEqual([
+        ['', '', ''],
+        ['70%', 'relative', '0.2571em'],
+        ['70%', 'relative', '-0.6em'],
+      ]);
+      // the same runs again leave the spans in place, and a plain string replaces them
+      writeLabel(span, [{ text: 'initial x' }, { text: '0', shift: 'sub' }, { text: '2', shift: 'sup' }]);
+      expect(span.children[0]).toBe(runs[0]);
+      writeLabel(span, [{ text: 'initial x' }, { text: '0', shift: 'sup' }, { text: '2', shift: 'sup' }]);
+      expect(span.children[0]).not.toBe(runs[0]);
+      writeLabel(span, 'x [DU]');
+      expect([span.children.length, span.textContent]).toEqual([0, 'x [DU]']);
+    } finally {
+      uninstall();
+    }
   });
   it('keeps the y tick column below the head, a line of text clear of its bottom edge', () => {
     const v = planeView(camera(0, 0, 1.1, 2), { kind: '2d', plane: 'xy' }, 880, 440);

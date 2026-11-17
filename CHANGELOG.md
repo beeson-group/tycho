@@ -9,9 +9,11 @@ The two file formats are versioned apart from the packages, i.e. either format v
 ### Added
 
 - The color of the marker of a points layer takes the forms of the color of a trajectories layer, i.e. a colormap over a parameter, which colors each member, and a colormap over a channel or `ty.threshold_color`, which color each sample, e.g. `ty.marker("disc", 1.6, {"colormap": "plasma", "channel": "height", "range": (0.0, 0.8)})`. A cloud of samples is thus colored by a stored value, as `c=` colors a matplotlib scatter plot, in one layer. The colormap `magma` is added, and a `truncate` of `(1, 0)` reads a colormap in reverse.
+- An axis title of a frame takes subscripts and superscripts, as a list of strings, `ty.sub` parts, and `ty.sup` parts, e.g. `scene.frame("phase", axes=("C", ["initial x", ty.sub("0")], "z"))` (#46). A script is set smaller and off the baseline, in the font of its title, in a plane panel, in the box of an axes layer, and at the tips of 3d axes. Unicode subscript digits are missing from many fonts, and the browser then draws them in another font.
 
 ### Fixed
 
+- The text of a video export is drawn with the page's antialiasing and baselines in Chrome on Linux, without colored fringes, and a rotated axis title on the pixel row the page shows it on (#48).
 - A points layer whose marker does not give a color is drawn in the foreground of the theme, as the scene reference says. Such a layer was drawn in white, which hardly shows on a light page.
 - A points layer whose member is selected by a parameter input is drawn again when the input changes, e.g. when its slider is moved. Such a layer kept the member of the loaded page, unless it was revealed or given `before` or `after`.
 - A row of tabs that is wider than the page is wrapped onto further lines, and a label wider than the page is wrapped within its tab, so that every tab can be reached on a phone. Such a row stayed on one line, ran off the screen, and widened the panels past it.

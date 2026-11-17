@@ -293,7 +293,10 @@ export async function exportVideo(source: ExportSource, options: ExportOptions =
     const frame = document.createElement('canvas');
     frame.width = width;
     frame.height = height;
-    const g = frame.getContext('2d', { alpha: false })!;
+    // an opaque canvas would get subpixel text in Chrome on Linux, which the page does not draw, hence the canvas keeps its alpha and starts black
+    const g = frame.getContext('2d')!;
+    g.fillStyle = '#000';
+    g.fillRect(0, 0, width, height);
     for (let k = 0; k < schedule.count; k++) {
       if (signal?.aborted) throw aborted();
       if (failure !== null) throw failure;

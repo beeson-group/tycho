@@ -1328,7 +1328,9 @@ def read_from_reference():
     rot = scene.frame("rotating", parent=pulsating, scale=ty.channel("rho"), label="rotating", axes=("xi", "eta", "z"))
     inertial = scene.frame("inertial", parent=rot, rotation=ty.rotation("z", ty.channel("f")), label="inertial", axes=("X", "Y", "Z"))
     m1 = scene.body("m1", frame=pulsating, position=[-ty.attr("mu"), 0.0, 0.0])
-    scene.frame("inertial-m1", parent=inertial, origin=m1, label="inertial, centered on the primary", axes=("X", "Y", "Z"))
+    # the axis titles hold subscripts, as a frame may (rule `timeline-parts`)
+    axes_m1 = (["X", ty.sub("1")], ["Y", ty.sub("1")], ["Z", ty.sub("1")])
+    scene.frame("inertial-m1", parent=inertial, origin=m1, label="inertial, centered on the primary", axes=axes_m1)
     # mu is carried by the reference trajectory's set alone, and the frame inertial-m1 reads it through the origin at the body m1
     orbit = scene.trajectory_set("orbit", frame=rot, tags={"family": "a"}, attrs={"mu": mu}, periodic=True, dtype="float64")
     orbit.add(orbit_rot, channels={"f": f, "rho": rho})

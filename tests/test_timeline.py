@@ -410,6 +410,18 @@ def test_axes_titles_take_parts():
         ty.axes(span="box", titles=("only one",))
 
 
+def test_a_frame_axis_title_takes_sub_and_sup_parts():
+    scene, _ = base()
+    scene.frame("phase", parent="root", axes=(["initial x", ty.sub("0")], ["initial ", "ẏ", ty.sub("0")], ["t", ty.sup("2")]))
+    assert scene._frames["phase"]["axes"] == [["initial x", {"sub": "0"}], ["initial ", "ẏ", {"sub": "0"}], ["t", {"sup": "2"}]]
+    document = scene.to_document()
+    jsonschema = pytest.importorskip("jsonschema")
+    schema = json.loads((CORPUS.parent / "scene.schema.json").read_text())
+    jsonschema.Draft202012Validator(schema).validate(document)
+    with pytest.raises(ty.SceneError, match=r"^frame:"):
+        scene.frame("other", parent="root", axes=(["t = ", ty.clock_value()],))
+
+
 def test_a_legend_label_takes_sub_and_sup_parts():
     assert ty.entry(["\u03bb", ty.sub("r1")], line={"color": "#1b9e77"})["label"] == ["\u03bb", {"sub": "r1"}]
     with pytest.raises(ty.SceneError, match=r"^timeline:"):

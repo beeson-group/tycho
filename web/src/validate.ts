@@ -212,6 +212,17 @@ function checkParts(scene: Scene, parts: unknown, what: string): void {
   }
 }
 
+/** True for a static text, a string or a list of strings and `sub` and `sup` parts (rule `timeline-parts`). */
+function isStaticText(t: unknown): boolean {
+  const part = (x: unknown) =>
+    typeof x === 'string' ||
+    (x !== null &&
+      typeof x === 'object' &&
+      Object.keys(x).length === 1 &&
+      (typeof (x as { sub?: unknown }).sub === 'string' || typeof (x as { sup?: unknown }).sup === 'string'));
+  return typeof t === 'string' || (Array.isArray(t) && t.every(part));
+}
+
 /** Checks the style of a label or a text overlay (rule `label`). */
 function checkTextStyle(
   id: string,
@@ -456,6 +467,8 @@ export function validate(scene: Scene, data?: DataStore, state?: State): string[
     checkScalar(f!.rotation?.angle, `the rotation of frame ${id}`, false);
     checkScalar(f!.scale, `the scale of frame ${id}`, false);
     if (f!.axes !== undefined && f!.axes.length !== 3) fail('frame', `frame ${id} has ${f!.axes.length} axis labels, not three`);
+    if (f!.axes !== undefined && !f!.axes.every(isStaticText))
+      fail('frame', `frame ${id} has an axis title that is not a string or a list of strings and sub and sup parts`);
   }
   for (const [id, b] of Object.entries(scene.bodies ?? {})) {
     if (!isFrame(b!.frame)) fail('body', `body ${id} is in frame ${b!.frame}, which is not declared`);
@@ -521,15 +534,7 @@ export function validate(scene: Scene, data?: DataStore, state?: State): string[
     } else if (o.kind === 'legend') {
       checkKeyframed(o.opacity, `${where}: the opacity`, isOpacity, 'timeline');
       for (const e of o.entries) {
-        const label = e.label as unknown;
-        const staticPart = (x: unknown) =>
-          typeof x === 'string' ||
-          (x !== null &&
-            typeof x === 'object' &&
-            Object.keys(x).length === 1 &&
-            (typeof (x as { sub?: unknown }).sub === 'string' || typeof (x as { sup?: unknown }).sup === 'string'));
-        if (!(typeof label === 'string' || (Array.isArray(label) && label.every(staticPart))))
-          fail('timeline', `${where} has an entry whose label is not a string or a list of strings and sub and sup parts`);
+        if (!isStaticText(e.label)) fail('timeline', `${where} has an entry whose label is not a string or a list of strings and sub and sup parts`);
         if (e.marker !== undefined) checkMarker(where, e.marker, 'timeline');
         if (e.line?.color !== undefined && !COLOR.test(e.line.color)) fail('timeline', `${where} has a line color that is not #rrggbb`);
         for (const c of e.colors ?? []) if (!COLOR.test(c)) fail('timeline', `${where} has a color ${JSON.stringify(c)} that is not #rrggbb`);

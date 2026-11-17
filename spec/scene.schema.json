@@ -276,10 +276,10 @@
           "type": "string"
         },
         "axes": {
-          "description": "The three axis labels, e.g. [\"x\", \"y\", \"z\"], are used as the titles of the axes.",
+          "description": "The three axis titles, e.g. [\"x\", \"y\", \"z\"] or [\"C\", [\"x\", {\"sub\": \"0\"}], \"z\"], are static texts.",
           "type": "array",
           "items": {
-            "type": "string"
+            "$ref": "#/$defs/staticText"
           },
           "minItems": 3,
           "maxItems": 3
@@ -2806,6 +2806,52 @@
         }
       ]
     },
+    "staticText": {
+      "description": "A static text is a string, or a list of strings and subscript and superscript parts, which do not change with the state or the time. (rule `timeline-parts`)",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "description": "The part is set as a subscript.",
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "sub"
+                ],
+                "properties": {
+                  "sub": {
+                    "description": "This text is set as a subscript.",
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "description": "The part is set as a superscript.",
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "sup"
+                ],
+                "properties": {
+                  "sup": {
+                    "description": "This text is set as a superscript.",
+                    "type": "string"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
     "anchor": {
       "description": "An anchor is the place at which a label is written. (rule `label`)",
       "oneOf": [
@@ -2985,50 +3031,8 @@
                 ],
                 "properties": {
                   "label": {
-                    "description": "The label is a string, or a list of strings and subscript and superscript parts.",
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "array",
-                        "items": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "description": "The part is set as a subscript.",
-                              "type": "object",
-                              "additionalProperties": false,
-                              "required": [
-                                "sub"
-                              ],
-                              "properties": {
-                                "sub": {
-                                  "description": "This text is set as a subscript.",
-                                  "type": "string"
-                                }
-                              }
-                            },
-                            {
-                              "description": "The part is set as a superscript.",
-                              "type": "object",
-                              "additionalProperties": false,
-                              "required": [
-                                "sup"
-                              ],
-                              "properties": {
-                                "sup": {
-                                  "description": "This text is set as a superscript.",
-                                  "type": "string"
-                                }
-                              }
-                            }
-                          ]
-                        }
-                      }
-                    ]
+                    "description": "The label is a static text.",
+                    "$ref": "#/$defs/staticText"
                   },
                   "line": {
                     "description": "The entry is drawn as a short line.",

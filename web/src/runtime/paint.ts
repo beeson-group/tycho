@@ -3,7 +3,7 @@
  * paints them onto a canvas over the panel area, and a video export onto each of its frames, with the same functions, so that a frame of a
  * video shows what the page shows. Every text is canvas text, never markup (rule `plain-text`).
  */
-import type { Box, LabelLayer, Layout, Marker, Overlay, Readout, Scene, State } from '../scene.js';
+import type { Box, LabelLayer, Layout, Marker, Overlay, Readout, Scene, State, StaticText } from '../scene.js';
 import type { PanelAreaRenderer } from './renderer.js';
 import { loopSeconds, opacityAt, sizeAt } from '../evaluate/timeline.js';
 import { hexRgb, mixHex, themed, themedMarker, type Theme } from './colors.js';
@@ -156,9 +156,9 @@ export interface TextRun {
 }
 
 /** A subscript or a superscript is set at this fraction of the size, lowered or raised by the fractions below, as mathtext sets them. */
-const SCRIPT_SIZE = 0.7;
-const SUB_DROP = 0.18;
-const SUP_RISE = 0.42;
+export const SCRIPT_SIZE = 0.7;
+export const SUB_DROP = 0.18;
+export const SUP_RISE = 0.42;
 
 /** The runs of a text as its lines, split at its newline characters. */
 function runLines(text: string | TextRun[]): TextRun[][] {
@@ -463,7 +463,7 @@ export function drawLegend(g: G, legend: Extract<Overlay, { kind: 'legend' }>, w
     baseline: 'middle',
     opacity: 1,
   };
-  for (const c of cells) colWidth[c.col] = Math.max(colWidth[c.col]!, handleWidth(c.e) + gap + textRect(g, labelRuns(c.e.label), 0, 0, labelStyle)[2]);
+  for (const c of cells) colWidth[c.col] = Math.max(colWidth[c.col]!, handleWidth(c.e) + gap + textRect(g, staticRuns(c.e.label), 0, 0, labelStyle)[2]);
   const total = colWidth.reduce((a, b) => a + b, 0) + columnGap * (columns - 1);
   // matplotlib's legend: rows of a text's height and half a size apart, inside a border of 0.4 sizes, which keeps half a size from its anchor
   const lh = (TEXT_HEIGHT + 0.5) * size;
@@ -472,7 +472,7 @@ export function drawLegend(g: G, legend: Extract<Overlay, { kind: 'legend' }>, w
   // A label with a subscript reaches further down, as its mathtext does in matplotlib, whose legend stacks the entries of a column by
   // the heights of their texts, hence the entries below it in its column move down by as much.
   const below = (e: (typeof legend.entries)[number]): number =>
-    labelRuns(e.label).some((r) => r.shift === 'sub') ? (SUB_DROP + (SCRIPT_SIZE - 1) * TEXT_DESCENT) * size : 0;
+    staticRuns(e.label).some((r) => r.shift === 'sub') ? (SUB_DROP + (SCRIPT_SIZE - 1) * TEXT_DESCENT) * size : 0;
   const offsets = cells.map(({ col, row }) => {
     let y = 0;
     for (let r = 0; r < row; r++) y += lh + below(legend.entries[col * rows + r]!);
@@ -535,7 +535,7 @@ export function drawLegend(g: G, legend: Extract<Overlay, { kind: 'legend' }>, w
       );
       g.restore();
     }
-    drawText(g, labelRuns(e.label), cx + hw + gap, ty, labelStyle);
+    drawText(g, staticRuns(e.label), cx + hw + gap, ty, labelStyle);
   }
   g.restore();
 }
@@ -620,10 +620,8 @@ export function runsOf(parts: Readout['parts'], pieces: string[]): TextRun[] {
   });
 }
 
-/** The runs of a legend entry's label, a string or a list of strings and `sub` and `sup` parts. */
-function labelRuns(label: string | readonly (string | { sub?: string; sup?: string })[]): TextRun[] {
+/** The runs of a static text, e.g. the label of a legend entry or an axis title of a frame (rule `timeline-parts`). */
+export function staticRuns(label: StaticText): TextRun[] {
   if (typeof label === 'string') return [{ text: label }];
-  return label.map((p) =>
-    typeof p === 'string' ? { text: p } : p.sub !== undefined ? { text: p.sub, shift: 'sub' as const } : { text: p.sup ?? '', shift: 'sup' as const },
-  );
+  return label.map((p) => (typeof p === 'string' ? { text: p } : 'sub' in p ? { text: p.sub, shift: 'sub' as const } : { text: p.sup, shift: 'sup' as const }));
 }

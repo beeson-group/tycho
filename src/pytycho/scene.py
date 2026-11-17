@@ -702,6 +702,18 @@ def _text_parts(value: Any, what: str) -> Any:
     return [_text_part(p) for p in value]
 
 
+def _static_text(value: Any, what: str) -> Any:
+    """A text of strings, ``sub`` parts, and ``sup`` parts only, e.g. ``["λ", ty.sub("r1")]``. ``what`` opens with the rule."""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (bytes, Mapping)) or not isinstance(value, Sequence):
+        raise SceneError(f"{what} is text or a list of text, sub, and sup parts, not {value!r}")
+    parts = [_text_part(p) for p in value]
+    if any(not isinstance(p, str) and set(p) - {"sub", "sup"} for p in parts):
+        raise SceneError(f"{what} takes text, sub, and sup parts only, not {value!r}")
+    return parts
+
+
 def _fmt(kw: Mapping[str, Any]) -> dict[str, Any]:
     if extra := set(kw) - set(FORMAT_KEYS):
         raise SceneError(f"timeline-parts: a part has unknown format keys {sorted(extra)}")
@@ -1549,17 +1561,7 @@ def _entry(value: Any) -> dict[str, Any]:
         raise SceneError(f"timeline: a legend entry is a dict with a label, not {value!r}")
     if extra := set(value) - {"label", "line", "marker", "colors"}:
         raise SceneError(f"timeline: a legend entry has unknown keys {sorted(extra)}")
-    label = value["label"]
-    if isinstance(label, str):
-        out: dict[str, Any] = {"label": label}
-    else:
-        # a label may hold subscripts and superscripts, e.g. ["λ", ty.sub("r1")]
-        if isinstance(label, (bytes, Mapping)) or not isinstance(label, Sequence):
-            raise SceneError(f"timeline: the label of a legend entry is text or a list of text, sub, and sup parts, not {label!r}")
-        parts = [_text_part(p) for p in label]
-        if any(not isinstance(p, str) and set(p) - {"sub", "sup"} for p in parts):
-            raise SceneError(f"timeline: the label of a legend entry takes text, sub, and sup parts only, not {label!r}")
-        out = {"label": parts}
+    out: dict[str, Any] = {"label": _static_text(value["label"], "timeline: the label of a legend entry")}
     if "line" in value:
         line = value["line"]
         if not isinstance(line, Mapping) or set(line) - {"color", "width", "dash", "opacity"}:
@@ -1807,20 +1809,24 @@ class Scene:
         id: str,
         *,
         label: str | None = None,
-        axes: Sequence[str] | None = None,
+        axes: Sequence[Any] | None = None,
         unit: str | None = None,
         parent: Any = None,
         origin: Any = None,
         rotation: Rotation | None = None,
         scale: Any = None,
     ) -> Frame:
-        """Declares a frame, defined against ``parent`` by ``origin``, ``rotation``, and ``scale`` (rule `transform`)."""
+        """Declares a frame, defined against ``parent`` by ``origin``, ``rotation``, and ``scale`` (rule `transform`).
+
+        ``axes`` gives up to three axis titles, each a string or a list of strings, :func:`sub` parts, and :func:`sup` parts, e.g.
+        ``("Jacobi constant C", ["initial x", ty.sub("0")])``.
+        """
         self._new(self._frames, id, "frame")
         out: dict[str, Any] = {}
         if label is not None:
             out["label"] = _text(label, "a frame label")
         if axes is not None:
-            names = [_text(a, "an axis label") for a in axes]
+            names = [_static_text(a, f"frame: an axis title of frame {id!r}") for a in axes]
             if len(names) > 3:
                 raise SceneError(f"frame: frame {id!r} has {len(names)} axis labels, more than three")
             out["axes"] = names + [""] * (3 - len(names))

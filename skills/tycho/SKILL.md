@@ -65,6 +65,7 @@ A scene for a talk moves things by the time of the loop in seconds rather than b
 - A layer takes `clock=ty.layer_clock(channel, keyframes=...)` to read its set on a channel of its own, e.g. a cloud grown backward in time beside a transfer drawn whole (rule `layer-clock`). Its set then carries this channel instead of the clock channels of the scene.
 - A 2d camera takes `"keyframes": [ty.camera_keyframe(at, width=, center=), ty.camera_keyframe(at, width=, follow=[ty.follow(layer_index, member)]), ...]` (rule `camera-keyframes`). A window computed by the caller, e.g. a smoothed percentile box, becomes keyframes sampled every few frame indices.
 - The parts `ty.clock_value()`, `ty.clock_time()`, `ty.keyframed_number(...)`, and `ty.timed_text((t, text), ...)` show the clock, a counter, or a caption that changes over the timeline, in a readout, a label, or an overlay (`scene.text`, `scene.legend`) (rule `timeline-parts`).
+- A subscript and a superscript are written with the parts `ty.sub(text)` and `ty.sup(text)` in readouts, label layers, `scene.text` overlays, legend entries, the titles of an axes layer, and the axis titles of a frame, e.g. `scene.frame("phase", axes=("C", ["initial x", ty.sub("0")], "z"))`. Use them rather than Unicode subscript digits, which many fonts do not have. Other labels, such as those of frames, bodies, and panels, take plain strings only.
 - `scene.step(id, at)` names the times a presentation stops at, and the viewer element plays to them with `playTo`, `next`, and `previous` (rule `steps`).
 
 ## Thinning

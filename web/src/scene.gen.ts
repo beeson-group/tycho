@@ -4,6 +4,29 @@
  */
 
 /**
+ * A static text is a string, or a list of strings and subscript and superscript parts, which do not change with the state or the time. (rule `timeline-parts`)
+ *
+ * This interface was referenced by `Scene`'s JSON-Schema
+ * via the `definition` "staticText".
+ */
+export type StaticText =
+  | string
+  | (
+      | string
+      | {
+          /**
+           * This text is set as a subscript.
+           */
+          sub: string;
+        }
+      | {
+          /**
+           * This text is set as a superscript.
+           */
+          sup: string;
+        }
+    )[];
+/**
  * A scalar is a number, an attribute, or a channel, and the field that holds it determines which forms are allowed. (rule `context-number`)
  *
  * This interface was referenced by `Scene`'s JSON-Schema
@@ -895,25 +918,9 @@ export type Overlay =
        */
       entries: {
         /**
-         * The label is a string, or a list of strings and subscript and superscript parts.
+         * The label is a static text.
          */
-        label:
-          | string
-          | (
-              | string
-              | {
-                  /**
-                   * This text is set as a subscript.
-                   */
-                  sub: string;
-                }
-              | {
-                  /**
-                   * This text is set as a superscript.
-                   */
-                  sup: string;
-                }
-            )[];
+        label: StaticText;
         /**
          * The entry is drawn as a short line.
          */
@@ -1535,12 +1542,12 @@ export interface Frame {
    */
   label?: string;
   /**
-   * The three axis labels, e.g. ["x", "y", "z"], are used as the titles of the axes.
+   * The three axis titles, e.g. ["x", "y", "z"] or ["C", ["x", {"sub": "0"}], "z"], are static texts.
    *
    * @minItems 3
    * @maxItems 3
    */
-  axes?: [string, string, string];
+  axes?: [StaticText, StaticText, StaticText];
   /**
    * The unit label, e.g. "DU", is appended to the titles of the axes.
    */

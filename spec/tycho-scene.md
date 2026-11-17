@@ -541,6 +541,8 @@ The rules for the timeline follow.
   - `{"timed_text": [[t, text], ...]}` is the text of the last of its pairs with `t <= s`, and the empty string before the first.
     Its times are finite and nondecreasing.
   - `{"sub": text}` and `{"sup": text}` are a subscript and a superscript, which are parts rather than markup, since a string never holds markup (rule `plain-text`).
+    A static text is a string or a list of strings, `sub` parts, and `sup` parts only.
+    The axis titles of a frame (its `axes`) and the label of a legend entry are static texts.
 
   A part that gives a number, i.e. an `input` of kind `parameter`, `parameter`, `attr`, `channel`, `clock`, and `keyframes`, may carry `factor` and `offset`, which show `factor * x + offset`, computed in float64 in this order.
   A channel part reads a channel whose `interp` is `hold` (section 2.1) at sample `k` of rule `segment`, or at sample `k + 1` when the weight `w` is 1, without the blend, so that a count stored per sample steps from one value to the next.

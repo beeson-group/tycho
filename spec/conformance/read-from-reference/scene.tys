@@ -46,9 +46,24 @@
   "inertial-m1": {
    "label": "inertial, centered on the primary",
    "axes": [
-    "X",
-    "Y",
-    "Z"
+    [
+     "X",
+     {
+      "sub": "1"
+     }
+    ],
+    [
+     "Y",
+     {
+      "sub": "1"
+     }
+    ],
+    [
+     "Z",
+     {
+      "sub": "1"
+     }
+    ]
    ],
    "parent": "inertial",
    "origin": {

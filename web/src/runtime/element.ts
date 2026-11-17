@@ -230,7 +230,7 @@ input[type=range]:disabled { opacity: 0.4; cursor: default; }
 .pheader .chip:is(:hover, :focus-within) .grip { visibility: visible; }
 .labels, .preadout, .perror, .drop, .cbars { pointer-events: none; }
 .labels { position: absolute; inset: 0; z-index: 1; overflow: hidden; }
-.labels span { position: absolute; left: 0; top: 0; white-space: nowrap; color: var(--fg); font-size: 12px; text-shadow: 0 0 3px var(--bg), 0 0 3px var(--bg); }
+.labels > span { position: absolute; left: 0; top: 0; white-space: nowrap; color: var(--fg); font-size: 12px; text-shadow: 0 0 3px var(--bg), 0 0 3px var(--bg); }
 /* the colorbars sit between the header, whose height the viewer writes as --header-height, and the row of x tick numbers, and shrink to fit */
 .cbars { position: absolute; right: 10px; top: calc(var(--header-height, 30px) + 10px); bottom: 40px; z-index: 1; display: flex; align-items: flex-start; gap: 12px; }
 .cbars.tight > .cbar { display: none; }

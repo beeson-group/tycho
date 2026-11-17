@@ -283,6 +283,8 @@ function paintElement(g: G, e: HTMLElement, o: Origin, at: { x: number; y: numbe
   }
   const inside = transformed || at !== null;
   g.globalAlpha *= px(cs.opacity);
+  // the page snaps a box to device pixels, but not the text in it
+  const [tx, ty] = [x, y];
   if (!transformed) [x, y, w, h] = snap(g, x, y, w, h);
   if (e instanceof HTMLCanvasElement) {
     if (e.width > 0 && e.height > 0) g.drawImage(e, x, y, w, h);
@@ -295,14 +297,45 @@ function paintElement(g: G, e: HTMLElement, o: Origin, at: { x: number; y: numbe
     g.clip();
   }
   pseudo(g, e, '::before', x, y, w, h, cs);
-  for (const n of (e.shadowRoot ?? e).childNodes) {
-    if (n.nodeType === Node.TEXT_NODE) text(g, n as Text, o, cs, inside ? { x, y } : null);
-    else if (n instanceof HTMLElement && !(n instanceof HTMLStyleElement) && !(n instanceof HTMLScriptElement)) {
-      paintElement(g, n, o, inside ? (n.offsetParent === e ? { x, y } : at) : null);
+  const nodes = [...(e.shadowRoot ?? e).childNodes];
+  // a line of inline runs, e.g. a title with scripts, is set along one baseline from the corner of its box
+  const elements = nodes.filter((n) => n instanceof HTMLElement);
+  const line = (inside || cs.whiteSpace === 'nowrap') && elements.length > 0 && elements.every((n) => getComputedStyle(n).display === 'inline');
+  if (line) inlineLine(g, nodes, cs, tx, ty);
+  else
+    for (const n of nodes) {
+      if (n.nodeType === Node.TEXT_NODE) text(g, n as Text, o, cs, inside ? { x, y } : null);
+      else if (n instanceof HTMLElement && !(n instanceof HTMLStyleElement) && !(n instanceof HTMLScriptElement)) {
+        paintElement(g, n, o, inside ? (n.offsetParent === e ? { x, y } : at) : null);
+      }
     }
-  }
   pseudo(g, e, '::after', x, y, w, h, cs);
   g.restore();
+}
+
+/**
+ * Paints a line of text nodes and inline elements, i.e. the text of a box at (x, y), along the baseline of the box. The offsets of an
+ * inline element are whole pixels and give the top of its own line box, hence each piece is set after the width of the pieces before
+ * it, and a relatively positioned element, e.g. a subscript, is moved by its `left` and `top`.
+ */
+function inlineLine(g: G, nodes: ChildNode[], cs: CSSStyleDeclaration, x: number, y: number): void {
+  const [a, d] = metrics(g, cs);
+  const lh = cs.lineHeight === 'normal' ? a + d : px(cs.lineHeight);
+  const base = y + px(cs.paddingTop) + px(cs.borderTopWidth) + (lh - a - d) / 2 + a;
+  let pen = x + px(cs.paddingLeft) + px(cs.borderLeftWidth);
+  const piece = (s: string, c: CSSStyleDeclaration, dx: number, dy: number) => {
+    if (s === '') return;
+    run(g, s, pen + dx, base + dy, c);
+    pen += g.measureText(s).width;
+  };
+  for (const n of nodes) {
+    if (n.nodeType === Node.TEXT_NODE) piece((n as Text).data, cs, 0, 0);
+    else if (n instanceof HTMLElement && n.checkVisibility()) {
+      const c = getComputedStyle(n);
+      const moved = c.position === 'relative';
+      piece(n.textContent ?? '', c, moved ? px(c.left) : 0, moved ? px(c.top) : 0);
+    }
+  }
 }
 
 /** Paints a text node. Inside a transform, `inside` is the corner of the parent's box, in which the text is one line. */

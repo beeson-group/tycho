@@ -15,13 +15,18 @@ const root = fileURLToPath(new URL('../..', import.meta.url));
 const chromePath = findChrome();
 if (chromePath === null && process.env.CI) throw new Error('the export test needs Google Chrome, which CI provides at /usr/bin/google-chrome');
 
-/** The corpus scene broucke-mini in two panels, with a colormap, a highlight, a panel readout, and a caption readout. */
+/**
+ * The corpus scene broucke-mini in two panels, with a colormap, a highlight, a panel readout, a caption readout, and axes whose titles hold a
+ * subscript and a superscript.
+ */
 async function testScene(): Promise<{ scene: Scene; data: Uint8Array }> {
   const dir = join(root, 'spec/conformance/broucke-mini');
   const scene = JSON.parse(readFileSync(join(dir, 'scene.tys'), 'utf-8')) as Scene;
   const data = new Uint8Array(readFileSync(join(dir, 'data.tyd')));
   const layers = scene.panels.main!.layers;
   layers[0] = { ...layers[0]!, color: { colormap: 'viridis', parameter: 'eccentricity' }, highlight: { input: 'e' } } as (typeof layers)[0];
+  layers.push({ kind: 'axes' });
+  scene.frames['inertial-m1']!.axes = [['initial x', { sub: '0' }], ['initial y', { sup: '2' }, { sub: 'k' }], 'z'];
   scene.readouts = [
     { place: 'panel', parts: ['true anomaly ', { channel: 'true_anomaly', digits: 4 }] },
     { place: 'caption', parts: ['frame ', { clock: 'frame_index' }, ' of ', { clock: 'frame_count' }] },
@@ -74,7 +79,7 @@ tycho-viewer { position: absolute; left: 0; top: 0; width: 480px; height: 360px;
   });
 
   /** The page's picture of the viewer at frame index `index`, and frame 0 of an export started there, compared in the page. */
-  async function compare(index: number): Promise<{ mean: number; far: number; width: number; height: number }> {
+  async function compare(index: number): Promise<{ mean: number; far: number; width: number; height: number; titles: [string, number][] }> {
     await chrome.evaluate(`(async () => {
       const v = document.querySelector('tycho-viewer');
       await document.fonts.ready;
@@ -98,14 +103,24 @@ tycho-viewer { position: absolute; left: 0; top: 0; width: 480px; height: 360px;
       c.drawImage(shot, 0, 0);
       const a = frame.data;
       const b = c.getImageData(0, 0, shot.width, shot.height).data;
-      if (a.length !== b.length) return { mean: Infinity, far: Infinity, width: shot.width, height: shot.height };
+      if (a.length !== b.length) return { mean: Infinity, far: Infinity, width: shot.width, height: shot.height, titles: [] };
+      const diff = (i) => Math.max(Math.abs(a[i] - b[i]), Math.abs(a[i + 1] - b[i + 1]), Math.abs(a[i + 2] - b[i + 2]));
       let sum = 0, far = 0;
       for (let i = 0; i < a.length; i += 4) {
-        const d = Math.max(Math.abs(a[i] - b[i]), Math.abs(a[i + 1] - b[i + 1]), Math.abs(a[i + 2] - b[i + 2]));
+        const d = diff(i);
         sum += d;
         if (d > 64) far++;
       }
-      return { mean: sum / (a.length / 4), far: far / (a.length / 4), width: shot.width, height: shot.height };
+      // the share of far pixels in the box of each title that holds scripts, grown by 2 px, in device pixels
+      const titles = [...v.shadowRoot.querySelectorAll('.labels > span')].filter((s) => s.children.length > 0 && !s.hidden).map((s) => {
+        const r = s.getBoundingClientRect();
+        const [x0, y0, x1, y1] = [r.left - 2, r.top - 2, r.right + 2, r.bottom + 2].map((u) => Math.round(2 * u));
+        let n = 0, f = 0;
+        for (let y = Math.max(0, y0); y < Math.min(shot.height, y1); y++)
+          for (let x = Math.max(0, x0); x < Math.min(shot.width, x1); x++, n++) if (diff(4 * (y * shot.width + x)) > 64) f++;
+        return [s.textContent, f / n];
+      });
+      return { mean: sum / (a.length / 4), far: far / (a.length / 4), width: shot.width, height: shot.height, titles };
     })()`);
   }
 
@@ -119,6 +134,9 @@ tycho-viewer { position: absolute; left: 0; top: 0; width: 480px; height: 360px;
       // antialiasing of text on Linux differs at about 0.1% of the pixels, and the old drawing of the export gave a mean of 8.3
       expect(r.mean, at).toBeLessThan(0.5);
       expect(r.far, at).toBeLessThan(2e-3);
+      // a script set off by one device pixel differs at about 1% of the box of its title, and a missing one at more
+      expect(r.titles.map(([t]) => t).sort(), at).toEqual(['initial x0', 'initial y2k']);
+      for (const [, f] of r.titles) expect(f, at).toBeLessThan(2e-3);
     }
   }, 60000);
 });

@@ -3,13 +3,16 @@
  * computes them, the element writes them as DOM, and the video export draws them on a canvas.
  */
 
+import type { TextRun } from './paint.js';
+
 /**
  * A text label over a panel, centered vertically on (x, y) in CSS pixels from the panel's corner.
  * Its start sits at (x, y) by default, and its center or its end with `align` set to 'center' or
  * 'end'. A rotated label reads upward, turned a quarter turn about (x, y).
  */
 export interface PanelLabel {
-  text: string;
+  /** The text, as a string or as runs with subscripts and superscripts. */
+  text: string | TextRun[];
   x: number;
   y: number;
   align?: 'start' | 'center' | 'end';

@@ -70,6 +70,7 @@ import type {
   PointsLayer,
   Scene,
   State,
+  StaticText,
   TrajectoriesLayer,
   Panel,
 } from '../scene.js';
@@ -91,7 +92,7 @@ import {
   type Theme,
 } from './colors.js';
 import type { ContextHolder } from './contexts.js';
-import { markerCanvas, markerStroke, TICK_SIZE, type BoxPaint } from './paint.js';
+import { markerCanvas, markerStroke, plainText, SCRIPT_SIZE, staticRuns, SUB_DROP, SUP_RISE, TICK_SIZE, type BoxPaint } from './paint.js';
 import {
   EMPTY_RANGE,
   GeometryCache,
@@ -844,10 +845,50 @@ const tickWidth = (s: string): number => 7 * s.length - 3.5 * (s.split('.').leng
  */
 export function labelBox(l: PanelLabel): [number, number, number, number] {
   const size = l.kind === 'title' ? 13 : 12;
-  const along = (tickWidth(l.text) * size) / 12;
+  const along = (tickWidth(plainText(l.text)) * size) / 12;
   const from = l.align === 'center' ? -along / 2 : l.align === 'end' ? -along : 0;
   // a rotated label is set upward, hence its start is at the bottom of its box
   return l.rotate ? [l.x - size / 2, l.y - from - along, l.x + size / 2, l.y - from] : [l.x + from, l.y - size / 2, l.x + from + along, l.y + size / 2];
+}
+
+/** A text with `suffix` appended, as a string or as runs. */
+const withSuffix = (t: PanelLabel['text'], suffix: string): PanelLabel['text'] => (typeof t === 'string' ? t + suffix : [...t, { text: suffix }]);
+
+/** The title of an axis of a frame, from the axis's static text and the frame's unit, which follows a nonempty title in brackets. */
+export function axisTitle(name: StaticText | undefined, unit: string | undefined): PanelLabel['text'] {
+  if (name === undefined) return '';
+  const t = typeof name === 'string' ? name : staticRuns(name);
+  return unit && plainText(t) !== '' ? withSuffix(t, ` [${unit}]`) : t;
+}
+
+/** The text that each label span shows, by which `writeLabel` writes a span only when its text changes. */
+const written = new WeakMap<HTMLElement, string>();
+
+/**
+ * Writes the text of a label into its span. A sub or a sup run becomes a span at the size of a script, lowered or raised as `drawText` sets it on a
+ * canvas. Its offset is relative, hence the line box of the label, and with it the label's place, does not change.
+ */
+export function writeLabel(span: HTMLElement, text: PanelLabel['text']): void {
+  const key = typeof text === 'string' ? text : '\u0002' + text.map((r) => `${r.shift ?? ''}\u0000${r.text}`).join('\u0001');
+  if (written.get(span) === key) return;
+  written.set(span, key);
+  if (typeof text === 'string') {
+    span.textContent = text;
+    return;
+  }
+  span.replaceChildren(
+    ...text.map((r) => {
+      const run = document.createElement('span');
+      run.textContent = r.text;
+      if (r.shift !== undefined) {
+        run.style.fontSize = `${SCRIPT_SIZE * 100}%`;
+        run.style.position = 'relative';
+        // in units of the run's own size, a fraction SCRIPT_SIZE of the label's
+        run.style.top = `${Number(((r.shift === 'sub' ? SUB_DROP : -SUP_RISE) / SCRIPT_SIZE).toFixed(4))}em`;
+      }
+      return run;
+    }),
+  );
 }
 
 /** True when the boxes of two labels are overlapping, as `labelBox` estimates them, and false when they are only touching. */
@@ -892,7 +933,7 @@ export function labelOver(l: PanelLabel, box: [number, number, number, number]):
  * title 10 px above it. The y title sits 10 px from the left edge, and the y tick column is right-aligned
  * clear of it at its widest number. A panel too short or too narrow for a title keeps its ticks.
  */
-export function planeLabels(v: PlaneView, ticks: boolean, titles: [string, string] | null, top = 0): PanelLabel[] {
+export function planeLabels(v: PlaneView, ticks: boolean, titles: [PanelLabel['text'], PanelLabel['text']] | null, top = 0): PanelLabel[] {
   const out: PanelLabel[] = [];
   const sx = (x: number) => ((x - v.x0) / (v.x1 - v.x0)) * v.w;
   const sy = (y: number) => v.h - ((y - v.y0) / (v.y1 - v.y0)) * v.h;
@@ -903,7 +944,7 @@ export function planeLabels(v: PlaneView, ticks: boolean, titles: [string, strin
       if (py > Math.max(22, top + HALF_LINE) && py < v.h - 44) left.push({ text: tickText(y, v.stepY), x: 0, y: py, align: 'end', kind: 'tick' });
     }
     // the column ends where its widest number starts 22 px from the edge, clear of the y title
-    const column = Math.max(44, 22 + Math.max(0, ...left.map((l) => tickWidth(l.text))));
+    const column = Math.max(44, 22 + Math.max(0, ...left.map((l) => tickWidth(plainText(l.text)))));
     for (const x of multiples(v.x0, v.x1, v.stepX)) {
       const px = sx(x);
       if (px > column + 12 && px < v.w - 16) out.push({ text: tickText(x, v.stepX), x: px, y: v.h - 28, align: 'center', kind: 'tick' });
@@ -911,8 +952,8 @@ export function planeLabels(v: PlaneView, ticks: boolean, titles: [string, strin
     for (const l of left) out.push({ ...l, x: column });
   }
   if (titles !== null) {
-    if (titles[0] !== '' && v.h >= TITLE_ROOM) out.push({ text: titles[0], x: v.w / 2, y: v.h - 10, align: 'center', kind: 'title' });
-    if (titles[1] !== '' && v.w >= TITLE_ROOM) out.push({ text: titles[1], x: 10, y: v.h / 2, align: 'center', rotate: true, kind: 'title' });
+    if (plainText(titles[0]) !== '' && v.h >= TITLE_ROOM) out.push({ text: titles[0], x: v.w / 2, y: v.h - 10, align: 'center', kind: 'title' });
+    if (plainText(titles[1]) !== '' && v.w >= TITLE_ROOM) out.push({ text: titles[1], x: 10, y: v.h / 2, align: 'center', rotate: true, kind: 'title' });
   }
   return out;
 }
@@ -3322,13 +3363,13 @@ export class PanelAreaRenderer implements ContextHolder {
     const titles: Item[] = [];
     const bodies: Item[] = [];
     const frame = this.ctx.scene.frames[p.plan.display];
-    const names = frame?.axes ?? ['x', 'y', 'z'];
+    const names: StaticText[] = frame?.axes ?? ['x', 'y', 'z'];
     const { normal } = cameraBasis(p.cameraSpec);
     const k = stretchOf(p.cameraSpec);
     const ox = p.rect.x - p.outer.x;
     const oy = p.rect.y - p.outer.y;
     const bars = barsBox(p.clearance, p.outer.w);
-    const add = (text: string, at: THREE.Vector3, dx: number, hide: boolean): Item => {
+    const add = (text: PanelLabel['text'], at: THREE.Vector3, dx: number, hide: boolean): Item => {
       const s = at.clone().multiply(k).project(p.camera);
       const x = ((s.x + 1) / 2) * p.rect.w + dx;
       const y = ((1 - s.y) / 2) * p.rect.h;
@@ -3340,7 +3381,7 @@ export class PanelAreaRenderer implements ContextHolder {
     const marks = [...p.draws.values()].filter((d): d is MarkDraw => d instanceof MarkDraw);
     if (p.view !== null && p.cameraSpec.kind === '2d') {
       const [ix, iy] = planeAxes(p.cameraSpec);
-      const title = (i: number) => (names[i] && frame?.unit ? `${names[i]} [${frame.unit}]` : (names[i] ?? ''));
+      const title = (i: number) => axisTitle(names[i], frame?.unit);
       const axes = marks.some((d) => d.follows && d.kind === 'axes');
       const ticks = marks.some((d) => d.ticks);
       for (const l of planeLabels(p.view, ticks, axes ? [title(ix), title(iy)] : null, p.clearance.header - oy)) {
@@ -3352,9 +3393,9 @@ export class PanelAreaRenderer implements ContextHolder {
     for (const d of p.draws.values()) {
       if (d instanceof MarkDraw && d.kind === 'axes' && !d.follows && d.box === null) {
         d.tips.forEach((tip, i) => {
-          const name = names[i] ?? '';
+          const name = axisTitle(names[i], undefined);
           const factor = k.getComponent(i);
-          const title = name !== '' && factor !== 1 ? `${name} ×${Number(factor.toPrecision(4))}` : name;
+          const title = plainText(name) !== '' && factor !== 1 ? withSuffix(name, ` ×${Number(factor.toPrecision(4))}`) : name;
           titles.push(add(title, tip, 4, p.cameraSpec.kind === '2d' && Math.abs(tip.clone().normalize().dot(normal)) > 0.99));
         });
       } else if (d instanceof BodyDraw && d.label !== null && d.at !== null && d.group.visible) {
@@ -3404,7 +3445,7 @@ export class PanelAreaRenderer implements ContextHolder {
     while (el.children.length > items.length) el.lastChild!.remove();
     items.forEach((it, i) => {
       const span = el.children[i] as HTMLElement;
-      if (span.textContent !== it.text) span.textContent = it.text;
+      writeLabel(span, it.text);
       span.hidden = it.hidden;
       const shift = it.align === 'center' ? '-50%' : it.align === 'end' ? '-100%' : '0';
       span.style.transformOrigin = '0 0';
@@ -3507,9 +3548,9 @@ export class PanelAreaRenderer implements ContextHolder {
         if (xy !== null) labels.push({ layer: d.layer, x: xy[0], y: xy[1], clip: !screen });
       } else if (d instanceof MarkDraw && d.box !== null && p.view !== null && p.cameraSpec.kind === '2d') {
         const frame = scene.frames[p.plan.display];
-        const names = frame?.axes ?? ['', '', ''];
+        const names = frame?.axes;
         const [ix, iy] = planeAxes(p.cameraSpec);
-        const title = (i: number) => (names[i] && frame?.unit ? `${names[i]} [${frame.unit}]` : (names[i] ?? ''));
+        const title = (i: number) => axisTitle(names?.[i], frame?.unit);
         const ticks = (d.box as { ticks?: string[] }).ticks ?? ['x', 'y'];
         box = {
           rect: p.rect,

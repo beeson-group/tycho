@@ -163,6 +163,23 @@ describe('colors', () => {
   });
 });
 
+describe('the axis titles of a frame (rule `timeline-parts`)', () => {
+  it('are static texts, i.e. strings or lists of strings and sub and sup parts', () => {
+    const data = new MemoryStore()
+      .add('off', [0, 2], 'uint32')
+      .add('pos', [
+        [0, 0],
+        [1, 0],
+      ])
+      .add('time', [0, 1]);
+    const scene = (axes: unknown) => baseScene({ frames: { a: { axes } } as Scene['frames'] });
+    expect(() => validate(scene(['C', ['initial x', { sub: '0' }], ['t', { sup: '2' }]]), data)).not.toThrow();
+    expect(() => validate(scene(['C', ['t = ', { clock: 'value' }], 'z']), data)).toThrow(/^\[frame\] frame a has an axis title/);
+    expect(() => validate(scene(['C', [{ sub: '0', sup: '1' }], 'z']), data)).toThrow(/^\[frame\]/);
+    expect(() => validate(scene(['C', 7, 'z']), data)).toThrow(/^\[frame\]/);
+  });
+});
+
 describe('readouts (section 2.9)', () => {
   const corpus = () => {
     const c = loadCorpus('two-panels');

@@ -114,7 +114,7 @@ tycho-viewer { display: block; width: 100%; height: 100%; }
         body: box(p.querySelector('.pbody')),
         head: box(p.querySelector('.pheader')),
         bars: [...p.querySelectorAll('.cbar')].map(box),
-        labels: [...p.querySelectorAll('.labels span')].filter((s) => !s.hidden).map((s) => ({
+        labels: [...p.querySelectorAll('.labels > span')].filter((s) => !s.hidden).map((s) => ({
           text: s.textContent,
           kind: s.style.fontSize === '13px' ? 'title' : /^[−\\d.]+$/.test(s.textContent) ? 'tick' : 'body',
           box: box(s),

@@ -313,6 +313,48 @@ def test_a_2d_camera_takes_an_aspect_and_a_3d_camera_does_not():
         scene.panel("w", frame="root", reference=ty.reference(moving, 0), layers=[], camera={"kind": "3d", "aspect": "free"})
 
 
+def test_a_3d_camera_takes_keyframes_of_a_center_a_width_and_two_angles():
+    jsonschema = pytest.importorskip("jsonschema")
+    scene, moving, _ = small()
+    keys = [
+        ty.camera_keyframe_3d(0, center=[1, 0, 0], width=2, azimuth=-90, elevation=90),
+        ty.camera_keyframe_3d(4, center=[0, 0, 0], width=20, azimuth=-50, elevation=30, ease="linear"),
+    ]
+    scene.panel(
+        "v", frame="root", reference=ty.reference(moving, 0), layers=[ty.trajectories(moving)], camera={"kind": "3d", "keyframes": keys}
+    )
+    scene.show("p", panel="v")
+    doc = scene.to_document()
+    assert doc["panels"]["v"]["camera"]["keyframes"][1] == {
+        "at": 4.0,
+        "center": [0.0, 0.0, 0.0],
+        "width": 20.0,
+        "azimuth": -50.0,
+        "elevation": 30.0,
+        "ease": "linear",
+    }
+    assert "camera.keyframes_3d" in doc["requires"]
+    assert "camera.keyframes" not in doc["requires"]
+    jsonschema.Draft202012Validator(json.loads((CORPUS.parent / "scene.schema.json").read_text())).validate(doc)
+
+    def camera(**changes):
+        return {"kind": "3d", "keyframes": [{"at": 0, "center": [0, 0, 0], "width": 1, "azimuth": 0, "elevation": 0, **changes}]}
+
+    for changes, message in (
+        ({"elevation": 91}, r"camera-keyframes-3d: the elevation of a camera keyframe is 91.0, not in \[-90, 90\]"),
+        ({"width": 0}, r"camera-keyframes-3d: the width of a camera keyframe is 0.0, not positive"),
+        ({"center": [0, 0]}, r"camera-keyframes-3d: the center of a camera keyframe is three coordinates"),
+        ({"follow": []}, r"camera-keyframes-3d: a camera keyframe of a 3d camera has unknown keys \['follow'\]"),
+    ):
+        with pytest.raises(ty.SceneError, match=message):
+            scene.panel("w", frame="root", reference=ty.reference(moving, 0), layers=[], camera=camera(**changes))
+    with pytest.raises(ty.SceneError, match=r"camera-keyframes-3d: a 3d camera has both keyframes and auto_rotate"):
+        scene.panel("w", frame="root", reference=ty.reference(moving, 0), layers=[], camera={**camera(), "auto_rotate": 90})
+    late = [ty.camera_keyframe_3d(t, center=[0, 0, 0], width=1, azimuth=0, elevation=0) for t in (2, 1)]
+    with pytest.raises(ty.SceneError, match=r"camera-keyframes-3d: the times of the camera keyframes decrease from 2.0 to 1.0"):
+        scene.panel("w", frame="root", reference=ty.reference(moving, 0), layers=[], camera={"kind": "3d", "keyframes": late})
+
+
 def test_a_3d_camera_takes_a_stretch_and_an_auto_rotate_and_a_2d_camera_does_not():
     jsonschema = pytest.importorskip("jsonschema")
     scene, moving, _ = small()

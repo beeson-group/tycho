@@ -522,7 +522,20 @@ The rules for the timeline follow.
   Both centers are taken at time `s`, hence a blend from a fixed window to a follow keyframe ends on the moving point.
   Before its first keyframe and after its last, the camera shows the window of this keyframe, and when a keyframe it needs lacks a center, the camera does not have a window at `s`.
   The layer at index `i` is a `trajectories` layer and `k` is an integer, and a reader rejects any other target.
-  A writer lists the feature `camera.keyframes` in `requires` for a scene with a camera with keyframes.
+  A writer lists the feature `camera.keyframes` in `requires` for a scene with a `2d` camera with keyframes.
+- `camera-keyframes-3d`. A `3d` camera may carry `keyframes`, a list of camera keyframes, each `{"at": t, "center": [x, y, z], "width": w, "azimuth": a, "elevation": e, "ease": name}`, whose times `at` are finite and nondecreasing.
+  A camera keyframe of a `3d` camera gives the view that the panel shows at its time.
+  The camera looks at `center`, a point of the display frame, from the direction `cos(e) * (cos(a) * u_1 + sin(a) * u_2) + sin(e) * u_3`.
+  Here `u_3` is the camera's `up` axis, `(u_1, u_2, u_3)` is `(x, y, z)`, `(y, z, x)`, or `(z, x, y)`, and the azimuth `a` and the elevation `e` are in degrees, with `e` in `[-90, 90]`.
+  The direction up the screen is `-sin(e) * (cos(a) * u_1 + sin(a) * u_2) + cos(e) * u_3`.
+  At `e = 90` the camera thus looks down its up axis, and the azimuth turns the picture, e.g. a camera with `up` `z` at `a = -90` shows `x` to the right and `y` up the screen, as a `2d` camera of plane `xy` does.
+  The width `w > 0` is the extent across the panel of the plane through the center that faces the camera, in units of the display frame after the camera's `stretch`.
+  The camera at time `s` blends two keyframes as rule `keyframes` blends two values, with the ease of the later keyframe.
+  The center, the azimuth, and the elevation are blended as `(1 - E) * v_i + E * v_(i+1)`, hence two azimuths that differ by more than 360 turn the camera more than once, and the width is blended as in rule `camera-keyframes`.
+  Before its first keyframe and after its last, the camera shows the view of this keyframe.
+  A reader rejects a `3d` camera with both `keyframes` and `auto_rotate`.
+  The view is for drawing only, and it is not part of an evaluated frame.
+  A writer lists the feature `camera.keyframes_3d` in `requires` for a scene with a `3d` camera with keyframes.
 - `label`. A `label` layer writes a text at an anchor.
   Its `text` is a string or a list of parts, the parts of a readout of section 2.9 and those of rule `timeline-parts`, read in the layer's panel.
   Its `at` is the anchor, one of the following.
@@ -610,7 +623,8 @@ The features of version 0.5 are the following.
 - `frames.origin_channel` is an origin given by a channel (rule `origin`).
 - `clock.keyframes` is the keyframes of a clock (rule `clock-keyframes`).
 - `layers.clock` is a layer clock (rule `layer-clock`).
-- `camera.keyframes` is the keyframes of a camera (rule `camera-keyframes`).
+- `camera.keyframes` is the keyframes of a `2d` camera (rule `camera-keyframes`).
+- `camera.keyframes_3d` is the keyframes of a `3d` camera (rule `camera-keyframes-3d`).
 - `layers.label` is the `label` layer (rule `label`).
 - `layers.points` is the `points` layer (rule `points`).
 

@@ -218,3 +218,60 @@ export function checkCameraKeyframes(keys: unknown, free: boolean, what: string)
   }
   if (heights !== 0 && heights !== keys.length) fail('camera-keyframes', `${what} gives a height in some keys but not in all`);
 }
+
+export type CameraKeyframe3d = NonNullable<Extract<Camera, { kind: '3d' }>['keyframes']>[number];
+
+/** The view of a 3d camera at a time (rule `camera-keyframes-3d`), with the two angles in degrees. */
+export interface CameraView {
+  center: [number, number, number];
+  width: number;
+  azimuth: number;
+  elevation: number;
+}
+
+/** The view of a 3d camera with keyframes at time `s` (rule `camera-keyframes-3d`). */
+export function cameraView(keys: readonly CameraKeyframe3d[], s: number): CameraView {
+  const { i, e } = segmentAt(
+    (j) => keys[j]!.at,
+    keys.length,
+    s,
+    (j) => keys[j]!.ease,
+  );
+  const a = keys[i]!;
+  const view = (k: CameraKeyframe3d): CameraView => ({
+    center: [k.center[0]!, k.center[1]!, k.center[2]!],
+    width: k.width,
+    azimuth: k.azimuth,
+    elevation: k.elevation,
+  });
+  if (e === null) return view(a);
+  const b = keys[i + 1]!;
+  const mix = (x: number, y: number) => (1 - e) * x + e * y;
+  return {
+    center: [mix(a.center[0]!, b.center[0]!), mix(a.center[1]!, b.center[1]!), mix(a.center[2]!, b.center[2]!)],
+    width: Math.exp(mix(Math.log(a.width), Math.log(b.width))),
+    azimuth: mix(a.azimuth, b.azimuth),
+    elevation: mix(a.elevation, b.elevation),
+  };
+}
+
+/** Checks the keyframes of a 3d camera (rule `camera-keyframes-3d`). */
+export function checkCameraKeyframes3d(keys: unknown, what: string): void {
+  const rule = 'camera-keyframes-3d';
+  if (!Array.isArray(keys) || keys.length === 0) fail(rule, `${what} has keyframes ${JSON.stringify(keys)}, not a list of at least one camera keyframe`);
+  const number = (v: unknown): boolean => typeof v === 'number' && Number.isFinite(v);
+  let last = -Infinity;
+  for (const k of keys as CameraKeyframe3d[]) {
+    if (k === null || typeof k !== 'object') fail(rule, `${what} has a keyframe ${JSON.stringify(k)}, not an object`);
+    if (!number(k.at)) fail(rule, `${what} has a keyframe at ${JSON.stringify(k.at)}, not a finite time`);
+    if (k.at < last) fail(rule, `${what} has keyframes whose times decrease, from ${last} to ${k.at}`);
+    last = k.at;
+    if (!isPositive(k.width)) fail(rule, `${what} has a keyframe of width ${JSON.stringify(k.width)}, not a positive number`);
+    if (!Array.isArray(k.center) || k.center.length !== 3 || !k.center.every(number))
+      fail(rule, `${what} has a keyframe whose center is ${JSON.stringify(k.center)}, not three finite numbers`);
+    if (!number(k.azimuth)) fail(rule, `${what} has a keyframe whose azimuth is ${JSON.stringify(k.azimuth)}, not a finite number of degrees`);
+    if (!number(k.elevation) || Math.abs(k.elevation) > 90)
+      fail(rule, `${what} has a keyframe whose elevation is ${JSON.stringify(k.elevation)}, not a number of degrees in [-90, 90]`);
+    if (k.ease !== undefined) ease(k.ease, 0);
+  }
+}

@@ -217,6 +217,17 @@ describe('validate', () => {
     for (const turn of [NaN, Infinity, '90'])
       expect(rule(() => validate({ ...scene, panels: { main: { ...scene.panels.main!, camera: { kind: '3d', auto_rotate: turn as never } } } }))).toBe('panel');
   });
+  it('a 3d camera takes keyframes of a center, a width, and two angles, and not together with auto_rotate (2.11)', () => {
+    const scene = baseScene({ version: '0.3' });
+    const key = { at: 0, center: [0, 0, 0], width: 2, azimuth: -90, elevation: 90 };
+    const withCamera = (camera: unknown) => ({ ...scene, panels: { main: { ...scene.panels.main!, camera: camera as never } } });
+    expect(validate(withCamera({ kind: '3d', keyframes: [key, { ...key, at: 3, elevation: 20, ease: 'smooth' }] }), data(), state())).toEqual([]);
+    for (const bad of [{ elevation: 91 }, { width: 0 }, { center: [0, 0] }, { azimuth: NaN }, { at: '1' }])
+      expect(rule(() => validate(withCamera({ kind: '3d', keyframes: [{ ...key, ...bad }] })))).toBe('camera-keyframes-3d');
+    expect(rule(() => validate(withCamera({ kind: '3d', keyframes: [] })))).toBe('camera-keyframes-3d');
+    expect(rule(() => validate(withCamera({ kind: '3d', keyframes: [{ ...key, at: 2 }, key] })))).toBe('camera-keyframes-3d');
+    expect(rule(() => validate(withCamera({ kind: '3d', keyframes: [key], auto_rotate: 90 })))).toBe('camera-keyframes-3d');
+  });
   it('a clock takes the seconds of one loop, a positive finite number, in either mode (2.6)', () => {
     const scene = baseScene({ version: '0.3' });
     scene.clock = { ...scene.clock, seconds: 24 };

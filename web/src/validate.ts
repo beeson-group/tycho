@@ -10,7 +10,16 @@ import { Frames } from './evaluate/frames.js';
 import { arrowParts, checkInsetBoxPanel, hasHead } from './evaluate/layers.js';
 import { checkState, displayFrame, layerVisible, layoutIds, oneSet, insetBoxTarget, querySets, inputDef, type PanelScope } from './evaluate/resolve.js';
 import { SetCache } from './evaluate/sets.js';
-import { checkCameraKeyframes, checkKeyframes, checkKeyframed, isOpacity, isPositive, isShare, loopSeconds } from './evaluate/timeline.js';
+import {
+  checkCameraKeyframes,
+  checkCameraKeyframes3d,
+  checkKeyframes,
+  checkKeyframed,
+  isOpacity,
+  isPositive,
+  isShare,
+  loopSeconds,
+} from './evaluate/timeline.js';
 import {
   ID_PATTERN,
   INDEX_CHANNEL,
@@ -63,7 +72,7 @@ const BODY_KEYS = ['label', 'frame', 'position', 'color', 'image'];
 const SET_KEYS = ['label', 'frame', 'tags', 'attrs', 'trajectories', 'offsets', 'positions', 'channels', 'parameters', 'periodic'];
 const PANEL_KEYS = ['label', 'frame', 'camera', 'reference', 'layers', 'opacity', 'margin'];
 const CAMERA_2D_KEYS = ['kind', 'plane', 'aspect', 'keyframes'];
-const CAMERA_3D_KEYS = ['kind', 'projection', 'up', 'stretch', 'auto_rotate'];
+const CAMERA_3D_KEYS = ['kind', 'projection', 'up', 'stretch', 'auto_rotate', 'keyframes'];
 const TEXT_KEYS = ['align', 'baseline', 'size', 'color', 'weight', 'linespacing', 'box', 'opacity'];
 const LAYER_KEYS: Record<string, readonly string[]> = {
   trajectories: [
@@ -588,6 +597,10 @@ export function validate(scene: Scene, data?: DataStore, state?: State): string[
         fail('panel', `panel ${id}: a 3d camera's stretch is ${JSON.stringify(stretch)}, not three positive finite factors`);
       if (auto_rotate !== undefined && !finite(auto_rotate))
         fail('panel', `panel ${id}: a 3d camera's auto_rotate is ${JSON.stringify(auto_rotate)}, not a finite number of degrees`);
+      if (panel!.camera.keyframes !== undefined) {
+        checkCameraKeyframes3d(panel!.camera.keyframes, `the camera of panel ${id}`);
+        if (auto_rotate !== undefined) fail('camera-keyframes-3d', `panel ${id}: a 3d camera has both keyframes and auto_rotate`);
+      }
     }
     for (const layer of panel!.layers) {
       if (!LAYER_KINDS.includes(layer.kind)) fail('version', `panel ${id}: layer kind ${JSON.stringify(layer.kind)} is not implemented`);

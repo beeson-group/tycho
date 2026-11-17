@@ -9,6 +9,7 @@ The two file formats are versioned apart from the packages, i.e. either format v
 ### Added
 
 - The color of the marker of a points layer takes the forms of the color of a trajectories layer, i.e. a colormap over a parameter, which colors each member, and a colormap over a channel or `ty.threshold_color`, which color each sample, e.g. `ty.marker("disc", 1.6, {"colormap": "plasma", "channel": "height", "range": (0.0, 0.8)})`. A cloud of samples is thus colored by a stored value, as `c=` colors a matplotlib scatter plot, in one layer. The colormap `magma` is added, and a `truncate` of `(1, 0)` reads a colormap in reverse.
+- An axis title of a frame takes subscripts and superscripts, as a list of strings, `ty.sub` parts, and `ty.sup` parts, e.g. `scene.frame("phase", axes=("C", ["initial x", ty.sub("0")], "z"))` (#46). A script is set smaller and off the baseline, in the font of its title, in a plane panel, in the box of an axes layer, and at the tips of 3d axes. Unicode subscript digits are missing from many fonts, and the browser then draws them in another font.
 
 ### Fixed
 

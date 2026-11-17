@@ -130,10 +130,10 @@ tycho-viewer { position: absolute; left: 0; top: 0; width: 480px; height: 360px;
     for (const r of results) {
       const at = `frame index ${r.index} of ${JSON.stringify(results)}`;
       expect([r.width, r.height], at).toEqual([960, 720]);
-      // the mean difference of a channel, out of 255, and the share of pixels that differ by more than a quarter of the range. The
-      // antialiasing of text on Linux differs at about 0.1% of the pixels, and the old drawing of the export gave a mean of 8.3
-      expect(r.mean, at).toBeLessThan(0.5);
-      expect(r.far, at).toBeLessThan(2e-3);
+      // the mean difference of a channel, out of 255, and the share of pixels that differ by more than a quarter of the range. Both are
+      // about 0.03 and 0 in Chrome on macOS and Linux. Subpixel text in the export gave 0.74 and 0.3%, and baselines a device pixel off 0.1%
+      expect(r.mean, at).toBeLessThan(0.1);
+      expect(r.far, at).toBeLessThan(1e-4);
       // a script set off by one device pixel differs at about 1% of the box of its title, and a missing one at more
       expect(r.titles.map(([t]) => t).sort(), at).toEqual(['initial x0', 'initial y2k']);
       for (const [, f] of r.titles) expect(f, at).toBeLessThan(2e-3);

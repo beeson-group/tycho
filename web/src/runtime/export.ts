@@ -294,7 +294,7 @@ export async function exportVideo(source: ExportSource, options: ExportOptions =
     frame.width = width;
     frame.height = height;
     // an opaque canvas would get subpixel text in Chrome on Linux, which the page does not draw, hence the canvas keeps its alpha and starts black
-    const g = frame.getContext('2d')!;
+    const g = frame.getContext('2d', { willReadFrequently: true })!;
     g.fillStyle = '#000';
     g.fillRect(0, 0, width, height);
     for (let k = 0; k < schedule.count; k++) {
@@ -303,7 +303,10 @@ export async function exportVideo(source: ExportSource, options: ExportOptions =
       g.setTransform(ratio, 0, 0, ratio, 0, 0);
       picture.draw(g, schedule.index(k), schedule.progress(k));
       options.onFrame?.(frame, k);
-      const video = new VideoFrame(frame, { timestamp: Math.round((k * 1e6) / fps), duration: Math.round(1e6 / fps) });
+      // a frame of the canvas itself is encoded by Chrome in limited range, which PowerPoint draws a level dark
+      const pixels = g.getImageData(0, 0, width, height).data;
+      const time = { timestamp: Math.round((k * 1e6) / fps), duration: Math.round(1e6 / fps) };
+      const video = new VideoFrame(pixels, { format: 'RGBX', codedWidth: width, codedHeight: height, ...time });
       encoder.encode(video, { keyFrame: k % keyEvery === 0 });
       video.close();
       options.onProgress?.(k + 1, schedule.count);

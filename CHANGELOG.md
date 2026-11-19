@@ -13,6 +13,7 @@ The two file formats are versioned apart from the packages, i.e. either format v
 
 ### Fixed
 
+- A video export is encoded and tagged in full range, with BT.709 primaries and matrix and the sRGB transfer, and its colors hence match the page in PowerPoint (#49). Chrome encoded the export in limited range, which PowerPoint draws about one level dark, so that a faint box could be seen around a video on a slide of its background color. An export takes about a quarter longer.
 - The text of a video export is drawn with the page's antialiasing and baselines in Chrome on Linux, without colored fringes, and a rotated axis title on the pixel row the page shows it on (#48).
 - A points layer whose marker does not give a color is drawn in the foreground of the theme, as the scene reference says. Such a layer was drawn in white, which hardly shows on a light page.
 - A points layer whose member is selected by a parameter input is drawn again when the input changes, e.g. when its slider is moved. Such a layer kept the member of the loaded page, unless it was revealed or given `before` or `after`.

@@ -139,4 +139,24 @@ tycho-viewer { position: absolute; left: 0; top: 0; width: 480px; height: 360px;
       for (const [, f] of r.titles) expect(f, at).toBeLessThan(2e-3);
     }
   }, 60000);
+
+  it('is tagged full range, with BT.709 primaries and matrix and the sRGB transfer, in the colr box of the MP4', async () => {
+    const base64 = await chrome.evaluate<string>(`(async () => {
+      const v = document.querySelector('tycho-viewer');
+      const blob = await v.exportVideo({ size: { width: 320, height: 240, pixelRatio: 1 }, fps: 30, speed: 32 });
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      let s = '';
+      for (const b of bytes) s += String.fromCharCode(b);
+      return btoa(s);
+    })()`);
+    const mp4 = Buffer.from(base64, 'base64');
+    const at = mp4.indexOf('colrnclx', 0, 'latin1');
+    expect(at, 'the MP4 has a colr box of type nclx').toBeGreaterThan(0);
+    const primaries = mp4.readUInt16BE(at + 8);
+    const transfer = mp4.readUInt16BE(at + 10);
+    const matrix = mp4.readUInt16BE(at + 12);
+    const fullRange = mp4[at + 14]! >> 7;
+    // PowerPoint draws limited range a level dark, and Keynote shifts the levels under the BT.709 transfer
+    expect({ primaries, transfer, matrix, fullRange }).toEqual({ primaries: 1, transfer: 13, matrix: 1, fullRange: 1 });
+  }, 60000);
 });

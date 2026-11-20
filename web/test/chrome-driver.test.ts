@@ -34,7 +34,8 @@ server.on('upgrade', (req, socket) => {
     if (message.method === 'Browser.close' && process.argv[1] === 'exits') setTimeout(() => process.exit(0), 300);
   });
 });
-server.listen(0, '127.0.0.1', () => console.log(server.address().port));
+// console.log would color a number where FORCE_COLOR is set, as in CI
+server.listen(0, '127.0.0.1', () => process.stdout.write(String(server.address().port)));
 `;
 
 /** Starts the stand-in for Chrome under `mode`, and returns its process and its port. */
@@ -66,8 +67,11 @@ describe('closeChrome', () => {
 
   it('ends a Chrome that does not exit after Browser.close', async () => {
     const { child, port } = await standIn('hangs');
+    const start = performance.now();
     await closeChrome(child, port, 500);
     expect(child.signalCode).toBe('SIGTERM');
+    // a Chrome whose port is closed is ended at once, hence the wait shows that Browser.close was sent
+    expect(performance.now() - start).toBeGreaterThanOrEqual(500);
   });
 });
 

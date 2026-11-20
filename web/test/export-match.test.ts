@@ -73,8 +73,8 @@ tycho-viewer { position: absolute; left: 0; top: 0; width: 480px; height: 360px;
     })`);
   }, 60000);
 
-  afterAll(() => {
-    chrome?.close();
+  afterAll(async () => {
+    await chrome?.close();
     if (dir !== undefined) rmSync(dir, { recursive: true, force: true });
   });
 

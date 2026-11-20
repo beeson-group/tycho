@@ -8,6 +8,7 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { chromeArgs, closeChrome } from './chrome.mjs';
 
 const [page, out] = process.argv.slice(2);
 if (page === undefined || out === undefined) {
@@ -21,20 +22,9 @@ const profile = mkdtempSync(join(tmpdir(), 'tycho-poster-'));
 const port = 9300 + Math.floor(Math.random() * 600);
 const chrome = spawn(
   executable,
-  [
-    '--headless=new',
-    `--remote-debugging-port=${port}`,
-    `--user-data-dir=${profile}`,
-    '--no-first-run',
-    '--no-default-browser-check',
-    '--disable-extensions',
-    '--use-angle=swiftshader',
-    '--enable-unsafe-swiftshader',
-    'about:blank',
-  ],
+  [...chromeArgs(profile, port), '--disable-extensions', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', 'about:blank'],
   { stdio: 'ignore' },
 );
-const exited = new Promise((r) => chrome.once('exit', r));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 try {
@@ -85,7 +75,6 @@ try {
   console.log(`wrote ${out} at frame ${res.result.result.value}`);
   ws.close();
 } finally {
-  chrome.kill();
-  await exited;
+  await closeChrome(chrome, port);
   rmSync(profile, { recursive: true, force: true });
 }

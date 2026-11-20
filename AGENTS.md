@@ -38,6 +38,8 @@ python3 .github/check_versions.py                   # the four version fields ag
 node web/scripts/frame-profile.mjs <page.html>      # the cost of playback, in headless Chrome
 ```
 
+Start Chrome only with `Chrome.launch` of `web/test/chrome-driver.ts` or with the scripts in `web/scripts/`, and never end it with `kill` or `pkill`. On macOS, a Chrome that is started without the arguments of `chromeArgs` in `web/scripts/chrome.mjs` copies its app into a temp folder, and this copy is left behind when Chrome is ended by a signal.
+
 ## Before you hand work over
 
 - Run `uvx pre-commit run --all-files`, `uv run pytest`, `npm --prefix web test`, and `npm --prefix web run typecheck`. Hand work over only when all four pass.

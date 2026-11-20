@@ -59,8 +59,8 @@ ${viewer.repeat(VIEWERS)}
     })()`);
   }, 90000);
 
-  afterAll(() => {
-    chrome?.close();
+  afterAll(async () => {
+    await chrome?.close();
     if (dir !== undefined) rmSync(dir, { recursive: true, force: true });
   });
 

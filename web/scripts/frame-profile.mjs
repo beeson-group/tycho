@@ -17,6 +17,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { extname, join, resolve, sep } from 'node:path';
+import { chromeArgs, closeChrome } from './chrome.mjs';
 
 const args = process.argv.slice(2);
 const page = args.find((a) => !a.startsWith('--') && extname(a) === '.html');
@@ -65,20 +66,7 @@ const MAC = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const executable = process.env.CHROME ?? (existsSync(MAC) ? MAC : 'google-chrome');
 const profile = mkdtempSync(join(tmpdir(), 'tycho-profile-'));
 const port = 9300 + Math.floor(Math.random() * 600);
-const chrome = spawn(
-  executable,
-  [
-    '--headless=new',
-    `--remote-debugging-port=${port}`,
-    `--user-data-dir=${profile}`,
-    '--no-first-run',
-    '--no-default-browser-check',
-    '--disable-extensions',
-    'about:blank',
-  ],
-  { stdio: 'ignore' },
-);
-const exited = new Promise((r) => chrome.once('exit', r));
+const chrome = spawn(executable, [...chromeArgs(profile, port), '--disable-extensions', 'about:blank'], { stdio: 'ignore' });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // a minimal client of the Chrome DevTools protocol over the WebSocket class that Node ships
@@ -342,8 +330,7 @@ try {
 } catch (e) {
   if (!e.done) throw e;
 } finally {
-  chrome.kill();
-  await exited;
+  await closeChrome(chrome, port);
   server.close();
   rmSync(profile, { recursive: true, force: true });
 }

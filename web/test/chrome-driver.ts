@@ -3,6 +3,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { chromeArgs, closeChrome } from '../scripts/chrome.mjs';
 
 const CANDIDATES = [
   process.env.CHROME_PATH,
@@ -21,11 +22,13 @@ export class Chrome {
   private readonly proc: ChildProcess;
   private readonly ws: WebSocket;
   private readonly profile: string;
+  private readonly port: number;
 
-  private constructor(proc: ChildProcess, ws: WebSocket, profile: string) {
+  private constructor(proc: ChildProcess, ws: WebSocket, profile: string, port: number) {
     this.proc = proc;
     this.ws = ws;
     this.profile = profile;
+    this.port = port;
   }
 
   private next = 1;
@@ -38,11 +41,7 @@ export class Chrome {
     const proc = spawn(
       path,
       [
-        '--headless=new',
-        '--remote-debugging-port=0',
-        `--user-data-dir=${profile}`,
-        '--no-first-run',
-        '--no-default-browser-check',
+        ...chromeArgs(profile, 0),
         '--hide-scrollbars',
         '--allow-file-access-from-files',
         '--enable-unsafe-swiftshader',
@@ -67,7 +66,7 @@ export class Chrome {
       ws.onopen = resolve;
       ws.onerror = () => reject(new Error(`cannot connect to ${url}`));
     });
-    const chrome = new Chrome(proc, ws, profile);
+    const chrome = new Chrome(proc, ws, profile, Number(new URL(url).port));
     ws.onmessage = (ev) => {
       const msg = JSON.parse(String(ev.data)) as { id?: number; result?: unknown; error?: { message: string } };
       if (msg.id === undefined) return;
@@ -99,9 +98,10 @@ export class Chrome {
     return r.result.value;
   }
 
-  close(): void {
+  /** Ends Chrome, waits for its exit, and removes its profile. */
+  async close(): Promise<void> {
     this.ws.close();
-    this.proc.kill();
+    await closeChrome(this.proc, this.port);
     try {
       rmSync(this.profile, { recursive: true, force: true });
     } catch {

@@ -88,8 +88,8 @@ tycho-viewer { display: block; width: 100%; height: 100%; }
     chrome = await Chrome.launch(chromePath!);
   }, 60000);
 
-  afterAll(() => {
-    chrome?.close();
+  afterAll(async () => {
+    await chrome?.close();
     if (dir !== undefined) rmSync(dir, { recursive: true, force: true });
   });
 

@@ -6,6 +6,10 @@ The two file formats are versioned apart from the packages, i.e. either format v
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-21
+
+Scene format 0.5 and data container version 2 are written and read at this version, as at 0.3.0. A scene that uses the forms added below, e.g. a marker colored by a colormap, is rejected by the runtime of 0.3.0.
+
 ### Added
 
 - The color of the marker of a points layer takes the forms of the color of a trajectories layer, i.e. a colormap over a parameter, which colors each member, and a colormap over a channel or `ty.threshold_color`, which color each sample, e.g. `ty.marker("disc", 1.6, {"colormap": "plasma", "channel": "height", "range": (0.0, 0.8)})`. A cloud of samples is thus colored by a stored value, as `c=` colors a matplotlib scatter plot, in one layer. The colormap `magma` is added, and a `truncate` of `(1, 0)` reads a colormap in reverse.
@@ -104,6 +108,7 @@ Version 0.2.0 introduces the scene grammar, i.e. a general vocabulary from which
 - The npm package bundles three.js and mp4-muxer, and it does not have any runtime dependencies, hence installing it does not install any other package.
 - Both packages declare the license `Apache-2.0 AND MIT`, since the bundle carries MIT-licensed code, and they ship `NOTICE` and `THIRD_PARTY_NOTICES.md`. Every bundle starts with a comment listing the bundled packages. Every page that pytycho writes inlines the bundle, and thus carries the same comment.
 
-[Unreleased]: https://github.com/beeson-group/tycho/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/beeson-group/tycho/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/beeson-group/tycho/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/beeson-group/tycho/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/beeson-group/tycho/releases/tag/v0.2.0

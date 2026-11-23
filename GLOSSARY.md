@@ -88,7 +88,7 @@ A rule of TyCHO that is never traded away for another goal, and that an agent do
 
 ## Input
 
-A value that the person at the page can change, such as the member shown, a numeric slider, or whether a layer is visible. An input is of kind parameter, choice, toggle, or number, and it is either shared by every panel or held per panel.
+A value that the person at the page can change, such as the member shown, a numeric slider, a list of 2D coordinates, or whether a layer is visible. An input is of kind parameter, choice, toggle, number, or points_2d, and it is either shared by every panel or held per panel.
 
 Avoid "variable", "selector", and "state" for an input.
 
@@ -160,6 +160,12 @@ The control that plays and pauses the clock and switches the clock channel.
 
 Avoid "transport".
 
+## Points 2D
+
+An input that stores a mutable list of 2D coordinates edited in a compact 2D picker pad.
+
+Avoid "picker_state".
+
 ## Readout
 
 A text that shows current values, such as the time or the Jacobi constant of the member shown.
@@ -201,6 +207,12 @@ The control that sets an input of kind parameter or number, stopping at paramete
 A named time of the timeline at which a presentation stops, so that one click of the presenter plays the animation to the next step. The word is used in the same sense in the slides template.
 
 Avoid "stage" and "chapter".
+
+## Surface
+
+A layer that draws a 3D height field over a 2D domain, from a stored height grid in `data.tyd` or a declared closed-form analytic field.
+
+Avoid "mesh" and "plot".
 
 ## Tabs
 

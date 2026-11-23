@@ -20,7 +20,7 @@
       "const": "tycho-scene"
     },
     "version": {
-      "description": "The version of the scene format is written as \"major.minor\", e.g. \"0.6\". (rule `version`)",
+      "description": "The version of the scene format is written as \"major.minor\", e.g. \"0.5\". (rule `version`)",
       "type": "string",
       "pattern": "^[0-9]+\\.[0-9]+$"
     },
@@ -648,8 +648,74 @@
               ]
             }
           }
+        },
+        {
+          "description": "An input of kind points_2d holds a mutable list of [x, y] pairs. (rule `points-2d`)",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "default"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The kind is \"points_2d\".",
+              "const": "points_2d"
+            },
+            "default": {
+              "description": "The list of [x, y] pairs at the start.",
+              "$ref": "#/$defs/points2DValue"
+            },
+            "min_points": {
+              "description": "The least number of points allowed is a nonnegative integer, and 0 by default.",
+              "type": "integer",
+              "minimum": 0
+            },
+            "max_points": {
+              "description": "The greatest number of points allowed is an integer of at least min_points, and 6 by default.",
+              "type": "integer",
+              "minimum": 0
+            },
+            "bounds": {
+              "description": "The bounding box of the 2D picker pad is [[x_min, x_max], [y_min, y_max]].",
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "type": "number"
+                }
+              }
+            },
+            "conjugate_lock": {
+              "description": "Whether the 2D picker pad starts with conjugate-pair symmetry locked, true by default.",
+              "type": "boolean"
+            },
+            "scope": {
+              "description": "With \"shared\", the default, the input has one value for the whole page, and with \"per_panel\" it has one value per shown panel. (rule `input-scope`)",
+              "enum": [
+                "shared",
+                "per_panel"
+              ]
+            }
+          }
         }
       ]
+    },
+    "points2DValue": {
+      "description": "A list of [x, y] pairs of finite numbers for an input of kind points_2d. (rule `points-2d`)",
+      "type": "array",
+      "items": {
+        "type": "array",
+        "minItems": 2,
+        "maxItems": 2,
+        "items": {
+          "type": "number"
+        }
+      }
     },
     "inputRef": {
       "description": "A value is read from an input by its id. (rule `input-scope`)",
@@ -1820,6 +1886,89 @@
               "$ref": "#/$defs/inputRef"
             }
           }
+        },
+        {
+          "description": "In a surface layer, a 3D height field is drawn over a 2D domain from a stored grid or a declared rational field. (rule `surface`)",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "source"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The kind is \"surface\".",
+              "const": "surface"
+            },
+            "source": {
+              "description": "The height field is given by a stored grid or a rational transform. (rule `surface`)",
+              "$ref": "#/$defs/surfaceSource"
+            },
+            "scale": {
+              "description": "The height scale is \"linear\", \"log\", or an input of kind choice with those values.",
+              "anyOf": [
+                {
+                  "enum": [
+                    "linear",
+                    "log"
+                  ]
+                },
+                {
+                  "$ref": "#/$defs/inputRef"
+                }
+              ]
+            },
+            "clamp": {
+              "description": "The smooth ceiling clamp applied to the height field. (rule `surface`)",
+              "$ref": "#/$defs/surfaceClamp"
+            },
+            "height_scale": {
+              "description": "A positive factor multiplying the clamped surface height, 1 by default.",
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "colormap": {
+              "description": "The height ramp colormap name, \"cividis\" by default.",
+              "$ref": "#/$defs/colormapName"
+            },
+            "color_range": {
+              "description": "The height interval [lo, hi] mapped onto the colormap, where lo > hi reverses the ramp.",
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "number"
+              }
+            },
+            "grooves": {
+              "description": "The coordinate grid grooves drawn on the surface.",
+              "$ref": "#/$defs/surfaceGrooves"
+            },
+            "roc": {
+              "description": "The causal region of convergence shading on the floor plane.",
+              "$ref": "#/$defs/surfaceRoc"
+            },
+            "slices": {
+              "description": "The continuous and discrete Fourier slices drawn on the surface.",
+              "$ref": "#/$defs/surfaceSlices"
+            },
+            "markers": {
+              "description": "The live pole and zero markers drawn on the floor plane.",
+              "$ref": "#/$defs/surfaceMarkers"
+            },
+            "grow": {
+              "description": "A growth factor in [0, 1], or keyframed, multiplying the height.",
+              "$ref": "#/$defs/opacity"
+            },
+            "opacity": {
+              "description": "The opacity of the surface is in [0, 1], or keyframed, and 1 by default.",
+              "$ref": "#/$defs/opacity"
+            },
+            "visible": {
+              "description": "The layer is omitted while the toggle that this refers to is false. (rule `visible`)",
+              "$ref": "#/$defs/inputRef"
+            }
+          }
         }
       ]
     },
@@ -1988,6 +2137,350 @@
           }
         }
       ]
+    },
+    "surfaceSource": {
+      "description": "The height field source of a surface layer. (rule `surface`)",
+      "oneOf": [
+        {
+          "description": "A stored 2D height array in data.tyd.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "array",
+            "x",
+            "y"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The kind is \"grid\".",
+              "const": "grid"
+            },
+            "array": {
+              "description": "The name of a 2D float32 or float64 array of shape (ny, nx) in data.tyd.",
+              "$ref": "#/$defs/name"
+            },
+            "x": {
+              "description": "The domain [x_0, x_1] along the x axis.",
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "number"
+              }
+            },
+            "y": {
+              "description": "The domain [y_0, y_1] along the y axis.",
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "number"
+              }
+            }
+          }
+        },
+        {
+          "description": "The magnitude |F(s)| of a proper rational Laplace transform.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "poles",
+            "x",
+            "y"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The kind is \"rational_s\".",
+              "const": "rational_s"
+            },
+            "poles": {
+              "description": "The points_2d input holding 1 to 6 s-plane poles.",
+              "$ref": "#/$defs/inputRef"
+            },
+            "zeros": {
+              "description": "The optional points_2d input holding 0 to 5 s-plane zeros.",
+              "$ref": "#/$defs/inputRef"
+            },
+            "gain": {
+              "description": "The scalar gain, given as a finite number or an input of kind number, 1 by default.",
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "$ref": "#/$defs/inputRef"
+                }
+              ]
+            },
+            "period": {
+              "description": "The sampling period T > 0 used for ROC and discrete Fourier stem spacing, 1 by default.",
+              "anyOf": [
+                {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "$ref": "#/$defs/inputRef"
+                }
+              ]
+            },
+            "x": {
+              "description": "The domain [x_0, x_1] along the real axis.",
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "number"
+              }
+            },
+            "y": {
+              "description": "The domain [y_0, y_1] along the imaginary axis.",
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "number"
+              }
+            },
+            "resolution": {
+              "description": "The evaluation grid sample counts [nx, ny], [64, 64] by default.",
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "integer",
+                "minimum": 2
+              }
+            }
+          }
+        },
+        {
+          "description": "The magnitude |F(z)| of the exact causal impulse-invariant Z-transform.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "poles",
+            "period",
+            "x",
+            "y"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The kind is \"rational_z\".",
+              "const": "rational_z"
+            },
+            "poles": {
+              "description": "The points_2d input holding 1 to 6 s-plane poles.",
+              "$ref": "#/$defs/inputRef"
+            },
+            "zeros": {
+              "description": "The optional points_2d input holding 0 to 5 s-plane zeros.",
+              "$ref": "#/$defs/inputRef"
+            },
+            "gain": {
+              "description": "The scalar gain, given as a finite number or an input of kind number, 1 by default.",
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "$ref": "#/$defs/inputRef"
+                }
+              ]
+            },
+            "period": {
+              "description": "The sampling period T > 0, given as a positive number or an input of kind number.",
+              "anyOf": [
+                {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "$ref": "#/$defs/inputRef"
+                }
+              ]
+            },
+            "x": {
+              "description": "The domain [x_0, x_1] along Re(z).",
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "number"
+              }
+            },
+            "y": {
+              "description": "The domain [y_0, y_1] along Im(z).",
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "number"
+              }
+            },
+            "resolution": {
+              "description": "The evaluation grid sample counts [nx, ny], [64, 64] by default.",
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "integer",
+                "minimum": 2
+              }
+            }
+          }
+        }
+      ]
+    },
+    "surfaceClamp": {
+      "description": "The smooth ceiling clamp applied to surface heights. (rule `surface`)",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max",
+        "softness"
+      ],
+      "properties": {
+        "max": {
+          "description": "The positive height ceiling before smoothing.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "softness": {
+          "description": "The positive smoothing width.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "surfaceGrooves": {
+      "description": "The coordinate grid grooves drawn on the surface.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "step": {
+          "description": "The grid spacing [dx, dy] in world coordinates.",
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          }
+        },
+        "color": {
+          "description": "The groove line color.",
+          "$ref": "#/$defs/color"
+        },
+        "opacity": {
+          "description": "The groove blend strength in [0, 1].",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "surfaceRoc": {
+      "description": "The causal region of convergence shading on the floor plane.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "visible": {
+          "description": "The toggle input controlling whether the ROC shading is shown. (rule `visible`)",
+          "$ref": "#/$defs/inputRef"
+        },
+        "color": {
+          "description": "The shading color of the ROC.",
+          "$ref": "#/$defs/color"
+        },
+        "opacity": {
+          "description": "The opacity of the ROC fill in [0, 1], or keyframed.",
+          "$ref": "#/$defs/opacity"
+        }
+      }
+    },
+    "surfaceSlices": {
+      "description": "The continuous and discrete Fourier slices drawn on a rational surface.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "continuous": {
+          "description": "The continuous Fourier transform or DTFT curtain and top curve.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "visible": {
+              "description": "The toggle input controlling whether the continuous slice is shown.",
+              "$ref": "#/$defs/inputRef"
+            },
+            "color": {
+              "description": "The color of the convergent continuous slice.",
+              "$ref": "#/$defs/color"
+            },
+            "divergent_color": {
+              "description": "The color of the slice when the causal ROC excludes the slice.",
+              "$ref": "#/$defs/color"
+            },
+            "opacity": {
+              "description": "The opacity of the continuous slice in [0, 1], or keyframed.",
+              "$ref": "#/$defs/opacity"
+            }
+          }
+        },
+        "discrete": {
+          "description": "The discrete Fourier series or DFT stems.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "visible": {
+              "description": "The toggle input controlling whether the discrete stems are shown.",
+              "$ref": "#/$defs/inputRef"
+            },
+            "count": {
+              "description": "The sample count N, given as an integer or an input of kind number.",
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 2
+                },
+                {
+                  "$ref": "#/$defs/inputRef"
+                }
+              ]
+            },
+            "color": {
+              "description": "The color of the discrete stems.",
+              "$ref": "#/$defs/color"
+            },
+            "opacity": {
+              "description": "The opacity of the discrete stems in [0, 1], or keyframed.",
+              "$ref": "#/$defs/opacity"
+            }
+          }
+        },
+        "clip": {
+          "description": "With true, slices off sigma > 0 for rational_s or |z| > 1 for rational_z while either slice is visible, and false by default.",
+          "type": "boolean"
+        }
+      }
+    },
+    "surfaceMarkers": {
+      "description": "The live pole and zero markers drawn on the floor plane of a rational surface.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "visible": {
+          "description": "The toggle input or keyframed opacity controlling marker visibility.",
+          "$ref": "#/$defs/inputRef"
+        },
+        "opacity": {
+          "description": "The opacity of the floor markers in [0, 1], or keyframed.",
+          "$ref": "#/$defs/opacity"
+        }
+      }
     },
     "camera": {
       "description": "The camera is the way a panel shows its display frame, as a flat picture of one plane or as a three-dimensional picture.",
@@ -2307,6 +2800,38 @@
         }
       }
     },
+    "points2DPreset": {
+      "description": "One named preset for a points_2d control.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "label",
+        "poles"
+      ],
+      "properties": {
+        "id": {
+          "description": "The choice value that selects this preset.",
+          "type": "string"
+        },
+        "label": {
+          "description": "The display name of the preset.",
+          "type": "string"
+        },
+        "poles": {
+          "description": "The list of [sigma, omega] pole pairs for this preset.",
+          "$ref": "#/$defs/points2DValue"
+        },
+        "zeros": {
+          "description": "The list of [sigma, omega] zero pairs for this preset, empty by default.",
+          "$ref": "#/$defs/points2DValue"
+        },
+        "gain": {
+          "description": "The scalar gain for this preset, 1 by default.",
+          "type": "number"
+        }
+      }
+    },
     "control": {
       "description": "A control is a widget on the page that sets an input or drives the clock. (rule `control`)",
       "oneOf": [
@@ -2375,6 +2900,70 @@
             "color": {
               "description": "An optional accent color #rrggbb drawn beside a toggle control.",
               "$ref": "#/$defs/color"
+            },
+            "show_range": {
+              "description": "The timeline interval [t_0, t_1] in seconds during which the control is visible.",
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "number"
+              }
+            }
+          }
+        },
+        {
+          "description": "A points_2d control renders a compact 2D picker pad editing poles and optional zeros. (rule `points-2d`)",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "input",
+            "label"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The kind is \"points_2d\".",
+              "const": "points_2d"
+            },
+            "input": {
+              "description": "The primary points_2d input id, holding poles.",
+              "$ref": "#/$defs/id"
+            },
+            "label": {
+              "description": "The title shown on the 2D picker pad.",
+              "type": "string"
+            },
+            "secondary_input": {
+              "description": "The optional points_2d input id holding zeros.",
+              "$ref": "#/$defs/id"
+            },
+            "gain_input": {
+              "description": "The optional number input id holding scalar gain.",
+              "$ref": "#/$defs/id"
+            },
+            "period_input": {
+              "description": "The optional number input id holding sampling period T for live z-plane mapping.",
+              "$ref": "#/$defs/id"
+            },
+            "preset_input": {
+              "description": "The optional choice input id synchronized with named presets.",
+              "$ref": "#/$defs/id"
+            },
+            "conjugate_lock": {
+              "description": "Whether conjugate-pair locking starts enabled, true by default.",
+              "type": "boolean"
+            },
+            "presets": {
+              "description": "The named presets synchronized with preset_input.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/points2DPreset"
+              }
+            },
+            "show_time_domain": {
+              "description": "The optional toggle input id showing the compact f(t) and f(kT) time-domain strip.",
+              "$ref": "#/$defs/id"
             },
             "show_range": {
               "description": "The timeline interval [t_0, t_1] in seconds during which the control is visible.",
@@ -2553,10 +3142,17 @@
           "description": "The values of the shared inputs are given by input id, and an input without a value takes its default. (rule `input-scope`)",
           "type": "object",
           "additionalProperties": {
-            "type": [
-              "number",
-              "string",
-              "boolean"
+            "anyOf": [
+              {
+                "type": [
+                  "number",
+                  "string",
+                  "boolean"
+                ]
+              },
+              {
+                "$ref": "#/$defs/points2DValue"
+              }
             ]
           }
         },
@@ -2596,10 +3192,17 @@
                 "description": "The values of the per-panel inputs in this shown panel are given by input id. (rule `input-scope`)",
                 "type": "object",
                 "additionalProperties": {
-                  "type": [
-                    "number",
-                    "string",
-                    "boolean"
+                  "anyOf": [
+                    {
+                      "type": [
+                        "number",
+                        "string",
+                        "boolean"
+                      ]
+                    },
+                    {
+                      "$ref": "#/$defs/points2DValue"
+                    }
                   ]
                 }
               }
@@ -3162,6 +3765,42 @@
             "sup": {
               "description": "This text is set as a superscript at 0.7 times the size, and as plain text in a readout.",
               "type": "string"
+            }
+          }
+        },
+        {
+          "description": "The part summarizes the causal region of convergence and Fourier convergence status.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "roc_status"
+          ],
+          "properties": {
+            "roc_status": {
+              "description": "The poles input and sampling period used to compute the causal ROC status.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "poles"
+              ],
+              "properties": {
+                "poles": {
+                  "description": "The points_2d input holding s-plane poles.",
+                  "$ref": "#/$defs/inputRef"
+                },
+                "period": {
+                  "description": "The sampling period T > 0 as a number or an input of kind number, 1 by default.",
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    },
+                    {
+                      "$ref": "#/$defs/inputRef"
+                    }
+                  ]
+                }
+              }
             }
           }
         }

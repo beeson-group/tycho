@@ -246,6 +246,9 @@ The rules for inputs and references follow.
   A value of the wrong kind (e.g. a boolean or a string for an input of kind `parameter`, or a number for a toggle) is never cast to the right kind.
 - `number-input`. An input of kind `number` holds a bounded finite number in `[min, max]`, with finite `min < max`, an optional positive `step`, and `default` in `[min, max]`.
   A writer lists the feature `inputs.number` in `requires` (section 4) for a scene with an input of kind `number`.
+- `points-2d`. An input of kind `points_2d` holds a list of `[x, y]` pairs of finite numbers, with optional integer counts `min_points >= 0` and `max_points >= min_points`, optional bounds `[[x_min, x_max], [y_min, y_max]]`, and optional `conjugate_lock`.
+  A value fits the input only when every entry is a pair of finite numbers and the list length lies in `[min_points, max_points]`.
+  A writer lists the feature `inputs.points_2d` in `requires` (section 4) for a scene with an input of kind `points_2d`.
 - `input-scope`. In a shown panel, `{"input": id}` reads the panel's value when the input is per-panel, and the shared value otherwise.
   A missing value is the input's default.
   A panel's value for a shared input is never read, and a writer rejects such a value in `initial` (section 2.8).
@@ -410,6 +413,12 @@ The rules for declared panels and layers follow.
   Any item whose `visible` toggle is false is omitted from the evaluated items list.
   A writer lists the feature `layers.morph` in `requires` (section 4) for a scene with a `morph` layer.
 
+- `surface`. A `surface` layer evaluates a 3D height field over a 2D domain `[x0, x1] x [y0, y1]`, either from a stored 2D float32 or float64 array of shape `(ny, nx)` (`ny >= 2`, `nx >= 2`) in `data.tyd` (`kind: "grid"`) or from a rational transform (`kind: "rational_s"` or `"rational_z"`).
+  For `"rational_s"` and `"rational_z"`, `poles` refers to a `points_2d` input with `1 <= n <= 6` poles, and optional `zeros` refers to a `points_2d` input with `0 <= m <= 5` zeros and `m <= n`.
+  The `"rational_s"` surface evaluates `|g * prod(s - z_j) / prod(s - p_k)|`, and `"rational_z"` evaluates the exact causal impulse-invariant Z-transform `|F(z)|` using a companion state-space realization `(A, b, c, d_inf)`, matrix exponential `M = exp(A * T)`, denominator `Q(z) = prod(z - exp(p_k * T))`, and numerator polynomial extracted from `M` via the Cayley-Hamilton recurrence.
+  For raw magnitude `m >= 0`, `scale` `"linear"` uses `r = m` and `"log"` uses `r = ln(1 + m)`, after which optional `clamp` applies a smooth ceiling and `height_scale` and `grow` scale the height.
+  A writer lists the feature `layers.surface` in `requires` (section 4) for a scene with a `surface` layer.
+
 The other keys of a declared panel and of its layers, such as a color, a width, an opacity, an `axes` or a `grid` layer, and every key of a camera but its `keyframes`, are for drawing only.
 They are not read in the evaluation of section 3, hence they are not covered by any case of the conformance corpus.
 A few of them still bind the data, as follows.
@@ -476,6 +485,7 @@ The rule for controls follows.
 - `control`. A reader rejects a control of an unknown kind, a control whose `input` is not declared, and a control whose input is of a kind that the control does not set.
   A slider sets an input of kind `parameter` with a `domain`, or an input of kind `number` without a `domain`.
   A toggle control may carry a fixed `color`, and any control may carry `show_range: [t_0, t_1]` to show the control only while the timeline lies in `[t_0, t_1]`.
+  A `points_2d` control edits an input of kind `points_2d`, with optional `secondary_input` of kind `points_2d`, optional `gain_input` and `period_input` of kind `number`, optional `preset_input` of kind `choice`, optional `presets`, and optional `show_time_domain` toggle input.
 - `action-control`. An `action` control carries a `label`, a start time `from` (a step id or finite seconds), and a stop target `to` (a step id or finite seconds).
   A writer lists the feature `controls.action` in `requires` (section 4) for a scene with an `action` control.
 
@@ -612,6 +622,7 @@ A shown panel whose camera has keyframes (rule `camera-keyframes`) also has the 
 A label layer (rule `label`) gives `{"kind": "label", "position": [x, y, z]}`, the position of its anchor in the display frame or `null`.
 A points layer (rule `points`) gives `{"kind": "points", "set": id, "members": [{"index": 3, "points": [[x, y, z], ...]}]}`, the given samples of each member, with `set` `null` and `members` empty when its set query does not match any set.
 A morph layer (rule `morph`) gives `{"kind": "morph", "alpha": alpha, "items": [...]}` with each visible line as `{"kind": "line", "points": [[x, y, 0], ...]}` and each visible region as `{"kind": "region", "grid": [nu, nv], "points": [[x, y, 0], ...]}`.
+A surface layer (rule `surface`) gives `{"kind": "surface", "source": kind, "grid": [nx, ny], "heights": [...]}`, together with `sigma_max` and `converges` for `"rational_s"` and `"rational_z"`, plus `r_max`, `z_poles`, `z_num`, and `z_den` (each `[re, im]` in ascending powers of `z`) for `"rational_z"`.
 
 The example shows one shown panel `p1` in the frame `inertial` with five layers.
 The `trajectories` layer gives member 3 of the set `family-7-periapsis` as the polyline `line` with a `head`.
@@ -643,11 +654,13 @@ The features of version 0.6 are the following.
 - `layers.label` is the `label` layer (rule `label`).
 - `layers.points` is the `points` layer (rule `points`).
 - `inputs.number` is an input of kind `number` (rule `number-input`).
+- `inputs.points_2d` is an input of kind `points_2d` (rule `points-2d`).
 - `layers.morph` is the `morph` layer (rule `morph`).
+- `layers.surface` is the `surface` layer (rule `surface`).
 - `controls.action` is the `action` control (rule `action-control`).
 
 Several keys are not features, since a reader that ignores one of them still draws every trajectory, only at another scale, from another side, at another pace, or at another opacity.
-They are the `aspect` of a `2d` camera, the `fit` of a `trajectories` layer, the `stretch` and the `auto_rotate` of a `3d` camera, the `seconds` and the `end` of the clock, the keyframed values of opacity, of a marker's size, and of a split's ratio, the parts of rule `timeline-parts`, the `steps` (rule `steps`), the markers, glows, dashes, fills, and threshold colors of a `trajectories` layer, the color of the marker of a `points` layer, the box of an axes layer, the margin and the opacity of a declared panel, the image of a body, the font and the gutter of the theme, the `color` and `show_range` keys of controls, and the overlays.
+They are the `aspect` of a `2d` camera, the `fit` of a `trajectories` layer, the `stretch` and the `auto_rotate` of a `3d` camera, the `seconds` and the `end` of the clock, the keyframed values of opacity, of a marker's size, and of a split's ratio, the parts of rule `timeline-parts`, the `steps` (rule `steps`), the markers, glows, dashes, fills, and threshold colors of a `trajectories` layer, the color of the marker of a `points` layer, the box of an axes layer, the margin and the opacity of a declared panel, the image of a body, the font and the gutter of the theme, the `color` and `show_range` keys of controls, the `points_2d` picker control, the `roc_status` readout part, and the overlays.
 
 The following features do not exist yet.
 They are reserved here so that they can be listed in `requires` once they exist.

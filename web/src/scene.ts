@@ -3,7 +3,7 @@
  * spec/scene.schema.json, and the types therefore cannot drift apart from the schema. The aliases below
  * only name parts that the generator, web/scripts/gen-types.mjs, leaves anonymous.
  */
-import type { Input, Layer, State, TrajectorySet } from './scene.gen.js';
+import type { Input, Layer, Points2DValue, State, TrajectorySet } from './scene.gen.js';
 
 export type * from './scene.gen.js';
 
@@ -17,12 +17,15 @@ export type MarkLayer = Extract<Layer, { kind: 'axes' | 'grid' }>;
 export type LabelLayer = Extract<Layer, { kind: 'label' }>;
 export type PointsLayer = Extract<Layer, { kind: 'points' }>;
 export type MorphLayer = Extract<Layer, { kind: 'morph' }>;
+export type SurfaceLayer = Extract<Layer, { kind: 'surface' }>;
 export type ParameterInput = Extract<Input, { kind: 'parameter' }>;
 export type Choice = Extract<Input, { kind: 'choice' }>;
 export type Toggle = Extract<Input, { kind: 'toggle' }>;
 export type NumberInput = Extract<Input, { kind: 'number' }>;
+export type Points2dInput = Extract<Input, { kind: 'points_2d' }>;
+export type Points2dValue = Points2DValue;
 export type ShownPanel = NonNullable<State['panels'][string]>;
-export type InputValue = number | string | boolean;
+export type InputValue = number | string | boolean | Points2DValue;
 
 /** The scene format version this reader implements. */
 export const SCENE_MAJOR = 0;
@@ -41,7 +44,9 @@ export const SUPPORTED_FEATURES: ReadonlySet<string> = new Set([
   'layers.label',
   'layers.points',
   'inputs.number',
+  'inputs.points_2d',
   'layers.morph',
+  'layers.surface',
   'controls.action',
 ]);
 

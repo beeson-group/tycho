@@ -121,6 +121,39 @@ export type Input =
        * With "shared", the default, the input has one value for the whole page, and with "per_panel" it has one value per shown panel. (rule `input-scope`)
        */
       scope?: 'shared' | 'per_panel';
+    }
+  | {
+      /**
+       * The kind is "points_2d".
+       */
+      kind: 'points_2d';
+      /**
+       * The list of [x, y] pairs at the start.
+       */
+      default: Points2DValue;
+      /**
+       * The least number of points allowed is a nonnegative integer, and 0 by default.
+       */
+      min_points?: number;
+      /**
+       * The greatest number of points allowed is an integer of at least min_points, and 6 by default.
+       */
+      max_points?: number;
+      /**
+       * The bounding box of the 2D picker pad is [[x_min, x_max], [y_min, y_max]].
+       *
+       * @minItems 2
+       * @maxItems 2
+       */
+      bounds?: [[number, number], [number, number]];
+      /**
+       * Whether the 2D picker pad starts with conjugate-pair symmetry locked, true by default.
+       */
+      conjugate_lock?: boolean;
+      /**
+       * With "shared", the default, the input has one value for the whole page, and with "per_panel" it has one value per shown panel. (rule `input-scope`)
+       */
+      scope?: 'shared' | 'per_panel';
     };
 /**
  * An identifier consists of ASCII letters, digits, underscores, dots, and hyphens, with at least one character. (rule `identifier`)
@@ -635,6 +668,67 @@ export type Layer =
        * The layer is omitted while the toggle that this refers to is false. (rule `visible`)
        */
       visible?: InputRef;
+    }
+  | {
+      /**
+       * The kind is "surface".
+       */
+      kind: 'surface';
+      /**
+       * The height field is given by a stored grid or a rational transform. (rule `surface`)
+       */
+      source: SurfaceSource;
+      /**
+       * The height scale is "linear", "log", or an input of kind choice with those values.
+       */
+      scale?: ('linear' | 'log') | InputRef;
+      /**
+       * The smooth ceiling clamp applied to the height field. (rule `surface`)
+       */
+      clamp?: SurfaceClamp;
+      /**
+       * A positive factor multiplying the clamped surface height, 1 by default.
+       */
+      height_scale?: number;
+      /**
+       * The height ramp colormap name, "cividis" by default.
+       */
+      colormap?: ColormapName;
+      /**
+       * The height interval [lo, hi] mapped onto the colormap, where lo > hi reverses the ramp.
+       *
+       * @minItems 2
+       * @maxItems 2
+       */
+      color_range?: [number, number];
+      /**
+       * The coordinate grid grooves drawn on the surface.
+       */
+      grooves?: SurfaceGrooves;
+      /**
+       * The causal region of convergence shading on the floor plane.
+       */
+      roc?: SurfaceRoc;
+      /**
+       * The continuous and discrete Fourier slices drawn on the surface.
+       */
+      slices?: SurfaceSlices;
+      /**
+       * The live pole and zero markers drawn on the floor plane.
+       */
+      markers?: SurfaceMarkers;
+      /**
+       * A growth factor in [0, 1], or keyframed, multiplying the height.
+       */
+      grow?: Opacity;
+      /**
+       * The opacity of the surface is in [0, 1], or keyframed, and 1 by default.
+       */
+      opacity?: Opacity;
+      /**
+       * The layer is omitted while the toggle that this refers to is false. (rule `visible`)
+       */
+      visible?: InputRef;
     };
 /**
  * A name of a channel, a parameter, an attribute, or an array of the data container is a nonempty string.
@@ -855,6 +949,21 @@ export type TextPart =
        * This text is set as a superscript at 0.7 times the size, and as plain text in a readout.
        */
       sup: string;
+    }
+  | {
+      /**
+       * The poles input and sampling period used to compute the causal ROC status.
+       */
+      roc_status: {
+        /**
+         * The points_2d input holding s-plane poles.
+         */
+        poles: InputRef;
+        /**
+         * The sampling period T > 0 as a number or an input of kind number, 1 by default.
+         */
+        period?: number | InputRef;
+      };
     };
 /**
  * One line or filled rectangle deformed by a morph layer. (rule `morph`)
@@ -1027,6 +1136,55 @@ export type Control =
        * An optional accent color #rrggbb drawn beside a toggle control.
        */
       color?: Color;
+      /**
+       * The timeline interval [t_0, t_1] in seconds during which the control is visible.
+       *
+       * @minItems 2
+       * @maxItems 2
+       */
+      show_range?: [number, number];
+    }
+  | {
+      /**
+       * The kind is "points_2d".
+       */
+      kind: 'points_2d';
+      /**
+       * The primary points_2d input id, holding poles.
+       */
+      input: Id;
+      /**
+       * The title shown on the 2D picker pad.
+       */
+      label: string;
+      /**
+       * The optional points_2d input id holding zeros.
+       */
+      secondary_input?: Id;
+      /**
+       * The optional number input id holding scalar gain.
+       */
+      gain_input?: Id;
+      /**
+       * The optional number input id holding sampling period T for live z-plane mapping.
+       */
+      period_input?: Id;
+      /**
+       * The optional choice input id synchronized with named presets.
+       */
+      preset_input?: Id;
+      /**
+       * Whether conjugate-pair locking starts enabled, true by default.
+       */
+      conjugate_lock?: boolean;
+      /**
+       * The named presets synchronized with preset_input.
+       */
+      presets?: Points2DPreset[];
+      /**
+       * The optional toggle input id showing the compact f(t) and f(kT) time-domain strip.
+       */
+      show_time_domain?: Id;
       /**
        * The timeline interval [t_0, t_1] in seconds during which the control is visible.
        *
@@ -1239,6 +1397,13 @@ export type ConstantScalar = number | Attr;
  */
 export type Point = [ConstantScalar, ConstantScalar, ConstantScalar];
 /**
+ * A list of [x, y] pairs of finite numbers for an input of kind points_2d. (rule `points-2d`)
+ *
+ * This interface was referenced by `Scene`'s JSON-Schema
+ * via the `definition` "points2DValue".
+ */
+export type Points2DValue = [number, number][];
+/**
  * A string is given as it is or read from an input of kind choice.
  *
  * This interface was referenced by `Scene`'s JSON-Schema
@@ -1367,6 +1532,123 @@ export type ColorSpec =
        * @minItems 2
        */
       colors: [Color, Color, ...Color[]];
+    };
+/**
+ * The height field source of a surface layer. (rule `surface`)
+ *
+ * This interface was referenced by `Scene`'s JSON-Schema
+ * via the `definition` "surfaceSource".
+ */
+export type SurfaceSource =
+  | {
+      /**
+       * The kind is "grid".
+       */
+      kind: 'grid';
+      /**
+       * The name of a 2D float32 or float64 array of shape (ny, nx) in data.tyd.
+       */
+      array: Name;
+      /**
+       * The domain [x_0, x_1] along the x axis.
+       *
+       * @minItems 2
+       * @maxItems 2
+       */
+      x: [number, number];
+      /**
+       * The domain [y_0, y_1] along the y axis.
+       *
+       * @minItems 2
+       * @maxItems 2
+       */
+      y: [number, number];
+    }
+  | {
+      /**
+       * The kind is "rational_s".
+       */
+      kind: 'rational_s';
+      /**
+       * The points_2d input holding 1 to 6 s-plane poles.
+       */
+      poles: InputRef;
+      /**
+       * The optional points_2d input holding 0 to 5 s-plane zeros.
+       */
+      zeros?: InputRef;
+      /**
+       * The scalar gain, given as a finite number or an input of kind number, 1 by default.
+       */
+      gain?: number | InputRef;
+      /**
+       * The sampling period T > 0 used for ROC and discrete Fourier stem spacing, 1 by default.
+       */
+      period?: number | InputRef;
+      /**
+       * The domain [x_0, x_1] along the real axis.
+       *
+       * @minItems 2
+       * @maxItems 2
+       */
+      x: [number, number];
+      /**
+       * The domain [y_0, y_1] along the imaginary axis.
+       *
+       * @minItems 2
+       * @maxItems 2
+       */
+      y: [number, number];
+      /**
+       * The evaluation grid sample counts [nx, ny], [64, 64] by default.
+       *
+       * @minItems 2
+       * @maxItems 2
+       */
+      resolution?: [number, number];
+    }
+  | {
+      /**
+       * The kind is "rational_z".
+       */
+      kind: 'rational_z';
+      /**
+       * The points_2d input holding 1 to 6 s-plane poles.
+       */
+      poles: InputRef;
+      /**
+       * The optional points_2d input holding 0 to 5 s-plane zeros.
+       */
+      zeros?: InputRef;
+      /**
+       * The scalar gain, given as a finite number or an input of kind number, 1 by default.
+       */
+      gain?: number | InputRef;
+      /**
+       * The sampling period T > 0, given as a positive number or an input of kind number.
+       */
+      period: number | InputRef;
+      /**
+       * The domain [x_0, x_1] along Re(z).
+       *
+       * @minItems 2
+       * @maxItems 2
+       */
+      x: [number, number];
+      /**
+       * The domain [y_0, y_1] along Im(z).
+       *
+       * @minItems 2
+       * @maxItems 2
+       */
+      y: [number, number];
+      /**
+       * The evaluation grid sample counts [nx, ny], [64, 64] by default.
+       *
+       * @minItems 2
+       * @maxItems 2
+       */
+      resolution?: [number, number];
     };
 /**
  * The camera is the way a panel shows its display frame, as a flat picture of one plane or as a three-dimensional picture.
@@ -1729,7 +2011,7 @@ export interface Scene {
    */
   format: 'tycho-scene';
   /**
-   * The version of the scene format is written as "major.minor", e.g. "0.6". (rule `version`)
+   * The version of the scene format is written as "major.minor", e.g. "0.5". (rule `version`)
    */
   version: string;
   /**
@@ -2095,6 +2377,34 @@ export interface Keyframed {
   keyframes: Keyframes;
 }
 /**
+ * One named preset for a points_2d control.
+ *
+ * This interface was referenced by `Scene`'s JSON-Schema
+ * via the `definition` "points2DPreset".
+ */
+export interface Points2DPreset {
+  /**
+   * The choice value that selects this preset.
+   */
+  id: string;
+  /**
+   * The display name of the preset.
+   */
+  label: string;
+  /**
+   * The list of [sigma, omega] pole pairs for this preset.
+   */
+  poles: Points2DValue;
+  /**
+   * The list of [sigma, omega] zero pairs for this preset, empty by default.
+   */
+  zeros?: Points2DValue;
+  /**
+   * The scalar gain for this preset, 1 by default.
+   */
+  gain?: number;
+}
+/**
  * A readout is a text that shows current values, read at the reference trajectory.
  *
  * This interface was referenced by `Scene`'s JSON-Schema
@@ -2231,6 +2541,135 @@ export interface Trail {
   };
 }
 /**
+ * The smooth ceiling clamp applied to surface heights. (rule `surface`)
+ *
+ * This interface was referenced by `Scene`'s JSON-Schema
+ * via the `definition` "surfaceClamp".
+ */
+export interface SurfaceClamp {
+  /**
+   * The positive height ceiling before smoothing.
+   */
+  max: number;
+  /**
+   * The positive smoothing width.
+   */
+  softness: number;
+}
+/**
+ * The coordinate grid grooves drawn on the surface.
+ *
+ * This interface was referenced by `Scene`'s JSON-Schema
+ * via the `definition` "surfaceGrooves".
+ */
+export interface SurfaceGrooves {
+  /**
+   * The grid spacing [dx, dy] in world coordinates.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  step?: [number, number];
+  /**
+   * The groove line color.
+   */
+  color?: Color;
+  /**
+   * The groove blend strength in [0, 1].
+   */
+  opacity?: number;
+}
+/**
+ * The causal region of convergence shading on the floor plane.
+ *
+ * This interface was referenced by `Scene`'s JSON-Schema
+ * via the `definition` "surfaceRoc".
+ */
+export interface SurfaceRoc {
+  /**
+   * The toggle input controlling whether the ROC shading is shown. (rule `visible`)
+   */
+  visible?: InputRef;
+  /**
+   * The shading color of the ROC.
+   */
+  color?: Color;
+  /**
+   * The opacity of the ROC fill in [0, 1], or keyframed.
+   */
+  opacity?: Opacity;
+}
+/**
+ * The continuous and discrete Fourier slices drawn on a rational surface.
+ *
+ * This interface was referenced by `Scene`'s JSON-Schema
+ * via the `definition` "surfaceSlices".
+ */
+export interface SurfaceSlices {
+  /**
+   * The continuous Fourier transform or DTFT curtain and top curve.
+   */
+  continuous?: {
+    /**
+     * The toggle input controlling whether the continuous slice is shown.
+     */
+    visible?: InputRef;
+    /**
+     * The color of the convergent continuous slice.
+     */
+    color?: Color;
+    /**
+     * The color of the slice when the causal ROC excludes the slice.
+     */
+    divergent_color?: Color;
+    /**
+     * The opacity of the continuous slice in [0, 1], or keyframed.
+     */
+    opacity?: Opacity;
+  };
+  /**
+   * The discrete Fourier series or DFT stems.
+   */
+  discrete?: {
+    /**
+     * The toggle input controlling whether the discrete stems are shown.
+     */
+    visible?: InputRef;
+    /**
+     * The sample count N, given as an integer or an input of kind number.
+     */
+    count?: number | InputRef;
+    /**
+     * The color of the discrete stems.
+     */
+    color?: Color;
+    /**
+     * The opacity of the discrete stems in [0, 1], or keyframed.
+     */
+    opacity?: Opacity;
+  };
+  /**
+   * With true, slices off sigma > 0 for rational_s or |z| > 1 for rational_z while either slice is visible, and false by default.
+   */
+  clip?: boolean;
+}
+/**
+ * The live pole and zero markers drawn on the floor plane of a rational surface.
+ *
+ * This interface was referenced by `Scene`'s JSON-Schema
+ * via the `definition` "surfaceMarkers".
+ */
+export interface SurfaceMarkers {
+  /**
+   * The toggle input or keyframed opacity controlling marker visibility.
+   */
+  visible?: InputRef;
+  /**
+   * The opacity of the floor markers in [0, 1], or keyframed.
+   */
+  opacity?: Opacity;
+}
+/**
  * The reference trajectory is the one trajectory that a panel follows, at which the bodies and the readouts of the panel are placed and read.
  *
  * This interface was referenced by `Scene`'s JSON-Schema
@@ -2264,7 +2703,7 @@ export interface State {
    * The values of the shared inputs are given by input id, and an input without a value takes its default. (rule `input-scope`)
    */
   inputs?: {
-    [k: string]: number | string | boolean | undefined;
+    [k: string]: number | string | boolean | Points2DValue | undefined;
   };
   /**
    * The clock channel of the state is given here.
@@ -2289,7 +2728,7 @@ export interface State {
            * The values of the per-panel inputs in this shown panel are given by input id. (rule `input-scope`)
            */
           inputs?: {
-            [k: string]: number | string | boolean | undefined;
+            [k: string]: number | string | boolean | Points2DValue | undefined;
           };
         }
       | undefined;

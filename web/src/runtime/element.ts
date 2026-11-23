@@ -103,6 +103,7 @@ import {
   type DropPayload,
 } from './state.js';
 import { ratioAt, tile, withRatio, type Gutter } from './tiles.js';
+import { PoleZeroPicker, type Points2dControl } from './picker.js';
 
 const MAX_PANELS = 8;
 /** The height in CSS pixels between a panel's header and its tick row below which its colorbars are hidden, since their title and two ends would not fit. */
@@ -127,9 +128,9 @@ const STYLE = `
 button, select, input { font: inherit; color: inherit; margin: 0; }
 .root { position: absolute; inset: 0; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr auto auto; }
 .root.kiosk { grid-template-rows: 1fr; }
-.root.kiosk header, .root.kiosk .stats, .root.kiosk footer, .root.kiosk .pheader { display: none; }
+.root.kiosk header, .root.kiosk .stats, .root.kiosk footer, .root.kiosk .pheader, .root.kiosk .picker { display: none; }
 .root.picture { grid-template-rows: 1fr auto; }
-.root.picture header, .root.picture footer, .root.picture .pheader { display: none; }
+.root.picture header, .root.picture footer, .root.picture .pheader, .root.picture .picker { display: none; }
 .root.minimal:not(.keep-panels) .add, .root.minimal:not(.keep-panels) .pheader .icon, .root.minimal .frame, .root.minimal .fps, .root.minimal:not(.slide) .cap.view, .root.minimal .cap.export, .root.minimal.slide .speed, .root.minimal.slide .cap.steps { display: none; }
 header h1:empty { display: none; }
 .root.dragging, .root.dragging * { cursor: grabbing !important; }
@@ -213,8 +214,8 @@ input[type=range]:disabled { opacity: 0.4; cursor: default; }
 .menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 2px; }
 
 .panel-area { position: relative; min-height: 120px; overflow: hidden; background: var(--gutter); }
-.panel-area canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-.panel-area canvas.paint { pointer-events: none; }
+.panel-area > canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.panel-area > canvas.paint { pointer-events: none; }
 .panels { position: absolute; inset: 0; }
 .panel { position: absolute; overflow: hidden; }
 .pbody { position: absolute; inset: 0; }
@@ -287,6 +288,25 @@ input[type=range]:disabled { opacity: 0.4; cursor: default; }
 .stack b { font-size: 13px; }
 .readout .u { color: var(--dim); font-size: 12px; margin-left: 0.35em; }
 .readout .line { white-space: pre-wrap; font-variant-numeric: tabular-nums; }
+.readout.warn .line, .readout b.warn { color: var(--accent); }
+
+.picker { position: absolute; right: 10px; bottom: 10px; z-index: 6; width: 244px; max-width: calc(100% - 20px);
+  background: var(--header); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.32); overflow: hidden; }
+.picker.collapsed { width: auto; }
+.picker-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 8px;
+  border-bottom: 1px solid var(--line); font-size: 12px; font-weight: 600; }
+.picker.collapsed .picker-head { border-bottom: 0; }
+.picker-toggle { border: 0; background: none; color: var(--dim); cursor: pointer; padding: 0 4px; font-size: 11px; line-height: 1.4; }
+.picker-toggle:hover { color: var(--fg); }
+.picker-body { display: flex; flex-direction: column; gap: 6px; padding: 8px; }
+.pz-canvas, .pz-time { display: block; border: 1px solid var(--line); border-radius: 4px; touch-action: none; }
+.pz-canvas { cursor: crosshair; }
+.pz-toggles { display: flex; align-items: center; gap: 12px; font-size: 11px; }
+.pz-lock, .pz-snap { display: inline-flex; align-items: center; gap: 4px; color: var(--dim); cursor: pointer; }
+.pz-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: 11px; }
+.pz-btn { flex: 1 1 0; justify-content: center; padding: 2px 6px; font-size: 11px; }
+.pz-info { font-size: 11px; color: var(--dim); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 footer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 8px 14px 10px; }
 .cap { display: flex; align-items: center; gap: 4px; padding: 3px; min-height: 36px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
@@ -329,6 +349,9 @@ footer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; pad
   footer { padding: 6px 10px 8px; gap: 6px 8px; }
   .cap.steps { max-width: 100%; }
   .cap.steps select { max-width: 155px; }
+  .picker { right: 8px; bottom: 8px; }
+  .picker:not(.collapsed) { left: 8px; right: 8px; width: auto; max-width: none; }
+  .picker-body { align-items: center; }
 }
 `;
 
@@ -541,10 +564,16 @@ export function buildReadout(parts: Readout['parts'], cls: 'wide' | 'stack'): Re
 /** Writes a readout: its value parts into the tiles, or the whole text, or an error, as a line. */
 export function fillReadout(r: ReadoutDom, pieces: string[] | { error: string }): void {
   const ok = Array.isArray(pieces);
+  const warn = ok && pieces.some((s) => s.includes('⚠'));
+  r.root.classList.toggle('warn', warn);
   if (ok && r.tiles !== null && r.list !== null && pieces.length > 0) {
     r.list.hidden = false;
     r.line.hidden = true;
-    r.tiles.forEach((t, i) => setText(r.values[i]!, pieces[t.part] ?? ''));
+    r.tiles.forEach((t, i) => {
+      const txt = pieces[t.part] ?? '';
+      setText(r.values[i]!, txt);
+      r.values[i]!.classList.toggle('warn', txt.includes('⚠'));
+    });
     return;
   }
   if (r.list !== null) r.list.hidden = true;
@@ -630,6 +659,7 @@ export class TychoViewerElement extends Base {
   private readonly gutterDom = new Map<string, HTMLDivElement>();
   private gutters: Gutter[] = [];
   private sceneWidgets: Widget[] = [];
+  private pickers: PoleZeroPicker[] = [];
   private captions: ReadoutDom[] = [];
   private addChips: HTMLElement[] = [];
   private addButton: HTMLButtonElement | null = null;
@@ -903,6 +933,8 @@ export class TychoViewerElement extends Base {
     this.overlayObserver?.disconnect();
     this.overlayObserver = null;
     this.dropRenderer();
+    for (const p of this.pickers) p.dispose();
+    this.pickers = [];
     this.canvas?.remove();
     this.canvas = null;
     this.paintCanvas?.remove();
@@ -1170,6 +1202,7 @@ export class TychoViewerElement extends Base {
         if (w.showRange !== undefined) w.el.hidden = tSec < w.showRange[0] - 1e-6 || tSec > w.showRange[1] + 1e-6;
       }
     }
+    for (const p of this.pickers) p.setTime(tSec);
     if (this.stepsCap !== null) {
       const steps = scene.steps ?? [];
       const cur = this.currentStep;
@@ -1812,6 +1845,7 @@ export class TychoViewerElement extends Base {
       btn.addEventListener('click', () => this.runAction(control.from, control.to));
       return { el: btn, showRange, sync: () => undefined };
     }
+    if (control.kind === 'points_2d') return null;
     const v = inputDef(scene, control.input);
     if (v === undefined) return null;
     const write = (value: InputValue) => this.store!.update((s) => withInput(scene, s, control.input, value, panel));
@@ -1940,8 +1974,19 @@ export class TychoViewerElement extends Base {
     const scene = this.scene!;
     this.varsEl.replaceChildren();
     this.sceneWidgets = [];
+    for (const p of this.pickers) p.dispose();
+    this.pickers = [];
+    const mobile = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 720px)').matches;
     for (const c of scene.controls ?? []) {
       if (c.kind === 'playback') continue;
+      if (c.kind === 'points_2d') {
+        const picker = new PoleZeroPicker(c as Points2dControl, mobile, (updates) => {
+          this.store!.update((s) => updates.reduce((acc, [id, val]) => withInput(scene, acc, id, val), s));
+        });
+        this.panelArea.appendChild(picker.el);
+        this.pickers.push(picker);
+        continue;
+      }
       if (c.kind !== 'action' && inputDef(scene, c.input)?.scope === 'per_panel') continue;
       const w = this.makeWidget(c, undefined);
       if (w) {
@@ -2126,6 +2171,12 @@ export class TychoViewerElement extends Base {
       for (const w of this.sceneWidgets) {
         w.sync(scope);
         if (w.showRange !== undefined) w.el.hidden = tSec < w.showRange[0] - 1e-6 || tSec > w.showRange[1] + 1e-6;
+      }
+      if (this.theme !== null) {
+        for (const p of this.pickers) {
+          p.sync(scope, this.theme);
+          p.setTime(tSec);
+        }
       }
     }
     const declaredCount = Object.keys(scene.panels).length;

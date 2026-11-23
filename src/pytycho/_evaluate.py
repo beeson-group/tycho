@@ -21,7 +21,7 @@ from typing import Any
 
 import numpy as np
 
-from ._complex import conformal_exp
+from ._complex import conformal_exp, eval_rational_s, eval_rational_z, impulse_invariant_z, map_height
 from .container import Container
 
 INDEX = "@index"
@@ -566,7 +566,7 @@ def evaluate(document: Mapping[str, Any], container: Container | bytes, state: M
     return _Evaluator(document, container).run(state, frame_index)
 
 
-KINDS = ("trajectories", "arrow", "inset_box", "body", "axes", "grid", "label", "points", "morph")
+KINDS = ("trajectories", "arrow", "inset_box", "body", "axes", "grid", "label", "points", "morph", "surface")
 
 
 def _fits_input(spec: Mapping[str, Any], value: Any) -> bool:
@@ -584,6 +584,24 @@ def _fits_input(spec: Mapping[str, Any], value: Any) -> bool:
         return value in spec.get("values", [])
     if kind == "toggle":
         return isinstance(value, bool)
+    if kind == "points_2d":
+        if not isinstance(value, list):
+            return False
+        min_p = int(spec.get("min_points", 0))
+        max_p = spec.get("max_points")
+        if len(value) < min_p or (max_p is not None and len(value) > int(max_p)):
+            return False
+        return all(
+            isinstance(pt, list)
+            and len(pt) == 2
+            and not isinstance(pt[0], bool)
+            and not isinstance(pt[1], bool)
+            and isinstance(pt[0], (int, float))
+            and isinstance(pt[1], (int, float))
+            and math.isfinite(pt[0])
+            and math.isfinite(pt[1])
+            for pt in value
+        )
     return False
 
 
@@ -598,7 +616,7 @@ class _Evaluator:
         for iid, spec in self.inputs.items():
             if (
                 not isinstance(spec, Mapping)
-                or spec.get("kind") not in ("parameter", "choice", "toggle", "number")
+                or spec.get("kind") not in ("parameter", "choice", "toggle", "number", "points_2d")
                 or "default" not in spec
             ):
                 raise EvaluationError(f"input: input {iid!r} lacks a known kind or a default")
@@ -621,6 +639,15 @@ class _Evaluator:
                     raise EvaluationError(f"number-input: input {iid!r} requires positive finite step")
                 if not _fits_input(spec, default):
                     raise EvaluationError(f"number-input: input {iid!r} default {default!r} is outside [min, max]")
+            if spec["kind"] == "points_2d":
+                min_p = spec.get("min_points", 0)
+                max_p = spec.get("max_points", 6)
+                if isinstance(min_p, bool) or not isinstance(min_p, int) or min_p < 0:
+                    raise EvaluationError(f"points-2d: input {iid!r} has invalid min_points {min_p!r}")
+                if max_p is not None and (isinstance(max_p, bool) or not isinstance(max_p, int) or max_p < min_p):
+                    raise EvaluationError(f"points-2d: input {iid!r} has invalid max_points {max_p!r}")
+                if not _fits_input(spec, spec["default"]):
+                    raise EvaluationError(f"points-2d: input {iid!r} default does not fit point bounds")
         self._sets: dict[str, SetData] = {}
 
     def set_data(self, sid: str) -> SetData:
@@ -907,6 +934,8 @@ class _Panel:
                 layers.append(self.points_layer(layer))
             elif kind == "morph":
                 layers.append(self.morph_layer(layer))
+            elif kind == "surface":
+                layers.append(self.surface_layer(layer))
             else:
                 layers.append({"kind": kind})
         out: dict[str, Any] = {"frame": frame, "layers": layers}
@@ -1235,6 +1264,20 @@ class _Panel:
             raise EvaluationError(f"{rule}: {what} is {val}, not positive")
         return float(val)
 
+    def _resolve_points2d_ref(self, spec: Any, rule: str, min_count: int, max_count: int, what: str) -> list[list[float]]:
+        if not isinstance(spec, Mapping) or "input" not in spec:
+            raise EvaluationError(f"{rule}: {what} is not an input reference")
+        iid = spec["input"]
+        info = self.ev.inputs.get(iid)
+        if info is None or info.get("kind") != "points_2d":
+            raise EvaluationError(f"{rule}: {what} names {iid!r}, which is not a points_2d input")
+        val = self.input(iid)
+        if not isinstance(val, list) or not (min_count <= len(val) <= max_count):
+            raise EvaluationError(
+                f"{rule}: {what} has length {len(val) if isinstance(val, list) else -1}, outside [{min_count}, {max_count}]"
+            )
+        return [[float(pt[0]), float(pt[1])] for pt in val]
+
     def _unit_keyframed(self, spec: Any, default: float, rule: str, what: str) -> float:
         if spec is None:
             return default
@@ -1314,6 +1357,115 @@ class _Panel:
             else:
                 raise EvaluationError(f"morph: unknown item kind {ikind!r}")
         return {"kind": "morph", "alpha": alpha, "items": out_items}
+
+    def surface_layer(self, layer: Mapping[str, Any]) -> dict[str, Any]:
+        """The evaluated height field and coefficients of a surface layer (rule `surface`)."""
+        scale_spec = layer.get("scale", "linear")
+        scale_mode = self.input(scale_spec["input"]) if isinstance(scale_spec, Mapping) and "input" in scale_spec else scale_spec
+        if scale_mode not in ("linear", "log"):
+            raise EvaluationError(f"surface: a surface's scale is {scale_mode!r}, not linear or log")
+        clamp_spec_raw = layer.get("clamp")
+        clamp_spec: tuple[float, float] | None = None
+        if clamp_spec_raw is not None:
+            c_max, c_soft = clamp_spec_raw.get("max"), clamp_spec_raw.get("softness")
+            if (
+                isinstance(c_max, bool)
+                or isinstance(c_soft, bool)
+                or not isinstance(c_max, (int, float))
+                or not isinstance(c_soft, (int, float))
+                or not (math.isfinite(c_max) and c_max > 0 and math.isfinite(c_soft) and c_soft > 0)
+            ):
+                raise EvaluationError(f"surface: a surface's clamp {clamp_spec_raw!r} requires positive max and softness")
+            clamp_spec = (float(c_max), float(c_soft))
+        height_scale = layer.get("height_scale", 1.0)
+        if (
+            isinstance(height_scale, bool)
+            or not isinstance(height_scale, (int, float))
+            or not math.isfinite(height_scale)
+            or height_scale <= 0
+        ):
+            raise EvaluationError(f"surface: a surface's height_scale is {height_scale!r}, not positive")
+        grow = self._unit_keyframed(layer.get("grow"), 1.0, "surface", "a surface layer's grow")
+        src = layer.get("source")
+        if not isinstance(src, Mapping):
+            raise EvaluationError("surface: missing source")
+        skind = src.get("kind")
+        if skind == "grid":
+            try:
+                arr = self.ev.container.array(src["array"])
+            except (KeyError, TypeError):
+                raise EvaluationError(f"surface: grid array {src.get('array')!r} is missing from data.tyd") from None
+            if arr.dtype not in (np.float32, np.float64) or arr.ndim != 2 or arr.shape[0] < 2 or arr.shape[1] < 2:
+                raise EvaluationError(f"surface: grid array {src['array']!r} must be 2d float32/float64 of at least 2x2")
+            x0, x1 = src["x"]
+            y0, y1 = src["y"]
+            if not (math.isfinite(x0) and math.isfinite(x1) and x0 < x1 and math.isfinite(y0) and math.isfinite(y1) and y0 < y1):
+                raise EvaluationError("surface: grid domain is invalid")
+            ny, nx = arr.shape
+            flat = arr.astype(np.float64).ravel()
+            if scale_mode == "linear" and clamp_spec is None:
+                heights = [float(v) * float(height_scale) * grow for v in flat]
+            else:
+                heights = [
+                    map_height(max(0.0, float(v)) if scale_mode == "log" else float(v), scale_mode, clamp_spec, float(height_scale), grow)
+                    for v in flat
+                ]
+            return {"kind": "surface", "source": "grid", "grid": [int(nx), int(ny)], "heights": heights}
+        if skind not in ("rational_s", "rational_z"):
+            raise EvaluationError(f"surface: unknown source kind {skind!r}")
+        poles = self._resolve_points2d_ref(src.get("poles"), "surface", 1, 6, "a rational surface poles")
+        zeros = self._resolve_points2d_ref(src["zeros"], "surface", 0, 5, "a rational surface zeros") if "zeros" in src else []
+        if len(zeros) > len(poles):
+            raise EvaluationError(f"surface: a rational surface has {len(zeros)} zeros and {len(poles)} poles, which is improper")
+        gain = self._resolve_number_ref(src["gain"], "surface", positive=False, what="a rational surface gain") if "gain" in src else 1.0
+        if skind == "rational_z" and "period" not in src:
+            raise EvaluationError("surface: rational_z surface requires period")
+        period = (
+            self._resolve_number_ref(src["period"], "surface", positive=True, what="a rational surface period") if "period" in src else 1.0
+        )
+        x0, x1 = src["x"]
+        y0, y1 = src["y"]
+        if not (math.isfinite(x0) and math.isfinite(x1) and x0 < x1 and math.isfinite(y0) and math.isfinite(y1) and y0 < y1):
+            raise EvaluationError("surface: surface domain is invalid")
+        res = src.get("resolution", [64, 64])
+        if not isinstance(res, list) or len(res) != 2 or any(isinstance(n, bool) or not isinstance(n, int) or n < 2 for n in res):
+            raise EvaluationError(f"surface: resolution {res!r} is not two integers >= 2")
+        nx, ny = res
+        xs = [x0 + (i / (nx - 1)) * (x1 - x0) for i in range(nx)]
+        ys = [y0 + (j / (ny - 1)) * (y1 - y0) for j in range(ny)]
+        if skind == "rational_s":
+            sigma_max = max(p[0] for p in poles)
+            heights = [
+                map_height(eval_rational_s(poles, zeros, gain, x, y), scale_mode, clamp_spec, float(height_scale), grow)
+                for y in ys
+                for x in xs
+            ]
+            return {
+                "kind": "surface",
+                "source": "rational_s",
+                "sigma_max": float(sigma_max),
+                "converges": bool(sigma_max < -1e-9),
+                "grid": [int(nx), int(ny)],
+                "heights": heights,
+            }
+        z_res = impulse_invariant_z(poles, zeros, gain, period)
+        z_poles = z_res["z_poles"]
+        z_num = z_res["z_num"]
+        heights = [
+            map_height(eval_rational_z(z_poles, z_num, x, y), scale_mode, clamp_spec, float(height_scale), grow) for y in ys for x in xs
+        ]
+        return {
+            "kind": "surface",
+            "source": "rational_z",
+            "sigma_max": z_res["sigma_max"],
+            "r_max": z_res["r_max"],
+            "converges": z_res["converges"],
+            "z_poles": z_poles,
+            "z_num": z_num,
+            "z_den": z_res["z_den"],
+            "grid": [int(nx), int(ny)],
+            "heights": heights,
+        }
 
     def camera(self, camera: Mapping[str, Any]) -> dict[str, Any] | None:
         """The window of a 2d camera with keyframes at the time of the timeline (rule `camera-keyframes`), or None when a keyframe

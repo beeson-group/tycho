@@ -2011,7 +2011,7 @@ export interface Scene {
    */
   format: 'tycho-scene';
   /**
-   * The version of the scene format is written as "major.minor", e.g. "0.5". (rule `version`)
+   * The version of the scene format is written as "major.minor", e.g. "0.6". (rule `version`)
    */
   version: string;
   /**

@@ -106,6 +106,7 @@ export class PoleZeroPicker {
   private showTime = false;
   private selected: { kind: 'pole' | 'zero'; idx: number } = { kind: 'pole', idx: 0 };
   private drag: DragState | null = null;
+  private syncSeq = 0;
   private lastSyncedPreset: string | null = null;
   private lastTimeKey = '';
   private cachedTimeResp: { t: number[]; f: number[]; tk: number[]; fk: number[] } | null = null;
@@ -226,6 +227,7 @@ export class PoleZeroPicker {
   }
 
   sync(scope: PanelScope, theme: Theme): void {
+    const seq = ++this.syncSeq;
     this.theme = theme;
     const pDef = inputDef(scope.scene, this.control.input);
     if (pDef?.kind === 'points_2d') {
@@ -240,6 +242,7 @@ export class PoleZeroPicker {
         this.maxZeros = Math.min(5, zDef.max_points ?? 5);
       }
     }
+    let appliedMatch: NonNullable<Points2dControl['presets']>[number] | null = null;
     if (this.control.preset_input !== undefined && this.control.presets !== undefined) {
       const prDef = inputDef(scope.scene, this.control.preset_input);
       this.hasCustomPreset = prDef?.kind === 'choice' && prDef.values.includes('custom');
@@ -248,6 +251,7 @@ export class PoleZeroPicker {
         this.lastSyncedPreset = presetVal;
         const match = this.control.presets.find((p) => p.id === presetVal);
         if (match !== undefined) {
+          appliedMatch = match;
           const updates: [string, InputValue][] = [[this.control.input, match.poles.map(([x, y]) => [x, y])]];
           if (this.control.secondary_input !== undefined) {
             updates.push([this.control.secondary_input, (match.zeros ?? []).map(([x, y]) => [x, y])]);
@@ -256,18 +260,19 @@ export class PoleZeroPicker {
             updates.push([this.control.gain_input, match.gain ?? 1]);
           }
           this.onUpdate(updates);
-          return;
+          if (this.syncSeq !== seq) return;
         }
       }
     }
 
-    const rawPoles = inputValue(scope, this.control.input);
+    const rawPoles = appliedMatch !== null ? appliedMatch.poles : inputValue(scope, this.control.input);
     if (Array.isArray(rawPoles)) this.poles = rawPoles.map(([x, y]) => [x, y]);
     if (this.control.secondary_input !== undefined) {
-      const rawZeros = inputValue(scope, this.control.secondary_input);
+      const rawZeros = appliedMatch !== null ? (appliedMatch.zeros ?? []) : inputValue(scope, this.control.secondary_input);
       if (Array.isArray(rawZeros)) this.zeros = rawZeros.map(([x, y]) => [x, y]);
     }
-    this.gain = this.control.gain_input !== undefined ? Number(inputValue(scope, this.control.gain_input)) : 1;
+    this.gain =
+      appliedMatch !== null ? (appliedMatch.gain ?? 1) : this.control.gain_input !== undefined ? Number(inputValue(scope, this.control.gain_input)) : 1;
     this.period = this.control.period_input !== undefined ? Number(inputValue(scope, this.control.period_input)) : 1;
     this.showTime = this.control.show_time_domain !== undefined && inputValue(scope, this.control.show_time_domain) === true;
     this.timeCanvas.hidden = !this.showTime;

@@ -306,11 +306,15 @@ void main() {
 `;
 
 const SLICE_VS = /* glsl */ `
+uniform float uGrow;
+uniform float uMinZ;
 attribute float aArc;
+attribute float aZOffset;
 varying float vArc;
 void main() {
   vArc = aArc;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  vec3 p = vec3(position.xy, max(uMinZ, position.z * uGrow + aZOffset));
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
 }
 `;
 
@@ -631,6 +635,11 @@ export class SurfaceDraw implements Draw {
       const cRgb = hexRgb(cSpec.color ?? '#38d0e8');
       this.contCurtainPos = new Float32Array(MAX_CONT_SAMPLES * 2 * 3);
       const cArc = new Float32Array(MAX_CONT_SAMPLES * 2);
+      const cZOff = new Float32Array(MAX_CONT_SAMPLES * 2);
+      for (let i = 0; i < MAX_CONT_SAMPLES; i++) {
+        cZOff[2 * i] = 0.008;
+        cZOff[2 * i + 1] = 0.024;
+      }
       const cIndices: number[] = [];
       for (let i = 0; i < MAX_CONT_SAMPLES - 1; i++) {
         const a = 2 * i;
@@ -642,6 +651,7 @@ export class SurfaceDraw implements Draw {
       this.contCurtainGeo = new THREE.BufferGeometry();
       this.contCurtainGeo.setAttribute('position', new THREE.BufferAttribute(this.contCurtainPos, 3).setUsage(THREE.DynamicDrawUsage));
       this.contCurtainGeo.setAttribute('aArc', new THREE.BufferAttribute(cArc, 1));
+      this.contCurtainGeo.setAttribute('aZOffset', new THREE.BufferAttribute(cZOff, 1));
       this.contCurtainGeo.setIndex(cIndices);
       this.contCurtainMat = new THREE.ShaderMaterial({
         vertexShader: SLICE_VS,
@@ -653,6 +663,8 @@ export class SurfaceDraw implements Draw {
           uColor: { value: new THREE.Color(cRgb[0], cRgb[1], cRgb[2]) },
           uOpacity: { value: 0.28 },
           uDiverges: { value: 0 },
+          uGrow: { value: 1 },
+          uMinZ: { value: 0 },
         },
       });
       this.contCurtainMesh = new THREE.Mesh(this.contCurtainGeo, this.contCurtainMat);
@@ -662,6 +674,14 @@ export class SurfaceDraw implements Draw {
       // Build crossed horizontal + vertical bold ribbon (4 vertices per sample)
       this.contLinePos = new Float32Array(MAX_CONT_SAMPLES * 4 * 3);
       this.contLineArc = new Float32Array(MAX_CONT_SAMPLES * 4);
+      const lZOff = new Float32Array(MAX_CONT_SAMPLES * 4);
+      for (let i = 0; i < MAX_CONT_SAMPLES; i++) {
+        const o = 4 * i;
+        lZOff[o] = 0.028;
+        lZOff[o + 1] = 0.028;
+        lZOff[o + 2] = 0.0;
+        lZOff[o + 3] = 0.056;
+      }
       const lIndices: number[] = [];
       for (let i = 0; i < MAX_CONT_SAMPLES - 1; i++) {
         const h0 = 4 * i;
@@ -678,6 +698,7 @@ export class SurfaceDraw implements Draw {
       this.contLineGeo = new THREE.BufferGeometry();
       this.contLineGeo.setAttribute('position', new THREE.BufferAttribute(this.contLinePos, 3).setUsage(THREE.DynamicDrawUsage));
       this.contLineGeo.setAttribute('aArc', new THREE.BufferAttribute(this.contLineArc, 1).setUsage(THREE.DynamicDrawUsage));
+      this.contLineGeo.setAttribute('aZOffset', new THREE.BufferAttribute(lZOff, 1));
       this.contLineGeo.setIndex(lIndices);
       this.contLineMat = new THREE.ShaderMaterial({
         vertexShader: SLICE_VS,
@@ -689,6 +710,8 @@ export class SurfaceDraw implements Draw {
           uColor: { value: new THREE.Color(cRgb[0], cRgb[1], cRgb[2]) },
           uOpacity: { value: 1 },
           uDiverges: { value: 0 },
+          uGrow: { value: 1 },
+          uMinZ: { value: 0.012 },
         },
       });
       this.contLineMesh = new THREE.Mesh(this.contLineGeo, this.contLineMat);
@@ -701,6 +724,18 @@ export class SurfaceDraw implements Draw {
       const dRgb = hexRgb(dColor);
       // Two crossed vertical quads per stem (8 vertices, 12 indices per stem)
       this.stemPos = new Float32Array(MAX_STEMS * 8 * 3);
+      const sZOff = new Float32Array(MAX_STEMS * 8);
+      for (let i = 0; i < MAX_STEMS; i++) {
+        const o = 8 * i;
+        sZOff[o] = 0.008;
+        sZOff[o + 1] = 0.008;
+        sZOff[o + 2] = 0.026;
+        sZOff[o + 3] = 0.026;
+        sZOff[o + 4] = 0.008;
+        sZOff[o + 5] = 0.008;
+        sZOff[o + 6] = 0.026;
+        sZOff[o + 7] = 0.026;
+      }
       const sIndices: number[] = [];
       for (let i = 0; i < MAX_STEMS; i++) {
         const b = 8 * i;
@@ -709,6 +744,7 @@ export class SurfaceDraw implements Draw {
       }
       this.stemGeo = new THREE.BufferGeometry();
       this.stemGeo.setAttribute('position', new THREE.BufferAttribute(this.stemPos, 3).setUsage(THREE.DynamicDrawUsage));
+      this.stemGeo.setAttribute('aZOffset', new THREE.BufferAttribute(sZOff, 1));
       this.stemGeo.setIndex(sIndices);
       this.stemMat = new THREE.ShaderMaterial({
         vertexShader: SLICE_VS,
@@ -719,6 +755,8 @@ export class SurfaceDraw implements Draw {
         uniforms: {
           uColor: { value: new THREE.Color(dRgb[0], dRgb[1], dRgb[2]) },
           uOpacity: { value: 0.95 },
+          uGrow: { value: 1 },
+          uMinZ: { value: 0 },
         },
       });
       this.stemMesh = new THREE.Mesh(this.stemGeo, this.stemMat);
@@ -727,6 +765,7 @@ export class SurfaceDraw implements Draw {
 
       this.stemDots = new MarkerSprites({ shape: 'disc', color: dColor }, 8.5, false);
       this.stemDots.grow(MAX_STEMS);
+      this.stemDots.points.position.z = 0.026;
       (this.stemDots.points.material as THREE.PointsMaterial).depthTest = true;
       this.group.add(this.stemDots.points);
     }
@@ -840,7 +879,7 @@ export class SurfaceDraw implements Draw {
             ? discSpec.count
             : resolveNumber(env.scope, discSpec.count, 'surface', true, 'discrete slice count')
         : 0;
-    const sliceKey = `${sysKey}|${scaleMode}|${grow}|${Math.round(nStems)}`;
+    const sliceKey = `${sysKey}|${scaleMode}|${Math.round(nStems)}`;
     let cActiveOp = 0;
     let dActiveOp = 0;
 
@@ -859,10 +898,12 @@ export class SurfaceDraw implements Draw {
         (curU.uColor!.value as THREE.Color).setRGB(cRgb[0], cRgb[1], cRgb[2]);
         curU.uOpacity!.value = 0.28 * cOp;
         curU.uDiverges!.value = diverges ? 1 : 0;
+        curU.uGrow!.value = grow;
         const lineU = this.contLineMat!.uniforms;
         (lineU.uColor!.value as THREE.Color).setRGB(cRgb[0], cRgb[1], cRgb[2]);
         lineU.uOpacity!.value = cOp;
         lineU.uDiverges!.value = diverges ? 1 : 0;
+        lineU.uGrow!.value = grow;
 
         if (contChanged && this.contCurtainPos !== null && this.contLinePos !== null && this.contLineArc !== null) {
           const [, , y0, y1] = this.domain;
@@ -890,7 +931,7 @@ export class SurfaceDraw implements Draw {
               nx = x;
               ny = y;
             }
-            const h = mapHeight(mag, scaleMode === 'log' ? 'log' : 'linear', layer.clamp, layer.height_scale ?? 1, grow);
+            const h = mapHeight(mag, scaleMode === 'log' ? 'log' : 'linear', layer.clamp, layer.height_scale ?? 1, 1);
             if (i > 0) arc += Math.hypot(x - prevX, y - prevY, h - prevH);
             prevX = x;
             prevY = y;
@@ -899,25 +940,24 @@ export class SurfaceDraw implements Draw {
             const cb = i * 6;
             this.contCurtainPos[cb] = x;
             this.contCurtainPos[cb + 1] = y;
-            this.contCurtainPos[cb + 2] = 0.008;
+            this.contCurtainPos[cb + 2] = 0;
             this.contCurtainPos[cb + 3] = x;
             this.contCurtainPos[cb + 4] = y;
-            this.contCurtainPos[cb + 5] = h + 0.024;
+            this.contCurtainPos[cb + 5] = h;
 
             const lb = i * 12;
-            const hz = h + 0.028;
             this.contLinePos[lb] = x - nx * halfW;
             this.contLinePos[lb + 1] = y - ny * halfW;
-            this.contLinePos[lb + 2] = hz;
+            this.contLinePos[lb + 2] = h;
             this.contLinePos[lb + 3] = x + nx * halfW;
             this.contLinePos[lb + 4] = y + ny * halfW;
-            this.contLinePos[lb + 5] = hz;
+            this.contLinePos[lb + 5] = h;
             this.contLinePos[lb + 6] = x;
             this.contLinePos[lb + 7] = y;
-            this.contLinePos[lb + 8] = Math.max(0.012, hz - halfW);
+            this.contLinePos[lb + 8] = h;
             this.contLinePos[lb + 9] = x;
             this.contLinePos[lb + 10] = y;
-            this.contLinePos[lb + 11] = hz + halfW;
+            this.contLinePos[lb + 11] = h;
 
             const ab = i * 4;
             this.contLineArc[ab] = arc;
@@ -942,7 +982,9 @@ export class SurfaceDraw implements Draw {
         const discChanged = sliceKey !== this.lastDiscKey;
         if (discChanged) this.lastDiscKey = sliceKey;
         this.stemMat!.uniforms.uOpacity!.value = 0.95 * dOp;
+        this.stemMat!.uniforms.uGrow!.value = grow;
         this.stemDots.setOpacity(dOp);
+        this.stemDots.points.scale.z = grow;
         if (discChanged && this.stemPos !== null && this.stemGeo !== null) {
           const N = Math.max(2, Math.min(MAX_STEMS, Math.round(nStems)));
           const pts: [number, number, number][] = [];
@@ -954,7 +996,7 @@ export class SurfaceDraw implements Draw {
             for (let k = kMin; k <= kMax && pts.length < MAX_STEMS; k++) {
               const w = k * step;
               const mag = evalRationalS(poles, zeros, gain, 0, w);
-              const h = mapHeight(mag, scaleMode === 'log' ? 'log' : 'linear', layer.clamp, layer.height_scale ?? 1, grow);
+              const h = mapHeight(mag, scaleMode === 'log' ? 'log' : 'linear', layer.clamp, layer.height_scale ?? 1, 1);
               pts.push([0, w, h]);
             }
           } else {
@@ -963,7 +1005,7 @@ export class SurfaceDraw implements Draw {
               const x = Math.cos(theta);
               const y = Math.sin(theta);
               const mag = evalRationalZ(this.cachedZPoles, this.cachedZNum, x, y);
-              const h = mapHeight(mag, scaleMode === 'log' ? 'log' : 'linear', layer.clamp, layer.height_scale ?? 1, grow);
+              const h = mapHeight(mag, scaleMode === 'log' ? 'log' : 'linear', layer.clamp, layer.height_scale ?? 1, 1);
               pts.push([x, y, h]);
             }
           }
@@ -971,35 +1013,34 @@ export class SurfaceDraw implements Draw {
           const posAttr = this.stemDots.position;
           for (let i = 0; i < pts.length; i++) {
             const [x, y, h] = pts[i]!;
-            const zTop = Math.max(0.024, h + 0.026);
             const b = i * 24;
             // X-oriented stem quad
             this.stemPos[b] = x - sw;
             this.stemPos[b + 1] = y;
-            this.stemPos[b + 2] = 0.008;
+            this.stemPos[b + 2] = 0;
             this.stemPos[b + 3] = x + sw;
             this.stemPos[b + 4] = y;
-            this.stemPos[b + 5] = 0.008;
+            this.stemPos[b + 5] = 0;
             this.stemPos[b + 6] = x - sw;
             this.stemPos[b + 7] = y;
-            this.stemPos[b + 8] = zTop;
+            this.stemPos[b + 8] = h;
             this.stemPos[b + 9] = x + sw;
             this.stemPos[b + 10] = y;
-            this.stemPos[b + 11] = zTop;
+            this.stemPos[b + 11] = h;
             // Y-oriented stem quad
             this.stemPos[b + 12] = x;
             this.stemPos[b + 13] = y - sw;
-            this.stemPos[b + 14] = 0.008;
+            this.stemPos[b + 14] = 0;
             this.stemPos[b + 15] = x;
             this.stemPos[b + 16] = y + sw;
-            this.stemPos[b + 17] = 0.008;
+            this.stemPos[b + 17] = 0;
             this.stemPos[b + 18] = x;
             this.stemPos[b + 19] = y - sw;
-            this.stemPos[b + 20] = zTop;
+            this.stemPos[b + 20] = h;
             this.stemPos[b + 21] = x;
             this.stemPos[b + 22] = y + sw;
-            this.stemPos[b + 23] = zTop;
-            posAttr.setXYZ(i, x, y, zTop);
+            this.stemPos[b + 23] = h;
+            posAttr.setXYZ(i, x, y, h);
           }
           (this.stemGeo.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
           this.stemGeo.setDrawRange(0, pts.length * 12);

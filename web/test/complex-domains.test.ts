@@ -283,4 +283,97 @@ describe('complex-domain evaluation and 0.6 controls', () => {
       expect(m[1]).toContain('polygonOffsetUnits: 4');
     }
   });
+
+  it('syncs PoleZeroPicker buttons and state even when a matching preset update is a no-op or re-entrant', () => {
+    const { doc, uninstall } = installDom();
+    const prevDoc = globalThis.document;
+    globalThis.document = doc as unknown as Document;
+    try {
+      const theme = { background: '#050505', foreground: '#f2f2ef', grid: '#232320' };
+      const { scene } = minimalScene06();
+      scene.inputs!.poles = { kind: 'points_2d', default: [[-0.8, 0]], min_points: 1, max_points: 2 };
+      scene.inputs!.zeros = { kind: 'points_2d', default: [], min_points: 0, max_points: 2 };
+      scene.inputs!.gain = { kind: 'number', min: -5, max: 5, step: 0.1, default: 1 };
+      scene.inputs!.preset = { kind: 'choice', values: ['p1', 'p2', 'custom'], default: 'p1' };
+      const panelState = scene.initial.panels.main!;
+      const ctrl: Extract<Control, { kind: 'points_2d' }> = {
+        kind: 'points_2d',
+        input: 'poles',
+        secondary_input: 'zeros',
+        gain_input: 'gain',
+        preset_input: 'preset',
+        label: 'Poles & Zeros (s)',
+        presets: [
+          {
+            id: 'p1',
+            label: 'Two real',
+            poles: [
+              [-0.6, 0],
+              [-0.4, 0],
+            ],
+            zeros: [[-0.2, 0]],
+            gain: 2,
+          },
+          { id: 'p2', label: 'One real', poles: [[-0.3, 0]], zeros: [], gain: 1 },
+        ],
+      };
+
+      const pickerNoop = new PoleZeroPicker(ctrl, false, () => {
+        // Store update can be a no-op when inputs already match; sync must not bail before syncing buttons/coords.
+      });
+      for (const cv of byClass(pickerNoop.el as never, 'pz-canvas')) cv.getContext = () => null;
+      pickerNoop.sync({ scene, state: { ...scene.initial, inputs: { preset: 'p1' } }, panel: panelState }, theme);
+      const noopAddPole = byClass(pickerNoop.el as never, 'pz-actions')[0]!.children[0]!;
+      const noopRemove = byClass(pickerNoop.el as never, 'pz-actions')[0]!.children[2]!;
+      const noopInfo = byClass(pickerNoop.el as never, 'pz-info')[0]!;
+      expect(noopAddPole.disabled).toBe(true);
+      expect(noopRemove.disabled).toBe(false);
+      expect(noopInfo.textContent).toContain('−0.60');
+
+      let reentrantState = {
+        ...scene.initial,
+        inputs: {
+          preset: 'p1',
+          poles: [
+            [-0.8, 0],
+            [-0.4, 0],
+          ],
+          zeros: [[-0.2, 0]],
+          gain: 2,
+        } as Record<string, unknown>,
+      };
+      let pickerReenter: PoleZeroPicker;
+      pickerReenter = new PoleZeroPicker(ctrl, false, () => {
+        if (reentrantState.inputs.preset !== 'p2') {
+          reentrantState = {
+            ...scene.initial,
+            inputs: { preset: 'p2', poles: [[-0.3, 0]], zeros: [], gain: 1 },
+          };
+          pickerReenter.sync({ scene, state: reentrantState as never, panel: panelState }, theme);
+        }
+      });
+      for (const cv of byClass(pickerReenter.el as never, 'pz-canvas')) cv.getContext = () => null;
+      pickerReenter.sync({ scene, state: reentrantState as never, panel: panelState }, theme);
+      const reAddPole = byClass(pickerReenter.el as never, 'pz-actions')[0]!.children[0]!;
+      const reRemove = byClass(pickerReenter.el as never, 'pz-actions')[0]!.children[2]!;
+      expect(reAddPole.disabled).toBe(false);
+      expect(reRemove.disabled).toBe(true);
+    } finally {
+      globalThis.document = prevDoc;
+      uninstall();
+    }
+  });
+
+  it('scales continuous slice and discrete stem grow heights on the GPU without rebuilding geometry', () => {
+    const src = readFileSync(new URL('../src/runtime/surface.ts', import.meta.url), 'utf8');
+    const sliceKeyMatch = src.match(/const sliceKey = ([^;]+);/);
+    expect(sliceKeyMatch).not.toBeNull();
+    expect(sliceKeyMatch![1]).not.toContain('grow');
+    const vsMatch = src.match(/const SLICE_VS = \/\* glsl \*\/ `([\s\S]*?)`;/);
+    expect(vsMatch).not.toBeNull();
+    expect(vsMatch![1]).toContain('uniform float uGrow;');
+    expect(vsMatch![1]).toContain('attribute float aZOffset;');
+    expect(vsMatch![1]).toContain('position.z * uGrow + aZOffset');
+    expect(src).toContain('this.stemDots.points.scale.z = grow;');
+  });
 });

@@ -125,7 +125,7 @@ const STYLE = `
 :focus { outline: none; }
 :focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
 button, select, input { font: inherit; color: inherit; margin: 0; }
-.root { position: absolute; inset: 0; display: grid; grid-template-rows: auto 1fr auto auto; }
+.root { position: absolute; inset: 0; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr auto auto; }
 .root.kiosk { grid-template-rows: 1fr; }
 .root.kiosk header, .root.kiosk .stats, .root.kiosk footer, .root.kiosk .pheader { display: none; }
 .root.picture { grid-template-rows: 1fr auto; }
@@ -134,16 +134,17 @@ button, select, input { font: inherit; color: inherit; margin: 0; }
 header h1:empty { display: none; }
 .root.dragging, .root.dragging * { cursor: grabbing !important; }
 
-header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; padding: 10px 14px 8px; }
+header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; padding: 10px 14px 8px; max-width: 100%; }
 header h1 { font-size: 17px; font-weight: 600; margin: 0; letter-spacing: 0.01em; }
-.vars { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; }
+.vars { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; min-width: 0; max-width: 100%; }
 .vars:empty { display: none; }
 .vars:not(:empty) { min-height: 30px; }
 .add { display: flex; align-items: center; min-width: 0; }
 .chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
 .k { color: var(--dim); font-size: 12px; }
 .chips > .k { margin-right: 2px; }
-.field { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.field { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.swatch { width: 9px; height: 9px; border-radius: 2px; flex: none; display: inline-block; }
 .field output { font-size: 12px; font-variant-numeric: lining-nums tabular-nums; min-width: 7ch; color: var(--fg); }
 
 .seg { display: inline-flex; flex-wrap: wrap; gap: 1px; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--line); }
@@ -290,6 +291,8 @@ input[type=range]:disabled { opacity: 0.4; cursor: default; }
 footer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 8px 14px 10px; }
 .cap { display: flex; align-items: center; gap: 4px; padding: 3px; min-height: 36px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
 .cap.playback { flex: 1 1 520px; flex-wrap: wrap; }
+.cap.steps { gap: 2px; }
+.cap.steps select { max-width: 220px; font-size: 12px; }
 .cap .scrub { flex: 1 1 160px; min-width: 100px; width: auto; margin: 0 6px; }
 .cap select { background: none; border-color: transparent; }
 .cap select:hover { background: var(--raised); }
@@ -313,6 +316,20 @@ footer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; pad
 .exportbar progress { width: 160px; accent-color: var(--accent); }
 .status { position: absolute; inset: 0; display: grid; place-items: center; padding: 20px; color: var(--dim); white-space: pre-wrap; z-index: 5; }
 .status.error { color: var(--error); }
+
+@media (max-width: 720px) {
+  header { padding: 6px 10px; gap: 6px 10px; }
+  header h1 { font-size: 15px; }
+  .vars { gap: 6px 10px; }
+  .field { white-space: normal; }
+  input[type=range] { width: 105px; }
+  .stats { padding: 6px 10px 0; }
+  .wide dl > div { padding: 0 8px; }
+  .readout dd { white-space: normal; }
+  footer { padding: 6px 10px 8px; gap: 6px 8px; }
+  .cap.steps { max-width: 100%; }
+  .cap.steps select { max-width: 155px; }
+}
 `;
 
 /** What the Add panel group offers, i.e. a declared panel, with the chip's label. */
@@ -321,6 +338,7 @@ type DragPayload = Template | Extract<DropPayload, { kind: 'panel' }>;
 
 interface Widget {
   el: HTMLElement;
+  showRange?: [number, number] | undefined;
   sync(scope: PanelScope): void;
 }
 
@@ -616,6 +634,7 @@ export class TychoViewerElement extends Base {
   private addChips: HTMLElement[] = [];
   private addButton: HTMLButtonElement | null = null;
   private addGroup: HTMLElement | null = null;
+  private stepsCap: { root: HTMLElement; prev: HTMLButtonElement; next: HTMLButtonElement; select: HTMLSelectElement } | null = null;
   private playback: {
     play: HTMLButtonElement;
     scrub: HTMLInputElement;
@@ -927,6 +946,7 @@ export class TychoViewerElement extends Base {
     this.theme = hostTheme(sceneTheme(this.scene), this.getAttribute('theme'), (name) => this.hostProperty(name));
     for (const [k, v] of Object.entries(controlsTokens(this.theme))) this.style.setProperty(k, v);
     this.renderer?.setTheme(this.theme);
+    if (this.store !== null && this.panelDom.size > 0) this.syncWidgets();
     this.invalidate();
   }
 
@@ -1068,7 +1088,7 @@ export class TychoViewerElement extends Base {
       const target = Math.min(stop?.x ?? Infinity, end);
       if (x >= target) {
         x = target;
-        const reached = stop !== null && stop.x <= end ? stop.index : null;
+        const reached = stop !== null && stop.x <= end && stop.index >= 0 ? stop.index : null;
         store.setFrame(positionIndex(x, clock.frame_count));
         this.playProgress = positionProgress(x, clock.frame_count);
         this.stopAt = null;
@@ -1140,6 +1160,23 @@ export class TychoViewerElement extends Base {
     if (this.playback) {
       setRange(this.playback.scrub, store.frame);
       setText(this.playback.frame, `${store.frame} / ${scene.clock.frame_count}`);
+    }
+    const tSec = q * timelineSeconds(scene.clock);
+    for (const w of this.sceneWidgets) {
+      if (w.showRange !== undefined) w.el.hidden = tSec < w.showRange[0] - 1e-6 || tSec > w.showRange[1] + 1e-6;
+    }
+    for (const dom of this.panelDom.values()) {
+      for (const w of dom.widgets) {
+        if (w.showRange !== undefined) w.el.hidden = tSec < w.showRange[0] - 1e-6 || tSec > w.showRange[1] + 1e-6;
+      }
+    }
+    if (this.stepsCap !== null) {
+      const steps = scene.steps ?? [];
+      const cur = this.currentStep;
+      const idx = steps.findIndex((st) => st.id === cur);
+      if (cur !== null && this.stepsCap.select.value !== cur) this.stepsCap.select.value = cur;
+      this.stepsCap.prev.disabled = idx <= 0 && tSec <= (steps[0]?.at ?? 0) + 1e-6;
+      this.stepsCap.next.disabled = idx >= steps.length - 1;
     }
   }
 
@@ -1313,6 +1350,24 @@ export class TychoViewerElement extends Base {
     this.dispatchEvent(new CustomEvent('tycho-step', { detail: { id: st.id, index, at: st.at }, bubbles: true, composed: true }));
   }
 
+  private runAction(from: number | string, to: number | string): void {
+    if (this.scene === null || this.store === null) return;
+    if (typeof from === 'string') this.goto(from);
+    else this.seek(from);
+    if (typeof to === 'string') {
+      this.playTo(to);
+      return;
+    }
+    const L = timelineSeconds(this.scene.clock);
+    const frameCount = this.scene.clock.frame_count;
+    const now = this.time;
+    if (Math.abs(to - now) < 1e-9) return;
+    const target = (to > now ? 0 : 1) * frameCount + Math.min((to / L) * frameCount, frameCount * (1 - 1e-9));
+    this.heldProgress ??= this.store.frame / frameCount;
+    this.store.setPlaying(true);
+    this.stopAt = { x: target, index: -1 };
+  }
+
   /** Goes to a frame, playing on from there when playing. */
   private seekFrame(frame: number): void {
     const store = this.store!;
@@ -1411,6 +1466,7 @@ export class TychoViewerElement extends Base {
     const scene = this.scene!;
     this.footer.replaceChildren();
     this.playback = null;
+    this.stepsCap = null;
     if (this.hasPlayback()) {
       const cap = capsule('Playback', 'playback');
       const play = iconButton('play', 'Play (k)', 'Play (k)', 'icon play');
@@ -1459,6 +1515,26 @@ export class TychoViewerElement extends Base {
       cap.append(fps);
       this.footer.append(cap);
       this.playback = { play, scrub, frame, fps, channel };
+    }
+    if ((scene.steps?.length ?? 0) > 0) {
+      const stepsCap = capsule('Steps', 'steps');
+      const prev = iconButton('chevronLeft', 'Previous step', 'Previous step');
+      prev.addEventListener('click', () => this.previous());
+      const select = el('select', 'step-select');
+      select.setAttribute('aria-label', 'Step');
+      scene.steps!.forEach((st, i) => {
+        const o = el('option', undefined, `${i + 1}/${scene.steps!.length} · ${st.label ?? st.id}`);
+        o.value = st.id;
+        select.appendChild(o);
+      });
+      select.addEventListener('change', () => {
+        if (select.value !== '') this.goto(select.value);
+      });
+      const next = iconButton('chevronRight', 'Next step', 'Next step');
+      next.addEventListener('click', () => this.next());
+      stepsCap.append(prev, select, next);
+      this.footer.append(stepsCap);
+      this.stepsCap = { root: stepsCap, prev, next, select };
     }
     const view = capsule('View', 'view');
     const fit = iconButton('house', 'Reset every view', "Reset every view: return each panel to its timeline's camera, or fit it to what it draws (F)");
@@ -1724,6 +1800,14 @@ export class TychoViewerElement extends Base {
 
   private makeWidget(control: Exclude<Control, { kind: 'playback' }>, panel: string | undefined): Widget | null {
     const scene = this.scene!;
+    const showRange = 'show_range' in control ? control.show_range : undefined;
+    if (control.kind === 'action') {
+      const btn = el('button', 'btn', control.label);
+      btn.type = 'button';
+      btn.addEventListener('pointerdown', stop);
+      btn.addEventListener('click', () => this.runAction(control.from, control.to));
+      return { el: btn, showRange, sync: () => undefined };
+    }
     const v = inputDef(scene, control.input);
     if (v === undefined) return null;
     const write = (value: InputValue) => this.store!.update((s) => withInput(scene, s, control.input, value, panel));
@@ -1737,8 +1821,8 @@ export class TychoViewerElement extends Base {
       f.addEventListener('pointerdown', stop);
       return f;
     };
-    if (control.kind === 'tabs' && v.kind === 'choice' && panel !== undefined && v.values.length > 3) {
-      // a compact select in a panel header, where a row of tabs would not fit
+    if (control.kind === 'tabs' && v.kind === 'choice' && ((panel !== undefined && v.values.length > 3) || v.values.length > 7)) {
+      // a compact select where a row of tabs would not fit
       const c = v as Choice;
       const select = el('select');
       c.values.forEach((value, i) => {
@@ -1749,7 +1833,7 @@ export class TychoViewerElement extends Base {
       select.addEventListener('change', () => write(select.value));
       const f = field();
       f.appendChild(select);
-      return { el: f, sync: (scope) => void (select.value = String(current(scope))) };
+      return { el: f, showRange, sync: (scope) => void (select.value = String(current(scope))) };
     }
     if (control.kind === 'tabs' && v.kind === 'choice') {
       const c = v as Choice;
@@ -1761,15 +1845,21 @@ export class TychoViewerElement extends Base {
       const wrapper = el('span', 'field');
       wrapper.append(el('span', 'k', control.label), s.el);
       wrapper.addEventListener('pointerdown', stop);
-      return { el: wrapper, sync: (scope) => s.set(String(current(scope))) };
+      return { el: wrapper, showRange, sync: (scope) => s.set(String(current(scope))) };
     }
     if (control.kind === 'toggle' && v.kind === 'toggle') {
       const box = el('input');
       box.type = 'checkbox';
+      if (control.color !== undefined) box.style.accentColor = control.color;
       box.addEventListener('change', () => write(box.checked));
       const f = field();
+      if (control.color !== undefined) {
+        const sw = el('span', 'swatch');
+        sw.style.background = control.color;
+        f.insertBefore(sw, f.firstChild);
+      }
       f.prepend(box);
-      return { el: f, sync: (scope) => void (box.checked = current(scope) === true) };
+      return { el: f, showRange, sync: (scope) => void (box.checked = current(scope) === true) };
     }
     if (control.kind === 'slider' && v.kind === 'parameter') {
       const range = el('input');
@@ -1787,6 +1877,7 @@ export class TychoViewerElement extends Base {
       f.append(range, out);
       return {
         el: f,
+        showRange,
         sync: (scope) => {
           stops = sliderStops(scope, this.geometry!.sets, control as Extract<Control, { kind: 'slider' }>);
           range.disabled = stops.length === 0;
@@ -1794,6 +1885,31 @@ export class TychoViewerElement extends Base {
           const value = current(scope) as number;
           setRange(range, Math.max(0, nearestStop(stops, value)));
           out.textContent = formatNumber(value);
+        },
+      };
+    }
+    if (control.kind === 'slider' && v.kind === 'number') {
+      const range = el('input');
+      range.type = 'range';
+      range.min = String(v.min);
+      range.max = String(v.max);
+      range.step = v.step !== undefined ? String(v.step) : 'any';
+      const out = el('output');
+      range.addEventListener('input', () => {
+        const num = Number(range.value);
+        setRange(range, num);
+        write(num);
+      });
+      const f = field();
+      f.append(range, out);
+      return {
+        el: f,
+        showRange,
+        sync: (scope) => {
+          const num = Number(current(scope));
+          setRange(range, num);
+          const dec = v.step !== undefined && Number.isInteger(v.step) ? 0 : 2;
+          out.textContent = formatNumber(num, undefined, dec);
         },
       };
     }
@@ -1822,7 +1938,7 @@ export class TychoViewerElement extends Base {
     this.sceneWidgets = [];
     for (const c of scene.controls ?? []) {
       if (c.kind === 'playback') continue;
-      if (inputDef(scene, c.input)?.scope === 'per_panel') continue;
+      if (c.kind !== 'action' && inputDef(scene, c.input)?.scope === 'per_panel') continue;
       const w = this.makeWidget(c, undefined);
       if (w) {
         this.sceneWidgets.push(w);
@@ -2000,9 +2116,13 @@ export class TychoViewerElement extends Base {
     const scene = this.scene!;
     const st = store.state;
     const first = this.firstPanel();
+    const tSec = this.time;
     if (first !== null) {
       const scope: PanelScope = { scene, state: st, panel: st.panels[first]! };
-      for (const w of this.sceneWidgets) w.sync(scope);
+      for (const w of this.sceneWidgets) {
+        w.sync(scope);
+        if (w.showRange !== undefined) w.el.hidden = tSec < w.showRange[0] - 1e-6 || tSec > w.showRange[1] + 1e-6;
+      }
     }
     const declaredCount = Object.keys(scene.panels).length;
     const choice = this.choice;
@@ -2010,7 +2130,10 @@ export class TychoViewerElement extends Base {
       const panel = st.panels[pid];
       if (panel === undefined) continue;
       const scope: PanelScope = { scene, state: st, panel };
-      for (const w of dom.widgets) w.sync(scope);
+      for (const w of dom.widgets) {
+        w.sync(scope);
+        if (w.showRange !== undefined) w.el.hidden = tSec < w.showRange[0] - 1e-6 || tSec > w.showRange[1] + 1e-6;
+      }
       const declared = scene.panels[panel.panel]!;
       const frame = typeof declared.frame === 'string' ? declared.frame : String(this.panelValue(scope, declared.frame.input));
       const f = Object.hasOwn(scene.frames, frame) ? scene.frames[frame] : undefined;
@@ -2029,7 +2152,9 @@ export class TychoViewerElement extends Base {
         dom.meta.hidden =
           framedBy === choice.id ||
           (framedBy !== null &&
-            (scene.controls ?? []).some((c) => c.kind !== 'playback' && c.input === framedBy && inputDef(scene, framedBy)?.scope === 'per_panel'));
+            (scene.controls ?? []).some(
+              (c) => c.kind !== 'playback' && c.kind !== 'action' && c.input === framedBy && inputDef(scene, framedBy)?.scope === 'per_panel',
+            ));
       } else {
         setText(dom.chipLabel, frameLabel);
         dom.meta.hidden = true;
@@ -2107,7 +2232,7 @@ export class TychoViewerElement extends Base {
     const pc = el('span', 'pc mini');
     const widgets: Widget[] = [];
     for (const c of scene.controls ?? []) {
-      if (c.kind === 'playback' || inputDef(scene, c.input)?.scope !== 'per_panel') continue;
+      if (c.kind === 'playback' || c.kind === 'action' || inputDef(scene, c.input)?.scope !== 'per_panel') continue;
       if (choice !== null && c.kind === 'tabs' && c.input === choice.id) continue;
       const w = this.makeWidget(c, pid);
       if (w) {

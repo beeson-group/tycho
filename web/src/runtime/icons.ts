@@ -43,6 +43,8 @@ export const GLYPHS = {
     ],
   },
   chevronDown: { grid: 24, fill: false, d: ['m6 9 6 6 6-6'] },
+  chevronLeft: { grid: 24, fill: false, d: ['m15 18-6-6 6-6'] },
+  chevronRight: { grid: 24, fill: false, d: ['m9 18 6-6-6-6'] },
   grip: { grid: 24, fill: false, d: [[5, 12, 19].map((y) => dot(9, y)).join(''), [5, 12, 19].map((y) => dot(15, y)).join('')] },
   x: { grid: 24, fill: false, d: ['M18 6 6 18', 'm6 6 12 12'] },
   rotateCcw: { grid: 24, fill: false, d: ['M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8', 'M3 3v5h5'] },

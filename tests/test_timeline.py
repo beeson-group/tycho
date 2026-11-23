@@ -78,7 +78,7 @@ def test_in_out_above_one_half_and_keyframe_values():
 def test_clock_keyframes_and_requires():
     scene, _ = base()
     doc = scene.to_document()
-    assert doc["version"] == "0.5"
+    assert doc["version"] == "0.6"
     assert doc["requires"] == ["clock.keyframes"]
     assert doc["clock"]["keyframes"] == [[0.0, 0.0], [5.0, 4.0, "smooth"]]
     with pytest.raises(ty.SceneError, match=r"^clock-keyframes:"):

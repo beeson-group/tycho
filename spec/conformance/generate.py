@@ -2501,6 +2501,124 @@ def containers():
     print(f"containers: {len(arrays)} arrays, {len(encoded.to_bytes())} bytes encoded, {len(raw.to_bytes())} raw")
 
 
+def complex_domains():
+    """Schema 0.6 morph and number-input cases computed independently from closed forms."""
+    import cmath
+    import math
+
+    scene = pytycho.Scene(title="Complex domains conformance")
+    s_frame = scene.frame("s_plane")
+    ref = scene.trajectory_set("ref", frame=s_frame, dtype="float64")
+    ref.add(np.array([[0.0, 0.0], [1.0, 0.0]]), channels={"t": [0.0, 10.0]})
+    scene.clock("epoch", channels=["t"], frame_count=10, range=(0.0, 10.0), seconds=10.0)
+
+    T_in = scene.number("T", min=0.25, max=2.0, step=0.05, default=1.0)
+    show_extra = scene.toggle("extra", default=True)
+
+    scene.panel(
+        "main",
+        frame=s_frame,
+        reference=pytycho.reference(ref, 0),
+        layers=[
+            pytycho.morph(
+                alpha=pytycho.keyframes((0.0, 0.0), (5.0, 0.5), (9.0, 1.0)),
+                period=T_in,
+                items=[
+                    pytycho.morph_line([0.0, pytycho.nyquist(-1)], [0.0, pytycho.nyquist(1)], samples=3),
+                    pytycho.morph_line([-1.0, 0.0], [1.0, 0.0], samples=3, visible=show_extra),
+                    pytycho.morph_region([-1.0, 0.0], [0.0, 1.0], samples=[2, 2]),
+                ],
+            ),
+        ],
+    )
+    scene.show("p1", panel="main")
+    doc = scene.to_document()
+    data = scene.to_container()
+
+    def h_alpha(u, v, alpha, T):
+        if alpha == 0.0:
+            return [u, v, 0.0]
+        w = complex(u, v) * (alpha * T)
+        d = (1.0 - alpha) * T + alpha
+        z = alpha + (cmath.exp(w) - 1.0) / (alpha * d)
+        return [z.real, z.imag, 0.0]
+
+    def analytic_case(name, inputs, frame_idx):
+        st = copy.deepcopy(doc["initial"])
+        st["inputs"] = dict(inputs)
+        T = inputs.get("T", 1.0)
+        extra = inputs.get("extra", True)
+        alpha = {0: 0.0, 5: 0.5, 9: 1.0}[frame_idx]
+
+        m_items = [
+            {
+                "kind": "line",
+                "points": [h_alpha(0.0, (-1.0 + t) * math.pi / T, alpha, T) for t in (0.0, 1.0, 2.0)],
+            }
+        ]
+        if extra:
+            m_items.append({"kind": "line", "points": [h_alpha(u, 0.0, alpha, T) for u in (-1.0, 0.0, 1.0)]})
+        m_items.append(
+            {
+                "kind": "region",
+                "grid": [2, 2],
+                "points": [h_alpha(u, v, alpha, T) for v in (0.0, 0.5, 1.0) for u in (-1.0, -0.5, 0.0)],
+            }
+        )
+
+        return {
+            "name": name,
+            "source": "analytic",
+            "state": st,
+            "frame_index": frame_idx,
+            "tolerance": TOL,
+            "expected": {
+                "panels": {
+                    "p1": {
+                        "frame": "s_plane",
+                        "layers": [
+                            {"kind": "morph", "alpha": alpha, "items": m_items},
+                        ],
+                    }
+                }
+            },
+        }
+
+    cases = [
+        analytic_case("alpha=0 (T=1.0)", {"T": 1.0, "extra": True}, 0),
+        analytic_case("alpha=0.5 (T=0.5, extra=false)", {"T": 0.5, "extra": False}, 5),
+        analytic_case("alpha=1.0 (T=0.75)", {"T": 0.75, "extra": True}, 9),
+    ]
+
+    rejections = [
+        {
+            "name": "number-input: min not less than max",
+            "rule": "number-input",
+            "scene": {"inputs": {"T": {"kind": "number", "min": 2.0, "max": 1.0, "default": 1.0}}},
+        },
+        {
+            "name": "morph: unknown map kind",
+            "rule": "morph",
+            "scene": {
+                "panels": {
+                    "main": {
+                        **doc["panels"]["main"],
+                        "layers": [{"kind": "morph", "map": "linear", "alpha": 0.0, "period": 1.0, "items": []}],
+                    }
+                }
+            },
+        },
+    ]
+
+    out = HERE / "complex-domains"
+    out.mkdir(exist_ok=True)
+    (out / "scene.tys").write_text(json.dumps(doc, indent=1) + "\n")
+    (out / "data.tyd").write_bytes(data)
+    (out / "cases.json").write_text(json.dumps(cases, indent=1) + "\n")
+    (out / "rejections.json").write_text(json.dumps(rejections, indent=1) + "\n")
+    print(f"complex-domains: {len(cases)} analytic cases, {len(rejections)} rejections")
+
+
 if __name__ == "__main__":
     rotating_loop()
     epoch_clock()
@@ -2516,3 +2634,4 @@ if __name__ == "__main__":
     inset_boxes()
     timeline()
     containers()
+    complex_domains()

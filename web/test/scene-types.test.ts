@@ -201,7 +201,7 @@ describe('validate', () => {
     }
     scene.panels.main!.camera = { kind: '2d', aspect: 'stretch' as 'free' };
     expect(rule(() => validate(scene))).toBe('panel');
-    expect(rule(() => validate(baseScene({ version: '0.6' })))).toBe('version');
+    expect(rule(() => validate(baseScene({ version: '0.7' })))).toBe('version');
   });
   it('an 3d camera takes a stretch of three positive factors and a finite turn, in a scene of version 0.3 (2.7)', () => {
     const scene = baseScene({ version: '0.3' });

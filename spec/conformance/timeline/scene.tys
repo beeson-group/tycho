@@ -1,6 +1,6 @@
 {
  "format": "tycho-scene",
- "version": "0.5",
+ "version": "0.6",
  "requires": [
   "clock.keyframes",
   "layers.clock",
@@ -8,7 +8,7 @@
   "layers.label",
   "layers.points"
  ],
- "generator": "pytycho 0.3.0",
+ "generator": "pytycho 0.3.1",
  "title": "the timeline",
  "frames": {
   "root": {},

@@ -1,0 +1,44 @@
+[
+ {
+  "name": "number-input: min not less than max",
+  "rule": "number-input",
+  "scene": {
+   "inputs": {
+    "T": {
+     "kind": "number",
+     "min": 2.0,
+     "max": 1.0,
+     "default": 1.0
+    }
+   }
+  }
+ },
+ {
+  "name": "morph: unknown map kind",
+  "rule": "morph",
+  "scene": {
+   "panels": {
+    "main": {
+     "frame": "s_plane",
+     "reference": {
+      "sets": {
+       "set": "ref"
+      },
+      "member": {
+       "index": 0
+      }
+     },
+     "layers": [
+      {
+       "kind": "morph",
+       "map": "linear",
+       "alpha": 0.0,
+       "period": 1.0,
+       "items": []
+      }
+     ]
+    }
+   }
+  }
+ }
+]

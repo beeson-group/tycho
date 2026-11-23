@@ -490,7 +490,9 @@ def test_readouts_and_sliders_are_checked_against_the_reference_trajectory():
         "control: the slider over 'e' has trajectory set 'still' in its domain, which lacks parameter 'e'",
     ):
         assert expected in message
-    with pytest.raises(ty.SceneError, match="of input, parameter, attr, channel, clock, keyframes, timed_text, sub, and sup, not one"):
+    with pytest.raises(
+        ty.SceneError, match="of input, parameter, attr, channel, clock, keyframes, timed_text, sub, sup, and roc_status, not one"
+    ):
         scene.readout("panel", {"parameter": "e", "attr": "mu"})
     with pytest.raises(ty.SceneError, match="digits"):
         scene.readout("panel", {"parameter": "e", "digits": 0})

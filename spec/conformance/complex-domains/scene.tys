@@ -3,7 +3,9 @@
  "version": "0.6",
  "requires": [
   "inputs.number",
-  "layers.morph"
+  "inputs.points_2d",
+  "layers.morph",
+  "layers.surface"
  ],
  "generator": "pytycho 0.3.1",
  "title": "Complex domains conformance",
@@ -32,6 +34,61 @@
    "default": 1.0,
    "scope": "shared",
    "step": 0.05
+  },
+  "poles": {
+   "kind": "points_2d",
+   "default": [
+    [
+     -0.7,
+     0.0
+    ]
+   ],
+   "scope": "shared",
+   "min_points": 1,
+   "max_points": 6,
+   "bounds": [
+    [
+     -3.0,
+     2.0
+    ],
+    [
+     -3.5,
+     3.5
+    ]
+   ]
+  },
+  "zeros": {
+   "kind": "points_2d",
+   "default": [],
+   "scope": "shared",
+   "min_points": 0,
+   "max_points": 5,
+   "bounds": [
+    [
+     -3.0,
+     2.0
+    ],
+    [
+     -3.5,
+     3.5
+    ]
+   ]
+  },
+  "gain": {
+   "kind": "number",
+   "min": -10.0,
+   "max": 10.0,
+   "default": 1.0,
+   "scope": "shared"
+  },
+  "scale": {
+   "kind": "choice",
+   "values": [
+    "linear",
+    "log"
+   ],
+   "default": "linear",
+   "scope": "shared"
   },
   "extra": {
    "kind": "toggle",
@@ -133,6 +190,115 @@
        ]
       }
      ]
+    },
+    {
+     "kind": "surface",
+     "source": {
+      "kind": "grid",
+      "array": "grid2d",
+      "x": [
+       0.0,
+       3.0
+      ],
+      "y": [
+       0.0,
+       2.0
+      ]
+     },
+     "scale": {
+      "input": "scale"
+     },
+     "clamp": {
+      "max": 4.0,
+      "softness": 0.5
+     },
+     "height_scale": 2.0,
+     "grow": {
+      "keyframes": [
+       [
+        0.0,
+        0.5
+       ],
+       [
+        9.0,
+        1.0
+       ]
+      ]
+     }
+    },
+    {
+     "kind": "surface",
+     "source": {
+      "kind": "rational_s",
+      "poles": {
+       "input": "poles"
+      },
+      "x": [
+       -2.0,
+       2.0
+      ],
+      "y": [
+       -2.0,
+       2.0
+      ],
+      "zeros": {
+       "input": "zeros"
+      },
+      "gain": {
+       "input": "gain"
+      },
+      "period": {
+       "input": "T"
+      },
+      "resolution": [
+       3,
+       3
+      ]
+     },
+     "scale": {
+      "input": "scale"
+     },
+     "clamp": {
+      "max": 4.0,
+      "softness": 0.5
+     }
+    },
+    {
+     "kind": "surface",
+     "source": {
+      "kind": "rational_z",
+      "poles": {
+       "input": "poles"
+      },
+      "x": [
+       -2.0,
+       2.0
+      ],
+      "y": [
+       -2.0,
+       2.0
+      ],
+      "zeros": {
+       "input": "zeros"
+      },
+      "gain": {
+       "input": "gain"
+      },
+      "period": {
+       "input": "T"
+      },
+      "resolution": [
+       3,
+       3
+      ]
+     },
+     "scale": {
+      "input": "scale"
+     },
+     "clamp": {
+      "max": 4.0,
+      "softness": 0.5
+     }
     }
    ]
   }

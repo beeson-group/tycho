@@ -14,6 +14,27 @@
   }
  },
  {
+  "name": "points-2d: empty poles list violates min_points",
+  "rule": "input",
+  "state": {
+   "inputs": {
+    "poles": []
+   },
+   "clock": {
+    "channel": "t"
+   },
+   "panels": {
+    "p1": {
+     "panel": "main"
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  }
+ },
+ {
   "name": "morph: unknown map kind",
   "rule": "morph",
   "scene": {
@@ -35,6 +56,80 @@
        "alpha": 0.0,
        "period": 1.0,
        "items": []
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "surface: improper transfer function (more zeros than poles)",
+  "rule": "surface",
+  "state": {
+   "inputs": {
+    "poles": [
+     [
+      -1.0,
+      0.0
+     ]
+    ],
+    "zeros": [
+     [
+      -0.5,
+      0.0
+     ],
+     [
+      -0.2,
+      0.0
+     ]
+    ]
+   },
+   "clock": {
+    "channel": "t"
+   },
+   "panels": {
+    "p1": {
+     "panel": "main"
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  }
+ },
+ {
+  "name": "surface: rational_z missing required period",
+  "rule": "surface",
+  "scene": {
+   "panels": {
+    "main": {
+     "frame": "s_plane",
+     "reference": {
+      "sets": {
+       "set": "ref"
+      },
+      "member": {
+       "index": 0
+      }
+     },
+     "layers": [
+      {
+       "kind": "surface",
+       "source": {
+        "kind": "rational_z",
+        "poles": {
+         "input": "poles"
+        },
+        "x": [
+         -2,
+         2
+        ],
+        "y": [
+         -2,
+         2
+        ]
+       }
       }
      ]
     }

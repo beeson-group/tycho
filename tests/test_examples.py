@@ -31,7 +31,7 @@ def _example(name: str):
     return module
 
 
-@pytest.mark.parametrize("name", ["broucke", "manifolds"])
+@pytest.mark.parametrize("name", ["broucke", "manifolds", "s-to-z"])
 def test_an_example_imports_only_numpy_pytycho_and_the_standard_library(name):
     tree = ast.parse((EXAMPLES / name / "build.py").read_text(encoding="utf-8"))
     imported = set()
@@ -158,3 +158,46 @@ def test_manifolds_slide_variant_holds_the_halo_alone_in_two_stacked_panels(tmp_
     trajectory_layers = [layer for layer in doc["panels"]["main"]["layers"] if layer["kind"] == "trajectories"]
     assert all("highlight" not in layer for layer in trajectory_layers)
     assert {layer["color"] for layer in trajectory_layers} == set(build.SLIDE_COLORS["light"].values())
+
+
+def test_s_to_z_example_builds_a_valid_scene(tmp_path):
+    build = _example("s-to-z")
+    html_path = build.build(tmp_path, write_page=True)
+    doc = json.loads((tmp_path / "s-to-z.tys").read_text())
+    assert doc["version"] == "0.6"
+    assert len(doc["steps"]) == 10
+    jsonschema = pytest.importorskip("jsonschema")
+    jsonschema.validate(doc, SCHEMA)
+    data = Container.read(tmp_path / "s-to-z.tyd")
+    res_morph = evaluate(doc, data, doc["initial"], frame_index=480)
+    res_3d = evaluate(doc, data, doc["initial"], frame_index=864)
+    assert res_morph["panels"]["s_panel"]["layers"][0]["kind"] == "morph"
+    z_layers = res_3d["panels"]["z_panel"]["layers"]
+    assert any(layer.get("kind") == "surface" and layer.get("source") == "rational_z" for layer in z_layers)
+    assert any(layer.get("kind") == "arrow" for layer in z_layers)
+    assert doc["inputs"]["poles"]["bounds"] == [[-2.4, 1.6], [-3.2, 3.2]]
+    html = html_path.read_text(encoding="utf-8")
+    assert 'data-tycho="scene"' in html
+    assert 'data-tycho="data"' in html
+    assert "<script src=" not in html
+
+    slide_html_path = build.build(tmp_path, write_page=True, slide=True)
+    slide_doc = json.loads((tmp_path / "s-to-z-slide.tys").read_text())
+    jsonschema.validate(slide_doc, SCHEMA)
+    assert slide_doc["clock"]["seconds"] == 25.0
+    assert slide_doc["clock"]["end"] == "stop"
+    assert len(slide_doc["steps"]) == 8
+    assert slide_doc.get("readouts", []) == []
+    assert "preset" not in slide_doc["inputs"]
+    assert slide_doc["inputs"]["show_time"]["default"] is True
+    for name in ("show_ft", "show_dtft", "show_fs", "show_dft"):
+        assert slide_doc["inputs"][name]["default"] is False
+    ctrl_labels = [c.get("label") for c in slide_doc["controls"]]
+    for forbidden in ("T", "N", "Preset", "ROC", "Aliasing", "Replay Morph"):
+        assert forbidden not in ctrl_labels
+    for p_name in ("s_panel", "z_panel"):
+        surfs = [layer for layer in slide_doc["panels"][p_name]["layers"] if layer["kind"] == "surface"]
+        assert len(surfs) == 1
+        assert "roc" not in surfs[0]
+    slide_html = slide_html_path.read_text(encoding="utf-8")
+    assert '<tycho-viewer minimal="slide">' in slide_html

@@ -1,5 +1,6 @@
 /** Polylines, trails, and layers by rules `polyline` to `visible`, with the point of rule `segment` and the revolutions of rule `revolutions`. */
 import { fail } from '../errors.js';
+import type { DataStore } from '../container.js';
 import {
   INDEX_CHANNEL,
   type ArrowLayer,
@@ -9,11 +10,13 @@ import {
   type InsetBoxLayer,
   type MorphCoord,
   type MorphLayer,
+  type Points2dValue,
   type PointsLayer,
+  type SurfaceLayer,
   type TrajectoriesLayer,
 } from '../scene.js';
 import { bound, clockRevolutions, revolutionOf, layerClock, TrajectoryClock } from './clock.js';
-import { conformalExp } from './complex.js';
+import { conformalExp, evalRationalS, evalRationalZ, impulseInvariantZ, mapHeight } from './complex.js';
 import { scalarValue, type Context, type Frames } from './frames.js';
 import type { PanelScope } from './resolve.js';
 import { inputDef, inputValue, members, insetBoxTarget } from './resolve.js';
@@ -30,6 +33,7 @@ import type {
   MorphLineResult,
   MorphRegionResult,
   PointsLayerResult,
+  SurfaceLayerResult,
   TrajectoriesLayerResult,
   Vec3,
 } from './types.js';
@@ -446,6 +450,16 @@ export function resolveNumber(scope: PanelScope, spec: number | { input: string 
   return val;
 }
 
+export function resolvePoints2d(scope: PanelScope, spec: { input: string }, rule: string, minCount: number, maxCount: number, what: string): Points2dValue {
+  const def = inputDef(scope.scene, spec.input);
+  if (def === undefined || def.kind !== 'points_2d') fail(rule, `${what} names ${JSON.stringify(spec.input)}, which is not a points_2d input`);
+  const val = inputValue(scope, spec.input);
+  if (!Array.isArray(val) || val.length < minCount || val.length > maxCount) {
+    fail(rule, `${what} has ${Array.isArray(val) ? val.length : 'non-list'} points, outside [${minCount}, ${maxCount}]`);
+  }
+  return val as Points2dValue;
+}
+
 export function resolveMorphCoord(coord: MorphCoord, period: number): number {
   if (typeof coord === 'number') {
     if (!Number.isFinite(coord)) fail('morph', `a morph coordinate is ${String(coord)}, not finite`);
@@ -508,4 +522,113 @@ export function morphLayer(env: LayerEnv, layer: MorphLayer): MorphLayerResult {
     }
   }
   return { kind: 'morph', alpha, items };
+}
+
+/** Evaluates a surface layer height field from a stored grid or closed-form rational transform (rule `surface`). */
+export function surfaceLayer(env: LayerEnv, layer: SurfaceLayer, data: DataStore): SurfaceLayerResult {
+  const s = timeAt(env.clock, env.q);
+  let scaleMode: 'linear' | 'log' = 'linear';
+  if (layer.scale !== undefined) {
+    const rawScale = typeof layer.scale === 'string' ? layer.scale : inputValue(env.scope, layer.scale.input);
+    if (rawScale !== 'linear' && rawScale !== 'log') fail('surface', `a surface's scale is ${JSON.stringify(rawScale)}, not linear or log`);
+    scaleMode = rawScale;
+  }
+  const clampSpec = layer.clamp;
+  if (clampSpec !== undefined) {
+    if (!(Number.isFinite(clampSpec.max) && clampSpec.max > 0 && Number.isFinite(clampSpec.softness) && clampSpec.softness > 0)) {
+      fail('surface', `a surface's clamp ${JSON.stringify(clampSpec)} does not have positive max and softness`);
+    }
+  }
+  const heightScale = layer.height_scale ?? 1.0;
+  if (!Number.isFinite(heightScale) || heightScale <= 0) fail('surface', `a surface's height_scale is ${String(heightScale)}, not positive`);
+  checkKeyframed(layer.grow, "a surface layer's grow", isOpacity, 'surface');
+  const grow = opacityAt(layer.grow, s, 1);
+  const src = layer.source;
+  if (src.kind === 'grid') {
+    if (!data.has(src.array)) fail('surface', `a surface grid names array ${JSON.stringify(src.array)}, which the data container lacks`);
+    const arr = data.array(src.array);
+    if (arr.dtype !== 'float32' && arr.dtype !== 'float64') fail('surface', `surface grid ${src.array} has dtype ${arr.dtype}, not float32 or float64`);
+    if (arr.shape.length !== 2 || arr.shape[0]! < 2 || arr.shape[1]! < 2) {
+      fail('surface', `surface grid ${src.array} has shape (${arr.shape.join(', ')}), not 2d with at least 2x2 samples`);
+    }
+    if (!(
+      Number.isFinite(src.x[0]) &&
+      Number.isFinite(src.x[1]) &&
+      src.x[0] < src.x[1] &&
+      Number.isFinite(src.y[0]) &&
+      Number.isFinite(src.y[1]) &&
+      src.y[0] < src.y[1]
+    )) {
+      fail('surface', `a surface grid domain x=${JSON.stringify(src.x)}, y=${JSON.stringify(src.y)} is invalid`);
+    }
+    const [ny, nx] = [arr.shape[0]!, arr.shape[1]!];
+    const heights: number[] = Array.from({ length: ny * nx });
+    const hasCustom = scaleMode === 'log' || clampSpec !== undefined;
+    for (let k = 0; k < ny * nx; k++) {
+      const val = arr.data[k]!;
+      heights[k] = hasCustom ? mapHeight(scaleMode === 'log' ? Math.max(0, val) : val, scaleMode, clampSpec, heightScale, grow) : val * heightScale * grow;
+    }
+    return { kind: 'surface', source: 'grid', grid: [nx, ny], heights };
+  }
+  if (src.kind !== 'rational_s' && src.kind !== 'rational_z') {
+    fail('surface', `a surface source has unknown kind ${JSON.stringify((src as { kind: unknown }).kind)}`);
+  }
+  const poles = resolvePoints2d(env.scope, src.poles, 'surface', 1, 6, 'a rational surface poles');
+  const zeros = src.zeros !== undefined ? resolvePoints2d(env.scope, src.zeros, 'surface', 0, 5, 'a rational surface zeros') : [];
+  if (zeros.length > poles.length) {
+    fail('surface', `a rational surface has ${zeros.length} zeros and ${poles.length} poles, which is improper`);
+  }
+  const gain = src.gain !== undefined ? resolveNumber(env.scope, src.gain, 'surface', false, 'a rational surface gain') : 1.0;
+  if (src.kind === 'rational_z' && src.period === undefined) fail('surface', 'rational_z surface requires period');
+  const period = src.period !== undefined ? resolveNumber(env.scope, src.period, 'surface', true, 'a rational surface period') : 1.0;
+  if (!(
+    Number.isFinite(src.x[0]) &&
+    Number.isFinite(src.x[1]) &&
+    src.x[0] < src.x[1] &&
+    Number.isFinite(src.y[0]) &&
+    Number.isFinite(src.y[1]) &&
+    src.y[0] < src.y[1]
+  )) {
+    fail('surface', `a rational surface domain x=${JSON.stringify(src.x)}, y=${JSON.stringify(src.y)} is invalid`);
+  }
+  const [nx, ny] = src.resolution ?? [64, 64];
+  if (!Number.isInteger(nx) || nx < 2 || !Number.isInteger(ny) || ny < 2) {
+    fail('surface', `a rational surface resolution ${JSON.stringify([nx, ny])} is not integers >= 2`);
+  }
+  const [x0, x1] = src.x;
+  const [y0, y1] = src.y;
+  const heights: number[] = Array.from({ length: ny * nx });
+  if (src.kind === 'rational_s') {
+    const sigmaMax = Math.max(...poles.map((p) => p[0]));
+    for (let j = 0; j < ny; j++) {
+      const y = y0 + (j / (ny - 1)) * (y1 - y0);
+      for (let i = 0; i < nx; i++) {
+        const x = x0 + (i / (nx - 1)) * (x1 - x0);
+        const mag = evalRationalS(poles, zeros, gain, x, y);
+        heights[j * nx + i] = mapHeight(mag, scaleMode, clampSpec, heightScale, grow);
+      }
+    }
+    return { kind: 'surface', source: 'rational_s', sigma_max: sigmaMax, converges: sigmaMax < -1e-9, grid: [nx, ny], heights };
+  }
+  const zRes = impulseInvariantZ(poles, zeros, gain, period);
+  for (let j = 0; j < ny; j++) {
+    const y = y0 + (j / (ny - 1)) * (y1 - y0);
+    for (let i = 0; i < nx; i++) {
+      const x = x0 + (i / (nx - 1)) * (x1 - x0);
+      const mag = evalRationalZ(zRes.z_poles, zRes.z_num, x, y);
+      heights[j * nx + i] = mapHeight(mag, scaleMode, clampSpec, heightScale, grow);
+    }
+  }
+  return {
+    kind: 'surface',
+    source: 'rational_z',
+    sigma_max: zRes.sigma_max,
+    r_max: zRes.r_max,
+    converges: zRes.converges,
+    z_poles: zRes.z_poles,
+    z_num: zRes.z_num,
+    z_den: zRes.z_den,
+    grid: [nx, ny],
+    heights,
+  };
 }

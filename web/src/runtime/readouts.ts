@@ -5,6 +5,7 @@
  * frame rate shown during playback, the keyboard map, and the colorbar that sets a parameter input.
  */
 import { fail } from '../errors.js';
+import { resolveNumber, resolvePoints2d } from '../evaluate/layers.js';
 import { referenceMember, oneSet, querySets, inputDef, inputValue, type PanelScope } from '../evaluate/resolve.js';
 import type { SetCache } from '../evaluate/sets.js';
 import type { Control, Panel, Scene, SetQuery, State, TextPart } from '../scene.js';
@@ -154,13 +155,23 @@ export function readoutPieces(ctx: ReadoutContext, parts: readonly Part[]): stri
         out.push(format ? formatPart(n, p) : String(n).padStart(p.width ?? 0, ' '));
       } else if (p.clock === 'time') out.push(formatPart(s, p));
       else out.push(formatPart(scene.clock.mode === 'fraction' ? q : clockValue(scene.clock, q), p));
+    } else if ('roc_status' in p) {
+      const poles = resolvePoints2d(scope, p.roc_status.poles, 'control', 1, 6, 'a roc_status poles');
+      const period = p.roc_status.period !== undefined ? resolveNumber(scope, p.roc_status.period, 'control', true, 'a roc_status period') : 1;
+      const sigmaMax = Math.max(...poles.map(([r]) => r));
+      const rMax = Math.exp(sigmaMax * period);
+      const converges = sigmaMax < -1e-9;
+      const sStr = formatNumber(sigmaMax, undefined, 2);
+      const rStr = formatNumber(rMax, undefined, 2);
+      out.push(converges ? `Causal ROC: σ > ${sStr}, |z| > ${rStr} (FT & DTFT converge)` : `Causal ROC: σ > ${sStr}, |z| > ${rStr} (FT & DTFT diverge) ⚠`);
     } else if ('input' in p) {
       const v = inputValue(scope, p.input);
       const def = inputDef(scene, p.input);
       if (typeof v === 'number') out.push(formatPart(v, p));
       else if (typeof v === 'boolean') out.push(v ? 'on' : 'off');
+      else if (Array.isArray(v)) out.push(v.map(([x, y]) => `(${formatNumber(x, 3)}, ${formatNumber(y, 3)})`).join(', '));
       else if (def?.kind === 'choice' && def.labels !== undefined) out.push(def.labels[def.values.indexOf(v)] ?? v);
-      else out.push(v);
+      else out.push(String(v));
     } else {
       const d = getReference();
       if (d === null) {

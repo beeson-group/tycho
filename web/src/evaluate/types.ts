@@ -97,6 +97,19 @@ export interface MorphLayerResult {
   items: (MorphLineResult | MorphRegionResult)[];
 }
 
+export interface SurfaceLayerResult {
+  kind: 'surface';
+  source: 'grid' | 'rational_s' | 'rational_z';
+  grid: [number, number];
+  heights: number[];
+  sigma_max?: number;
+  r_max?: number;
+  converges?: boolean;
+  z_poles?: [number, number][];
+  z_num?: [number, number][];
+  z_den?: [number, number][];
+}
+
 export type LayerResult =
   | TrajectoriesLayerResult
   | ArrowLayerResult
@@ -105,7 +118,8 @@ export type LayerResult =
   | MarkLayerResult
   | LabelLayerResult
   | PointsLayerResult
-  | MorphLayerResult;
+  | MorphLayerResult
+  | SurfaceLayerResult;
 
 /** The window of a camera with keyframes (rule `camera-keyframes`). */
 export interface CameraResult {

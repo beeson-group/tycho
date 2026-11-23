@@ -20,6 +20,7 @@ vec2 cmul(vec2 a, vec2 b) {
 vec2 conformalExp(vec2 s, float alpha, float period) {
   float denomA = (1.0 - alpha) * period + alpha;
   vec2 w = alpha * period * s;
+  // Float32 exp(w) - 1 loses precision below |w| < 1e-3, where |w|^4 / 120 < 1e-14 is below float32 epsilon.
   if (alpha < 1e-4 || length(w) < 1e-3) {
     vec2 sScaled = (period / denomA) * s;
     vec2 t2 = vec2(1.0 / 6.0, 0.0) + w / 24.0;

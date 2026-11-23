@@ -1362,6 +1362,10 @@ export class TychoViewerElement extends Base {
     const frameCount = this.scene.clock.frame_count;
     const now = this.time;
     if (Math.abs(to - now) < 1e-9) return;
+    if (to < now && this.scene.clock.end === 'stop') {
+      this.seek(to);
+      return;
+    }
     const target = (to > now ? 0 : 1) * frameCount + Math.min((to / L) * frameCount, frameCount * (1 - 1e-9));
     this.heldProgress ??= this.store.frame / frameCount;
     this.store.setPlaying(true);

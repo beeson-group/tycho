@@ -600,7 +600,7 @@ def build_scene(*, slide: bool = False) -> ty.Scene:
     return scene
 
 
-def build(out_dir: Path, *, write_page: bool = True, slide: bool = False) -> Path:
+def build(out_dir: Path, *, write_page: bool = True, slide: bool = False, runtime: str | None = None) -> Path:
     """Build and write the s-to-z scene files into ``out_dir``."""
     out_dir.mkdir(parents=True, exist_ok=True)
     stem = "s-to-z-slide" if slide else "s-to-z"
@@ -608,7 +608,11 @@ def build(out_dir: Path, *, write_page: bool = True, slide: bool = False) -> Pat
     scene.write(out_dir / f"{stem}.tys", out_dir / f"{stem}.tyd")
     html_path = out_dir / f"{stem}.html"
     if write_page:
-        sizes = scene.write_html(html_path, title="Complex Domains: s to z", minimal="slide") if slide else scene.write_html(html_path)
+        sizes = (
+            scene.write_html(html_path, title="Complex Domains: s to z", minimal="slide", runtime=runtime)
+            if slide
+            else scene.write_html(html_path, runtime=runtime)
+        )
         print(f"wrote {html_path} ({sizes['page'] / 1e6:.2f} MB)")
     return html_path
 

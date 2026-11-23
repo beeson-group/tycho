@@ -80,8 +80,32 @@ export interface PointsLayerResult {
   members: PointsMemberResult[];
 }
 
+export interface MorphLineResult {
+  kind: 'line';
+  points: Vec3[];
+}
+
+export interface MorphRegionResult {
+  kind: 'region';
+  grid: [number, number];
+  points: Vec3[];
+}
+
+export interface MorphLayerResult {
+  kind: 'morph';
+  alpha: number;
+  items: (MorphLineResult | MorphRegionResult)[];
+}
+
 export type LayerResult =
-  TrajectoriesLayerResult | ArrowLayerResult | InsetBoxLayerResult | BodyLayerResult | MarkLayerResult | LabelLayerResult | PointsLayerResult;
+  | TrajectoriesLayerResult
+  | ArrowLayerResult
+  | InsetBoxLayerResult
+  | BodyLayerResult
+  | MarkLayerResult
+  | LabelLayerResult
+  | PointsLayerResult
+  | MorphLayerResult;
 
 /** The window of a camera with keyframes (rule `camera-keyframes`). */
 export interface CameraResult {

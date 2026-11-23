@@ -27,6 +27,7 @@ export function inputValue(scope: PanelScope, id: string): InputValue {
 /** Whether a value fits its input's kind (section 2.5). */
 export function fits(v: Input, value: unknown): boolean {
   if (v.kind === 'parameter') return typeof value === 'number' && Number.isFinite(value);
+  if (v.kind === 'number') return typeof value === 'number' && Number.isFinite(value) && value >= v.min && value <= v.max;
   if (v.kind === 'toggle') return typeof value === 'boolean';
   return typeof value === 'string' && v.values.includes(value);
 }

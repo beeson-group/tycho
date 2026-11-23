@@ -12,6 +12,7 @@ Scene format 0.5 and data container version 2 are written and read at this versi
 
 ### Added
 
+- A 3d camera takes keyframes, `ty.camera_keyframe_3d(at, center=, width=, azimuth=, elevation=)`, each with the point that the camera looks at, the width that the panel shows there, and the two angles of the direction that the camera looks from. The camera blends them over the timeline, e.g. from a view down the up axis, which matches a 2d camera, into a tilted one.
 - The color of the marker of a points layer takes the forms of the color of a trajectories layer, i.e. a colormap over a parameter, which colors each member, and a colormap over a channel or `ty.threshold_color`, which color each sample, e.g. `ty.marker("disc", 1.6, {"colormap": "plasma", "channel": "height", "range": (0.0, 0.8)})`. A cloud of samples is thus colored by a stored value, as `c=` colors a matplotlib scatter plot, in one layer. The colormap `magma` is added, and a `truncate` of `(1, 0)` reads a colormap in reverse.
 - An axis title of a frame takes subscripts and superscripts, as a list of strings, `ty.sub` parts, and `ty.sup` parts, e.g. `scene.frame("phase", axes=("C", ["initial x", ty.sub("0")], "z"))` (#46). A script is set smaller and off the baseline, in the font of its title, in a plane panel, in the box of an axes layer, and at the tips of 3d axes. Unicode subscript digits are missing from many fonts, and the browser then draws them in another font.
 

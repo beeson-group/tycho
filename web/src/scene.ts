@@ -35,6 +35,7 @@ export const SUPPORTED_FEATURES: ReadonlySet<string> = new Set([
   'clock.keyframes',
   'layers.clock',
   'camera.keyframes',
+  'camera.keyframes_3d',
   'layers.label',
   'layers.points',
 ]);

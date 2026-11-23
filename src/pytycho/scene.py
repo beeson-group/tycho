@@ -1449,7 +1449,11 @@ def _camera(value: Mapping[str, Any]) -> dict[str, Any]:
         if "keyframes" in value:
             out["keyframes"] = _camera_keyframes(value["keyframes"], out.get("aspect", "equal"))
     else:
-        allowed = {"kind", "projection", "up", "stretch", "auto_rotate"}
+        allowed = {"kind", "projection", "up", "stretch", "auto_rotate", "keyframes"}
+        if "keyframes" in value:
+            if "auto_rotate" in value:
+                raise SceneError("camera-keyframes-3d: a 3d camera has both keyframes and auto_rotate")
+            out["keyframes"] = _camera_keyframes_3d(value["keyframes"])
         if "projection" in value:
             out["projection"] = _enum(value["projection"], ("orthographic", "perspective"), "panel: a camera projection")
         if "up" in value:
@@ -1538,6 +1542,58 @@ def _camera_keyframe(value: Any) -> dict[str, Any]:
     if "ease" in value:
         out["ease"] = _enum(value["ease"], EASES, "ease: the ease of a camera keyframe")
     return out
+
+
+def camera_keyframe_3d(
+    at: float,
+    *,
+    center: Sequence[float],
+    width: float,
+    azimuth: float,
+    elevation: float,
+    ease: str = "smooth",
+) -> dict[str, Any]:
+    """A camera keyframe of a 3d camera (rule `camera-keyframes-3d`): at time ``at`` of the timeline, the camera looks at the point
+    ``center`` of the display frame from ``azimuth`` degrees about its up axis and ``elevation`` degrees above the plane normal to it,
+    and the panel shows ``width`` units across at the center.
+
+    At an elevation of 90 the camera looks down its up axis, and the azimuth turns the picture. ``ease`` says how the camera
+    travels to this keyframe from the keyframe before.
+    """
+    return _camera_keyframe_3d({"at": at, "center": list(center), "width": width, "azimuth": azimuth, "elevation": elevation, "ease": ease})
+
+
+def _camera_keyframe_3d(value: Any) -> dict[str, Any]:
+    required = {"at", "center", "width", "azimuth", "elevation"}
+    if not isinstance(value, Mapping) or not required <= set(value):
+        raise SceneError(f"camera-keyframes-3d: a camera keyframe of a 3d camera is a dict with {sorted(required)}, not {value!r}")
+    if extra := set(value) - required - {"ease"}:
+        raise SceneError(f"camera-keyframes-3d: a camera keyframe of a 3d camera has unknown keys {sorted(extra)}")
+    center = value["center"]
+    if isinstance(center, (str, bytes, Mapping)) or not isinstance(center, Sequence) or len(center) != 3:
+        raise SceneError(f"camera-keyframes-3d: the center of a camera keyframe is three coordinates, not {center!r}")
+    out: dict[str, Any] = {
+        "at": _finite(value["at"], "camera-keyframes-3d: the time of a camera keyframe"),
+        "center": [_finite(x, "camera-keyframes-3d: a coordinate of the center of a camera keyframe") for x in center],
+        "width": _positive(value["width"], "the width of a camera keyframe", "camera-keyframes-3d"),
+        "azimuth": _finite(value["azimuth"], "camera-keyframes-3d: the azimuth of a camera keyframe"),
+        "elevation": _finite(value["elevation"], "camera-keyframes-3d: the elevation of a camera keyframe"),
+    }
+    if abs(out["elevation"]) > 90.0:
+        raise SceneError(f"camera-keyframes-3d: the elevation of a camera keyframe is {out['elevation']}, not in [-90, 90]")
+    if "ease" in value:
+        out["ease"] = _enum(value["ease"], EASES, "ease: the ease of a camera keyframe")
+    return out
+
+
+def _camera_keyframes_3d(value: Any) -> list[dict[str, Any]]:
+    if isinstance(value, (str, bytes, Mapping)) or not isinstance(value, Sequence) or len(value) == 0:
+        raise SceneError(f"camera-keyframes-3d: the keyframes of a 3d camera are a nonempty list of camera keyframes, not {value!r}")
+    keys = [_camera_keyframe_3d(k) for k in value]
+    for a, b in itertools.pairwise(keys):
+        if b["at"] < a["at"]:
+            raise SceneError(f"camera-keyframes-3d: the times of the camera keyframes decrease from {a['at']} to {b['at']}")
+    return keys
 
 
 def _camera_keyframes(value: Any, aspect: str) -> list[dict[str, Any]]:
@@ -2257,7 +2313,14 @@ class Scene:
                 ),
                 ("clock.keyframes", "keyframes" in self._clock),
                 ("layers.clock", any("clock" in layer for layer in layers)),
-                ("camera.keyframes", any("keyframes" in (panel.get("camera") or {}) for panel in self._panels.values())),
+                (
+                    "camera.keyframes",
+                    any("keyframes" in c and c["kind"] == "2d" for c in (panel.get("camera") or {} for panel in self._panels.values())),
+                ),
+                (
+                    "camera.keyframes_3d",
+                    any("keyframes" in c and c["kind"] == "3d" for c in (panel.get("camera") or {} for panel in self._panels.values())),
+                ),
                 ("layers.label", any(layer["kind"] == "label" for layer in layers)),
                 ("layers.points", any(layer["kind"] == "points" for layer in layers)),
             )

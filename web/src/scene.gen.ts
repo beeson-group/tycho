@@ -1317,6 +1317,71 @@ export type Camera =
        * The camera is turned about its up axis by this many degrees over each loop, and by 0 by default.
        */
       auto_rotate?: number;
+      /**
+       * The view that the panel shows is given by camera keyframes over the timeline. (rule `camera-keyframes-3d`)
+       *
+       * @minItems 1
+       */
+      keyframes?: [
+        {
+          /**
+           * The time of the keyframe is given in seconds of the timeline.
+           */
+          at: number;
+          /**
+           * The camera looks at this point of the display frame.
+           *
+           * @minItems 3
+           * @maxItems 3
+           */
+          center: [number, number, number];
+          /**
+           * The extent across the panel of the plane through the center that faces the camera is given in units of the display frame after the stretch.
+           */
+          width: number;
+          /**
+           * The camera stands at this angle in degrees about its up axis, from the first of the two other axes toward the second.
+           */
+          azimuth: number;
+          /**
+           * The camera stands at this angle in degrees above the plane normal to its up axis, and looks down the up axis at 90.
+           */
+          elevation: number;
+          /**
+           * The view travels to this keyframe from the one before by this ease, and linearly by default. (rule `ease`)
+           */
+          ease?: Ease;
+        },
+        ...{
+          /**
+           * The time of the keyframe is given in seconds of the timeline.
+           */
+          at: number;
+          /**
+           * The camera looks at this point of the display frame.
+           *
+           * @minItems 3
+           * @maxItems 3
+           */
+          center: [number, number, number];
+          /**
+           * The extent across the panel of the plane through the center that faces the camera is given in units of the display frame after the stretch.
+           */
+          width: number;
+          /**
+           * The camera stands at this angle in degrees about its up axis, from the first of the two other axes toward the second.
+           */
+          azimuth: number;
+          /**
+           * The camera stands at this angle in degrees above the plane normal to its up axis, and looks down the up axis at 90.
+           */
+          elevation: number;
+          /**
+           * The view travels to this keyframe from the one before by this ease, and linearly by default. (rule `ease`)
+           */
+          ease?: Ease;
+        }[]
+      ];
     };
 /**
  * A layout node holds one shown panel or splits its area into two parts.

@@ -1035,6 +1035,12 @@ describe('a viewer embedded on a page, under a DOM stand-in', () => {
       expect(v.dispatchEvent.mock.calls.at(-1)[0].detail).toEqual({ id: 'c', index: 2, at: L / 2 });
       now.mockRestore();
     });
+    it('seeks backward numeric action targets directly under "end": "stop"', async () => {
+      const { v, L } = await staged('stop');
+      v.runAction(0.75 * L, 0.25 * L);
+      expect(v.playing).toBe(false);
+      expect(v.time).toBeCloseTo(0.25 * L, 6);
+    });
   });
 
   describe('the camera keys of the timeline (rule `camera-keyframes`)', () => {

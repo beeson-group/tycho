@@ -2986,11 +2986,19 @@ class Scene:
         with open(tyd_path, "wb") as fh:
             fh.write(data)
 
-    def write_html(self, path: str | os.PathLike[str], *, kiosk: bool = False, runtime: str | None = None) -> dict[str, int]:
+    def write_html(
+        self,
+        path: str | os.PathLike[str],
+        *,
+        title: str | None = None,
+        kiosk: bool = False,
+        minimal: bool | str = False,
+        runtime: str | None = None,
+    ) -> dict[str, int]:
         """Writes the scene as one self-contained page, and returns the stored size in bytes of every array and of the page."""
         from .html import write_html
 
-        return write_html(path, self.to_document(), self.to_container(), kiosk=kiosk, runtime=runtime)
+        return write_html(path, self.to_document(), self.to_container(), title=title, kiosk=kiosk, minimal=minimal, runtime=runtime)
 
 
 def _edges_used(tree: FrameTree, src: str, dst: str, _stack: tuple[str, ...] = ()) -> set[str]:

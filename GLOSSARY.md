@@ -88,7 +88,7 @@ A rule of TyCHO that is never traded away for another goal, and that an agent do
 
 ## Input
 
-A value that the person at the page can change, such as the member shown or whether a layer is visible. An input is of kind parameter, choice, or toggle, and it is either shared by every panel or held per panel.
+A value that the person at the page can change, such as the member shown, a numeric slider, or whether a layer is visible. An input is of kind parameter, choice, toggle, or number, and it is either shared by every panel or held per panel.
 
 Avoid "variable", "selector", and "state" for an input.
 
@@ -115,6 +115,12 @@ Avoid "loop" for a periodic trajectory.
 ## Member
 
 One trajectory of a trajectory set, as an orbit is a member of a family.
+
+## Morph
+
+A layer that deforms declared curves and regions continuously along a closed-form homotopy over the timeline.
+
+Avoid "tween".
 
 ## Page
 
@@ -188,7 +194,7 @@ The JSON file `scene.tys`, in which what is drawn from the arrays of the data co
 
 ## Slider
 
-The control that sets an input of kind parameter, and that stops at the values of the parameter in its domain.
+The control that sets an input of kind parameter or number, stopping at parameter values in a domain or sweeping continuously over `[min, max]`.
 
 ## Step
 

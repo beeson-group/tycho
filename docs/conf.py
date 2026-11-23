@@ -33,7 +33,7 @@ import reference  # noqa: E402
 import pytycho  # noqa: E402
 
 # the version of scene.tys that this release writes, which is also the name of the published schema directory
-SCENE_FORMAT = "0.5"
+SCENE_FORMAT = "0.6"
 REPOSITORY = "https://github.com/beeson-group/tycho"
 
 project = "TyCHO"

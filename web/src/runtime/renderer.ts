@@ -66,6 +66,7 @@ import type {
   Layout,
   Marker,
   MarkLayer,
+  MorphLayer,
   InsetBoxLayer,
   PointsLayer,
   Scene,
@@ -113,6 +114,7 @@ import {
   type TrajectoryReadings,
 } from './geometry.js';
 import { outlineTriangles } from './outline.js';
+import { MorphDraw } from './morph.js';
 import { mergeColorbars, type Colorbar, type PanelLabel } from './overlay.js';
 import { tile, type Rect } from './tiles.js';
 
@@ -475,7 +477,7 @@ export class Shared {
   }
 }
 
-interface DrawContext {
+export interface DrawContext {
   scene: Scene;
   geometry: GeometryCache;
   shared: Shared;
@@ -556,7 +558,13 @@ export interface InsetBoxPlan {
   layer: InsetBoxLayer;
 }
 
-export type LayerPlan = TrajectoryPlan | ArrowPlan | InsetBoxPlan | BodyPlan | MarkPlan | PointsPlan | LabelPlan;
+export interface MorphPlan {
+  kind: 'morph';
+  index: number;
+  layer: MorphLayer;
+}
+
+export type LayerPlan = TrajectoryPlan | ArrowPlan | InsetBoxPlan | BodyPlan | MarkPlan | PointsPlan | LabelPlan | MorphPlan;
 
 export interface PanelPlan {
   /** The id of the declared panel that the shown panel shows. */
@@ -631,6 +639,8 @@ export function planPanel(scene: Scene, geometry: GeometryCache, state: State, p
       const at = layer.at as { sets?: unknown };
       const id = at !== null && typeof at === 'object' && 'sets' in at ? oneSet(scope, at.sets as never) : null;
       layers.push({ kind: 'label', index, layer, set: id === null ? null : geometry.sets.get(id) });
+    } else if (layer.kind === 'morph') {
+      layers.push({ kind: 'morph', index, layer });
     } else layers.push({ kind: layer.kind, index, layer });
   });
   return { declaredId: panel.panel, declared, display, scope, reference, layers };
@@ -958,7 +968,7 @@ export function planeLabels(v: PlaneView, ticks: boolean, titles: [PanelLabel['t
   return out;
 }
 
-interface Draw {
+export interface Draw {
   readonly key: string;
   readonly group: THREE.Group;
   extend(box: THREE.Box3): void;
@@ -3098,6 +3108,8 @@ export class PanelAreaRenderer implements ContextHolder {
           if (lp.kind === 'points' && lp.set === null) continue;
           const color = lp.kind === 'points' ? JSON.stringify(lp.color ?? null) : '';
           key = `${lp.kind}\0${plan.declaredId}\0${lp.index}\0${lp.set?.id ?? ''}\0${plan.display}\0${JSON.stringify(lp.layer)}\0${color}\0${theme}`;
+        } else if (lp.kind === 'morph') {
+          key = `${lp.kind}\0${plan.declaredId}\0${lp.index}\0${JSON.stringify(lp.layer)}\0${theme}`;
         } else key = `${lp.kind}\0${plan.declaredId}\0${lp.index}\0${plan.display}\0${theme}`;
         keep.add(lp.index);
         const old = p.draws.get(lp.index);
@@ -3126,11 +3138,13 @@ export class PanelAreaRenderer implements ContextHolder {
                     ? new PointsDraw(this.ctx, lp as PointsPlan & { set: SetData }, key)
                     : lp.kind === 'label'
                       ? new LabelDraw(lp.layer, key)
-                      : new MarkDraw(this.ctx, lp.layer, p.cameraSpec, key);
+                      : lp.kind === 'morph'
+                        ? new MorphDraw(this.ctx, lp.layer, key)
+                        : new MarkDraw(this.ctx, lp.layer, p.cameraSpec, key);
         // layers stack in their order, and within a layer its objects in the order they were added
         draw.group.renderOrder = lp.index;
         let k = 0;
-        for (const o of draw.group.children) o.renderOrder = 16 * lp.index + k++;
+        for (const o of draw.group.children) o.renderOrder = 256 * lp.index + k++;
         p.draws.set(lp.index, draw);
         if (draw instanceof MarkDraw && p.box !== null) draw.layout(p.box, p.cameraSpec, stretchOf(p.cameraSpec));
       }
@@ -3184,6 +3198,7 @@ export class PanelAreaRenderer implements ContextHolder {
         else if (d instanceof BodyDraw && lp.kind === 'body') d.update(env, lp.layer, plan.reference);
         else if (d instanceof PointsDraw && lp.kind === 'points') d.update(layerEnv(env, lp.layer), lp);
         else if (d instanceof LabelDraw && lp.kind === 'label') d.update(env, lp, plan.reference);
+        else if (d instanceof MorphDraw && lp.kind === 'morph') d.update(env, lp.layer);
       }
     } catch (e) {
       if (!(e instanceof TychoError)) throw e;
@@ -3196,7 +3211,7 @@ export class PanelAreaRenderer implements ContextHolder {
     const box = new THREE.Box3();
     const b = p.plan === null ? null : fitBox(p.plan, this.ctx.geometry);
     if (b !== null) box.set(new THREE.Vector3(b[0], b[1], b[2]), new THREE.Vector3(b[3], b[4], b[5]));
-    else for (const d of p.draws.values()) if ((d instanceof BodyDraw && d.group.visible) || d instanceof PointsDraw) d.extend(box);
+    else for (const d of p.draws.values()) if ((d instanceof BodyDraw && d.group.visible) || d instanceof PointsDraw || d instanceof MorphDraw) d.extend(box);
     if (box.isEmpty()) box.set(new THREE.Vector3(-1, -1, -1), new THREE.Vector3(1, 1, 1));
     const spec = p.cameraSpec;
     // the camera sees the box as stretched by the scale of the panel's scenes

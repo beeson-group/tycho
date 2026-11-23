@@ -191,7 +191,7 @@ def test_a_layer_read_from_the_reference_reads_the_frame_edges_on_the_reference_
     scene.panel("v", frame="rot", reference=ty.reference(orbit, 0), layers=[ty.trajectories(grid, read_from="reference")])
     scene.show("p", panel="v")
     doc, data = scene.to_document(), scene.to_container()
-    assert (doc["version"], doc["requires"]) == ("0.5", ["layers.read_from"])
+    assert (doc["version"], doc["requires"]) == ("0.6", ["layers.read_from"])
     assert doc["panels"]["v"]["layers"][0]["read_from"] == "reference"
     # at frame 1 of 4 the reference trajectory reads t = 0.5, halfway between rho = 1 and rho = 2 (rules `body-layer` and `read-from`)
     line = evaluate(doc, data, doc["initial"], 1)["panels"]["p"]["layers"][0]["members"][0]["line"]
@@ -306,7 +306,7 @@ def test_a_2d_camera_takes_an_aspect_and_a_3d_camera_does_not():
     scene.show("p", panel="v")
     doc = scene.to_document()
     assert doc["panels"]["v"]["camera"] == {"kind": "2d", "aspect": "free"}
-    assert doc["version"] == "0.5"
+    assert doc["version"] == "0.6"
     with pytest.raises(ty.SceneError, match=r"panel: a camera aspect is 'stretch', not one of equal, free"):
         scene.panel("w", frame="root", reference=ty.reference(moving, 0), layers=[], camera={"kind": "2d", "aspect": "stretch"})
     with pytest.raises(ty.SceneError, match=r"panel: .* camera has unknown keys \['aspect'\]"):

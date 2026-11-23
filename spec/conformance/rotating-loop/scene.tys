@@ -1,7 +1,7 @@
 {
  "format": "tycho-scene",
  "version": "0.5",
- "generator": "pytycho 0.3.0, spec/conformance/generate.py",
+ "generator": "pytycho 0.3.1, spec/conformance/generate.py",
  "frames": {
   "rot": {
    "label": "rotating"

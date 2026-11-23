@@ -9,7 +9,8 @@
  *   kiosk     hides every control and plays as `autoplay` does, for a slide
  *   minimal   hides the Add panel group, the icons of the panel headers, the frame and rate readouts, the View group, and Export,
  *             for a slide on which the controls of the scene are still worked by hand. With the value `panels`, the Add panel
- *             group and the icons of the panel headers stay, for a slide on which panels are added by hand
+ *             group and the icons of the panel headers stay, for a slide on which panels are added by hand. With the value
+ *             `slide`, the View group (home and reset buttons) stays while playback speed and step navigation are hidden.
  *
  * A block is a `<script type="application/octet-stream">` with base64 text, and `data-encoding="base64"` is the default and the
  * only encoding. Each file is taken from the viewer's own child block marked `data-tycho="scene"` or `data-tycho="data"`, else from
@@ -129,13 +130,15 @@ button, select, input { font: inherit; color: inherit; margin: 0; }
 .root.kiosk header, .root.kiosk .stats, .root.kiosk footer, .root.kiosk .pheader { display: none; }
 .root.picture { grid-template-rows: 1fr auto; }
 .root.picture header, .root.picture footer, .root.picture .pheader { display: none; }
-.root.minimal:not(.keep-panels) .add, .root.minimal:not(.keep-panels) .pheader .icon, .root.minimal .frame, .root.minimal .fps, .root.minimal .cap.view, .root.minimal .cap.export { display: none; }
+.root.minimal:not(.keep-panels) .add, .root.minimal:not(.keep-panels) .pheader .icon, .root.minimal .frame, .root.minimal .fps, .root.minimal:not(.slide) .cap.view, .root.minimal .cap.export, .root.minimal.slide .speed, .root.minimal.slide .cap.steps { display: none; }
+header h1:empty { display: none; }
 .root.dragging, .root.dragging * { cursor: grabbing !important; }
 
 header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; padding: 10px 14px 8px; }
 header h1 { font-size: 17px; font-weight: 600; margin: 0; letter-spacing: 0.01em; }
 .vars { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; }
 .vars:empty { display: none; }
+.vars:not(:empty) { min-height: 30px; }
 .add { display: flex; align-items: center; min-width: 0; }
 .chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
 .k { color: var(--dim); font-size: 12px; }
@@ -568,6 +571,7 @@ export class TychoViewerElement extends Base {
   private twin: 'kiosk' | 'picture' | null = null;
   private minimal = false;
   private keepPanels = false;
+  private slideMode = false;
   private loading = false;
   /** Counts the loads begun, so that a load that a later one overtook drops its result. */
   private loads = 0;
@@ -683,14 +687,16 @@ export class TychoViewerElement extends Base {
   private buildShell(): void {
     this.kiosk = this.hasAttribute('kiosk') || this.twin === 'kiosk';
     this.minimal = this.hasAttribute('minimal');
-    this.keepPanels = this.minimal && (this.getAttribute('minimal') ?? '').split(/\s+/).includes('panels');
+    const minTokens = this.minimal ? (this.getAttribute('minimal') ?? '').split(/\s+/) : [];
+    this.keepPanels = minTokens.includes('panels');
+    this.slideMode = minTokens.includes('slide');
     const shadow = this.attachShadow({ mode: 'open' });
     const style = el('style');
     style.textContent = STYLE;
     shadow.appendChild(style);
     this.root = el(
       'div',
-      `root${this.kiosk ? ' kiosk' : ''}${this.twin === 'picture' ? ' picture' : ''}${this.minimal ? ' minimal' : ''}${this.keepPanels ? ' keep-panels' : ''}`,
+      `root${this.kiosk ? ' kiosk' : ''}${this.twin === 'picture' ? ' picture' : ''}${this.minimal ? ' minimal' : ''}${this.keepPanels ? ' keep-panels' : ''}${this.slideMode ? ' slide' : ''}`,
     );
     this.header = el('header');
     this.titleEl = el('h1');

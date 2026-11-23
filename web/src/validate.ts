@@ -41,6 +41,8 @@ import {
   type InsetBoxLayer,
   type LabelLayer,
   type PointsLayer,
+  type MorphCoord,
+  type MorphLayer,
   type LayerClock,
   type Marker,
   type ColorSpec,
@@ -49,9 +51,9 @@ import {
   type Box,
 } from './scene.js';
 
-const LAYER_KINDS = ['trajectories', 'arrow', 'inset_box', 'body', 'axes', 'grid', 'label', 'points'];
+const LAYER_KINDS = ['trajectories', 'arrow', 'inset_box', 'body', 'axes', 'grid', 'label', 'points', 'morph'];
 const SHAPES = ['disc', 'ring', 'square', 'diamond', 'triangle', 'star', 'cross', 'plus'];
-const CONTROL_KINDS = ['slider', 'tabs', 'toggle', 'playback'];
+const CONTROL_KINDS = ['slider', 'tabs', 'toggle', 'action', 'playback'];
 const COLORMAPS = ['viridis', 'plasma', 'magma', 'cividis', 'blues', 'reds'];
 
 const checkId = (id: string, what: string): void => {
@@ -104,6 +106,7 @@ const LAYER_KEYS: Record<string, readonly string[]> = {
   grid: ['kind', 'labels', 'visible', 'opacity'],
   label: ['kind', 'text', 'at', 'offset', 'leader', 'clock', 'visible', ...TEXT_KEYS],
   points: ['kind', 'sets', 'members', 'marker', 'reveal', 'before', 'after', 'clock', 'fit', 'opacity', 'visible'],
+  morph: ['kind', 'map', 'alpha', 'period', 'items', 'opacity', 'visible'],
 };
 const CLOCK_KEYS = ['mode', 'channels', 'labels', 'frame_count', 'range', 'revolutions', 'seconds', 'keyframes', 'end'];
 const THEME_KEYS = ['background', 'foreground', 'grid', 'font', 'gutter'];
@@ -394,6 +397,54 @@ function checkTrajectoryLayer(scene: Scene, id: string, layer: TrajectoriesLayer
   checkColor(scene, id, layer.color);
 }
 
+function morphCoord(c: MorphCoord, id: string): void {
+  if (typeof c === 'number') {
+    if (!Number.isFinite(c)) fail('morph', `panel ${id}: a morph coordinate is ${String(c)}, not finite`);
+    return;
+  }
+  if (c === null || typeof c !== 'object' || !('nyquist' in c) || !finite(c.nyquist))
+    fail('morph', `panel ${id}: a morph coordinate is ${JSON.stringify(c)}, not a finite number or {nyquist}`);
+}
+
+function checkMorphLayer(scene: Scene, id: string, layer: MorphLayer): void {
+  if (layer.map !== 'conformal_exp') fail('morph', `panel ${id}: morph map is ${JSON.stringify(layer.map)}, not conformal_exp`);
+  checkKeyframed(layer.alpha, `panel ${id}: a morph layer's alpha`, isOpacity, 'morph');
+  if (typeof layer.period === 'number') {
+    if (!finite(layer.period) || layer.period <= 0) fail('morph', `panel ${id}: morph period ${layer.period} is not positive`);
+  } else {
+    checkInputRef(scene, layer.period.input, 'number', 'morph');
+  }
+  checkKeyframed(layer.opacity, `panel ${id}: a morph layer's opacity`, isOpacity, 'morph');
+  if (!Array.isArray(layer.items)) fail('morph', `panel ${id}: morph items is not a list`);
+  for (const item of layer.items) {
+    if (item.visible !== undefined) checkInputRef(scene, item.visible.input, 'toggle', 'visible');
+    checkKeyframed(item.opacity, `panel ${id}: morph item opacity`, isOpacity, 'morph');
+    if (item.kind === 'line') {
+      item.from.forEach((c) => morphCoord(c, id));
+      item.to.forEach((c) => morphCoord(c, id));
+      if (item.samples !== undefined && (!Number.isInteger(item.samples) || item.samples < 2))
+        fail('morph', `panel ${id}: morph line samples ${item.samples} is less than 2`);
+      if (item.color !== undefined && !COLOR.test(item.color)) fail('morph', `panel ${id}: morph line color ${item.color} is not #rrggbb`);
+      if (item.width !== undefined && (!finite(item.width) || item.width <= 0)) fail('morph', `panel ${id}: morph line width is not positive`);
+      if (item.dash !== undefined && (!Array.isArray(item.dash) || item.dash.length !== 2 || item.dash.some((d) => !finite(d) || d <= 0)))
+        fail('morph', `panel ${id}: morph line dash is invalid`);
+      checkKeyframed(item.reveal, `panel ${id}: morph line reveal`, isOpacity, 'morph');
+    } else if (item.kind === 'region') {
+      item.u.forEach((c) => morphCoord(c, id));
+      item.v.forEach((c) => morphCoord(c, id));
+      if (item.samples !== undefined && (!Array.isArray(item.samples) || item.samples.length !== 2 || item.samples.some((s) => !Number.isInteger(s) || s < 1)))
+        fail('morph', `panel ${id}: morph region samples are invalid`);
+      if (item.color !== undefined && !COLOR.test(item.color)) fail('morph', `panel ${id}: morph region color ${item.color} is not #rrggbb`);
+      checkKeyframed(item.reveal, `panel ${id}: morph region reveal`, isOpacity, 'morph');
+      if (item.reveal_origin !== undefined) {
+        if (!Array.isArray(item.reveal_origin) || item.reveal_origin.length !== 2)
+          fail('morph', `panel ${id}: morph region reveal_origin must be a 2-element list`);
+        item.reveal_origin.forEach((c) => morphCoord(c, id));
+      }
+    } else fail('morph', `panel ${id}: unknown morph item kind ${JSON.stringify((item as { kind: unknown }).kind)}`);
+  }
+}
+
 /** Checks the color of a trajectories layer or of a points layer's marker (section 2.7). */
 function checkColor(scene: Scene, id: string, color: ColorSpec | undefined): void {
   if (typeof color !== 'object') return;
@@ -508,7 +559,11 @@ export function validate(scene: Scene, data?: DataStore, state?: State): string[
     } else if (v!.kind === 'toggle') {
       const d: unknown = v!.default;
       if (typeof d !== 'boolean') fail('input', `toggle ${name} defaults to ${JSON.stringify(d)}, not a boolean`);
-    } else fail('input', `input ${name} has kind ${JSON.stringify((v as { kind: unknown }).kind)}, not parameter, choice, or toggle`);
+    } else if (v!.kind === 'number') {
+      if (!finite(v!.min) || !finite(v!.max) || !(v!.min < v!.max)) fail('number-input', `number input ${name} requires finite min < max`);
+      if (v!.step !== undefined && (!finite(v!.step) || v!.step <= 0)) fail('number-input', `number input ${name} requires positive step`);
+      if (!finite(v!.default) || v!.default < v!.min || v!.default > v!.max) fail('number-input', `number input ${name} default is outside [min, max]`);
+    } else fail('input', `input ${name} has kind ${JSON.stringify((v as { kind: unknown }).kind)}, not parameter, choice, toggle, or number`);
   }
   const clock = scene.clock;
   if (clock.mode !== 'fraction' && clock.mode !== 'epoch') fail('clock', `the clock mode is ${JSON.stringify(clock.mode)}, not fraction or epoch`);
@@ -610,6 +665,7 @@ export function validate(scene: Scene, data?: DataStore, state?: State): string[
       else if (layer.kind === 'inset_box') checkInsetBoxLayer(scene, id, layer);
       else if (layer.kind === 'label') checkLabelLayer(scene, id, layer);
       else if (layer.kind === 'points') checkPointsLayer(scene, id, layer);
+      else if (layer.kind === 'morph') checkMorphLayer(scene, id, layer);
       else if (layer.kind === 'body') {
         if (!Object.hasOwn(scene.bodies ?? {}, layer.body)) fail('body-layer', `panel ${id} draws ${layer.body}, which is not a body`);
         if (layer.trail !== undefined) checkTrail(id, layer.trail);
@@ -637,11 +693,40 @@ export function validate(scene: Scene, data?: DataStore, state?: State): string[
   }
   for (const c of scene.controls ?? []) {
     if (!CONTROL_KINDS.includes(c.kind)) fail('version', `control kind ${JSON.stringify(c.kind)} is not implemented`);
+    if ('show_range' in c && c.show_range !== undefined) {
+      if (
+        !Array.isArray(c.show_range) ||
+        c.show_range.length !== 2 ||
+        !finite(c.show_range[0]) ||
+        !finite(c.show_range[1]) ||
+        c.show_range[0] > c.show_range[1]
+      )
+        fail('control', `control show_range ${JSON.stringify(c.show_range)} is not [t0, t1]`);
+    }
     if (c.kind === 'slider') {
-      checkInputRef(scene, c.input, 'parameter', 'control');
-      checkQuery(scene, c.domain);
+      const target = inputDef(scene, c.input);
+      if (target === undefined) fail('control', `input ${JSON.stringify(c.input)} is not declared`);
+      if (target.kind === 'parameter') {
+        if (c.domain === undefined) fail('control', `slider over parameter ${c.input} lacks domain`);
+        checkQuery(scene, c.domain);
+      } else if (target.kind === 'number') {
+        if (c.domain !== undefined) fail('control', `slider over number input ${c.input} cannot have domain`);
+      } else fail('control', `input ${c.input} is a ${target.kind}, not parameter or number`);
     } else if (c.kind === 'tabs') checkInputRef(scene, c.input, 'choice', 'control');
-    else if (c.kind === 'toggle') checkInputRef(scene, c.input, 'toggle', 'control');
+    else if (c.kind === 'toggle') {
+      checkInputRef(scene, c.input, 'toggle', 'control');
+      if (c.color !== undefined && !COLOR.test(c.color)) fail('control', `toggle control color ${JSON.stringify(c.color)} is not #rrggbb`);
+    } else if (c.kind === 'action') {
+      const checkTarget = (v: unknown) => {
+        if (typeof v === 'number') {
+          if (!Number.isFinite(v) || v < 0 || v > seconds) fail('action-control', `action time ${v} is outside [0, ${seconds}]`);
+        } else if (typeof v === 'string') {
+          if (!stepIds.has(v)) fail('action-control', `action target step ${JSON.stringify(v)} is not declared`);
+        } else fail('action-control', `action target ${JSON.stringify(v)} is not a time or step id`);
+      };
+      checkTarget(c.from);
+      checkTarget(c.to);
+    }
   }
   for (const r of scene.readouts ?? []) {
     if (r.place !== 'caption' && r.place !== 'panel') fail('control', `readout place ${JSON.stringify(r.place)} is not caption or panel`);
@@ -849,7 +934,7 @@ function validateState(scene: Scene, frames: Frames, state: State, warnings: str
     }
     if (pid === first) {
       for (const c of scene.controls ?? []) {
-        if (c.kind !== 'slider') continue;
+        if (c.kind !== 'slider' || c.domain === undefined) continue;
         const sel = inputDef(scene, c.input);
         if (sel?.kind !== 'parameter' || sel.parameter === INDEX_PARAMETER) continue;
         for (const setId of querySets(scope, c.domain)) {

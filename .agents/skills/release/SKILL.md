@@ -20,15 +20,17 @@ pytycho and `@beeson-group/tycho` are released together from one tag, and both p
 
 Run the steps below from the repository root of a checkout of the tag, with the runtime built, the two inputs of step 2 in `examples/broucke/` and `examples/manifolds/`, and Google Chrome and ffmpeg installed.
 
-1. Build the two example pages.
+1. Build the three example pages.
    ```sh
    uv run python examples/broucke/build.py
    uv run python examples/manifolds/build.py
+   uv run python examples/s-to-z/build.py
    ```
 2. Take the poster of each page, i.e. the still shown above the link to the page in the gallery of the docs, at 1920 by 1080 in the middle of the loop.
    ```sh
    node web/scripts/poster.mjs examples/broucke/broucke.html examples/broucke/broucke.png
    node web/scripts/poster.mjs examples/manifolds/manifolds.html examples/manifolds/manifolds.png
+   node web/scripts/poster.mjs examples/s-to-z/s-to-z.html examples/s-to-z/s-to-z.png
    ```
 3. Convert the screen recording of the Broucke page to the GIF of the README. Claudio Vestini records this video for each release, while he uses the page in a full-screen browser, hence ask him for the file. The picture of the README is loaded from `https://github.com/beeson-group/tycho/releases/latest/download/broucke.gif`, hence it is broken whenever this file is missing from the latest release. Add `-t SECONDS` before each `-i recording.mov` to cut the end of the recording, where the browser bar or the recording controls come into view.
    ```sh
@@ -37,7 +39,7 @@ Run the steps below from the repository root of a checkout of the tag, with the 
    ```
 4. Upload the pages, the posters, the inputs, and the GIF to the release.
    ```sh
-   gh release upload vX.Y.Z examples/broucke/broucke.html examples/broucke/broucke.png examples/broucke/broucke-input.tyd examples/manifolds/manifolds.html examples/manifolds/manifolds.png examples/manifolds/manifolds-input.tyd --clobber --repo beeson-group/tycho
+   gh release upload vX.Y.Z examples/broucke/broucke.html examples/broucke/broucke.png examples/broucke/broucke-input.tyd examples/manifolds/manifolds.html examples/manifolds/manifolds.png examples/manifolds/manifolds-input.tyd examples/s-to-z/s-to-z.html examples/s-to-z/s-to-z.png --clobber --repo beeson-group/tycho
    gh release upload vX.Y.Z broucke.gif --repo beeson-group/tycho
    ```
 5. Delete `broucke-palette.png` and `broucke.gif` from the repository root, since they are not gitignored there.

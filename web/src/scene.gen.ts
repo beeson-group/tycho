@@ -95,6 +95,32 @@ export type Input =
        * With "shared", the default, the input has one value for the whole page, and with "per_panel" it has one value per shown panel. (rule `input-scope`)
        */
       scope?: 'shared' | 'per_panel';
+    }
+  | {
+      /**
+       * The kind is "number".
+       */
+      kind: 'number';
+      /**
+       * The lower bound of the allowed numbers is finite and strictly below max.
+       */
+      min: number;
+      /**
+       * The upper bound of the allowed numbers is finite and strictly above min.
+       */
+      max: number;
+      /**
+       * The slider step size is a positive finite number when given.
+       */
+      step?: number;
+      /**
+       * The value at the start is a finite number in [min, max].
+       */
+      default: number;
+      /**
+       * With "shared", the default, the input has one value for the whole page, and with "per_panel" it has one value per shown panel. (rule `input-scope`)
+       */
+      scope?: 'shared' | 'per_panel';
     };
 /**
  * An identifier consists of ASCII letters, digits, underscores, dots, and hyphens, with at least one character. (rule `identifier`)
@@ -579,6 +605,36 @@ export type Layer =
        * The layer is omitted while the toggle that this refers to is false. (rule `visible`)
        */
       visible?: InputRef;
+    }
+  | {
+      /**
+       * The kind is "morph".
+       */
+      kind: 'morph';
+      /**
+       * The conformal rolling-ribbon homotopy is "conformal_exp". (rule `morph`)
+       */
+      map: 'conformal_exp';
+      /**
+       * The normalized morph parameter in [0, 1], given as a number or keyframes. (rule `morph`)
+       */
+      alpha: Opacity;
+      /**
+       * The sampling period T > 0 is given as a positive number or by an input of kind number. (rule `morph`)
+       */
+      period: number | InputRef;
+      /**
+       * The lines and regions deformed by the homotopy.
+       */
+      items: MorphItem[];
+      /**
+       * The opacity of the whole layer is in [0, 1], or keyframed, and 1 by default.
+       */
+      opacity?: Opacity;
+      /**
+       * The layer is omitted while the toggle that this refers to is false. (rule `visible`)
+       */
+      visible?: InputRef;
     };
 /**
  * A name of a channel, a parameter, an attribute, or an array of the data container is a nonempty string.
@@ -801,6 +857,128 @@ export type TextPart =
       sup: string;
     };
 /**
+ * One line or filled rectangle deformed by a morph layer. (rule `morph`)
+ *
+ * This interface was referenced by `Scene`'s JSON-Schema
+ * via the `definition` "morphItem".
+ */
+export type MorphItem =
+  | {
+      /**
+       * The kind is "line".
+       */
+      kind: 'line';
+      /**
+       * The start point [u, v] in the base s-plane.
+       *
+       * @minItems 2
+       * @maxItems 2
+       */
+      from: [MorphCoord, MorphCoord];
+      /**
+       * The end point [u, v] in the base s-plane.
+       *
+       * @minItems 2
+       * @maxItems 2
+       */
+      to: [MorphCoord, MorphCoord];
+      /**
+       * The number of sample points along the line, at least 2, 64 by default.
+       */
+      samples?: number;
+      /**
+       * The stroke color of the line.
+       */
+      color?: Color;
+      /**
+       * The stroke width in CSS pixels, 2 by default.
+       */
+      width?: number;
+      /**
+       * The opacity of the line in [0, 1], or keyframed, 1 by default.
+       */
+      opacity?: Opacity;
+      /**
+       * The revealed fraction along the line from 0 to 1, or keyframed, 1 by default.
+       */
+      reveal?: Opacity;
+      /**
+       * The dash pattern [on, off] in CSS pixels.
+       *
+       * @minItems 2
+       * @maxItems 2
+       */
+      dash?: [number, number];
+      /**
+       * The item is omitted while the toggle that this refers to is false. (rule `visible`)
+       */
+      visible?: InputRef;
+    }
+  | {
+      /**
+       * The kind is "region".
+       */
+      kind: 'region';
+      /**
+       * The horizontal interval [u_0, u_1] in the base s-plane.
+       *
+       * @minItems 2
+       * @maxItems 2
+       */
+      u: [MorphCoord, MorphCoord];
+      /**
+       * The vertical interval [v_0, v_1] in the base s-plane.
+       *
+       * @minItems 2
+       * @maxItems 2
+       */
+      v: [MorphCoord, MorphCoord];
+      /**
+       * The grid subdivisions [nu, nv] along u and v, [24, 24] by default.
+       *
+       * @minItems 2
+       * @maxItems 2
+       */
+      samples?: [number, number];
+      /**
+       * The fill color of the region.
+       */
+      color?: Color;
+      /**
+       * The opacity of the region in [0, 1], or keyframed, 1 by default.
+       */
+      opacity?: Opacity;
+      /**
+       * The radial spread fraction from 0 to 1, or keyframed, 1 by default.
+       */
+      reveal?: Opacity;
+      /**
+       * The [u, v] point source in the base s-plane from which the region spreads as an expanding disk, and the region center by default.
+       *
+       * @minItems 2
+       * @maxItems 2
+       */
+      reveal_origin?: [MorphCoord, MorphCoord];
+      /**
+       * The item is omitted while the toggle that this refers to is false. (rule `visible`)
+       */
+      visible?: InputRef;
+    };
+/**
+ * A coordinate in a morph item is a finite number or a multiple k of the Nyquist frequency pi / T. (rule `morph`)
+ *
+ * This interface was referenced by `Scene`'s JSON-Schema
+ * via the `definition` "morphCoord".
+ */
+export type MorphCoord =
+  | number
+  | {
+      /**
+       * The multiplier of pi / T.
+       */
+      nyquist: number;
+    };
+/**
  * A control is a widget on the page that sets an input or drives the clock. (rule `control`)
  *
  * This interface was referenced by `Scene`'s JSON-Schema
@@ -813,7 +991,7 @@ export type Control =
        */
       kind: 'slider';
       /**
-       * The slider sets the input of kind parameter with this id.
+       * The slider sets the input of kind parameter or number with this id.
        */
       input: Id;
       /**
@@ -821,9 +999,16 @@ export type Control =
        */
       label: string;
       /**
-       * The slider stops at the distinct values of the parameter over the sets that this query matches.
+       * For a parameter input, the slider stops at the distinct values of the parameter over the sets that this query matches.
        */
-      domain: SetQuery;
+      domain?: SetQuery;
+      /**
+       * The timeline interval [t_0, t_1] in seconds during which the control is visible.
+       *
+       * @minItems 2
+       * @maxItems 2
+       */
+      show_range?: [number, number];
     }
   | {
       /**
@@ -838,6 +1023,42 @@ export type Control =
        * The name shown beside the control is plain text.
        */
       label: string;
+      /**
+       * An optional accent color #rrggbb drawn beside a toggle control.
+       */
+      color?: Color;
+      /**
+       * The timeline interval [t_0, t_1] in seconds during which the control is visible.
+       *
+       * @minItems 2
+       * @maxItems 2
+       */
+      show_range?: [number, number];
+    }
+  | {
+      /**
+       * The kind is "action".
+       */
+      kind: 'action';
+      /**
+       * The button text.
+       */
+      label: string;
+      /**
+       * The start time in seconds or step id to seek to.
+       */
+      from: number | string;
+      /**
+       * The target time in seconds or step id to play to.
+       */
+      to: number | string;
+      /**
+       * The timeline interval [t_0, t_1] in seconds during which the control is visible.
+       *
+       * @minItems 2
+       * @maxItems 2
+       */
+      show_range?: [number, number];
     }
   | {
       /**
@@ -1500,7 +1721,7 @@ export type Anchor =
     };
 
 /**
- * Structure of scene.tys, version 0.5. The rules that this schema cannot express are in tycho-scene.md.
+ * Structure of scene.tys, version 0.6. The rules that this schema cannot express are in tycho-scene.md.
  */
 export interface Scene {
   /**
@@ -1508,7 +1729,7 @@ export interface Scene {
    */
   format: 'tycho-scene';
   /**
-   * The version of the scene format is written as "major.minor", e.g. "0.5". (rule `version`)
+   * The version of the scene format is written as "major.minor", e.g. "0.6". (rule `version`)
    */
   version: string;
   /**

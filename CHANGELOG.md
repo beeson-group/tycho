@@ -11,6 +11,7 @@ The two file formats are versioned apart from the packages, i.e. either format v
 - A 3d camera takes keyframes, `ty.camera_keyframe_3d(at, center=, width=, azimuth=, elevation=)`, each with the point that the camera looks at, the width that the panel shows there, and the two angles of the direction that the camera looks from (#56). The camera blends them over the timeline, e.g. from a view down the up axis, which matches a 2d camera, into a tilted one.
 - `<tycho-viewer minimal="slide">` keeps the View group while hiding the playback speed selector and step navigation, locks a populated header row to a constant minimum height when controls swap, and collapses empty viewer titles (#57). `build_html` and `Scene.write_html` also take `minimal`, and `Scene.write_html` accepts `title`.
 - Scene format 0.6 adds `ty.morph` conformal homotopy layers (`ty.morph_line`, `ty.morph_region`, `ty.nyquist`), `scene.number` bounded numeric inputs, `scene.action_control` replay buttons, `show_range` visibility intervals on controls, and toggle color swatches (#58).
+- Scene format 0.6 adds `ty.surface` three-dimensional height field layers (`grid`, `rational_s`, `rational_z` causal impulse-invariant Z-transform) with grooves, slices, causal ROC shading, magma colormap, `scene.points_2d` inputs, an interactive complex pole-zero picker pad with time-domain `f(t)` / `f(kT)` preview, and `ty.roc_status` convergence readouts (#59).
 
 ## [0.3.1] - 2026-11-21
 

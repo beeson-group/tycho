@@ -6,6 +6,10 @@ The two file formats are versioned apart from the packages, i.e. either format v
 
 ## [Unreleased]
 
+### Changed
+
+- In the top bar, a tabs control with nine or more choices is shown as a compact select, so that controls stay usable on phones and narrow layouts.
+
 ## [0.3.1] - 2026-11-21
 
 Scene format 0.5 and data container version 2 are written and read at this version, as at 0.3.0. A scene that uses the forms added below, e.g. a marker colored by a colormap, is rejected by the runtime of 0.3.0.

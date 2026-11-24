@@ -608,6 +608,55 @@ describe('the chrome under a DOM stand-in', () => {
       delete g.VideoFrame;
     }
   });
+
+  it('shows a shared tabs control with many choices as a compact select in the top bar', async () => {
+    const g = globalThis as Record<string, unknown>;
+    g.VideoEncoder = class {};
+    g.VideoFrame = class {};
+    try {
+      const { scene, bytes } = dressedBroucke();
+      scene.inputs = {
+        ...scene.inputs,
+        mode: { kind: 'choice', values: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'], default: 'a', scope: 'shared' },
+      } as Scene['inputs'];
+      scene.controls = [{ kind: 'tabs', input: 'mode', label: 'mode' }, ...(scene.controls ?? [])];
+      const text = JSON.stringify(scene);
+      const doc = g.document as { activeElement: unknown };
+      const hostEvents = new FakeElement(g.document as never, 'tycho-viewer');
+      const v = new TychoViewerElement() as any;
+      Object.assign(v, {
+        shadowRoot: null,
+        isConnected: false,
+        style: hostEvents.style,
+        hasAttribute: () => false,
+        getAttribute: () => null,
+        addEventListener: hostEvents.addEventListener.bind(hostEvents),
+        attachShadow: () => {
+          const r = new FakeElement(g.document as never, '#shadow-root');
+          Object.defineProperty(r, 'activeElement', { get: () => doc.activeElement });
+          v.shadowRoot = r;
+          return r;
+        },
+      });
+      await v.load(text, bytes);
+      v.unsubscribe = v.store.subscribe((c: string) => v.onChange(c));
+      v.onChange('state');
+      const root = byClass(v.shadowRoot as FakeElement, 'root')[0]!;
+      const vars = byClass(root, 'vars')[0]!;
+      const modeField = byClass(vars, 'field').find((f) => byClass(f, 'k')[0]!.textContent === 'mode')!;
+      expect(modeField).toBeDefined();
+      const selects = byTag(modeField, 'select');
+      expect(selects).toHaveLength(1);
+      expect(byClass(modeField, 'seg')).toHaveLength(0);
+      expect(selects[0]!.value).toBe('a');
+      selects[0]!.value = 'd';
+      selects[0]!.dispatchEvent({ type: 'change' });
+      expect(v.state.inputs.mode).toBe('d');
+    } finally {
+      delete g.VideoEncoder;
+      delete g.VideoFrame;
+    }
+  });
 });
 
 // every node the shell builds is an element. scene strings thus reach the DOM as text and never as markup

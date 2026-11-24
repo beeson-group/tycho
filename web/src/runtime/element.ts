@@ -106,6 +106,8 @@ import { ratioAt, tile, withRatio, type Gutter } from './tiles.js';
 const MAX_PANELS = 8;
 /** The height in CSS pixels between a panel's header and its tick row below which its colorbars are hidden, since their title and two ends would not fit. */
 const BAR_ROOM = 56;
+/** The minimum count of choices at which a shared top-bar tabs control falls back to a compact select. */
+const TOP_BAR_COMPACT_TABS_MIN_CHOICES = 9;
 const SPEEDS = [0.25, 0.5, 1, 2, 4];
 /** The keys that move the view of a panel with a 3d camera, in groups, each with what they do. The keys of the group `turn` turn the view to the left and to the right. */
 const ORBIT_KEYS: readonly { keys: readonly string[]; does: string; turn?: true }[] = [
@@ -1731,8 +1733,12 @@ export class TychoViewerElement extends Base {
       f.addEventListener('pointerdown', stop);
       return f;
     };
-    if (control.kind === 'tabs' && v.kind === 'choice' && panel !== undefined && v.values.length > 3) {
-      // a compact select in a panel header, where a row of tabs would not fit
+    const compactTabs =
+      control.kind === 'tabs' &&
+      v.kind === 'choice' &&
+      ((panel !== undefined && v.values.length > 3) || (panel === undefined && v.values.length >= TOP_BAR_COMPACT_TABS_MIN_CHOICES));
+    if (compactTabs) {
+      // a compact select where a row of tabs would not fit
       const c = v as Choice;
       const select = el('select');
       c.values.forEach((value, i) => {

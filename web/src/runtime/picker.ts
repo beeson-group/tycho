@@ -47,6 +47,12 @@ function stabilityColor(sigma: number): string {
   return COLOR_MARGINAL;
 }
 
+/** Whether the state gives input `id` a value, in place of the default of the input. */
+function holdsInput(scope: PanelScope, id: string): boolean {
+  const values = inputDef(scope.scene, id)?.scope === 'per_panel' ? scope.panel.inputs : scope.state.inputs;
+  return values !== undefined && Object.hasOwn(values, id) && values[id] !== undefined;
+}
+
 function makeEl<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
   if (cls !== undefined) e.className = cls;
@@ -248,8 +254,10 @@ export class PoleZeroPicker {
       this.hasCustomPreset = prDef?.kind === 'choice' && prDef.values.includes('custom');
       const presetVal = String(inputValue(scope, this.control.preset_input));
       if (presetVal !== this.lastSyncedPreset) {
+        // a new picker keeps the points that the state holds, as after a reload and in the twin of an export
+        const keep = this.lastSyncedPreset === null && holdsInput(scope, this.control.input);
         this.lastSyncedPreset = presetVal;
-        const match = this.control.presets.find((p) => p.id === presetVal);
+        const match = keep ? undefined : this.control.presets.find((p) => p.id === presetVal);
         if (match !== undefined) {
           appliedMatch = match;
           const updates: [string, InputValue][] = [[this.control.input, match.poles.map(([x, y]) => [x, y])]];

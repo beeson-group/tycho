@@ -330,18 +330,7 @@ describe('complex-domain evaluation and 0.6 controls', () => {
       expect(noopRemove.disabled).toBe(false);
       expect(noopInfo.textContent).toContain('−0.60');
 
-      let reentrantState = {
-        ...scene.initial,
-        inputs: {
-          preset: 'p1',
-          poles: [
-            [-0.8, 0],
-            [-0.4, 0],
-          ],
-          zeros: [[-0.2, 0]],
-          gain: 2,
-        } as Record<string, unknown>,
-      };
+      let reentrantState = { ...scene.initial, inputs: { preset: 'p1' } as Record<string, unknown> };
       let pickerReenter: PoleZeroPicker;
       pickerReenter = new PoleZeroPicker(ctrl, false, () => {
         if (reentrantState.inputs.preset !== 'p2') {
@@ -358,6 +347,50 @@ describe('complex-domain evaluation and 0.6 controls', () => {
       const reRemove = byClass(pickerReenter.el as never, 'pz-actions')[0]!.children[2]!;
       expect(reAddPole.disabled).toBe(false);
       expect(reRemove.disabled).toBe(true);
+    } finally {
+      globalThis.document = prevDoc;
+      uninstall();
+    }
+  });
+
+  it('keeps the poles and the gain that the state holds at the first sync of a new picker, and applies a preset that is chosen later', () => {
+    const { doc, uninstall } = installDom();
+    const prevDoc = globalThis.document;
+    globalThis.document = doc as unknown as Document;
+    try {
+      const theme = { background: '#050505', foreground: '#f2f2ef', grid: '#232320' };
+      const { scene } = minimalScene06();
+      scene.inputs!.gain = { kind: 'number', min: -5, max: 5, step: 0.1, default: 1 };
+      scene.inputs!.preset = { kind: 'choice', values: ['p1', 'p2'], default: 'p1' };
+      const ctrl: Extract<Control, { kind: 'points_2d' }> = {
+        kind: 'points_2d',
+        input: 'poles',
+        secondary_input: 'zeros',
+        gain_input: 'gain',
+        preset_input: 'preset',
+        label: 'Poles & Zeros (s)',
+        presets: [
+          { id: 'p1', label: 'one', poles: [[-0.6, 0]], zeros: [], gain: 2 },
+          { id: 'p2', label: 'two', poles: [[-0.3, 0]], zeros: [], gain: 1 },
+        ],
+      };
+      // what a reload from localStorage or the twin of an export starts from, i.e. a dragged pole and a moved gain under the choice 'p1'
+      let state = { ...scene.initial, inputs: { preset: 'p1', poles: [[-1.5, 0]], gain: 4 } } as Scene['initial'];
+      const picker = new PoleZeroPicker(ctrl, false, (updates) => {
+        state = updates.reduce((acc, [id, val]) => withInput(scene, acc, id, val), state);
+      });
+      for (const cv of byClass(picker.el as never, 'pz-canvas')) cv.getContext = () => null;
+      const sync = () => picker.sync({ scene, state, panel: state.panels.main! }, theme);
+      sync();
+      expect(state.inputs).toEqual({ preset: 'p1', poles: [[-1.5, 0]], gain: 4 });
+      expect(byClass(picker.el as never, 'pz-info')[0]!.textContent).toContain('−1.50');
+
+      state = withInput(scene, state, 'preset', 'p2');
+      sync();
+      expect(state.inputs).toEqual({ preset: 'p2', poles: [[-0.3, 0]], zeros: [], gain: 1 });
+      state = withInput(scene, state, 'preset', 'p1');
+      sync();
+      expect(state.inputs).toEqual({ preset: 'p1', poles: [[-0.6, 0]], zeros: [], gain: 2 });
     } finally {
       globalThis.document = prevDoc;
       uninstall();

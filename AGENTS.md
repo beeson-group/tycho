@@ -11,10 +11,9 @@ Hard invariants are never traded away for other goals. When a change would break
 2. Great performance on slow machines is always an objective.
 3. The best part is no part. Complexity is never favored when a simpler solution exists.
 <!-- shared:end -->
-4. Trajectory integration and numerical solvers do not run in the runtime. Stored samples are only rotated, scaled, translated, or blended linearly in pairs, and declared closed-form schema fields (surfaces, parametric morphs, and rational transforms) are evaluated directly.
-5. Pages are single files that work offline. The data and the runtime are embedded, and nothing is fetched while a page is viewed.
-6. Dependencies are not added to the runtime beyond three.js and mp4-muxer.
-7. Every feature is supported in all browsers. Pages can be viewed and presented, and every control can be used, in current Chrome, Firefox, and Safari, on desktops and phones. Extras such as the video export may be missing in one browser. The user is then told so in a message.
+4. Pages are single files that work offline. The data and the runtime are embedded, and nothing is fetched while a page is viewed.
+5. Dependencies are not added to the runtime beyond three.js and mp4-muxer.
+6. Every feature is supported in all browsers. Pages can be viewed and presented, and every control can be used, in current Chrome, Firefox, and Safari, on desktops and phones. Extras such as the video export may be missing in one browser. The user is then told so in a message.
 
 ## Where things are
 

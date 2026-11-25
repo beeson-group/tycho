@@ -2808,6 +2808,12 @@ def complex_domains():
         ),
     ]
 
+    def with_surface(source, change):
+        """The panels of the scene with ``change`` applied to its first surface layer of this source kind."""
+        layers = copy.deepcopy(doc["panels"]["main"]["layers"])
+        change(next(layer for layer in layers if layer["kind"] == "surface" and layer["source"]["kind"] == source))
+        return {"panels": {"main": {"layers": layers}}}
+
     rejections = [
         {
             "name": "number-input: min not less than max",
@@ -2818,6 +2824,12 @@ def complex_domains():
             "name": "points-2d: empty poles list violates min_points",
             "rule": "input",
             "state": {**doc["initial"], "inputs": {"poles": []}},
+        },
+        {
+            "name": "input: seven points for an input of kind points_2d without max_points, which is 6 by default",
+            "rule": "input",
+            "scene": {"inputs": {"poles": {"max_points": None}}},
+            "state": {**doc["initial"], "inputs": {"poles": [[-0.1 * k, 0.0] for k in range(1, 8)]}},
         },
         {
             "name": "morph: unknown map kind",
@@ -2852,6 +2864,26 @@ def complex_domains():
                     }
                 }
             },
+        },
+        {
+            "name": "surface: a rational surface over a domain whose x interval is empty",
+            "rule": "surface",
+            "scene": with_surface("rational_s", lambda layer: layer["source"].update(x=[1.0, 1.0])),
+        },
+        {
+            "name": "surface: a rational surface with a resolution below 2",
+            "rule": "surface",
+            "scene": with_surface("rational_s", lambda layer: layer["source"].update(resolution=[1, 8])),
+        },
+        {
+            "name": "surface: a clamp whose softness is not positive",
+            "rule": "surface",
+            "scene": with_surface("rational_s", lambda layer: layer.update(clamp={"max": 5.0, "softness": 0.0})),
+        },
+        {
+            "name": "surface: a height_scale that is not positive",
+            "rule": "surface",
+            "scene": with_surface("rational_z", lambda layer: layer.update(height_scale=0.0)),
         },
     ]
 

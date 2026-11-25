@@ -35,6 +35,63 @@
   }
  },
  {
+  "name": "input: seven points for an input of kind points_2d without max_points, which is 6 by default",
+  "rule": "input",
+  "scene": {
+   "inputs": {
+    "poles": {
+     "max_points": null
+    }
+   }
+  },
+  "state": {
+   "inputs": {
+    "poles": [
+     [
+      -0.1,
+      0.0
+     ],
+     [
+      -0.2,
+      0.0
+     ],
+     [
+      -0.30000000000000004,
+      0.0
+     ],
+     [
+      -0.4,
+      0.0
+     ],
+     [
+      -0.5,
+      0.0
+     ],
+     [
+      -0.6000000000000001,
+      0.0
+     ],
+     [
+      -0.7000000000000001,
+      0.0
+     ]
+    ]
+   },
+   "clock": {
+    "channel": "t"
+   },
+   "panels": {
+    "p1": {
+     "panel": "main"
+    }
+   },
+   "layout": {
+    "kind": "panel",
+    "id": "p1"
+   }
+  }
+ },
+ {
   "name": "morph: unknown map kind",
   "rule": "morph",
   "scene": {
@@ -130,6 +187,775 @@
          2
         ]
        }
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "surface: a rational surface over a domain whose x interval is empty",
+  "rule": "surface",
+  "scene": {
+   "panels": {
+    "main": {
+     "layers": [
+      {
+       "kind": "morph",
+       "map": "conformal_exp",
+       "alpha": {
+        "keyframes": [
+         [
+          0.0,
+          0.0
+         ],
+         [
+          5.0,
+          0.5
+         ],
+         [
+          9.0,
+          1.0
+         ]
+        ]
+       },
+       "period": {
+        "input": "T"
+       },
+       "items": [
+        {
+         "kind": "line",
+         "from": [
+          0.0,
+          {
+           "nyquist": -1.0
+          }
+         ],
+         "to": [
+          0.0,
+          {
+           "nyquist": 1.0
+          }
+         ],
+         "samples": 3
+        },
+        {
+         "kind": "line",
+         "visible": {
+          "input": "extra"
+         },
+         "from": [
+          -1.0,
+          0.0
+         ],
+         "to": [
+          1.0,
+          0.0
+         ],
+         "samples": 3
+        },
+        {
+         "kind": "region",
+         "u": [
+          -1.0,
+          0.0
+         ],
+         "v": [
+          0.0,
+          1.0
+         ],
+         "samples": [
+          2,
+          2
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "surface",
+       "source": {
+        "kind": "grid",
+        "array": "grid2d",
+        "x": [
+         0.0,
+         3.0
+        ],
+        "y": [
+         0.0,
+         2.0
+        ]
+       },
+       "scale": {
+        "input": "scale"
+       },
+       "clamp": {
+        "max": 4.0,
+        "softness": 0.5
+       },
+       "height_scale": 2.0,
+       "grow": {
+        "keyframes": [
+         [
+          0.0,
+          0.5
+         ],
+         [
+          9.0,
+          1.0
+         ]
+        ]
+       }
+      },
+      {
+       "kind": "surface",
+       "source": {
+        "kind": "rational_s",
+        "poles": {
+         "input": "poles"
+        },
+        "x": [
+         1.0,
+         1.0
+        ],
+        "y": [
+         -2.0,
+         2.0
+        ],
+        "zeros": {
+         "input": "zeros"
+        },
+        "gain": {
+         "input": "gain"
+        },
+        "period": {
+         "input": "T"
+        },
+        "resolution": [
+         3,
+         3
+        ]
+       },
+       "scale": {
+        "input": "scale"
+       },
+       "clamp": {
+        "max": 4.0,
+        "softness": 0.5
+       }
+      },
+      {
+       "kind": "surface",
+       "source": {
+        "kind": "rational_z",
+        "poles": {
+         "input": "poles"
+        },
+        "x": [
+         -2.0,
+         2.0
+        ],
+        "y": [
+         -2.0,
+         2.0
+        ],
+        "zeros": {
+         "input": "zeros"
+        },
+        "gain": {
+         "input": "gain"
+        },
+        "period": {
+         "input": "T"
+        },
+        "resolution": [
+         3,
+         3
+        ]
+       },
+       "scale": {
+        "input": "scale"
+       },
+       "clamp": {
+        "max": 4.0,
+        "softness": 0.5
+       }
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "surface: a rational surface with a resolution below 2",
+  "rule": "surface",
+  "scene": {
+   "panels": {
+    "main": {
+     "layers": [
+      {
+       "kind": "morph",
+       "map": "conformal_exp",
+       "alpha": {
+        "keyframes": [
+         [
+          0.0,
+          0.0
+         ],
+         [
+          5.0,
+          0.5
+         ],
+         [
+          9.0,
+          1.0
+         ]
+        ]
+       },
+       "period": {
+        "input": "T"
+       },
+       "items": [
+        {
+         "kind": "line",
+         "from": [
+          0.0,
+          {
+           "nyquist": -1.0
+          }
+         ],
+         "to": [
+          0.0,
+          {
+           "nyquist": 1.0
+          }
+         ],
+         "samples": 3
+        },
+        {
+         "kind": "line",
+         "visible": {
+          "input": "extra"
+         },
+         "from": [
+          -1.0,
+          0.0
+         ],
+         "to": [
+          1.0,
+          0.0
+         ],
+         "samples": 3
+        },
+        {
+         "kind": "region",
+         "u": [
+          -1.0,
+          0.0
+         ],
+         "v": [
+          0.0,
+          1.0
+         ],
+         "samples": [
+          2,
+          2
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "surface",
+       "source": {
+        "kind": "grid",
+        "array": "grid2d",
+        "x": [
+         0.0,
+         3.0
+        ],
+        "y": [
+         0.0,
+         2.0
+        ]
+       },
+       "scale": {
+        "input": "scale"
+       },
+       "clamp": {
+        "max": 4.0,
+        "softness": 0.5
+       },
+       "height_scale": 2.0,
+       "grow": {
+        "keyframes": [
+         [
+          0.0,
+          0.5
+         ],
+         [
+          9.0,
+          1.0
+         ]
+        ]
+       }
+      },
+      {
+       "kind": "surface",
+       "source": {
+        "kind": "rational_s",
+        "poles": {
+         "input": "poles"
+        },
+        "x": [
+         -2.0,
+         2.0
+        ],
+        "y": [
+         -2.0,
+         2.0
+        ],
+        "zeros": {
+         "input": "zeros"
+        },
+        "gain": {
+         "input": "gain"
+        },
+        "period": {
+         "input": "T"
+        },
+        "resolution": [
+         1,
+         8
+        ]
+       },
+       "scale": {
+        "input": "scale"
+       },
+       "clamp": {
+        "max": 4.0,
+        "softness": 0.5
+       }
+      },
+      {
+       "kind": "surface",
+       "source": {
+        "kind": "rational_z",
+        "poles": {
+         "input": "poles"
+        },
+        "x": [
+         -2.0,
+         2.0
+        ],
+        "y": [
+         -2.0,
+         2.0
+        ],
+        "zeros": {
+         "input": "zeros"
+        },
+        "gain": {
+         "input": "gain"
+        },
+        "period": {
+         "input": "T"
+        },
+        "resolution": [
+         3,
+         3
+        ]
+       },
+       "scale": {
+        "input": "scale"
+       },
+       "clamp": {
+        "max": 4.0,
+        "softness": 0.5
+       }
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "surface: a clamp whose softness is not positive",
+  "rule": "surface",
+  "scene": {
+   "panels": {
+    "main": {
+     "layers": [
+      {
+       "kind": "morph",
+       "map": "conformal_exp",
+       "alpha": {
+        "keyframes": [
+         [
+          0.0,
+          0.0
+         ],
+         [
+          5.0,
+          0.5
+         ],
+         [
+          9.0,
+          1.0
+         ]
+        ]
+       },
+       "period": {
+        "input": "T"
+       },
+       "items": [
+        {
+         "kind": "line",
+         "from": [
+          0.0,
+          {
+           "nyquist": -1.0
+          }
+         ],
+         "to": [
+          0.0,
+          {
+           "nyquist": 1.0
+          }
+         ],
+         "samples": 3
+        },
+        {
+         "kind": "line",
+         "visible": {
+          "input": "extra"
+         },
+         "from": [
+          -1.0,
+          0.0
+         ],
+         "to": [
+          1.0,
+          0.0
+         ],
+         "samples": 3
+        },
+        {
+         "kind": "region",
+         "u": [
+          -1.0,
+          0.0
+         ],
+         "v": [
+          0.0,
+          1.0
+         ],
+         "samples": [
+          2,
+          2
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "surface",
+       "source": {
+        "kind": "grid",
+        "array": "grid2d",
+        "x": [
+         0.0,
+         3.0
+        ],
+        "y": [
+         0.0,
+         2.0
+        ]
+       },
+       "scale": {
+        "input": "scale"
+       },
+       "clamp": {
+        "max": 4.0,
+        "softness": 0.5
+       },
+       "height_scale": 2.0,
+       "grow": {
+        "keyframes": [
+         [
+          0.0,
+          0.5
+         ],
+         [
+          9.0,
+          1.0
+         ]
+        ]
+       }
+      },
+      {
+       "kind": "surface",
+       "source": {
+        "kind": "rational_s",
+        "poles": {
+         "input": "poles"
+        },
+        "x": [
+         -2.0,
+         2.0
+        ],
+        "y": [
+         -2.0,
+         2.0
+        ],
+        "zeros": {
+         "input": "zeros"
+        },
+        "gain": {
+         "input": "gain"
+        },
+        "period": {
+         "input": "T"
+        },
+        "resolution": [
+         3,
+         3
+        ]
+       },
+       "scale": {
+        "input": "scale"
+       },
+       "clamp": {
+        "max": 5.0,
+        "softness": 0.0
+       }
+      },
+      {
+       "kind": "surface",
+       "source": {
+        "kind": "rational_z",
+        "poles": {
+         "input": "poles"
+        },
+        "x": [
+         -2.0,
+         2.0
+        ],
+        "y": [
+         -2.0,
+         2.0
+        ],
+        "zeros": {
+         "input": "zeros"
+        },
+        "gain": {
+         "input": "gain"
+        },
+        "period": {
+         "input": "T"
+        },
+        "resolution": [
+         3,
+         3
+        ]
+       },
+       "scale": {
+        "input": "scale"
+       },
+       "clamp": {
+        "max": 4.0,
+        "softness": 0.5
+       }
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "surface: a height_scale that is not positive",
+  "rule": "surface",
+  "scene": {
+   "panels": {
+    "main": {
+     "layers": [
+      {
+       "kind": "morph",
+       "map": "conformal_exp",
+       "alpha": {
+        "keyframes": [
+         [
+          0.0,
+          0.0
+         ],
+         [
+          5.0,
+          0.5
+         ],
+         [
+          9.0,
+          1.0
+         ]
+        ]
+       },
+       "period": {
+        "input": "T"
+       },
+       "items": [
+        {
+         "kind": "line",
+         "from": [
+          0.0,
+          {
+           "nyquist": -1.0
+          }
+         ],
+         "to": [
+          0.0,
+          {
+           "nyquist": 1.0
+          }
+         ],
+         "samples": 3
+        },
+        {
+         "kind": "line",
+         "visible": {
+          "input": "extra"
+         },
+         "from": [
+          -1.0,
+          0.0
+         ],
+         "to": [
+          1.0,
+          0.0
+         ],
+         "samples": 3
+        },
+        {
+         "kind": "region",
+         "u": [
+          -1.0,
+          0.0
+         ],
+         "v": [
+          0.0,
+          1.0
+         ],
+         "samples": [
+          2,
+          2
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "surface",
+       "source": {
+        "kind": "grid",
+        "array": "grid2d",
+        "x": [
+         0.0,
+         3.0
+        ],
+        "y": [
+         0.0,
+         2.0
+        ]
+       },
+       "scale": {
+        "input": "scale"
+       },
+       "clamp": {
+        "max": 4.0,
+        "softness": 0.5
+       },
+       "height_scale": 2.0,
+       "grow": {
+        "keyframes": [
+         [
+          0.0,
+          0.5
+         ],
+         [
+          9.0,
+          1.0
+         ]
+        ]
+       }
+      },
+      {
+       "kind": "surface",
+       "source": {
+        "kind": "rational_s",
+        "poles": {
+         "input": "poles"
+        },
+        "x": [
+         -2.0,
+         2.0
+        ],
+        "y": [
+         -2.0,
+         2.0
+        ],
+        "zeros": {
+         "input": "zeros"
+        },
+        "gain": {
+         "input": "gain"
+        },
+        "period": {
+         "input": "T"
+        },
+        "resolution": [
+         3,
+         3
+        ]
+       },
+       "scale": {
+        "input": "scale"
+       },
+       "clamp": {
+        "max": 4.0,
+        "softness": 0.5
+       }
+      },
+      {
+       "kind": "surface",
+       "source": {
+        "kind": "rational_z",
+        "poles": {
+         "input": "poles"
+        },
+        "x": [
+         -2.0,
+         2.0
+        ],
+        "y": [
+         -2.0,
+         2.0
+        ],
+        "zeros": {
+         "input": "zeros"
+        },
+        "gain": {
+         "input": "gain"
+        },
+        "period": {
+         "input": "T"
+        },
+        "resolution": [
+         3,
+         3
+        ]
+       },
+       "scale": {
+        "input": "scale"
+       },
+       "clamp": {
+        "max": 4.0,
+        "softness": 0.5
+       },
+       "height_scale": 0.0
       }
      ]
     }

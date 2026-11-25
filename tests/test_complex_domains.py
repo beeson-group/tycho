@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from typing import Any
 
 import numpy as np
 import pytest
@@ -202,3 +203,70 @@ def test_06_builders_and_validation_errors():
             reference=ty.reference(ty.by_id("pts"), 0),
             layers=[ty.surface({"kind": "rational_s", "poles": p3, "x": [-2, 2], "y": [-2, 2]}, slices={"clip": "yes"})],
         )
+
+
+def _surface_scene(poles=((-0.5, 0.0),), zeros=None, *, source="rational_s", poles_kwargs=None, zeros_kwargs=None):
+    """A scene with one rational surface over the inputs ``poles`` and ``zeros``, and these two inputs."""
+    scene = ty.Scene("surface")
+    f = scene.frame("s")
+    ts = scene.trajectory_set("pts", frame=f)
+    ts.add(np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]]), channels={"t": np.array([0.0, 1.0])})
+    ts.describe("t")
+    scene.clock("epoch", channels=["t"], range=[0.0, 1.0], frame_count=10, seconds=2.0)
+    p = scene.points_2d("poles", default=[list(pt) for pt in poles], **(poles_kwargs or {}))
+    src = {"kind": source, "poles": p, "x": [-2.0, 2.0], "y": [-2.0, 2.0]}
+    z = None
+    if zeros is not None:
+        z = scene.points_2d("zeros", default=[list(pt) for pt in zeros], **(zeros_kwargs or {}))
+        src["zeros"] = z
+    if source == "rational_z":
+        src["period"] = 1.0
+    scene.panel("main", frame=f, reference=ty.reference(ty.by_id("pts"), 0), layers=[ty.surface(src)])
+    scene.show("main")
+    return scene, p, z
+
+
+@pytest.mark.parametrize(
+    ("poles", "zeros", "kwargs", "message"),
+    [
+        ((), None, {}, r"surface: .*poles.*0 points"),
+        ([(-0.1 * k, 0.0) for k in range(1, 8)], None, {"poles_kwargs": {"max_points": 8}}, r"surface: .*poles.*7 points"),
+        (((-0.5, 0.0),), ((0.0, 0.0), (1.0, 0.0)), {}, r"surface: .*2 zeros and 1 poles"),
+        ([(-0.1 * k, 0.0) for k in range(1, 7)], [(0.1 * k, 0.0) for k in range(1, 7)], {}, r"surface: .*zeros.*6 points"),
+    ],
+)
+def test_the_writer_rejects_a_rational_surface_whose_defaults_the_evaluators_reject(poles, zeros, kwargs, message):
+    scene, _, _ = _surface_scene(poles, zeros, **kwargs)
+    with pytest.raises(ty.SceneError, match=message):
+        scene.to_document()
+
+
+def test_a_preset_of_a_points_2d_control_is_a_proper_rational_function_within_the_counts_of_its_inputs():
+    scene, p, z = _surface_scene(((-0.5, 0.0),), (), poles_kwargs={"max_points": 2})
+    improper = {"id": "a", "label": "A", "poles": [[-1, 0]], "zeros": [[0, 0], [1, 0]]}
+    with pytest.raises(ty.SceneError, match=r"control: preset 'a' has 2 zeros and 1 poles"):
+        scene.points_2d_control(p, label="Poles", secondary_input=z, presets=[improper])
+    scene.points_2d_control(p, label="Poles", secondary_input=z, presets=[{"id": "b", "label": "B", "poles": [[-1, 0], [-2, 0], [-3, 0]]}])
+    with pytest.raises(ty.SceneError, match=r"control: .*preset 'b'.*3 poles.*\[0, 2\]"):
+        scene.to_document()
+
+
+def test_points_2d_takes_numpy_arrays():
+    scene, p, _ = _surface_scene(np.array([[-0.5, 0.25], [-0.5, -0.25]]))
+    assert scene.to_document()["inputs"]["poles"]["default"] == [[-0.5, 0.25], [-0.5, -0.25]]
+    scene.points_2d_control(p, label="Poles", presets=[{"id": "a", "label": "A", "poles": np.array([[-1.0, 0.0]])}])
+    assert scene.to_document()["controls"][0]["presets"][0]["poles"] == [[-1.0, 0.0]]
+
+
+def test_an_array_of_a_surface_grid_is_finite_at_the_dtype_it_is_stored_in():
+    scene = ty.Scene("grid")
+    with pytest.raises(ty.SceneError, match=r"finite-number: grid array 'big' has non-finite values as float32"):
+        scene.array("big", np.full((2, 2), 1e39))
+    assert scene.array("big", np.full((2, 2), 1e39), dtype="float64") == "big"
+
+
+def test_a_points_2d_input_does_not_take_a_conjugate_lock_which_belongs_to_the_control():
+    scene = ty.Scene("lock")
+    lock: dict[str, Any] = {"conjugate_lock": True}
+    with pytest.raises(TypeError):
+        scene.points_2d("poles", default=[[-0.5, 0.0]], **lock)

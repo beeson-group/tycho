@@ -81,4 +81,33 @@ The page is not part of this build of the documentation. It is attached to each 
 +++
 [`examples/manifolds/build.py`](https://github.com/beeson-group/tycho/blob/main/examples/manifolds/build.py)
 :::
+
+:::{grid-item-card} Continuous-to-discrete complex domains, s to z
+
+This page walks from the continuous Laplace domain to the discrete Z-domain over a 32-second timeline.
+Stable, unstable, and marginal regions of the s-plane morph under `z = exp(s * T)` into the interior, exterior, and unit circle of the z-plane.
+Two panels then appear side by side under 3d cameras to show the continuous Laplace and causal impulse-invariant Z-transform magnitude surfaces together with Fourier transform (FT), discrete-time Fourier transform (DTFT), Fourier series (FS), and discrete Fourier transform (DFT) slices.
+The controls of the page are the following.
+
+- Sliders set the sampling period `T` and discrete sample count `N`, and a button replays the conformal morph.
+- A select chooses the pole-zero preset, and tabs choose a linear or a logarithmic scale of the magnitude.
+- Toggles show and hide the stability regions, aliasing strips, causal region of convergence (ROC), continuous and discrete Fourier slices, and the time-domain signal.
+- In the pole-zero picker, poles and zeros of the s-plane are moved, added, and removed, and both magnitude surfaces and the time-domain response follow.
+
+```{only} s_to_z_page and s_to_z_poster
+<a href="examples/s-to-z.html"><img class="tycho-poster" src="examples/s-to-z.png" alt="A still of the complex domains page"></a>
+```
+
+```{only} s_to_z_page
+[Open the complex domains page](site:examples/s-to-z.html).
+The interactive page has a size of {{ s_to_z_size }}, about {{ s_to_z_transfer }} to download in compressed form, and it opens separately.
+```
+
+```{only} not s_to_z_page
+The page is not part of this build of the documentation.
+It is attached to each [GitHub Release](https://github.com/beeson-group/tycho/releases), and you can also build it directly from `examples/s-to-z/build.py` without extra input files.
+```
++++
+[`examples/s-to-z/build.py`](https://github.com/beeson-group/tycho/blob/main/examples/s-to-z/build.py)
+:::
 ::::

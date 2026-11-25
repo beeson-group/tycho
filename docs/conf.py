@@ -88,7 +88,7 @@ for _name in ("scene.schema.json", "tycho-scene.md"):
     shutil.copyfile(ROOT / "spec" / _name, STAGED / _name)
 
 EXAMPLES = EXTRA / "examples"
-EXAMPLE_PAGES = ("broucke", "manifolds")
+EXAMPLE_PAGES = ("broucke", "manifolds", "s-to-z")
 # The example pages are attached to each GitHub Release and are not tracked in git. When Read the Docs sets the READTHEDOCS
 # environment variable, fetch_example_pages() downloads the pages and posters of the latest release from the release download
 # URLs, which work without a token or an API call. A local build stays offline unless TYCHO_DOCS_EXAMPLES=1 is set.
@@ -118,16 +118,18 @@ myst_substitutions = {
     "spec_link": f"[`schema/{SCENE_FORMAT}/tycho-scene.md`](site:schema/{SCENE_FORMAT}/tycho-scene.md)",
 }
 for _page in EXAMPLE_PAGES:
+    # the tags of `only` and the MyST substitutions are read as Jinja names, which do not take a hyphen
+    _key = _page.replace("-", "_")
     _path = EXAMPLES / f"{_page}.html"
     if _path.is_file():
         _bytes = _path.read_bytes()
-        tags.add(f"{_page}_page")
-        myst_substitutions[f"{_page}_size"] = f"{len(_bytes) / 1e6:.1f} MB"
-        myst_substitutions[f"{_page}_transfer"] = f"{len(gzip.compress(_bytes, 6)) / 1e6:.1f} MB"
+        tags.add(f"{_key}_page")
+        myst_substitutions[f"{_key}_size"] = f"{len(_bytes) / 1e6:.1f} MB"
+        myst_substitutions[f"{_key}_transfer"] = f"{len(gzip.compress(_bytes, 6)) / 1e6:.1f} MB"
     else:
-        myst_substitutions[f"{_page}_size"] = myst_substitutions[f"{_page}_transfer"] = "unknown"
+        myst_substitutions[f"{_key}_size"] = myst_substitutions[f"{_key}_transfer"] = "unknown"
     if (EXAMPLES / f"{_page}.png").is_file():
-        tags.add(f"{_page}_poster")
+        tags.add(f"{_key}_poster")
 
 # autodoc
 

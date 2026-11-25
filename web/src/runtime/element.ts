@@ -383,6 +383,23 @@ interface Widget {
   sync(scope: PanelScope): void;
 }
 
+/** Shows a widget only while the time `t` of the timeline lies in its `show_range` (rule `control`), writing to the page only on a change. */
+function showInRange(w: Widget, t: number): void {
+  if (w.showRange === undefined) return;
+  const hidden = t < w.showRange[0] - 1e-6 || t > w.showRange[1] + 1e-6;
+  if (w.el.hidden !== hidden) w.el.hidden = hidden;
+}
+
+/**
+ * The decimals that the readout of a number slider shows, i.e. those of its step, or else those of a hundredth of its range, and at
+ * most six.
+ */
+export function sliderDecimals(min: number, max: number, step?: number): number {
+  if (step === undefined) return Math.min(6, Math.max(0, -Math.floor(Math.log10((max - min) / 100) + 1e-9)));
+  for (let d = 0; d < 6; d++) if (Math.abs(step * 10 ** d - Math.round(step * 10 ** d)) < 1e-9 * 10 ** d) return d;
+  return 6;
+}
+
 /** A readout's elements, which are stat tiles when its text splits, or else one line that also shows an error. */
 export interface ReadoutDom {
   parts: Readout['parts'];
@@ -1211,22 +1228,18 @@ export class TychoViewerElement extends Base {
       setText(this.playback.frame, `${store.frame} / ${scene.clock.frame_count}`);
     }
     const tSec = q * timelineSeconds(scene.clock);
-    for (const w of this.sceneWidgets) {
-      if (w.showRange !== undefined) w.el.hidden = tSec < w.showRange[0] - 1e-6 || tSec > w.showRange[1] + 1e-6;
-    }
-    for (const dom of this.panelDom.values()) {
-      for (const w of dom.widgets) {
-        if (w.showRange !== undefined) w.el.hidden = tSec < w.showRange[0] - 1e-6 || tSec > w.showRange[1] + 1e-6;
-      }
-    }
+    for (const w of this.sceneWidgets) showInRange(w, tSec);
+    for (const dom of this.panelDom.values()) for (const w of dom.widgets) showInRange(w, tSec);
     for (const p of this.pickers) p.setTime(tSec);
     if (this.stepsCap !== null) {
       const steps = scene.steps ?? [];
       const cur = this.currentStep;
       const idx = steps.findIndex((st) => st.id === cur);
       if (cur !== null && this.stepsCap.select.value !== cur) this.stepsCap.select.value = cur;
-      this.stepsCap.prev.disabled = idx <= 0 && tSec <= (steps[0]?.at ?? 0) + 1e-6;
-      this.stepsCap.next.disabled = idx >= steps.length - 1;
+      const first = idx <= 0 && tSec <= (steps[0]?.at ?? 0) + 1e-6;
+      const last = idx >= steps.length - 1;
+      if (this.stepsCap.prev.disabled !== first) this.stepsCap.prev.disabled = first;
+      if (this.stepsCap.next.disabled !== last) this.stepsCap.next.disabled = last;
     }
   }
 
@@ -1405,7 +1418,9 @@ export class TychoViewerElement extends Base {
     if (typeof from === 'string') this.goto(from);
     else this.seek(from);
     if (typeof to === 'string') {
-      this.playTo(to);
+      // a clock that ends with a stop does not play around to a stage behind the time shown
+      if (this.scene.clock.end === 'stop' && this.steps[this.stepIndex(to)]!.at < this.time - 1e-9) this.goto(to);
+      else this.playTo(to);
       return;
     }
     const L = timelineSeconds(this.scene.clock);
@@ -1963,8 +1978,7 @@ export class TychoViewerElement extends Base {
         sync: (scope) => {
           const num = Number(current(scope));
           setRange(range, num);
-          const dec = v.step !== undefined && Number.isInteger(v.step) ? 0 : 2;
-          out.textContent = formatNumber(num, undefined, dec);
+          out.textContent = formatNumber(num, undefined, sliderDecimals(v.min, v.max, v.step));
         },
       };
     }
@@ -2187,7 +2201,7 @@ export class TychoViewerElement extends Base {
       const scope: PanelScope = { scene, state: st, panel: st.panels[first]! };
       for (const w of this.sceneWidgets) {
         w.sync(scope);
-        if (w.showRange !== undefined) w.el.hidden = tSec < w.showRange[0] - 1e-6 || tSec > w.showRange[1] + 1e-6;
+        showInRange(w, tSec);
       }
       if (this.theme !== null) {
         for (const p of this.pickers) {
@@ -2204,7 +2218,7 @@ export class TychoViewerElement extends Base {
       const scope: PanelScope = { scene, state: st, panel };
       for (const w of dom.widgets) {
         w.sync(scope);
-        if (w.showRange !== undefined) w.el.hidden = tSec < w.showRange[0] - 1e-6 || tSec > w.showRange[1] + 1e-6;
+        showInRange(w, tSec);
       }
       const declared = scene.panels[panel.panel]!;
       const frame = typeof declared.frame === 'string' ? declared.frame : String(this.panelValue(scope, declared.frame.input));

@@ -245,6 +245,8 @@ The rules for inputs and references follow.
 - `input`. A reader rejects an input without a known kind or a default, a reference to an input that is not declared, and a value that is not of its input's kind.
   A value of the wrong kind (e.g. a boolean or a string for an input of kind `parameter`, or a number for a toggle) is never cast to the right kind.
 - `number-input`. An input of kind `number` holds a bounded finite number in `[min, max]`, with finite `min < max`, an optional positive `step`, and `default` in `[min, max]`.
+  A reader rejects an input of kind `number` whose `min` is not below its `max`, whose `step` is not positive, or whose `default` lies outside `[min, max]`.
+  A value outside `[min, max]` is not of the kind of its input, and a reader rejects it under rule `input`.
   A writer lists the feature `inputs.number` in `requires` (section 4) for a scene with an input of kind `number`.
 - `points-2d`. An input of kind `points_2d` holds a list of `[x, y]` pairs of finite numbers, with optional integer counts `min_points >= 0`, 0 by default, and `max_points >= min_points`, 6 by default, and optional bounds `[[x_min, x_max], [y_min, y_max]]`.
   A value fits the input only when every entry is a pair of finite numbers and the list length lies in `[min_points, max_points]`.
@@ -408,8 +410,13 @@ The rules for declared panels and layers follow.
 - `morph`. A `morph` layer deforms declared lines and rectangular regions in the complex plane under the conformal rolling-ribbon homotopy `h_alpha(s)`.
   For `alpha` in `[0, 1]` and positive period `T`, write `c(alpha) = alpha * ((1 - alpha) * T + alpha)` and `w = alpha * s * T`.
   When `alpha < 1e-5` or `|w| < 1e-4`, evaluate `h_alpha(s) = alpha + (s * T / ((1 - alpha) * T + alpha)) * (1 + w / 2 + w^2 / 6 + w^3 / 24)`, and otherwise evaluate `h_alpha(s) = alpha + (exp(w) - 1) / c(alpha)`.
+  The `alpha` of the layer is a number or a keyframed value (rule `keyframes`), and its `period` is a positive number or `{"input": id}`, which refers to an input of kind `number`.
   Coordinates in `items` are either a finite number or `{"nyquist": k}`, which evaluates to `k * pi / T`.
   Each item of kind `"line"` maps `samples` points uniformly from `from` to `to`, and each item of kind `"region"` maps `(nu + 1) * (nv + 1)` grid points across intervals `u` and `v` in row-major order.
+  A line has 64 samples by default and at least 2, and the `samples` of a region are `[nu, nv]`, each at least 1 and 24 by default.
+  Each evaluated point is `(x, y, 0)` in the display frame of the panel, where `x` and `y` are the real and the imaginary part of `h_alpha(s)`.
+  A reader rejects a `map` other than `"conformal_exp"`, an `alpha` outside `[0, 1]`, a `period` that is not positive or that refers to an input of another kind, and `samples` below these minimums.
+  A keyframe of `alpha` outside `[0, 1]` is rejected under rule `keyframes`.
   Any item whose `visible` toggle is false is omitted from the evaluated items list.
   A writer lists the feature `layers.morph` in `requires` (section 4) for a scene with a `morph` layer.
 
@@ -494,13 +501,15 @@ The rule for controls follows.
 
 - `control`. A reader rejects a control of an unknown kind, a control whose `input` is not declared, and a control whose input is of a kind that the control does not set.
   A slider sets an input of kind `parameter` with a `domain`, or an input of kind `number` without a `domain`.
-  A toggle control may carry a fixed `color`, and any control may carry `show_range: [t_0, t_1]` to show the control only while the timeline lies in `[t_0, t_1]`.
+  A toggle control may carry a fixed `color`, and a slider, a tabs, a toggle, a `points_2d`, or an action control may carry `show_range: [t_0, t_1]` to show the control only while the timeline lies in `[t_0, t_1]`.
+  A reader rejects a `show_range` that is not two finite times with `t_0 <= t_1`.
   A `points_2d` control edits an input of kind `points_2d`, with optional `secondary_input` of kind `points_2d`, optional `gain_input` and `period_input` of kind `number`, optional `preset_input` of kind `choice`, optional `presets`, and optional `show_time_domain` toggle input.
   Its `input` holds the poles of a rational function, and its `secondary_input` the zeros.
   With `conjugate_lock`, true by default, the control starts with each point off the real axis paired with its complex conjugate.
   Each of the `presets` carries an `id`, a `label`, 1 to 6 `poles`, optional `zeros`, at most 5 and not more than its poles, and an optional finite `gain`.
   A reader rejects a preset outside these counts, and a preset whose `poles` or `zeros` lie outside the counts of the input that holds them.
 - `action-control`. An `action` control carries a `label`, a start time `from` (a step id or finite seconds), and a stop target `to` (a step id or finite seconds).
+  A reader rejects a `from` or a `to` that is the id of a step that the scene does not declare (rule `steps`), or a time outside `[0, L]`, where `L` is the length of a loop (section 2.11).
   A writer lists the feature `controls.action` in `requires` (section 4) for a scene with an `action` control.
 
 ### 2.10 Export
@@ -570,6 +579,8 @@ The rules for the timeline follow.
   The width `w > 0` is the extent across the panel of the plane through the center that faces the camera, in units of the display frame after the camera's `stretch`.
   The camera at time `s` blends two keyframes as rule `keyframes` blends two values, with the ease of the later keyframe.
   The center, the azimuth, and the elevation are blended as `(1 - E) * v_i + E * v_(i+1)`, hence two azimuths that differ by more than 360 turn the camera more than once, and the width is blended as in rule `camera-keyframes`.
+  The camera thus turns by the difference of two azimuths, and not by the shorter way around.
+  From an azimuth of 179, the camera turns by 2 degrees through 180 to a keyframe at 181, and by 358 degrees through 0 to a keyframe at -179, although 181 and -179 give the same direction.
   Before its first keyframe and after its last, the camera shows the view of this keyframe.
   A reader rejects a `3d` camera with both `keyframes` and `auto_rotate`.
   The view is for drawing only, and it is not part of an evaluated frame.

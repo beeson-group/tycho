@@ -3,7 +3,7 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { controlsTokens, colormapName, cssColorHex, DEFAULT_THEME, hostTheme, PALETTES, themed } from '../src/runtime/colors';
-import { buildChip, buildReadout, dropText, fillReadout, TychoViewerElement } from '../src/runtime/element';
+import { buildChip, buildReadout, dropText, fillReadout, sliderDecimals, TychoViewerElement } from '../src/runtime/element';
 import { GeometryCache } from '../src/runtime/geometry';
 import { GLYPHS, icon } from '../src/runtime/icons';
 import {
@@ -908,6 +908,7 @@ describe('a viewer embedded on a page, under a DOM stand-in', () => {
     it('keeps the Add panel group and the icons of the panel headers under minimal="panels", for a slide on which panels are added by hand', async () => {
       expect((await live({ minimal: 'panels' })).v.root.className).toBe('root minimal keep-panels');
       expect((await live({ minimal: 'slide' })).v.root.className).toBe('root minimal slide');
+      expect((await live({ minimal: 'panels slide' })).v.root.className).toBe('root minimal keep-panels slide');
       expect((await live({ minimal: 'controls' })).v.root.className).toBe('root minimal');
     });
     it('links a colorbar to its parameter input in kiosk mode too, so that a click on the bar of a kiosk page sets the eccentricity', async () => {
@@ -937,7 +938,7 @@ describe('a viewer embedded on a page, under a DOM stand-in', () => {
 
   describe('stages (rule `steps`)', () => {
     /** A live viewer of the dressed Broucke scene with three stages, at 0, a quarter, and a half of its loop. */
-    async function staged(end?: 'stop') {
+    async function staged(end?: 'stop', edit: (scene: Scene, L: number) => void = () => {}) {
       const { scene, bytes } = dressedBroucke();
       const L = loopSeconds(scene.clock);
       scene.steps = [
@@ -946,6 +947,7 @@ describe('a viewer embedded on a page, under a DOM stand-in', () => {
         { id: 'c', at: L / 2 },
       ];
       if (end !== undefined) scene.clock.end = end;
+      edit(scene, L);
       const { v } = viewer();
       await v.load(JSON.stringify(scene), bytes);
       v.unsubscribe = v.store.subscribe((c: string) => v.onChange(c));
@@ -1040,6 +1042,54 @@ describe('a viewer embedded on a page, under a DOM stand-in', () => {
       v.runAction(0.75 * L, 0.25 * L);
       expect(v.playing).toBe(false);
       expect(v.time).toBeCloseTo(0.25 * L, 6);
+    });
+    it('shows a stage behind the start of an action at once under "end": "stop", as it shows a time behind it', async () => {
+      const { v } = await staged('stop');
+      v.runAction('c', 'a');
+      expect(v.playing).toBe(false);
+      expect(v.time).toBeCloseTo(0, 6);
+    });
+    it('a click on an action button goes to its start from anywhere, plays, and pauses at its target', async () => {
+      const { v, L } = await staged(undefined, (scene, L) => scene.controls!.push({ kind: 'action', label: 'Replay', from: 'b', to: L / 2 }));
+      v.seek(0.9 * L);
+      byTag(v.varsEl as unknown as FakeElement, 'button')
+        .find((b) => b.textContent === 'Replay')!
+        .click();
+      expect(v.playing).toBe(true);
+      expect(v.time).toBeCloseTo(L / 4, 6);
+      expect(v.currentStep).toBe('b');
+      v.tick(v.anchor.time + 1000 * L);
+      expect(v.playing).toBe(false);
+      expect(v.time).toBeCloseTo(L / 2, 6);
+      // a time is not a stage, hence the viewer does not announce one
+      expect(v.dispatchEvent).not.toHaveBeenCalled();
+    });
+    it('shows a control only while the timeline lies in its show_range (rule `control`)', async () => {
+      const { v, L } = await staged(undefined, (scene, L) =>
+        scene.controls!.push({ kind: 'action', label: 'Late', from: 0, to: 1, show_range: [L / 4, L / 2] }),
+      );
+      v.renderer = { ...v.renderer, connected: true, live: true, colorbars: () => [] };
+      v.panelAreaSize = { w: 400, h: 300 };
+      const late = byTag(v.varsEl as unknown as FakeElement, 'button').find((b) => b.textContent === 'Late')!;
+      for (const [t, hidden] of [
+        [0.1 * L, true],
+        [0.25 * L, false],
+        [0.4 * L, false],
+        [0.6 * L, true],
+      ] as const) {
+        v.seek(t);
+        v.draw();
+        expect(late.hidden).toBe(hidden);
+      }
+    });
+    it('writes the readout of a number slider with the decimals of its step, or else of a hundredth of its range', () => {
+      expect(sliderDecimals(0.25, 2, 0.05)).toBe(2);
+      expect(sliderDecimals(0, 10, 1)).toBe(0);
+      expect(sliderDecimals(0, 1, 0.25)).toBe(2);
+      expect(sliderDecimals(0.001, 0.01, 0.0005)).toBe(4);
+      expect(sliderDecimals(0, 1)).toBe(2);
+      expect(sliderDecimals(0.001, 0.01)).toBe(5);
+      expect(sliderDecimals(0, 500)).toBe(0);
     });
   });
 

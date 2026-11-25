@@ -454,7 +454,7 @@ const clamp01 = (x: number): number => Math.min(1, Math.max(0, x));
  * does (section 2.11): a fragment passes only where the stencil does not hold the layer's mark yet, and leaves the mark. The
  * stencil is cleared with each frame, and two flat layers of a panel carry different marks.
  */
-function flatten(mat: THREE.Material, mark: number): void {
+export function flatten(mat: THREE.Material, mark: number): void {
   mat.stencilWrite = true;
   mat.stencilRef = mark;
   mat.stencilFunc = THREE.NotEqualStencilFunc;
@@ -2698,6 +2698,8 @@ const cameraKey = (c: Camera): string => JSON.stringify(c);
 
 /** A 3d camera turns with the clock when it has a nonzero turn. */
 const turns = (c: Camera): boolean => c.kind === '3d' && (c.auto_rotate ?? 0) !== 0;
+/** The largest elevation in radians at which a 3d camera with keyframes stands (rule `camera-keyframes-3d`). */
+const POLE = Math.PI / 2 - 1e-10;
 
 export class PanelAreaRenderer implements ContextHolder {
   /**
@@ -3149,7 +3151,7 @@ export class PanelAreaRenderer implements ContextHolder {
                     : lp.kind === 'label'
                       ? new LabelDraw(lp.layer, key)
                       : lp.kind === 'morph'
-                        ? new MorphDraw(this.ctx, lp.layer, key)
+                        ? new MorphDraw(this.ctx, lp.layer, key, lp.index)
                         : lp.kind === 'surface'
                           ? new SurfaceDraw(this.ctx, lp.layer, key)
                           : new MarkDraw(this.ctx, lp.layer, p.cameraSpec, key);
@@ -3563,7 +3565,9 @@ export class PanelAreaRenderer implements ContextHolder {
     const a = (view.azimuth * Math.PI) / 180;
     const e = (view.elevation * Math.PI) / 180;
     const flat = u1.clone().multiplyScalar(Math.cos(a)).addScaledVector(u2, Math.sin(a));
-    const toward = flat.clone().multiplyScalar(Math.cos(e)).addScaledVector(u3, Math.sin(e));
+    // the camera stands a hair off its up axis, since the controls read the azimuth from where it stands once the viewer moves it
+    const stand = Math.max(-POLE, Math.min(POLE, e));
+    const toward = flat.clone().multiplyScalar(Math.cos(stand)).addScaledVector(u3, Math.sin(stand));
     const up = flat.clone().multiplyScalar(-Math.sin(e)).addScaledVector(u3, Math.cos(e));
     const center = new THREE.Vector3(...view.center).multiply(stretchOf(spec));
     const aspect = p.rect.w / Math.max(1, p.rect.h);

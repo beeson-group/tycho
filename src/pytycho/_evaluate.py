@@ -1282,7 +1282,11 @@ class _Panel:
         if spec is None:
             return default
         if isinstance(spec, Mapping) and "keyframes" in spec:
-            val = keyframe_value(keyframe_list(spec["keyframes"], what), self.reading.s)
+            keys = keyframe_list(spec["keyframes"], what)
+            for _, v, _ in keys:
+                if not 0.0 <= v <= 1.0:
+                    raise EvaluationError(f"keyframes: {what} has a keyframe whose value is {v}, not in [0, 1]")
+            val = keyframe_value(keys, self.reading.s)
         else:
             if isinstance(spec, bool) or not isinstance(spec, (int, float)) or not math.isfinite(spec):
                 raise EvaluationError(f"{rule}: {what} is {spec!r}, not finite")

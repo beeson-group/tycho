@@ -129,6 +129,8 @@ def test_06_builders_and_validation_errors():
         scene.number("bad_step", min=0.0, max=1.0, step=0.0, default=0.5)
     with pytest.raises(ty.SceneError, match="number-input"):
         scene.number("bad_default", min=0.0, max=1.0, default=2.0)
+    with pytest.raises(ty.SceneError, match=r"^morph: a morph period is 0.0, not positive"):
+        ty.morph(alpha=0.0, period=0.0, items=[])
     with pytest.raises(ty.SceneError, match="points-2d"):
         scene.points_2d("bad_pts", default=[[0.0, 0.0], [1.0, 0.0]], min_points=3, max_points=4)
 

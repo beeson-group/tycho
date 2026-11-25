@@ -14,6 +14,217 @@
   }
  },
  {
+  "name": "number-input: a default above the maximum",
+  "rule": "number-input",
+  "scene": {
+   "inputs": {
+    "T": {
+     "default": 3.0
+    }
+   }
+  }
+ },
+ {
+  "name": "keyframes: a morph alpha with a keyframe above 1, read before this keyframe",
+  "rule": "keyframes",
+  "scene": {
+   "panels": {
+    "main": {
+     "layers": [
+      {
+       "kind": "morph",
+       "map": "conformal_exp",
+       "alpha": {
+        "keyframes": [
+         [
+          0.0,
+          0.0
+         ],
+         [
+          5.0,
+          2.0
+         ]
+        ]
+       },
+       "period": {
+        "input": "T"
+       },
+       "items": [
+        {
+         "kind": "line",
+         "from": [
+          0.0,
+          {
+           "nyquist": -1.0
+          }
+         ],
+         "to": [
+          0.0,
+          {
+           "nyquist": 1.0
+          }
+         ],
+         "samples": 3
+        },
+        {
+         "kind": "line",
+         "visible": {
+          "input": "extra"
+         },
+         "from": [
+          -1.0,
+          0.0
+         ],
+         "to": [
+          1.0,
+          0.0
+         ],
+         "samples": 3
+        },
+        {
+         "kind": "region",
+         "u": [
+          -1.0,
+          0.0
+         ],
+         "v": [
+          0.0,
+          1.0
+         ],
+         "samples": [
+          2,
+          2
+         ]
+        },
+        {
+         "kind": "line",
+         "from": [
+          1e-05,
+          0.0
+         ],
+         "to": [
+          2e-05,
+          1e-05
+         ],
+         "samples": 2
+        }
+       ]
+      },
+      {
+       "kind": "surface",
+       "source": {
+        "kind": "grid",
+        "array": "grid2d",
+        "x": [
+         0.0,
+         3.0
+        ],
+        "y": [
+         0.0,
+         2.0
+        ]
+       },
+       "scale": {
+        "input": "scale"
+       },
+       "clamp": {
+        "max": 4.0,
+        "softness": 0.5
+       },
+       "height_scale": 2.0,
+       "grow": {
+        "keyframes": [
+         [
+          0.0,
+          0.5
+         ],
+         [
+          9.0,
+          1.0
+         ]
+        ]
+       }
+      },
+      {
+       "kind": "surface",
+       "source": {
+        "kind": "rational_s",
+        "poles": {
+         "input": "poles"
+        },
+        "x": [
+         -2.0,
+         2.0
+        ],
+        "y": [
+         -2.0,
+         2.0
+        ],
+        "zeros": {
+         "input": "zeros"
+        },
+        "gain": {
+         "input": "gain"
+        },
+        "period": {
+         "input": "T"
+        },
+        "resolution": [
+         3,
+         3
+        ]
+       },
+       "scale": {
+        "input": "scale"
+       },
+       "clamp": {
+        "max": 4.0,
+        "softness": 0.5
+       }
+      },
+      {
+       "kind": "surface",
+       "source": {
+        "kind": "rational_z",
+        "poles": {
+         "input": "poles"
+        },
+        "x": [
+         -2.0,
+         2.0
+        ],
+        "y": [
+         -2.0,
+         2.0
+        ],
+        "zeros": {
+         "input": "zeros"
+        },
+        "gain": {
+         "input": "gain"
+        },
+        "period": {
+         "input": "T"
+        },
+        "resolution": [
+         3,
+         3
+        ]
+       },
+       "scale": {
+        "input": "scale"
+       },
+       "clamp": {
+        "max": 4.0,
+        "softness": 0.5
+       }
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
   "name": "points-2d: empty poles list violates min_points",
   "rule": "input",
   "state": {
@@ -268,6 +479,18 @@
           2,
           2
          ]
+        },
+        {
+         "kind": "line",
+         "from": [
+          1e-05,
+          0.0
+         ],
+         "to": [
+          2e-05,
+          1e-05
+         ],
+         "samples": 2
         }
        ]
       },
@@ -460,6 +683,18 @@
           2,
           2
          ]
+        },
+        {
+         "kind": "line",
+         "from": [
+          1e-05,
+          0.0
+         ],
+         "to": [
+          2e-05,
+          1e-05
+         ],
+         "samples": 2
         }
        ]
       },
@@ -652,6 +887,18 @@
           2,
           2
          ]
+        },
+        {
+         "kind": "line",
+         "from": [
+          1e-05,
+          0.0
+         ],
+         "to": [
+          2e-05,
+          1e-05
+         ],
+         "samples": 2
         }
        ]
       },
@@ -844,6 +1091,18 @@
           2,
           2
          ]
+        },
+        {
+         "kind": "line",
+         "from": [
+          1e-05,
+          0.0
+         ],
+         "to": [
+          2e-05,
+          1e-05
+         ],
+         "samples": 2
         }
        ]
       },

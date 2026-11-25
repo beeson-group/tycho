@@ -49,7 +49,7 @@ The pages read the files below where they live in the repository, meaning that t
 `_extra/` is copied unchanged to the root of the site, and the `.gitignore` at the repository root ignores it, since it holds only build outputs.
 
 - `conf.py` stages `spec/scene.schema.json` and `spec/tycho-scene.md` into `_extra/schema/<format>/` on every build, where `<format>` is the version of the scene format.
-  Thus the schema is published at `schema/0.5/scene.schema.json`, the URL that its `$id` gives, i.e. the URL that identifies the schema.
+  Thus the schema is published at `schema/0.6/scene.schema.json`, the URL that its `$id` gives, i.e. the URL that identifies the schema.
 - The example pages are not kept in git.
   On Read the Docs, `conf.py` downloads them into `_extra/examples/` from the download links of the latest GitHub Release, which work without a token or an API call.
   In the gallery, `broucke.html` is reached through a link that shows its size, under the poster `broucke.png` when there is one.

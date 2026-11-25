@@ -1,13 +1,15 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { companionSystem, conformalExp, evalRationalS, evalRationalZ, evalTimeResponse, impulseInvariantZ, mapHeight } from '../src/evaluate/complex.js';
+import { surfaceLayer, type LayerEnv } from '../src/evaluate/layers.js';
 import { readoutPieces, readoutText } from '../src/runtime/readouts.js';
 import { PoleZeroPicker, snapPickerPoint } from '../src/runtime/picker.js';
 import { GeometryCache } from '../src/runtime/geometry.js';
 import { withInput } from '../src/runtime/state.js';
+import { SurfaceDraw } from '../src/runtime/surface.js';
 import type { DataArray, DataStore } from '../src/container.js';
 import { TychoError } from '../src/errors.js';
-import type { Control, Scene } from '../src/scene.js';
+import type { Control, Scene, SurfaceLayer } from '../src/scene.js';
 import { validate } from '../src/validate.js';
 import { byClass, installDom } from './dom-shim.js';
 
@@ -394,6 +396,34 @@ describe('complex-domain evaluation and 0.6 controls', () => {
     } finally {
       globalThis.document = prevDoc;
       uninstall();
+    }
+  });
+
+  it('fails by rule `surface` in the draw, as the evaluator does, when a rational surface has more zeros than poles, and draws the next valid state', () => {
+    for (const kind of ['rational_s', 'rational_z'] as const) {
+      const { scene, data } = minimalScene06();
+      const layer = scene.panels.main!.layers[0] as SurfaceLayer;
+      layer.source = { ...layer.source, kind } as SurfaceLayer['source'];
+      const improper = withInput(scene, scene.initial, 'zeros', [
+        [-0.2, 0],
+        [-0.3, 0],
+      ]);
+      const env = (state: Scene['initial']) => ({ scope: { scene, state, panel: state.panels.main! }, clock: scene.clock, q: 0 }) as LayerEnv;
+      const thrown = (f: () => void): unknown => {
+        try {
+          f();
+        } catch (e) {
+          return e;
+        }
+        return null;
+      };
+      const draw = new SurfaceDraw({ scene, theme: { background: '#050505', foreground: '#f2f2ef', grid: '#232320' }, geometry: {} } as never, layer, 'k');
+      const e = thrown(() => draw.update(env(improper), layer));
+      expect(e, kind).toBeInstanceOf(TychoError);
+      expect((e as TychoError).rule).toBe('surface');
+      expect((e as TychoError).message).toBe((thrown(() => surfaceLayer(env(improper), layer, data)) as TychoError).message);
+      expect(thrown(() => draw.update(env(scene.initial), layer))).toBeNull();
+      expect((draw as unknown as { surfaceMat: { uniforms: { uNZeros: { value: number } } } }).surfaceMat.uniforms.uNZeros.value).toBe(0);
     }
   });
 

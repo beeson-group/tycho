@@ -5,6 +5,7 @@
  * anti-aliased grid grooves, causal ROC shading, Fourier slices, and floor pole/zero markers at 120 fps.
  */
 import * as THREE from 'three';
+import { fail } from '../errors.js';
 import { evalRationalS, evalRationalZ, impulseInvariantZ, mapHeight } from '../evaluate/complex.js';
 import { resolveNumber, resolvePoints2d, type LayerEnv } from '../evaluate/layers.js';
 import { inputDef, inputValue } from '../evaluate/resolve.js';
@@ -811,6 +812,9 @@ export class SurfaceDraw implements Draw {
 
     const poles = resolvePoints2d(env.scope, src.poles, 'surface', 1, 6, 'a rational surface poles');
     const zeros = src.zeros !== undefined ? resolvePoints2d(env.scope, src.zeros, 'surface', 0, 5, 'a rational surface zeros') : [];
+    if (zeros.length > poles.length) {
+      fail('surface', `a rational surface has ${zeros.length} zeros and ${poles.length} poles, which is improper`);
+    }
     const gain = src.gain !== undefined ? resolveNumber(env.scope, src.gain, 'surface', false, 'a rational surface gain') : 1;
     const period = src.period !== undefined ? resolveNumber(env.scope, src.period, 'surface', true, 'a rational surface period') : 1;
 

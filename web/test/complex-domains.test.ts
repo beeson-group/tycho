@@ -220,7 +220,7 @@ describe('complex-domain evaluation and 0.6 controls', () => {
       const [ox, oy] = [((0 - -3) / 5) * 224, ((3.5 - 0) / 7) * 172];
       const [pxPole, pyPole] = [((-0.8 - -3) / 5) * 224, oy];
       pad.dispatchEvent({ type: 'pointerdown', button: 0, clientX: pxPole, clientY: pyPole, pointerId: 1 });
-      pad.dispatchEvent({ type: 'pointermove', clientX: ox + 3, clientY: oy - 3, shiftKey: false });
+      pad.dispatchEvent({ type: 'pointermove', clientX: ox + 3, clientY: oy - 3, pointerId: 1, buttons: 1, shiftKey: false });
       const unsnapped = updates.at(-1)![1] as [number, number][];
       expect(unsnapped[0]![0]).not.toBe(0);
       expect(unsnapped[0]![1]).not.toBe(0);
@@ -228,9 +228,77 @@ describe('complex-domain evaluation and 0.6 controls', () => {
       // Check Snap ON and drag within 3 px of origin -> both coordinates snap cleanly to zero
       snapBox.checked = true;
       snapBox.dispatchEvent({ type: 'change' });
-      pad.dispatchEvent({ type: 'pointermove', clientX: ox + 3, clientY: oy - 3, shiftKey: false });
+      pad.dispatchEvent({ type: 'pointermove', clientX: ox + 3, clientY: oy - 3, pointerId: 1, buttons: 1, shiftKey: false });
       const snapped = updates.at(-1)![1] as [number, number][];
       expect(snapped[0]).toEqual([0, 0]);
+    } finally {
+      globalThis.document = prevDoc;
+      uninstall();
+    }
+  });
+
+  it('ties a drag on the pad to the pointer that began it, and ends the drag when the pointer is released, canceled, or loses its capture', () => {
+    const { doc, uninstall } = installDom();
+    const prevDoc = globalThis.document;
+    globalThis.document = doc as unknown as Document;
+    try {
+      const { scene } = minimalScene06();
+      const theme = { background: '#050505', foreground: '#f2f2ef', grid: '#232320' };
+      const ctrl: Extract<Control, { kind: 'points_2d' }> = { kind: 'points_2d', input: 'poles', label: 'Poles & Zeros (s)', conjugate_lock: false };
+      let state = scene.initial;
+      let picker: PoleZeroPicker;
+      const sync = () => picker.sync({ scene, state, panel: state.panels.main! }, theme);
+      picker = new PoleZeroPicker(ctrl, false, (updates) => {
+        state = updates.reduce((acc, [id, val]) => withInput(scene, acc, id, val), state);
+        sync();
+      });
+      const pad = byClass(picker.el as never, 'pz-canvas')[0]!;
+      pad.getContext = () => null;
+      pad.getBoundingClientRect = () => ({ left: 0, top: 0, right: 224, bottom: 172, width: 224, height: 172, x: 0, y: 0 });
+      sync();
+      const px = (x: number) => ((x + 3) / 5) * 224;
+      const py = (y: number) => ((3.5 - y) / 7) * 172;
+      const pole = () => ((state.inputs?.poles ?? scene.inputs!.poles!.default) as [number, number][])[0]!;
+      const down = (pointerId: number) =>
+        pad.dispatchEvent({
+          type: 'pointerdown',
+          button: 0,
+          clientX: px(pole()[0]),
+          clientY: py(pole()[1]),
+          pointerId,
+          preventDefault() {},
+          stopPropagation() {},
+        });
+      const move = (pointerId: number, x: number, y: number, buttons = 1) =>
+        pad.dispatchEvent({ type: 'pointermove', clientX: px(x), clientY: py(y), pointerId, buttons, shiftKey: false, stopPropagation() {} });
+
+      // a second finger does not move the pole that the first one holds
+      down(1);
+      move(2, 1, 2);
+      expect(pole()).toEqual([-0.8, 0]);
+      move(1, -1, 1);
+      expect(pole()[0]).toBeCloseTo(-1);
+      expect(pole()[1]).toBeCloseTo(1);
+      // the end of another pointer leaves the drag alone
+      pad.dispatchEvent({ type: 'pointerup', pointerId: 2 });
+      move(1, -1.5, 1);
+      expect(pole()[0]).toBeCloseTo(-1.5);
+
+      for (const end of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+        const before = pole();
+        down(1);
+        pad.dispatchEvent({ type: end, pointerId: 1 });
+        move(1, 1, 2);
+        move(2, 1, 2);
+        expect(pole(), end).toEqual(before);
+      }
+
+      // a release that the pad did not see, as when the viewer left the page during the drag, ends the drag at the next move
+      const before = pole();
+      down(1);
+      move(1, 1, 2, 0);
+      move(1, 1, 2);
+      expect(pole()).toEqual(before);
     } finally {
       globalThis.document = prevDoc;
       uninstall();

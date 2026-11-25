@@ -63,6 +63,7 @@ function makeEl<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, tex
 export type InputUpdater = (updates: [string, InputValue][]) => void;
 
 interface DragState {
+  pointerId: number;
   kind: 'pole' | 'zero';
   idx: number;
   partnerIdx: number;
@@ -421,6 +422,7 @@ export class PoleZeroPicker {
       const partnerIdx = this.conjugateLock ? this.findPartner(pts, hit.idx) : -1;
       const [hx, hy] = pts[hit.idx] ?? [0, 0];
       this.drag = {
+        pointerId: ev.pointerId,
         kind: hit.kind,
         idx: hit.idx,
         partnerIdx,
@@ -433,8 +435,20 @@ export class PoleZeroPicker {
       this.draw();
     });
 
+    const endDrag = (ev: PointerEvent) => {
+      if (this.drag === null || ev.pointerId !== this.drag.pointerId) return;
+      this.drag = null;
+      if (!this.collapsed && this.inRange) this.draw();
+    };
+    for (const type of ['pointerup', 'pointercancel', 'lostpointercapture'] as const) this.padCanvas.addEventListener(type, endDrag);
+
     this.padCanvas.addEventListener('pointermove', (ev) => {
-      if (this.drag === null) return;
+      if (this.drag === null || ev.pointerId !== this.drag.pointerId) return;
+      // the pad does not see the release of a pointer whose capture ended while the viewer was off the page
+      if ((ev.buttons & 1) === 0) {
+        endDrag(ev);
+        return;
+      }
       ev.stopPropagation();
       const [px, py] = this.canvasPx(ev);
       const { x, y, snappedX, snappedY } = this.pxToWorld(px, py, this.snapAxes && !ev.shiftKey);
@@ -473,14 +487,6 @@ export class PoleZeroPicker {
         );
       if (!this.collapsed && this.inRange) this.draw();
     });
-
-    const endDrag = () => {
-      if (this.drag === null) return;
-      this.drag = null;
-      if (!this.collapsed && this.inRange) this.draw();
-    };
-    this.padCanvas.addEventListener('pointerup', endDrag);
-    this.padCanvas.addEventListener('pointercancel', endDrag);
   }
 
   private draw(): void {

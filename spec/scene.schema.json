@@ -1877,6 +1877,56 @@
             "auto_rotate": {
               "description": "The camera is turned about its up axis by this many degrees over each loop, and by 0 by default.",
               "type": "number"
+            },
+            "keyframes": {
+              "description": "The view that the panel shows is given by camera keyframes over the timeline. (rule `camera-keyframes-3d`)",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "at",
+                  "center",
+                  "width",
+                  "azimuth",
+                  "elevation"
+                ],
+                "properties": {
+                  "at": {
+                    "description": "The time of the keyframe is given in seconds of the timeline.",
+                    "type": "number"
+                  },
+                  "center": {
+                    "description": "The camera looks at this point of the display frame.",
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 3,
+                    "maxItems": 3
+                  },
+                  "width": {
+                    "description": "The extent across the panel of the plane through the center that faces the camera is given in units of the display frame after the stretch.",
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "azimuth": {
+                    "description": "The camera stands at this angle in degrees about its up axis, from the first of the two other axes toward the second.",
+                    "type": "number"
+                  },
+                  "elevation": {
+                    "description": "The camera stands at this angle in degrees above the plane normal to its up axis, and looks down the up axis at 90.",
+                    "type": "number",
+                    "minimum": -90,
+                    "maximum": 90
+                  },
+                  "ease": {
+                    "description": "The view travels to this keyframe from the one before by this ease, and linearly by default. (rule `ease`)",
+                    "$ref": "#/$defs/ease"
+                  }
+                }
+              }
             }
           }
         }

@@ -41,7 +41,7 @@ import {
   type Vertex,
 } from '../evaluate/layers.js';
 import { cameraAt } from '../evaluate/index.js';
-import { numberAt, opacityAt, planeAxes, sizeAt, timeAt, keyframesValue, type CameraWindow, type Keyframe } from '../evaluate/timeline.js';
+import { cameraView, numberAt, opacityAt, planeAxes, sizeAt, timeAt, keyframesValue, type CameraWindow, type Keyframe } from '../evaluate/timeline.js';
 import type { InsetBoxLayerResult, Vec3 } from '../evaluate/types.js';
 import type { Context, Frames } from '../evaluate/frames.js';
 import {
@@ -2678,6 +2678,8 @@ const cameraKey = (c: Camera): string => JSON.stringify(c);
 
 /** A 3d camera turns with the clock when it has a nonzero turn. */
 const turns = (c: Camera): boolean => c.kind === '3d' && (c.auto_rotate ?? 0) !== 0;
+/** The largest elevation in radians at which a 3d camera with keyframes stands (rule `camera-keyframes-3d`). */
+const POLE = Math.PI / 2 - 1e-10;
 
 export class PanelAreaRenderer implements ContextHolder {
   /**
@@ -2874,7 +2876,7 @@ export class PanelAreaRenderer implements ContextHolder {
    */
   offKeys(pid: string): boolean {
     const p = this.panels.get(pid);
-    return p !== undefined && p.userMoved && p.cameraSpec.kind === '2d' && p.cameraSpec.keyframes !== undefined;
+    return p !== undefined && p.userMoved && p.cameraSpec.keyframes !== undefined;
   }
 
   /** The panels with a 3d camera and its controls, i.e. those that the keys of a 3d camera move. */
@@ -2926,6 +2928,8 @@ export class PanelAreaRenderer implements ContextHolder {
     }
     c.addEventListener('change', () => {
       if (p.fitting) return;
+      // a 3d camera that leaves its keyframes turns about its up axis again
+      if (p.cameraSpec.kind === '3d' && p.cameraSpec.keyframes !== undefined) p.camera.up.copy(cameraBasis(p.cameraSpec).up);
       p.userMoved = true;
       this.onChange();
     });
@@ -3317,6 +3321,7 @@ export class PanelAreaRenderer implements ContextHolder {
       if (p.needsFit || (resized && !p.userMoved)) this.fit(p);
       else if (resized) this.aspect(p);
       this.keyed(p, state, q);
+      this.keyed3d(p, q);
       this.autoRotate(p, q);
       this.follow(p);
       for (const d of p.draws.values()) if (d instanceof BodyDraw) d.clip(p.camera);
@@ -3513,6 +3518,59 @@ export class PanelAreaRenderer implements ContextHolder {
       p.controls.target.copy(target);
       p.controls.update();
     }
+    p.fitting = false;
+  }
+
+  /**
+   * Moves a 3d camera with keyframes to its view at progress `q` (rule `camera-keyframes-3d`), unless the viewer has moved the camera
+   * since its last fit.
+   */
+  private keyed3d(p: PanelRender, q: number): void {
+    const spec = p.cameraSpec;
+    if (spec.kind !== '3d' || spec.keyframes === undefined || p.userMoved) return;
+    const view = cameraView(spec.keyframes, timeAt(this.ctx.scene.clock, q));
+    const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+    const [u1, u2, u3] =
+      spec.up === 'x' ? [v(0, 1, 0), v(0, 0, 1), v(1, 0, 0)] : spec.up === 'y' ? [v(0, 0, 1), v(1, 0, 0), v(0, 1, 0)] : [v(1, 0, 0), v(0, 1, 0), v(0, 0, 1)];
+    const a = (view.azimuth * Math.PI) / 180;
+    const e = (view.elevation * Math.PI) / 180;
+    const flat = u1.clone().multiplyScalar(Math.cos(a)).addScaledVector(u2, Math.sin(a));
+    // the camera stands a hair off its up axis, since the controls read the azimuth from where it stands once the viewer moves it
+    const stand = Math.max(-POLE, Math.min(POLE, e));
+    const toward = flat.clone().multiplyScalar(Math.cos(stand)).addScaledVector(u3, Math.sin(stand));
+    const up = flat.clone().multiplyScalar(-Math.sin(e)).addScaledVector(u3, Math.cos(e));
+    const center = new THREE.Vector3(...view.center).multiply(stretchOf(spec));
+    const aspect = p.rect.w / Math.max(1, p.rect.h);
+    const hw = view.width / 2;
+    // far enough to keep everything that the fit saw between the near and the far plane
+    const radius =
+      (p.box === null || p.box.isEmpty() ? 0 : p.box.getSize(new THREE.Vector3()).multiply(stretchOf(spec)).length()) + center.length() + view.width;
+    const cam = p.camera;
+    p.fitting = true;
+    if (cam instanceof THREE.OrthographicCamera) {
+      p.halfWidth = hw;
+      p.halfHeight = hw / aspect;
+      cam.left = -hw;
+      cam.right = hw;
+      cam.top = p.halfHeight;
+      cam.bottom = -p.halfHeight;
+      cam.zoom = 1;
+      cam.near = -10 * radius;
+      cam.far = 10 * radius;
+      cam.position.copy(center).addScaledVector(toward, radius);
+    } else if (cam instanceof THREE.PerspectiveCamera) {
+      const dist = hw / (Math.tan((cam.fov * Math.PI) / 360) * aspect);
+      cam.aspect = aspect;
+      cam.near = dist / 1000;
+      cam.far = dist + 10 * radius;
+      cam.position.copy(center).addScaledVector(toward, dist);
+    }
+    cam.up.copy(up);
+    cam.lookAt(center);
+    cam.updateProjectionMatrix();
+    p.target.copy(center);
+    // the controls are not updated here, since their update would turn a view down the up axis back to their own azimuth
+    if (p.controls) p.controls.target.copy(center);
     p.fitting = false;
   }
 

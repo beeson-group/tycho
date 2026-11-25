@@ -239,6 +239,55 @@ describe("an 3d camera's stretch and turn (2.7)", () => {
     y.stage.autoRotate(y.p, 0.25);
     expect(y.p.camera.position.clone().sub(y.p.target).toArray()).toEqual(near(from.applyAxisAngle(new THREE.Vector3(0, 1, 0), -Math.PI / 4)));
   });
+  it('moves a 3d camera to the view of its keyframes, down the up axis at an elevation of 90, until the viewer moves it', () => {
+    const keyframes: NonNullable<Extract<Camera, { kind: '3d' }>['keyframes']> = [
+      { at: 0, center: [1, 2, 0], width: 4, azimuth: -90, elevation: 90 },
+      { at: 10, center: [3, 2, 0], width: 16, azimuth: 0, elevation: 0, ease: 'linear' },
+    ];
+    for (const projection of ['orthographic', 'perspective'] as const) {
+      const { stage, p } = boxPanel({ kind: '3d', projection, keyframes }, (scene) => {
+        scene.clock = { ...scene.clock, seconds: 10 };
+      });
+      const axes = () => {
+        p.camera.updateMatrixWorld();
+        const e = p.camera.matrixWorld.elements;
+        return { right: [e[0], e[1], e[2]], up: [e[4], e[5], e[6]], toward: [e[8], e[9], e[10]] };
+      };
+      stage.keyed3d(p, 0);
+      // x to the right and y up the screen, as a 2d camera of plane xy
+      expect(axes()).toEqual({ right: near(new THREE.Vector3(1, 0, 0)), up: near(new THREE.Vector3(0, 1, 0)), toward: near(new THREE.Vector3(0, 0, 1)) });
+      expect(p.target.toArray()).toEqual(near(new THREE.Vector3(1, 2, 0)));
+      stage.keyed3d(p, 0.5);
+      expect(p.target.toArray()).toEqual(near(new THREE.Vector3(2, 2, 0)));
+      const s = Math.SQRT1_2;
+      expect(axes().toward).toEqual(near(new THREE.Vector3(s * s, -s * s, s)));
+      if (p.camera instanceof THREE.OrthographicCamera) expect(p.camera.right - p.camera.left).toBeCloseTo(8, 9);
+      else {
+        const across = 2 * p.camera.position.distanceTo(p.target) * Math.tan((p.camera.fov * Math.PI) / 360) * p.camera.aspect;
+        expect(across).toBeCloseTo(8, 9);
+      }
+      stage.keyed3d(p, 1);
+      expect(axes()).toEqual({ right: near(new THREE.Vector3(0, 1, 0)), up: near(new THREE.Vector3(0, 0, 1)), toward: near(new THREE.Vector3(1, 0, 0)) });
+      p.userMoved = true;
+      const held = { position: p.camera.position.toArray(), target: p.target.toArray(), axes: axes() };
+      stage.keyed3d(p, 0);
+      expect({ position: p.camera.position.toArray(), target: p.target.toArray(), axes: axes() }).toEqual(held);
+    }
+  });
+  it('stands a hair off the up axis toward its azimuth at an elevation of 90, where the controls read the azimuth once the viewer moves the camera', () => {
+    for (const [elevation, sign] of [
+      [90, 1],
+      [-90, -1],
+    ] as const) {
+      const { stage, p } = boxPanel({ kind: '3d', keyframes: [{ at: 0, center: [1, 2, 0], width: 4, azimuth: 30, elevation }] });
+      stage.keyed3d(p, 0);
+      const from = p.camera.position.clone().sub(p.target);
+      const flat = new THREE.Vector3(from.x, from.y, 0);
+      expect(flat.length()).toBeGreaterThan(0);
+      expect(flat.normalize().toArray()).toEqual([expect.closeTo(Math.cos(Math.PI / 6), 5), expect.closeTo(0.5, 5), 0]);
+      expect(from.normalize().toArray()).toEqual(near(new THREE.Vector3(0, 0, sign)));
+    }
+  });
   it('adds the turn to where the viewer moved the camera, and does not turn a camera without a turn', () => {
     const { stage, p } = boxPanel({ kind: '3d', auto_rotate: 90 });
     const z = new THREE.Vector3(0, 0, 1);

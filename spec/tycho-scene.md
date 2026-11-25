@@ -555,6 +555,8 @@ The rules for the timeline follow.
   The width `w > 0` is the extent across the panel of the plane through the center that faces the camera, in units of the display frame after the camera's `stretch`.
   The camera at time `s` blends two keyframes as rule `keyframes` blends two values, with the ease of the later keyframe.
   The center, the azimuth, and the elevation are blended as `(1 - E) * v_i + E * v_(i+1)`, hence two azimuths that differ by more than 360 turn the camera more than once, and the width is blended as in rule `camera-keyframes`.
+  The camera thus turns by the difference of two azimuths, and not by the shorter way around.
+  From an azimuth of 179, the camera turns by 2 degrees through 180 to a keyframe at 181, and by 358 degrees through 0 to a keyframe at -179, although 181 and -179 give the same direction.
   Before its first keyframe and after its last, the camera shows the view of this keyframe.
   A reader rejects a `3d` camera with both `keyframes` and `auto_rotate`.
   The view is for drawing only, and it is not part of an evaluated frame.

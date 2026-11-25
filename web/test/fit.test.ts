@@ -269,9 +269,23 @@ describe("an 3d camera's stretch and turn (2.7)", () => {
       stage.keyed3d(p, 1);
       expect(axes()).toEqual({ right: near(new THREE.Vector3(0, 1, 0)), up: near(new THREE.Vector3(0, 0, 1)), toward: near(new THREE.Vector3(1, 0, 0)) });
       p.userMoved = true;
-      const held = p.camera.position.clone();
+      const held = { position: p.camera.position.toArray(), target: p.target.toArray(), axes: axes() };
       stage.keyed3d(p, 0);
-      expect(p.camera.position.toArray()).toEqual(held.toArray());
+      expect({ position: p.camera.position.toArray(), target: p.target.toArray(), axes: axes() }).toEqual(held);
+    }
+  });
+  it('stands a hair off the up axis toward its azimuth at an elevation of 90, where the controls read the azimuth once the viewer moves the camera', () => {
+    for (const [elevation, sign] of [
+      [90, 1],
+      [-90, -1],
+    ] as const) {
+      const { stage, p } = boxPanel({ kind: '3d', keyframes: [{ at: 0, center: [1, 2, 0], width: 4, azimuth: 30, elevation }] });
+      stage.keyed3d(p, 0);
+      const from = p.camera.position.clone().sub(p.target);
+      const flat = new THREE.Vector3(from.x, from.y, 0);
+      expect(flat.length()).toBeGreaterThan(0);
+      expect(flat.normalize().toArray()).toEqual([expect.closeTo(Math.cos(Math.PI / 6), 5), expect.closeTo(0.5, 5), 0]);
+      expect(from.normalize().toArray()).toEqual(near(new THREE.Vector3(0, 0, sign)));
     }
   });
   it('adds the turn to where the viewer moved the camera, and does not turn a camera without a turn', () => {

@@ -2527,6 +2527,8 @@ def complex_domains():
                     pytycho.morph_line([0.0, pytycho.nyquist(-1)], [0.0, pytycho.nyquist(1)], samples=3),
                     pytycho.morph_line([-1.0, 0.0], [1.0, 0.0], samples=3, visible=show_extra),
                     pytycho.morph_region([-1.0, 0.0], [0.0, 1.0], samples=[2, 2]),
+                    # a line near the origin, where the map is summed as a series
+                    pytycho.morph_line([1e-5, 0.0], [2e-5, 1e-5], samples=2),
                 ],
             ),
         ],
@@ -2565,6 +2567,7 @@ def complex_domains():
                 "points": [h_alpha(u, v, alpha, T) for v in (0.0, 0.5, 1.0) for u in (-1.0, -0.5, 0.0)],
             }
         )
+        m_items.append({"kind": "line", "points": [h_alpha(1e-5, 0.0, alpha, T), h_alpha(2e-5, 1e-5, alpha, T)]})
 
         return {
             "name": name,
@@ -2595,6 +2598,20 @@ def complex_domains():
             "name": "number-input: min not less than max",
             "rule": "number-input",
             "scene": {"inputs": {"T": {"kind": "number", "min": 2.0, "max": 1.0, "default": 1.0}}},
+        },
+        {
+            "name": "number-input: a default above the maximum",
+            "rule": "number-input",
+            "scene": {"inputs": {"T": {"default": 3.0}}},
+        },
+        {
+            "name": "keyframes: a morph alpha with a keyframe above 1, read before this keyframe",
+            "rule": "keyframes",
+            "scene": {
+                "panels": {
+                    "main": {"layers": [{**doc["panels"]["main"]["layers"][0], "alpha": {"keyframes": [[0.0, 0.0], [5.0, 2.0]]}}]},
+                }
+            },
         },
         {
             "name": "morph: unknown map kind",

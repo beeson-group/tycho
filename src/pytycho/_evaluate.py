@@ -588,8 +588,8 @@ def _fits_input(spec: Mapping[str, Any], value: Any) -> bool:
         if not isinstance(value, list):
             return False
         min_p = int(spec.get("min_points", 0))
-        max_p = spec.get("max_points")
-        if len(value) < min_p or (max_p is not None and len(value) > int(max_p)):
+        max_p = int(spec.get("max_points", 6))
+        if not min_p <= len(value) <= max_p:
             return False
         return all(
             isinstance(pt, list)

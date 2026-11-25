@@ -47,6 +47,7 @@ import {
   type LayerClock,
   type Marker,
   type ColorSpec,
+  type Control,
   type TrajectorySet,
   type TextPart,
   type Box,
@@ -408,7 +409,6 @@ function checkTrajectoryLayer(scene: Scene, id: string, layer: TrajectoriesLayer
   checkColor(scene, id, layer.color);
 }
 
-/** Checks the color of a trajectories layer or of a points layer's marker (section 2.7). */
 function morphCoord(c: MorphCoord, id: string): void {
   if (typeof c === 'number') {
     if (!Number.isFinite(c)) fail('morph', `panel ${id}: a morph coordinate is ${String(c)}, not finite`);
@@ -457,6 +457,29 @@ function checkMorphLayer(scene: Scene, id: string, layer: MorphLayer): void {
   }
 }
 
+type Points2dControl = Extract<Control, { kind: 'points_2d' }>;
+
+/** Checks a preset of a `points_2d` control (rule `control`), i.e. a proper rational function within the counts of the inputs that hold it. */
+function checkPreset(scene: Scene, control: Points2dControl, preset: NonNullable<Points2dControl['presets']>[number]): void {
+  const what = `preset ${JSON.stringify(preset?.id)} of a points_2d control`;
+  const pairs = (v: unknown): v is [number, number][] => Array.isArray(v) && v.every((pt) => Array.isArray(pt) && pt.length === 2 && pt.every(finite));
+  if (preset === null || typeof preset !== 'object' || !pairs(preset.poles) || (preset.zeros !== undefined && !pairs(preset.zeros)))
+    fail('control', `${what} does not hold lists of [x, y] pairs`);
+  const [poles, zeros] = [preset.poles.length, preset.zeros?.length ?? 0];
+  if (poles < 1 || poles > 6 || zeros > 5) fail('control', `${what} has ${poles} poles and ${zeros} zeros, outside [1, 6] and [0, 5]`);
+  if (zeros > poles) fail('control', `${what} has ${zeros} zeros and ${poles} poles, which is improper`);
+  if (preset.gain !== undefined && !finite(preset.gain)) fail('control', `${what} has a gain that is not finite`);
+  for (const [id, count, name] of [
+    [control.input, poles, 'poles'],
+    [control.secondary_input, zeros, 'zeros'],
+  ] as const) {
+    const def = id === undefined ? undefined : inputDef(scene, id);
+    if (def?.kind !== 'points_2d' || (name === 'zeros' && preset.zeros === undefined)) continue;
+    const [lo, hi] = [def.min_points ?? 0, def.max_points ?? 6];
+    if (count < lo || count > hi) fail('control', `${what} has ${count} ${name}, outside the counts [${lo}, ${hi}] of input ${id}`);
+  }
+}
+
 function checkSurfaceLayer(scene: Scene, id: string, layer: SurfaceLayer, data?: DataStore): void {
   const src = layer.source;
   if (src === null || typeof src !== 'object') fail('surface', `panel ${id}: surface layer lacks source`);
@@ -471,15 +494,16 @@ function checkSurfaceLayer(scene: Scene, id: string, layer: SurfaceLayer, data?:
     }
   } else if (src.kind === 'rational_s' || src.kind === 'rational_z') {
     checkInputRef(scene, src.poles.input, 'points_2d', 'surface');
+    // the function that the inputs default to is one that the evaluator takes
     const polesDef = inputDef(scene, src.poles.input);
-    if (polesDef?.kind === 'points_2d' && ((polesDef.min_points ?? 0) < 1 || (polesDef.max_points ?? 6) > 6)) {
-      if (polesDef.default.length < 1 || polesDef.default.length > 6) fail('surface', `panel ${id}: poles default must have 1 to 6 points`);
-    }
+    const poles = polesDef?.kind === 'points_2d' ? polesDef.default.length : 1;
+    if (poles < 1 || poles > 6) fail('surface', `panel ${id}: the poles of a surface default to ${poles} points, outside [1, 6]`);
     if (src.zeros !== undefined) {
       checkInputRef(scene, src.zeros.input, 'points_2d', 'surface');
       const zerosDef = inputDef(scene, src.zeros.input);
-      if (zerosDef?.kind === 'points_2d' && (zerosDef.max_points ?? 5) > 5 && zerosDef.default.length > 5)
-        fail('surface', `panel ${id}: zeros default cannot exceed 5 points`);
+      const zeros = zerosDef?.kind === 'points_2d' ? zerosDef.default.length : 0;
+      if (zeros > 5) fail('surface', `panel ${id}: the zeros of a surface default to ${zeros} points, outside [0, 5]`);
+      if (zeros > poles) fail('surface', `panel ${id}: a surface defaults to ${zeros} zeros and ${poles} poles, which is improper`);
     }
     if (src.gain !== undefined && typeof src.gain !== 'number') checkInputRef(scene, src.gain.input, 'number', 'surface');
     else if (typeof src.gain === 'number' && !finite(src.gain)) fail('surface', `panel ${id}: surface gain is not finite`);
@@ -526,6 +550,7 @@ function checkSurfaceLayer(scene: Scene, id: string, layer: SurfaceLayer, data?:
   checkKeyframed(layer.opacity, `panel ${id}: a surface layer's opacity`, isOpacity, 'surface');
 }
 
+/** Checks the color of a trajectories layer or of a points layer's marker (section 2.7). */
 function checkColor(scene: Scene, id: string, color: ColorSpec | undefined): void {
   if (typeof color !== 'object') return;
   if (color === null) fail('panel', `panel ${id}: a color is null, not a #rrggbb color or a colormap`);
@@ -820,6 +845,7 @@ export function validate(scene: Scene, data?: DataStore, state?: State): string[
       if (c.period_input !== undefined) checkInputRef(scene, c.period_input, 'number', 'control');
       if (c.preset_input !== undefined) checkInputRef(scene, c.preset_input, 'choice', 'control');
       if (c.show_time_domain !== undefined) checkInputRef(scene, c.show_time_domain, 'toggle', 'control');
+      for (const preset of c.presets ?? []) checkPreset(scene, c, preset);
     } else if (c.kind === 'action') {
       const checkTarget = (v: unknown) => {
         if (typeof v === 'number') {

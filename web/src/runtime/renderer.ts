@@ -452,7 +452,7 @@ const clamp01 = (x: number): number => Math.min(1, Math.max(0, x));
  * does (section 2.11): a fragment passes only where the stencil does not hold the layer's mark yet, and leaves the mark. The
  * stencil is cleared with each frame, and two flat layers of a panel carry different marks.
  */
-function flatten(mat: THREE.Material, mark: number): void {
+export function flatten(mat: THREE.Material, mark: number): void {
   mat.stencilWrite = true;
   mat.stencilRef = mark;
   mat.stencilFunc = THREE.NotEqualStencilFunc;
@@ -3141,7 +3141,7 @@ export class PanelAreaRenderer implements ContextHolder {
                     : lp.kind === 'label'
                       ? new LabelDraw(lp.layer, key)
                       : lp.kind === 'morph'
-                        ? new MorphDraw(this.ctx, lp.layer, key)
+                        ? new MorphDraw(this.ctx, lp.layer, key, lp.index)
                         : new MarkDraw(this.ctx, lp.layer, p.cameraSpec, key);
         // layers stack in their order, and within a layer its objects in the order they were added
         draw.group.renderOrder = lp.index;

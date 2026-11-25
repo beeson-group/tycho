@@ -11,7 +11,7 @@ import { inputDef, inputValue } from '../evaluate/resolve.js';
 import { opacityAt, timeAt } from '../evaluate/timeline.js';
 import type { MorphItem, MorphLayer } from '../scene.js';
 import { hexRgb, themed } from './colors.js';
-import type { Draw, DrawContext } from './renderer.js';
+import { flatten, type Draw, type DrawContext } from './renderer.js';
 
 const CONFORMAL_GLSL = /* glsl */ `
 vec2 cmul(vec2 a, vec2 b) {
@@ -261,10 +261,12 @@ export class MorphDraw implements Draw {
   private lastAlpha = 0;
   private lastPeriod = 1;
 
-  constructor(ctx: DrawContext, layer: MorphLayer, key: string) {
+  /** `index` is the index of the layer in its panel, from which the stencil marks of its lines are taken. */
+  constructor(ctx: DrawContext, layer: MorphLayer, key: string, index: number) {
     this.key = key;
     this.layer = layer;
     const fg = ctx.theme.foreground;
+    let lines = 0;
     for (const item of layer.items) {
       const rgb = hexRgb(themed(item.color ?? fg, ctx.theme));
       if (item.kind === 'region') {
@@ -316,6 +318,9 @@ export class MorphDraw implements Draw {
             uOpacity: { value: 1 },
           },
         });
+        // The quads of two segments overlap at their joint, where a translucent line would be blended twice. Each solid line thus
+        // carries a mark of its own in 128 to 255, apart from the marks of the flat trajectories layers of a panel with fewer than 127 layers.
+        if (dash === undefined) flatten(material, 128 + ((16 * index + lines++) % 128));
         const mesh = new THREE.Mesh(geometry, material);
         mesh.frustumCulled = false;
         this.group.add(mesh);

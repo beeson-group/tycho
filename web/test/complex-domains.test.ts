@@ -495,6 +495,18 @@ describe('complex-domain evaluation and 0.6 controls', () => {
     }
   });
 
+  it('meshes a rational surface without a resolution on the 64 by 64 grid that the evaluator samples', () => {
+    const { scene, data } = minimalScene06();
+    const layer = scene.panels.main!.layers[0] as SurfaceLayer;
+    expect(layer.source.kind !== 'grid' && layer.source.resolution).toBeUndefined();
+    const env = { scope: { scene, state: scene.initial, panel: scene.initial.panels.main! }, clock: scene.clock, q: 0 } as LayerEnv;
+    const { grid } = surfaceLayer(env, layer, data);
+    expect(grid).toEqual([64, 64]);
+    const draw = new SurfaceDraw({ scene, theme: { background: '#050505', foreground: '#f2f2ef', grid: '#232320' }, geometry: {} } as never, layer, 'k');
+    const geo = (draw as unknown as { surfaceGeo: { getAttribute(name: string): { count: number } } }).surfaceGeo;
+    expect(geo.getAttribute('position').count).toBe(grid[0] * grid[1]);
+  });
+
   it('scales continuous slice and discrete stem grow heights on the GPU without rebuilding geometry', () => {
     const src = readFileSync(new URL('../src/runtime/surface.ts', import.meta.url), 'utf8');
     const sliceKeyMatch = src.match(/const sliceKey = ([^;]+);/);

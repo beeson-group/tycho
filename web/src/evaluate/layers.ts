@@ -524,6 +524,9 @@ export function morphLayer(env: LayerEnv, layer: MorphLayer): MorphLayerResult {
   return { kind: 'morph', alpha, items };
 }
 
+/** The sample counts [nx, ny] of a rational surface that does not give a resolution. */
+export const SURFACE_RESOLUTION: readonly [number, number] = [64, 64];
+
 /** Evaluates a surface layer height field from a stored grid or closed-form rational transform (rule `surface`). */
 export function surfaceLayer(env: LayerEnv, layer: SurfaceLayer, data: DataStore): SurfaceLayerResult {
   const s = timeAt(env.clock, env.q);
@@ -591,7 +594,7 @@ export function surfaceLayer(env: LayerEnv, layer: SurfaceLayer, data: DataStore
   )) {
     fail('surface', `a rational surface domain x=${JSON.stringify(src.x)}, y=${JSON.stringify(src.y)} is invalid`);
   }
-  const [nx, ny] = src.resolution ?? [64, 64];
+  const [nx, ny] = src.resolution ?? SURFACE_RESOLUTION;
   if (!Number.isInteger(nx) || nx < 2 || !Number.isInteger(ny) || ny < 2) {
     fail('surface', `a rational surface resolution ${JSON.stringify([nx, ny])} is not integers >= 2`);
   }

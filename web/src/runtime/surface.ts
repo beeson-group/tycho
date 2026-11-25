@@ -7,7 +7,7 @@
 import * as THREE from 'three';
 import { fail } from '../errors.js';
 import { evalRationalS, evalRationalZ, impulseInvariantZ, mapHeight } from '../evaluate/complex.js';
-import { resolveNumber, resolvePoints2d, type LayerEnv } from '../evaluate/layers.js';
+import { resolveNumber, resolvePoints2d, SURFACE_RESOLUTION, type LayerEnv } from '../evaluate/layers.js';
 import { inputDef, inputValue } from '../evaluate/resolve.js';
 import { opacityAt, timeAt } from '../evaluate/timeline.js';
 import type { SurfaceLayer } from '../scene.js';
@@ -549,7 +549,7 @@ export class SurfaceDraw implements Draw {
       return;
     }
 
-    const [nx, ny] = src.resolution ?? [128, 128];
+    const [nx, ny] = src.resolution ?? SURFACE_RESOLUTION;
     this.surfaceGeo = buildDomainGrid(x0, x1, y0, y1, nx, ny);
     const makeVec2Arr = (count: number) => Array.from({ length: count }, () => new THREE.Vector2(0, 0));
     const uniforms: Record<string, THREE.IUniform> = {

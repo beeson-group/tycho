@@ -2080,10 +2080,12 @@ def entry(
 
 
 def _check_points2d_list(value: Any, what: str, min_p: int, max_p: int | None) -> list[list[float]]:
+    if isinstance(value, np.ndarray):
+        value = value.tolist()
     if isinstance(value, (str, bytes, Mapping)) or not isinstance(value, Sequence):
         raise SceneError(f"points-2d: {what} must be a list of [x, y] pairs, not {value!r}")
     out: list[list[float]] = []
-    for pt in value:
+    for pt in (p.tolist() if isinstance(p, np.ndarray) else p for p in value):
         if isinstance(pt, (str, bytes, Mapping)) or not isinstance(pt, Sequence) or len(pt) != 2:
             raise SceneError(f"points-2d: coordinate {pt!r} in {what} is not a pair")
         out.append([_finite(pt[0], what), _finite(pt[1], what)])
@@ -2296,10 +2298,33 @@ class Scene:
         arr = np.asarray(values, dtype=np.float64)
         if arr.ndim != 2 or arr.shape[0] < 2 or arr.shape[1] < 2:
             raise SceneError(f"surface: grid array {name!r} must have 2d shape with at least 2x2 samples, got {arr.shape}")
-        if not np.all(np.isfinite(arr)):
-            raise SceneError(f"finite-number: grid array {name!r} has non-finite values")
-        self._arrays[name] = (arr.astype(dtype), dtype)
+        # a value that is finite in float64 may overflow in float32
+        with np.errstate(over="ignore"):
+            stored = arr.astype(dtype)
+        if not np.all(np.isfinite(stored)):
+            raise SceneError(f"finite-number: grid array {name!r} has non-finite values as {dtype}")
+        self._arrays[name] = (stored, dtype)
         return name
+
+    def _check_rational_defaults(self, src: Mapping[str, Any], where: str) -> list[str]:
+        """The failures of a rational surface whose inputs default to a function that the evaluators reject (rule `surface`)."""
+
+        def default(ref: Mapping[str, Any]) -> list[Any] | None:
+            spec = self._inputs.get(ref["input"])
+            return spec["default"] if spec is not None and spec["kind"] == "points_2d" else None
+
+        poles = default(src["poles"])
+        zeros = default(src["zeros"]) if "zeros" in src else []
+        if poles is None or zeros is None:
+            return []
+        out: list[str] = []
+        if not 1 <= len(poles) <= 6:
+            out.append(f"surface: the poles of {where} default to {len(poles)} points, outside [1, 6]")
+        if len(zeros) > 5:
+            out.append(f"surface: the zeros of {where} default to {len(zeros)} points, outside [0, 5]")
+        if len(zeros) > len(poles):
+            out.append(f"surface: {where} defaults to {len(zeros)} zeros and {len(poles)} poles, which is improper")
+        return out
 
     def _new(self, table: Mapping[str, Any], value: str, what: str) -> str:
         _check_id(value, what)
@@ -2531,7 +2556,6 @@ class Scene:
         min_points: int | None = None,
         max_points: int | None = None,
         bounds: Sequence[Sequence[float]] | None = None,
-        conjugate_lock: bool | None = None,
         scope: str = "shared",
     ) -> Input:
         """A mutable list of two-dimensional point coordinates."""
@@ -2551,8 +2575,6 @@ class Scene:
             bx = _domain_pair(bounds[0], f"bounds x of {id!r}")
             by = _domain_pair(bounds[1], f"bounds y of {id!r}")
             spec["bounds"] = [bx, by]
-        if conjugate_lock is not None:
-            spec["conjugate_lock"] = _bool(conjugate_lock, f"conjugate_lock of {id!r}", "points-2d")
         return self._declare_input(id, spec)
 
     def clock(
@@ -2786,6 +2808,9 @@ class Scene:
                 }
                 if "zeros" in p and p["zeros"] is not None:
                     item["zeros"] = _check_points2d_list(p["zeros"], "preset zeros", 0, 5)
+                    if len(item["zeros"]) > len(item["poles"]):
+                        counts = f"{len(item['zeros'])} zeros and {len(item['poles'])} poles"
+                        raise SceneError(f"control: preset {item['id']!r} has {counts}, which is improper")
                 if "gain" in p and p["gain"] is not None:
                     item["gain"] = _finite(p["gain"], "preset gain")
                 clean_presets.append(item)
@@ -3210,6 +3235,7 @@ class Scene:
                     out += self._check_input(src["poles"]["input"], "points_2d", f"surface: poles of {where}")
                     if "zeros" in src:
                         out += self._check_input(src["zeros"]["input"], "points_2d", f"surface: zeros of {where}")
+                    out += self._check_rational_defaults(src, where)
                     if "gain" in src and isinstance(src["gain"], Mapping):
                         out += self._check_input(src["gain"]["input"], "number", f"surface: gain of {where}")
                     if "period" in src and isinstance(src["period"], Mapping):
@@ -3584,6 +3610,16 @@ class Scene:
                 out += self._check_input(control["preset_input"], "choice", "control: preset_input")
             if "show_time_domain" in control:
                 out += self._check_input(control["show_time_domain"], "toggle", "control: show_time_domain")
+            # a preset outside the counts of its inputs could not be applied
+            for preset in control.get("presets", []):
+                for key, iid in (("poles", control["input"]), ("zeros", control.get("secondary_input"))):
+                    spec = self._inputs.get(iid) if iid is not None else None
+                    if key not in preset or spec is None or spec["kind"] != "points_2d":
+                        continue
+                    lo, hi = spec.get("min_points", 0), spec.get("max_points", 6)
+                    if not lo <= len(preset[key]) <= hi:
+                        counts = f"{len(preset[key])} {key}, outside the counts [{lo}, {hi}] of input {iid!r}"
+                        out.append(f"control: preset {preset['id']!r} has {counts}")
             return out
         if ckind == "slider":
             out = self._check_input(control["input"], None, "control: a slider control")

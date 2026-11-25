@@ -56,7 +56,7 @@ function formatPart(x: number, p: NumberFormat): string {
 /** The slider's stops, which are the distinct parameter values of the matched trajectory sets in increasing order (section 2.9). */
 export function sliderStops(scope: PanelScope, sets: SetCache, control: Extract<Control, { kind: 'slider' }>): number[] {
   const sel = inputDef(scope.scene, control.input);
-  if (sel?.kind !== 'parameter' || sel.parameter === undefined) return [];
+  if (sel?.kind !== 'parameter' || sel.parameter === undefined || control.domain === undefined) return [];
   const values: number[] = [];
   for (const id of querySets(scope, control.domain)) {
     const set = sets.get(id);

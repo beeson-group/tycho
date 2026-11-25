@@ -7,13 +7,17 @@ import {
   type Clock,
   type LabelLayer,
   type InsetBoxLayer,
+  type MorphCoord,
+  type MorphLayer,
   type PointsLayer,
   type TrajectoriesLayer,
 } from '../scene.js';
 import { bound, clockRevolutions, revolutionOf, layerClock, TrajectoryClock } from './clock.js';
+import { conformalExp } from './complex.js';
 import { scalarValue, type Context, type Frames } from './frames.js';
 import type { PanelScope } from './resolve.js';
-import { members, insetBoxTarget } from './resolve.js';
+import { inputDef, inputValue, members, insetBoxTarget } from './resolve.js';
+import { checkKeyframed, isOpacity, opacityAt, timeAt } from './timeline.js';
 import type { SetData } from './sets.js';
 import type {
   ArrowLayerResult,
@@ -22,6 +26,9 @@ import type {
   LabelLayerResult,
   MemberResult,
   InsetBoxLayerResult,
+  MorphLayerResult,
+  MorphLineResult,
+  MorphRegionResult,
   PointsLayerResult,
   TrajectoriesLayerResult,
   Vec3,
@@ -424,4 +431,81 @@ export function pointsLayer(env: LayerEnv, layer: PointsLayer, set: SetData | nu
     out.push({ index: t, points });
   }
   return { kind: 'points', set: set.id, members: out };
+}
+
+export function resolveNumber(scope: PanelScope, spec: number | { input: string }, rule: string, positive: boolean, what: string): number {
+  let val: unknown;
+  if (typeof spec === 'number') val = spec;
+  else {
+    const def = inputDef(scope.scene, spec.input);
+    if (def === undefined || def.kind !== 'number') fail(rule, `${what} names ${JSON.stringify(spec.input)}, which is not a number input`);
+    val = inputValue(scope, spec.input);
+  }
+  if (typeof val !== 'number' || !Number.isFinite(val)) fail(rule, `${what} is ${String(val)}, not finite`);
+  if (positive && val <= 0) fail(rule, `${what} is ${val}, not positive`);
+  return val;
+}
+
+export function resolveMorphCoord(coord: MorphCoord, period: number): number {
+  if (typeof coord === 'number') {
+    if (!Number.isFinite(coord)) fail('morph', `a morph coordinate is ${String(coord)}, not finite`);
+    return coord;
+  }
+  if (!Number.isFinite(coord.nyquist)) fail('morph', `a morph Nyquist multiple is ${String(coord.nyquist)}, not finite`);
+  return (coord.nyquist * Math.PI) / period;
+}
+
+/** The deformed curves and regions of a morph layer at the timeline time (rule `morph`). */
+export function morphLayer(env: LayerEnv, layer: MorphLayer): MorphLayerResult {
+  if (layer.map !== 'conformal_exp') fail('morph', `a morph layer's map is ${JSON.stringify(layer.map)}, not conformal_exp`);
+  checkKeyframed(layer.alpha, "a morph layer's alpha", isOpacity, 'morph');
+  const s = timeAt(env.clock, env.q);
+  const alpha = opacityAt(layer.alpha, s, 0);
+  const period = resolveNumber(env.scope, layer.period, 'morph', true, 'a morph period');
+  const items: (MorphLineResult | MorphRegionResult)[] = [];
+  for (const item of layer.items) {
+    if (item.visible !== undefined) {
+      const def = inputDef(env.scope.scene, item.visible.input);
+      if (def === undefined || def.kind !== 'toggle') fail('visible', `a morph item's visible names ${item.visible.input}, which is not a toggle`);
+      if (inputValue(env.scope, item.visible.input) === false) continue;
+    }
+    if (item.kind === 'line') {
+      const samples = item.samples ?? 64;
+      if (!Number.isInteger(samples) || samples < 2) fail('morph', `a morph line's samples is ${String(samples)}, not an integer >= 2`);
+      const u0 = resolveMorphCoord(item.from[0], period);
+      const v0 = resolveMorphCoord(item.from[1], period);
+      const u1 = resolveMorphCoord(item.to[0], period);
+      const v1 = resolveMorphCoord(item.to[1], period);
+      const points: Vec3[] = [];
+      for (let i = 0; i < samples; i++) {
+        const t = i / (samples - 1);
+        const [x, y] = conformalExp(u0 + t * (u1 - u0), v0 + t * (v1 - v0), alpha, period);
+        points.push([x, y, 0]);
+      }
+      items.push({ kind: 'line', points });
+    } else if (item.kind === 'region') {
+      const grid = item.samples ?? [24, 24];
+      const [nu, nv] = grid;
+      if (!Number.isInteger(nu) || nu < 1 || !Number.isInteger(nv) || nv < 1) {
+        fail('morph', `a morph region's samples are ${JSON.stringify(grid)}, not positive integers`);
+      }
+      const u0 = resolveMorphCoord(item.u[0], period);
+      const u1 = resolveMorphCoord(item.u[1], period);
+      const v0 = resolveMorphCoord(item.v[0], period);
+      const v1 = resolveMorphCoord(item.v[1], period);
+      const points: Vec3[] = [];
+      for (let j = 0; j <= nv; j++) {
+        const v = v0 + (j / nv) * (v1 - v0);
+        for (let i = 0; i <= nu; i++) {
+          const u = u0 + (i / nu) * (u1 - u0);
+          const [x, y] = conformalExp(u, v, alpha, period);
+          points.push([x, y, 0]);
+        }
+      }
+      items.push({ kind: 'region', grid: [nu, nv], points });
+    } else {
+      fail('morph', `a morph item has unknown kind ${JSON.stringify((item as { kind: unknown }).kind)}`);
+    }
+  }
+  return { kind: 'morph', alpha, items };
 }

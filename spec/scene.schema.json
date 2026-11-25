@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://pytycho.readthedocs.io/en/stable/schema/0.5/scene.schema.json",
+  "$id": "https://pytycho.readthedocs.io/en/stable/schema/0.6/scene.schema.json",
   "title": "TyCHO scene",
-  "description": "Structure of scene.tys, version 0.5. The rules that this schema cannot express are in tycho-scene.md.",
+  "description": "Structure of scene.tys, version 0.6. The rules that this schema cannot express are in tycho-scene.md.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -20,7 +20,7 @@
       "const": "tycho-scene"
     },
     "version": {
-      "description": "The version of the scene format is written as \"major.minor\", e.g. \"0.5\". (rule `version`)",
+      "description": "The version of the scene format is written as \"major.minor\", e.g. \"0.6\". (rule `version`)",
       "type": "string",
       "pattern": "^[0-9]+\\.[0-9]+$"
     },
@@ -598,6 +598,47 @@
             "default": {
               "description": "The value at the start is true or false.",
               "type": "boolean"
+            },
+            "scope": {
+              "description": "With \"shared\", the default, the input has one value for the whole page, and with \"per_panel\" it has one value per shown panel. (rule `input-scope`)",
+              "enum": [
+                "shared",
+                "per_panel"
+              ]
+            }
+          }
+        },
+        {
+          "description": "An input of kind number holds a bounded finite number in [min, max]. (rule `number-input`)",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "min",
+            "max",
+            "default"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The kind is \"number\".",
+              "const": "number"
+            },
+            "min": {
+              "description": "The lower bound of the allowed numbers is finite and strictly below max.",
+              "type": "number"
+            },
+            "max": {
+              "description": "The upper bound of the allowed numbers is finite and strictly above min.",
+              "type": "number"
+            },
+            "step": {
+              "description": "The slider step size is a positive finite number when given.",
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "default": {
+              "description": "The value at the start is a finite number in [min, max].",
+              "type": "number"
             },
             "scope": {
               "description": "With \"shared\", the default, the input has one value for the whole page, and with \"per_panel\" it has one value per shown panel. (rule `input-scope`)",
@@ -1726,6 +1767,225 @@
               "$ref": "#/$defs/inputRef"
             }
           }
+        },
+        {
+          "description": "In a morph layer, curves and regions deform continuously along a parametric conformal homotopy over the timeline. (rule `morph`)",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "map",
+            "alpha",
+            "period",
+            "items"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The kind is \"morph\".",
+              "const": "morph"
+            },
+            "map": {
+              "description": "The conformal rolling-ribbon homotopy is \"conformal_exp\". (rule `morph`)",
+              "const": "conformal_exp"
+            },
+            "alpha": {
+              "description": "The normalized morph parameter in [0, 1], given as a number or keyframes. (rule `morph`)",
+              "$ref": "#/$defs/opacity"
+            },
+            "period": {
+              "description": "The sampling period T > 0 is given as a positive number or by an input of kind number. (rule `morph`)",
+              "anyOf": [
+                {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "$ref": "#/$defs/inputRef"
+                }
+              ]
+            },
+            "items": {
+              "description": "The lines and regions deformed by the homotopy.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/morphItem"
+              }
+            },
+            "opacity": {
+              "description": "The opacity of the whole layer is in [0, 1], or keyframed, and 1 by default.",
+              "$ref": "#/$defs/opacity"
+            },
+            "visible": {
+              "description": "The layer is omitted while the toggle that this refers to is false. (rule `visible`)",
+              "$ref": "#/$defs/inputRef"
+            }
+          }
+        }
+      ]
+    },
+    "morphCoord": {
+      "description": "A coordinate in a morph item is a finite number or a multiple k of the Nyquist frequency pi / T. (rule `morph`)",
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "description": "A multiple of pi / T evaluated dynamically with the sampling period T.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "nyquist"
+          ],
+          "properties": {
+            "nyquist": {
+              "description": "The multiplier of pi / T.",
+              "type": "number"
+            }
+          }
+        }
+      ]
+    },
+    "morphItem": {
+      "description": "One line or filled rectangle deformed by a morph layer. (rule `morph`)",
+      "oneOf": [
+        {
+          "description": "A line segment in the base s-plane deformed by the homotopy.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "from",
+            "to"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The kind is \"line\".",
+              "const": "line"
+            },
+            "from": {
+              "description": "The start point [u, v] in the base s-plane.",
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "$ref": "#/$defs/morphCoord"
+              }
+            },
+            "to": {
+              "description": "The end point [u, v] in the base s-plane.",
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "$ref": "#/$defs/morphCoord"
+              }
+            },
+            "samples": {
+              "description": "The number of sample points along the line, at least 2, 64 by default.",
+              "type": "integer",
+              "minimum": 2
+            },
+            "color": {
+              "description": "The stroke color of the line.",
+              "$ref": "#/$defs/color"
+            },
+            "width": {
+              "description": "The stroke width in CSS pixels, 2 by default.",
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "opacity": {
+              "description": "The opacity of the line in [0, 1], or keyframed, 1 by default.",
+              "$ref": "#/$defs/opacity"
+            },
+            "reveal": {
+              "description": "The revealed fraction along the line from 0 to 1, or keyframed, 1 by default.",
+              "$ref": "#/$defs/opacity"
+            },
+            "dash": {
+              "description": "The dash pattern [on, off] in CSS pixels.",
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            },
+            "visible": {
+              "description": "The item is omitted while the toggle that this refers to is false. (rule `visible`)",
+              "$ref": "#/$defs/inputRef"
+            }
+          }
+        },
+        {
+          "description": "A rectangular region in the base s-plane deformed by the homotopy.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "u",
+            "v"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The kind is \"region\".",
+              "const": "region"
+            },
+            "u": {
+              "description": "The horizontal interval [u_0, u_1] in the base s-plane.",
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "$ref": "#/$defs/morphCoord"
+              }
+            },
+            "v": {
+              "description": "The vertical interval [v_0, v_1] in the base s-plane.",
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "$ref": "#/$defs/morphCoord"
+              }
+            },
+            "samples": {
+              "description": "The grid subdivisions [nu, nv] along u and v, [24, 24] by default.",
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "color": {
+              "description": "The fill color of the region.",
+              "$ref": "#/$defs/color"
+            },
+            "opacity": {
+              "description": "The opacity of the region in [0, 1], or keyframed, 1 by default.",
+              "$ref": "#/$defs/opacity"
+            },
+            "reveal": {
+              "description": "The radial spread fraction from 0 to 1, or keyframed, 1 by default.",
+              "$ref": "#/$defs/opacity"
+            },
+            "reveal_origin": {
+              "description": "The [u, v] point source in the base s-plane from which the region spreads as an expanding disk, and the region center by default.",
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "$ref": "#/$defs/morphCoord"
+              }
+            },
+            "visible": {
+              "description": "The item is omitted while the toggle that this refers to is false. (rule `visible`)",
+              "$ref": "#/$defs/inputRef"
+            }
+          }
         }
       ]
     },
@@ -2051,14 +2311,13 @@
       "description": "A control is a widget on the page that sets an input or drives the clock. (rule `control`)",
       "oneOf": [
         {
-          "description": "A slider sets an input of kind parameter and stops at the values of the parameter in its domain.",
+          "description": "A slider sets an input of kind parameter with a domain, or an input of kind number without a domain.",
           "type": "object",
           "additionalProperties": false,
           "required": [
             "kind",
             "input",
-            "label",
-            "domain"
+            "label"
           ],
           "properties": {
             "kind": {
@@ -2066,7 +2325,7 @@
               "const": "slider"
             },
             "input": {
-              "description": "The slider sets the input of kind parameter with this id.",
+              "description": "The slider sets the input of kind parameter or number with this id.",
               "$ref": "#/$defs/id"
             },
             "label": {
@@ -2074,8 +2333,17 @@
               "type": "string"
             },
             "domain": {
-              "description": "The slider stops at the distinct values of the parameter over the sets that this query matches.",
+              "description": "For a parameter input, the slider stops at the distinct values of the parameter over the sets that this query matches.",
               "$ref": "#/$defs/setQuery"
+            },
+            "show_range": {
+              "description": "The timeline interval [t_0, t_1] in seconds during which the control is visible.",
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "number"
+              }
             }
           }
         },
@@ -2103,6 +2371,63 @@
             "label": {
               "description": "The name shown beside the control is plain text.",
               "type": "string"
+            },
+            "color": {
+              "description": "An optional accent color #rrggbb drawn beside a toggle control.",
+              "$ref": "#/$defs/color"
+            },
+            "show_range": {
+              "description": "The timeline interval [t_0, t_1] in seconds during which the control is visible.",
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "number"
+              }
+            }
+          }
+        },
+        {
+          "description": "An action control renders a button that seeks to `from` and plays to `to`. (rule `action-control`)",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "label",
+            "from",
+            "to"
+          ],
+          "properties": {
+            "kind": {
+              "description": "The kind is \"action\".",
+              "const": "action"
+            },
+            "label": {
+              "description": "The button text.",
+              "type": "string"
+            },
+            "from": {
+              "description": "The start time in seconds or step id to seek to.",
+              "type": [
+                "number",
+                "string"
+              ]
+            },
+            "to": {
+              "description": "The target time in seconds or step id to play to.",
+              "type": [
+                "number",
+                "string"
+              ]
+            },
+            "show_range": {
+              "description": "The timeline interval [t_0, t_1] in seconds during which the control is visible.",
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "number"
+              }
             }
           }
         },

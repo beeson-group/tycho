@@ -862,7 +862,11 @@ def _check_layer(layer: Any) -> dict[str, Any]:
     """A layer dict in the form that the schema and section 2.7 define, with every value checked."""
     if not isinstance(layer, Mapping) or "kind" not in layer:
         raise SceneError(f"panel: a layer is a dict with a kind, not {layer!r}")
-    kind = _enum(layer["kind"], ("trajectories", "arrow", "inset_box", "body", "axes", "grid", "label", "points"), "panel: a layer kind")
+    kind = _enum(
+        layer["kind"],
+        ("trajectories", "arrow", "inset_box", "body", "axes", "grid", "label", "points", "morph"),
+        "panel: a layer kind",
+    )
     out: dict[str, Any] = {"kind": kind}
     allowed = {"kind", "visible"}
     if "visible" in layer:
@@ -1102,7 +1106,7 @@ def _check_layer(layer: Any) -> dict[str, Any]:
                 raise SceneError(f"label: a label's leader is a boolean or a dict of color and width, not {leader!r}")
         if "clock" in layer:
             out["clock"] = _layer_clock(layer["clock"], "a label layer")
-    else:
+    elif kind == "points":
         allowed |= {"sets", "members", "marker", "reveal", "before", "after", "clock", "fit", "opacity"}
         out["sets"] = _query(layer.get("sets"))
         out["members"] = _member(layer.get("members", "all"), "a points layer's members")
@@ -1119,8 +1123,97 @@ def _check_layer(layer: Any) -> dict[str, Any]:
             out["fit"] = _bool(layer["fit"], "a points layer's fit", "panel")
         if "opacity" in layer:
             out["opacity"] = _opacity(layer["opacity"], "a points layer's opacity")
+    else:
+        allowed |= {"map", "alpha", "period", "items", "opacity"}
+        out["map"] = _enum(layer.get("map"), ("conformal_exp",), "morph: a morph layer's map")
+        out["alpha"] = _opacity(layer.get("alpha"), "a morph layer's alpha")
+        out["period"] = _number_or_ref(layer.get("period"), "morph: a morph period", positive=True)
+        raw_items = layer.get("items")
+        if isinstance(raw_items, (str, bytes, Mapping)) or not isinstance(raw_items, Sequence):
+            raise SceneError("morph: a morph layer's items must be a list")
+        out["items"] = [_check_morph_item(it) for it in raw_items]
+        if "opacity" in layer:
+            out["opacity"] = _opacity(layer["opacity"], "a morph layer's opacity")
     if extra := set(layer) - allowed:
         raise SceneError(f"panel: a {kind} layer has unknown keys {sorted(extra)}")
+    return out
+
+
+def _number_or_ref(value: Any, what: str, *, positive: bool) -> Any:
+    if isinstance(value, Input):
+        return _input_ref(value, what, "number")
+    if isinstance(value, Mapping) and set(value) == {"input"}:
+        return _input_ref(value["input"], what, "number")
+    if not positive:
+        return _finite(value, what)
+    rule, _, name = what.partition(": ")
+    return _positive(value, name, rule)
+
+
+def _morph_coord(value: Any) -> Any:
+    if isinstance(value, Mapping) and set(value) == {"nyquist"}:
+        return {"nyquist": _finite(value["nyquist"], "morph: Nyquist multiple")}
+    return _finite(value, "morph: coordinate")
+
+
+def _check_morph_item(item: Any) -> dict[str, Any]:
+    if not isinstance(item, Mapping) or "kind" not in item:
+        raise SceneError(f"morph: an item is a dict with kind, not {item!r}")
+    kind = _enum(item["kind"], ("line", "region"), "morph: item kind")
+    out: dict[str, Any] = {"kind": kind}
+    allowed = {"kind", "color", "opacity", "visible"}
+    if "visible" in item:
+        v = item["visible"]
+        out["visible"] = v if isinstance(v, Mapping) and set(v) == {"input"} else _input_ref(v, "visible: morph item visible", "toggle")
+    if "color" in item:
+        out["color"] = _color(item["color"], "morph: item color")
+    if "opacity" in item:
+        out["opacity"] = _opacity(item["opacity"], "morph item opacity")
+    if kind == "line":
+        allowed |= {"from", "to", "samples", "width", "reveal", "dash"}
+        for key in ("from", "to"):
+            pt = item.get(key)
+            if isinstance(pt, (str, bytes, Mapping)) or not isinstance(pt, Sequence) or len(pt) != 2:
+                raise SceneError(f"morph: line {key} must be a 2-element list, not {pt!r}")
+            out[key] = [_morph_coord(pt[0]), _morph_coord(pt[1])]
+        if "samples" in item:
+            s = _integer(item["samples"], "morph: line samples")
+            if s < 2:
+                raise SceneError(f"morph: line samples {s} is less than 2")
+            out["samples"] = s
+        if "width" in item:
+            out["width"] = _positive(item["width"], "morph line width", "morph")
+        if "reveal" in item:
+            out["reveal"] = _opacity(item["reveal"], "morph line reveal")
+        if "dash" in item:
+            dash = _pair(item["dash"], "morph line dash", "morph")
+            if min(dash) <= 0.0:
+                raise SceneError("morph: line dash lengths must be positive")
+            out["dash"] = dash
+    else:
+        allowed |= {"u", "v", "samples", "reveal", "reveal_origin"}
+        for key in ("u", "v"):
+            iv = item.get(key)
+            if isinstance(iv, (str, bytes, Mapping)) or not isinstance(iv, Sequence) or len(iv) != 2:
+                raise SceneError(f"morph: region {key} must be a 2-element list, not {iv!r}")
+            out[key] = [_morph_coord(iv[0]), _morph_coord(iv[1])]
+        if "samples" in item:
+            sp = item["samples"]
+            if isinstance(sp, (str, bytes, Mapping)) or not isinstance(sp, Sequence) or len(sp) != 2:
+                raise SceneError(f"morph: region samples {sp!r} must be two positive integers")
+            nu, nv = _integer(sp[0], "morph: nu"), _integer(sp[1], "morph: nv")
+            if nu < 1 or nv < 1:
+                raise SceneError("morph: region sample counts must be positive")
+            out["samples"] = [nu, nv]
+        if "reveal" in item:
+            out["reveal"] = _opacity(item["reveal"], "morph region reveal")
+        if "reveal_origin" in item:
+            ro = item["reveal_origin"]
+            if isinstance(ro, (str, bytes, Mapping)) or not isinstance(ro, Sequence) or len(ro) != 2:
+                raise SceneError(f"morph: region reveal_origin must be a 2-element list, not {ro!r}")
+            out["reveal_origin"] = [_morph_coord(ro[0]), _morph_coord(ro[1])]
+    if extra := set(item) - allowed:
+        raise SceneError(f"morph: {kind} item has unknown keys {sorted(extra)}")
     return out
 
 
@@ -1393,6 +1486,82 @@ def points(
         ("opacity", opacity),
         ("visible", visible),
     ):
+        if value is not None:
+            layer[key] = value
+    return _check_layer(layer)
+
+
+def nyquist(k: float) -> dict[str, float]:
+    """A morph coordinate evaluating to ``k * pi / T`` in terms of the active sampling period."""
+    return {"nyquist": _finite(k, "morph: Nyquist multiple")}
+
+
+def morph_line(
+    start: Sequence[Any],
+    end: Sequence[Any],
+    *,
+    samples: int | None = None,
+    color: str | None = None,
+    width: float | None = None,
+    opacity: Any = None,
+    reveal: Any = None,
+    dash: Sequence[float] | None = None,
+    visible: Any = None,
+) -> dict[str, Any]:
+    """A line item deformed by a :func:`morph` layer."""
+    item: dict[str, Any] = {"kind": "line", "from": list(start), "to": list(end)}
+    for key, value in (
+        ("samples", samples),
+        ("color", color),
+        ("width", width),
+        ("opacity", opacity),
+        ("reveal", reveal),
+        ("dash", None if dash is None else list(dash)),
+        ("visible", visible),
+    ):
+        if value is not None:
+            item[key] = value
+    return item
+
+
+def morph_region(
+    u: Sequence[Any],
+    v: Sequence[Any],
+    *,
+    samples: Sequence[int] | None = None,
+    color: str | None = None,
+    opacity: Any = None,
+    reveal: Any = None,
+    reveal_origin: Sequence[Any] | None = None,
+    visible: Any = None,
+) -> dict[str, Any]:
+    """A rectangular region item deformed by a :func:`morph` layer."""
+    item: dict[str, Any] = {"kind": "region", "u": list(u), "v": list(v)}
+    for key, value in (
+        ("samples", None if samples is None else list(samples)),
+        ("color", color),
+        ("opacity", opacity),
+        ("reveal", reveal),
+        ("reveal_origin", None if reveal_origin is None else list(reveal_origin)),
+        ("visible", visible),
+    ):
+        if value is not None:
+            item[key] = value
+    return item
+
+
+def morph(
+    *,
+    alpha: Any,
+    period: Any,
+    items: Sequence[Mapping[str, Any]],
+    map: str = "conformal_exp",
+    opacity: Any = None,
+    visible: Any = None,
+) -> dict[str, Any]:
+    """A morph layer deforming declared lines and regions under the conformal homotopy."""
+    layer: dict[str, Any] = {"kind": "morph", "map": map, "alpha": alpha, "period": period, "items": list(items)}
+    for key, value in (("opacity", opacity), ("visible", visible)):
         if value is not None:
             layer[key] = value
     return _check_layer(layer)
@@ -2053,6 +2222,29 @@ class Scene:
             raise SceneError(f"input: toggle {id!r} defaults to {default!r}, not a boolean")
         return self._declare_input(id, {"kind": "toggle", "default": default, "scope": scope})
 
+    def number(
+        self,
+        id: str,
+        *,
+        min: float,
+        max: float,
+        default: float,
+        step: float | None = None,
+        scope: str = "shared",
+    ) -> Input:
+        """A bounded numeric input."""
+        lo = _finite(min, f"number-input: min of {id!r}")
+        hi = _finite(max, f"number-input: max of {id!r}")
+        if not lo < hi:
+            raise SceneError(f"number-input: input {id!r} requires min < max, got {lo} >= {hi}")
+        d = _finite(default, f"number-input: default of {id!r}")
+        if not lo <= d <= hi:
+            raise SceneError(f"number-input: default {d} of {id!r} lies outside [{lo}, {hi}]")
+        spec: dict[str, Any] = {"kind": "number", "min": lo, "max": hi, "default": d, "scope": scope}
+        if step is not None:
+            spec["step"] = _positive(step, f"step of number input {id!r}", "number-input")
+        return self._declare_input(id, spec)
+
     def clock(
         self,
         mode: str = "fraction",
@@ -2191,28 +2383,78 @@ class Scene:
         not been passed to :meth:`show` shows this declared panel under its own id."""
         self._layout = _node(node)
 
-    def slider(self, input: Any, *, label: str, domain: Any) -> None:
-        """A slider over a parameter input, with its stops taken from the trajectory sets of ``domain``."""
-        self._controls.append(
-            {
+    def _add_show_range(self, control: dict[str, Any], show_range: Sequence[float] | None) -> None:
+        if show_range is not None:
+            sr = _pair(show_range, "a control's show_range", "control")
+            if sr[0] > sr[1]:
+                raise SceneError(f"control: show_range {sr} has start > end")
+            control["show_range"] = sr
+
+    def slider(self, input: Any, *, label: str, domain: Any = None, show_range: Sequence[float] | None = None) -> None:
+        """A slider over a parameter input with ``domain``, or a continuous number input without ``domain``."""
+        iid = _id(input)
+        spec = self._inputs.get(iid)
+        if spec is not None and spec["kind"] == "number":
+            if domain is not None:
+                raise SceneError(f"control: slider over number input {iid!r} does not take domain")
+            ctrl: dict[str, Any] = {"kind": "slider", "input": iid, "label": _text(label, "a label")}
+        elif spec is None and domain is None:
+            ctrl = {"kind": "slider", "input": _input_ref(input, "control: a slider")["input"], "label": _text(label, "a label")}
+        else:
+            ctrl = {
                 "kind": "slider",
                 "input": _input_ref(input, "control: a slider", "parameter")["input"],
                 "label": _text(label, "a label"),
                 "domain": _query(domain),
             }
-        )
+        self._add_show_range(ctrl, show_range)
+        self._controls.append(ctrl)
 
-    def tabs(self, input: Any, *, label: str) -> None:
+    def tabs(self, input: Any, *, label: str, show_range: Sequence[float] | None = None) -> None:
         """Tabs over a choice."""
-        self._controls.append(
-            {"kind": "tabs", "input": _input_ref(input, "control: tabs", "choice")["input"], "label": _text(label, "a label")}
-        )
+        ctrl: dict[str, Any] = {
+            "kind": "tabs",
+            "input": _input_ref(input, "control: tabs", "choice")["input"],
+            "label": _text(label, "a label"),
+        }
+        self._add_show_range(ctrl, show_range)
+        self._controls.append(ctrl)
 
-    def toggle_control(self, input: Any, *, label: str) -> None:
+    def toggle_control(self, input: Any, *, label: str, color: str | None = None, show_range: Sequence[float] | None = None) -> None:
         """A toggle control over a toggle input."""
-        self._controls.append(
-            {"kind": "toggle", "input": _input_ref(input, "control: a toggle control", "toggle")["input"], "label": _text(label, "a label")}
-        )
+        ctrl: dict[str, Any] = {
+            "kind": "toggle",
+            "input": _input_ref(input, "control: a toggle control", "toggle")["input"],
+            "label": _text(label, "a label"),
+        }
+        if color is not None:
+            ctrl["color"] = _color(color, "control: toggle color")
+        self._add_show_range(ctrl, show_range)
+        self._controls.append(ctrl)
+
+    def action_control(
+        self,
+        label: str,
+        from_time: float | str,
+        to_time: float | str,
+        *,
+        show_range: Sequence[float] | None = None,
+    ) -> None:
+        """A button control that seeks to ``from_time`` and plays to ``to_time``."""
+
+        def _target(v: Any) -> float | str:
+            if isinstance(v, str):
+                return _check_id(v, "action target step")
+            return _finite(v, "action target time")
+
+        ctrl: dict[str, Any] = {
+            "kind": "action",
+            "label": _text(label, "an action label"),
+            "from": _target(from_time),
+            "to": _target(to_time),
+        }
+        self._add_show_range(ctrl, show_range)
+        self._controls.append(ctrl)
 
     def playback(self) -> None:
         """The playback, bound to the clock."""
@@ -2293,7 +2535,7 @@ class Scene:
             raise SceneError("clock: the scene does not have a clock")
         if not self._panels:
             raise SceneError("panel: the scene does not have a panel")
-        doc: dict[str, Any] = {"format": "tycho-scene", "version": "0.5"}
+        doc: dict[str, Any] = {"format": "tycho-scene", "version": "0.6"}
         # a reader that does not implement a feature of section 4 then rejects the scene (rule `version`)
         layers = [layer for panel in self._panels.values() for layer in panel["layers"]]
         requires = [
@@ -2323,6 +2565,9 @@ class Scene:
                 ),
                 ("layers.label", any(layer["kind"] == "label" for layer in layers)),
                 ("layers.points", any(layer["kind"] == "points" for layer in layers)),
+                ("inputs.number", any(spec["kind"] == "number" for spec in self._inputs.values())),
+                ("layers.morph", any(layer["kind"] == "morph" for layer in layers)),
+                ("controls.action", any(c["kind"] == "action" for c in self._controls)),
             )
             if used
         ]
@@ -2585,6 +2830,12 @@ class Scene:
                 for part in layer["text"] if isinstance(layer["text"], list) else []:
                     if isinstance(part, Mapping) and "input" in part:
                         out += self._check_input(part["input"], None, f"control: a label of {where}")
+            elif layer["kind"] == "morph":
+                if isinstance(layer["period"], Mapping):
+                    out += self._check_input(layer["period"]["input"], "number", f"morph: a morph period of {where}")
+                for item in layer["items"]:
+                    if "visible" in item:
+                        out += self._check_input(item["visible"]["input"], "toggle", f"visible: a morph item of {where}")
         for key in (panel.get("camera") or {}).get("keyframes", []):
             for target in key.get("follow", []):
                 i = target["layer"]
@@ -2647,6 +2898,12 @@ class Scene:
                     out.append(f"input: {where} sets choice {iid!r} to {value!r}, which is not one of its values")
                 elif spec["kind"] == "parameter" and (isinstance(value, bool) or not isinstance(value, (int, float))):
                     out.append(f"input: {where} sets parameter input {iid!r} to {value!r}, which is not a number")
+                elif spec["kind"] == "number" and (
+                    isinstance(value, bool)
+                    or not isinstance(value, (int, float))
+                    or not float(spec["min"]) <= float(value) <= float(spec["max"])
+                ):
+                    out.append(f"input: {where} sets number input {iid!r} to {value!r}, outside [{spec['min']}, {spec['max']}]")
                 elif spec["kind"] == "toggle" and not isinstance(value, bool):
                     out.append(f"input: {where} sets toggle {iid!r} to {value!r}, which is not a boolean")
 
@@ -2897,24 +3154,49 @@ class Scene:
         return out
 
     def _check_control(self, control: Mapping[str, Any], combos: Callable[[set[str]], list[dict[str, str]]]) -> list[str]:
-        kind = {"slider": "parameter", "tabs": "choice", "toggle": "toggle"}.get(control["kind"])
+        ckind = control["kind"]
+        if ckind == "playback":
+            return []
+        if ckind == "action":
+            out: list[str] = []
+            step_ids = {st["id"] for st in self._steps}
+            clock = self._clock or {}
+            seconds = clock.get("seconds", 8.0 * clock.get("revolutions", 1))
+            for end_key in ("from", "to"):
+                v = control[end_key]
+                if isinstance(v, str) and v not in step_ids:
+                    out.append(f"action-control: action target {v!r} is not a step id")
+                elif isinstance(v, (int, float)) and not (0.0 <= float(v) <= float(seconds)):
+                    out.append(f"action-control: action target time {v} lies outside [0, {seconds}]")
+            return out
+        if ckind == "slider":
+            out = self._check_input(control["input"], None, "control: a slider control")
+            if out:
+                return out
+            spec = self._inputs[control["input"]]
+            if spec["kind"] == "number":
+                if "domain" in control:
+                    out.append(f"control: slider over number input {control['input']!r} cannot have a domain")
+                return out
+            if spec["kind"] != "parameter":
+                return [f"control: a slider control names {control['input']!r}, which is a {spec['kind']}, not a parameter or number"]
+            if "domain" not in control:
+                return [f"control: slider over parameter {control['input']!r} lacks a domain"]
+            out += self._check_query(control["domain"], "control: a slider's domain")
+            if out:
+                return out
+            for values in combos(self._choices_in(control["domain"])):
+                for ts in self._match(control["domain"], values):
+                    if spec["parameter"] not in (*ts.parameters[0], INDEX):
+                        out.append(
+                            f"control: the slider over {control['input']!r} has trajectory set {ts.id!r} in its domain, "
+                            f"which lacks parameter {spec['parameter']!r}"
+                        )
+            return out
+        kind = {"tabs": "choice", "toggle": "toggle"}.get(ckind)
         if kind is None:
             return []
-        out = self._check_input(control["input"], kind, f"control: a {control['kind']} control")
-        if out or control["kind"] != "slider":
-            return out
-        spec = self._inputs[control["input"]]
-        out += self._check_query(control["domain"], "control: a slider's domain")
-        if out:
-            return out
-        for values in combos(self._choices_in(control["domain"])):
-            for ts in self._match(control["domain"], values):
-                if spec["parameter"] not in (*ts.parameters[0], INDEX):
-                    out.append(
-                        f"control: the slider over {control['input']!r} has trajectory set {ts.id!r} in its domain, "
-                        f"which lacks parameter {spec['parameter']!r}"
-                    )
-        return out
+        return self._check_input(control["input"], kind, f"control: a {ckind} control")
 
     def _check_readout(
         self,

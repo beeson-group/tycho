@@ -1,10 +1,10 @@
 {
  "format": "tycho-scene",
- "version": "0.5",
+ "version": "0.6",
  "requires": [
   "layers.read_from"
  ],
- "generator": "pytycho 0.3.0",
+ "generator": "pytycho 0.3.1",
  "title": "a grid and a grown ring in the reference trajectory's context over two revolutions",
  "frames": {
   "rot": {

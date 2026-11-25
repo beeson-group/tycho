@@ -21,6 +21,7 @@ from typing import Any
 
 import numpy as np
 
+from ._complex import conformal_exp
 from .container import Container
 
 INDEX = "@index"
@@ -565,7 +566,25 @@ def evaluate(document: Mapping[str, Any], container: Container | bytes, state: M
     return _Evaluator(document, container).run(state, frame_index)
 
 
-KINDS = ("trajectories", "arrow", "inset_box", "body", "axes", "grid", "label", "points")
+KINDS = ("trajectories", "arrow", "inset_box", "body", "axes", "grid", "label", "points", "morph")
+
+
+def _fits_input(spec: Mapping[str, Any], value: Any) -> bool:
+    kind = spec["kind"]
+    if kind == "parameter":
+        return not isinstance(value, bool) and isinstance(value, (int, float)) and math.isfinite(value)
+    if kind == "number":
+        return (
+            not isinstance(value, bool)
+            and isinstance(value, (int, float))
+            and math.isfinite(value)
+            and float(spec["min"]) <= float(value) <= float(spec["max"])
+        )
+    if kind == "choice":
+        return value in spec.get("values", [])
+    if kind == "toggle":
+        return isinstance(value, bool)
+    return False
 
 
 class _Evaluator:
@@ -577,10 +596,31 @@ class _Evaluator:
         self.tree = FrameTree(document["frames"], document.get("bodies") or {})
         self.inputs = document.get("inputs") or {}
         for iid, spec in self.inputs.items():
-            if not isinstance(spec, Mapping) or spec.get("kind") not in ("parameter", "choice", "toggle") or "default" not in spec:
+            if (
+                not isinstance(spec, Mapping)
+                or spec.get("kind") not in ("parameter", "choice", "toggle", "number")
+                or "default" not in spec
+            ):
                 raise EvaluationError(f"input: input {iid!r} lacks a known kind or a default")
             if spec["kind"] == "parameter" and not isinstance(spec.get("parameter"), str):
                 raise EvaluationError(f"input: parameter input {iid!r} does not name a parameter")
+            if spec["kind"] == "number":
+                lo, hi, default = spec.get("min"), spec.get("max"), spec.get("default")
+                step = spec.get("step")
+                if (
+                    isinstance(lo, bool)
+                    or isinstance(hi, bool)
+                    or not isinstance(lo, (int, float))
+                    or not isinstance(hi, (int, float))
+                    or not (math.isfinite(lo) and math.isfinite(hi) and lo < hi)
+                ):
+                    raise EvaluationError(f"number-input: input {iid!r} requires finite min < max")
+                if step is not None and (
+                    isinstance(step, bool) or not isinstance(step, (int, float)) or not math.isfinite(step) or step <= 0
+                ):
+                    raise EvaluationError(f"number-input: input {iid!r} requires positive finite step")
+                if not _fits_input(spec, default):
+                    raise EvaluationError(f"number-input: input {iid!r} default {default!r} is outside [min, max]")
         self._sets: dict[str, SetData] = {}
 
     def set_data(self, sid: str) -> SetData:
@@ -624,15 +664,8 @@ class _Evaluator:
                 spec = self.inputs.get(iid)
                 if spec is None:
                     continue
-                kind, choices = spec["kind"], spec.get("values", [])
-                if kind == "parameter":
-                    ok = not isinstance(value, bool) and isinstance(value, (int, float)) and math.isfinite(value)
-                elif kind == "choice":
-                    ok = value in choices
-                else:
-                    ok = isinstance(value, bool)
-                if not ok:
-                    raise EvaluationError(f"input: {where}: {kind} {iid!r} cannot hold {value!r}")
+                if not _fits_input(spec, value):
+                    raise EvaluationError(f"input: {where}: {spec['kind']} {iid!r} cannot hold {value!r}")
 
         held(state.get("inputs"), "the state")
         if not isinstance(state["panels"], Mapping) or not state["panels"]:
@@ -872,6 +905,8 @@ class _Panel:
                 layers.append(self.label_layer(layer))
             elif kind == "points":
                 layers.append(self.points_layer(layer))
+            elif kind == "morph":
+                layers.append(self.morph_layer(layer))
             else:
                 layers.append({"kind": kind})
         out: dict[str, Any] = {"frame": frame, "layers": layers}
@@ -1184,6 +1219,105 @@ class _Panel:
                     shown = np.zeros(trajectory.m, dtype=bool) if u < 0.0 else trajectory.sample_readings(rd.channel) <= u
             members.append({"index": i, "points": [[float(x) for x in row] for row in p[shown]]})
         return {"kind": "points", "set": data.id, "members": members}
+
+    def _resolve_number_ref(self, spec: Any, rule: str, *, positive: bool, what: str) -> float:
+        if isinstance(spec, Mapping) and set(spec) == {"input"}:
+            iid = spec["input"]
+            info = self.ev.inputs.get(iid)
+            if info is None or info.get("kind") != "number":
+                raise EvaluationError(f"{rule}: {what} names {iid!r}, which is not a number input")
+            val = self.input(iid)
+        else:
+            val = spec
+        if isinstance(val, bool) or not isinstance(val, (int, float)) or not math.isfinite(val):
+            raise EvaluationError(f"{rule}: {what} is {val!r}, not finite")
+        if positive and float(val) <= 0.0:
+            raise EvaluationError(f"{rule}: {what} is {val}, not positive")
+        return float(val)
+
+    def _unit_keyframed(self, spec: Any, default: float, rule: str, what: str) -> float:
+        if spec is None:
+            return default
+        if isinstance(spec, Mapping) and "keyframes" in spec:
+            keys = keyframe_list(spec["keyframes"], what)
+            for _, v, _ in keys:
+                if not 0.0 <= v <= 1.0:
+                    raise EvaluationError(f"keyframes: {what} has a keyframe whose value is {v}, not in [0, 1]")
+            val = keyframe_value(keys, self.reading.s)
+        else:
+            if isinstance(spec, bool) or not isinstance(spec, (int, float)) or not math.isfinite(spec):
+                raise EvaluationError(f"{rule}: {what} is {spec!r}, not finite")
+            val = float(spec)
+        if not 0.0 <= val <= 1.0:
+            raise EvaluationError(f"{rule}: {what} is {val}, not in [0, 1]")
+        return val
+
+    def morph_layer(self, layer: Mapping[str, Any]) -> dict[str, Any]:
+        """The deformed lines and regions of a morph layer at the timeline time (rule `morph`)."""
+        if layer.get("map") != "conformal_exp":
+            raise EvaluationError(f"morph: a morph layer's map is {layer.get('map')!r}, not conformal_exp")
+        alpha = self._unit_keyframed(layer.get("alpha"), 0.0, "morph", "a morph layer's alpha")
+        period = self._resolve_number_ref(layer.get("period"), "morph", positive=True, what="a morph period")
+
+        def coord(c: Any) -> float:
+            if isinstance(c, Mapping) and "nyquist" in c:
+                k = c["nyquist"]
+                if isinstance(k, bool) or not isinstance(k, (int, float)) or not math.isfinite(k):
+                    raise EvaluationError(f"morph: a Nyquist multiple is {k!r}, not finite")
+                return float(k) * math.pi / period
+            if isinstance(c, bool) or not isinstance(c, (int, float)) or not math.isfinite(c):
+                raise EvaluationError(f"morph: a morph coordinate is {c!r}, not finite")
+            return float(c)
+
+        out_items: list[dict[str, Any]] = []
+        items = layer.get("items")
+        if not isinstance(items, list):
+            raise EvaluationError("morph: items must be a list")
+        for item in items:
+            if not isinstance(item, Mapping):
+                raise EvaluationError("morph: an item must be an object")
+            if "visible" in item:
+                vis = item["visible"]
+                viid = vis.get("input") if isinstance(vis, Mapping) else None
+                if viid is None or self.ev.inputs.get(viid, {}).get("kind") != "toggle":
+                    raise EvaluationError(f"visible: a morph item's visible names {viid!r}, which is not a toggle")
+                if self.input(viid) is False:
+                    continue
+            ikind = item.get("kind")
+            if ikind == "line":
+                samples = item.get("samples", 64)
+                if isinstance(samples, bool) or not isinstance(samples, int) or samples < 2:
+                    raise EvaluationError(f"morph: a morph line's samples is {samples!r}, not an integer >= 2")
+                u0, v0 = coord(item["from"][0]), coord(item["from"][1])
+                u1, v1 = coord(item["to"][0]), coord(item["to"][1])
+                pts = []
+                for i in range(samples):
+                    t = i / (samples - 1)
+                    x, y = conformal_exp(u0 + t * (u1 - u0), v0 + t * (v1 - v0), alpha, period)
+                    pts.append([x, y, 0.0])
+                out_items.append({"kind": "line", "points": pts})
+            elif ikind == "region":
+                grid_spec = item.get("samples", [24, 24])
+                if (
+                    not isinstance(grid_spec, list)
+                    or len(grid_spec) != 2
+                    or any(isinstance(n, bool) or not isinstance(n, int) or n < 1 for n in grid_spec)
+                ):
+                    raise EvaluationError(f"morph: a morph region's samples are {grid_spec!r}, not two positive integers")
+                nu, nv = grid_spec
+                u0, u1 = coord(item["u"][0]), coord(item["u"][1])
+                v0, v1 = coord(item["v"][0]), coord(item["v"][1])
+                pts = []
+                for j in range(nv + 1):
+                    v = v0 + (j / nv) * (v1 - v0)
+                    for i in range(nu + 1):
+                        u = u0 + (i / nu) * (u1 - u0)
+                        x, y = conformal_exp(u, v, alpha, period)
+                        pts.append([x, y, 0.0])
+                out_items.append({"kind": "region", "grid": [nu, nv], "points": pts})
+            else:
+                raise EvaluationError(f"morph: unknown item kind {ikind!r}")
+        return {"kind": "morph", "alpha": alpha, "items": out_items}
 
     def camera(self, camera: Mapping[str, Any]) -> dict[str, Any] | None:
         """The window of a 2d camera with keyframes at the time of the timeline (rule `camera-keyframes`), or None when a keyframe

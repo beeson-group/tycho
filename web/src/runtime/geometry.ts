@@ -212,7 +212,7 @@ export class GeometryCache {
   private readonly readingsBy = new Map<string, TrajectoryReadings>();
   private readonly bodyTrails = new Map<string, BodyTrailTable>();
 
-  private readonly data: DataStore;
+  readonly data: DataStore;
 
   constructor(scene: Scene, data: DataStore) {
     this.scene = scene;

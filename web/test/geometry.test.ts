@@ -173,6 +173,8 @@ describe('reveal, pieces, and the GPU comparison give the evaluator line (before
     for (const rounding of ['float64', 'float32'] as const) {
       it(`${name}, readings in ${rounding}`, () => {
         const c = loadCorpus(name);
+        const hasRevealable = Object.values(c.scene.panels).some((p) => p!.layers.some((l) => l.kind === 'trajectories' || l.kind === 'arrow'));
+        if (!hasRevealable) return;
         const geo = new GeometryCache(c.scene, c.data);
         const round = rounding === 'float32' ? Math.fround : (x: number) => x;
         const states = [...new Map(c.cases.map((k) => [JSON.stringify(k.state), k.state])).values()];

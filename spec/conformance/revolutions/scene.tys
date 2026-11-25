@@ -1,7 +1,7 @@
 {
  "format": "tycho-scene",
- "version": "0.5",
- "generator": "pytycho 0.3.0",
+ "version": "0.6",
+ "generator": "pytycho 0.3.1",
  "title": "three revolutions of the rotating loop",
  "frames": {
   "rot": {

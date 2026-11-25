@@ -68,6 +68,10 @@ A scene for a talk moves things by the time of the loop in seconds rather than b
 - The parts `ty.clock_value()`, `ty.clock_time()`, `ty.keyframed_number(...)`, and `ty.timed_text((t, text), ...)` show the clock, a counter, or a caption that changes over the timeline, in a readout, a label, or an overlay (`scene.text`, `scene.legend`) (rule `timeline-parts`).
 - A subscript and a superscript are written with the parts `ty.sub(text)` and `ty.sup(text)` in readouts, label layers, `scene.text` overlays, legend entries, the titles of an axes layer, and the axis titles of a frame, e.g. `scene.frame("phase", axes=("C", ["initial x", ty.sub("0")], "z"))`. Use them rather than Unicode subscript digits, which many fonts do not have. Other labels, such as those of frames, bodies, and panels, take plain strings only.
 - `scene.step(id, at)` names the times a presentation stops at, and the viewer element plays to them with `playTo`, `next`, and `previous` (rule `steps`).
+- An input of kind number, `scene.number(id, min=, max=, default=, step=)`, holds a number between two bounds (rule `number-input`). A slider sets it, `scene.slider(input, label=)`, without a `domain`.
+- `scene.action_control(label, from_time, to_time)` adds a button that shows a time or a step of the timeline and plays from there to another, e.g. to replay a part of a talk (rule `action-control`).
+- A slider, a tabs, a toggle, or an action control takes `show_range=(t0, t1)`, and the page then shows it only while the timeline lies between these two times (rule `control`). A toggle control also takes `color=`, the color of its swatch.
+- A _morph_ layer, `ty.morph(alpha=, period=, items=[ty.morph_line(start, end), ty.morph_region(u, v)])`, draws lines and rectangles of the complex plane on their way from the s-plane, at `alpha` 0, to the z-plane `z = exp(s * T)`, at `alpha` 1 (rule `morph`). The `period` `T` is a number or a number input, `alpha` takes keyframes, and a coordinate is a number or `ty.nyquist(k)`, i.e. `k * pi / T`. The page computes these points from the formula of the rule, and they are not stored samples.
 
 ## Thinning
 

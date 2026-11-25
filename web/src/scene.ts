@@ -16,17 +16,19 @@ export type BodyLayer = Extract<Layer, { kind: 'body' }>;
 export type MarkLayer = Extract<Layer, { kind: 'axes' | 'grid' }>;
 export type LabelLayer = Extract<Layer, { kind: 'label' }>;
 export type PointsLayer = Extract<Layer, { kind: 'points' }>;
+export type MorphLayer = Extract<Layer, { kind: 'morph' }>;
 export type ParameterInput = Extract<Input, { kind: 'parameter' }>;
 export type Choice = Extract<Input, { kind: 'choice' }>;
 export type Toggle = Extract<Input, { kind: 'toggle' }>;
+export type NumberInput = Extract<Input, { kind: 'number' }>;
 export type ShownPanel = NonNullable<State['panels'][string]>;
 export type InputValue = number | string | boolean;
 
 /** The scene format version this reader implements. */
 export const SCENE_MAJOR = 0;
-export const SCENE_MINOR = 5;
+export const SCENE_MINOR = 6;
 
-/** Features from `requires` that this reader implements, i.e. the features of section 4 that version 0.5 of the format includes. */
+/** Features from `requires` that this reader implements, i.e. the features of section 4 that version 0.6 of the format includes. */
 export const SUPPORTED_FEATURES: ReadonlySet<string> = new Set([
   'frames.origin_channel',
   'layers.arrows',
@@ -38,6 +40,9 @@ export const SUPPORTED_FEATURES: ReadonlySet<string> = new Set([
   'camera.keyframes_3d',
   'layers.label',
   'layers.points',
+  'inputs.number',
+  'layers.morph',
+  'controls.action',
 ]);
 
 export const TOP_LEVEL_KEYS: ReadonlySet<string> = new Set([

@@ -112,8 +112,8 @@ The renderer is the code that draws the page, i.e. the `<tycho-viewer>` element 
 The rules for the scene document as a whole follow.
 
 - `scene`. A reader rejects a document that is not a JSON object, or that lacks one of the required keys `format`, `version`, `frames`, `trajectory_sets`, `clock`, `panels`, and `initial`.
-- `version`. The `version` of a scene is a string `"major.minor"`, e.g. `"0.5"`.
-  Before version 1.0, a key, a value, or a feature may be renamed or removed from one minor version to the next, without an alias for the old name, and a scene of an older minor version is therefore rejected by the rules on the renamed keys and values.
+- `version`. The `version` of a scene is a string `"major.minor"`, e.g. `"0.6"`.
+  Before version 1.0, a key, a value, or a feature may be renamed or removed from one minor version to the next, without an alias for the old name, and a scene of an older minor version is therefore rejected when it uses renamed keys or values, while compatible `0.5` scenes continue to load under a `0.6` reader.
   From version 1.0 on, a minor version only adds to the format, i.e. what an earlier minor version defined is never changed or removed.
   The validator rejects a scene of another major version or of a newer minor version.
   The validator also rejects a scene whose `requires` lists a feature that it does not implement.
@@ -244,6 +244,10 @@ The rules for inputs and references follow.
 
 - `input`. A reader rejects an input without a known kind or a default, a reference to an input that is not declared, and a value that is not of its input's kind.
   A value of the wrong kind (e.g. a boolean or a string for an input of kind `parameter`, or a number for a toggle) is never cast to the right kind.
+- `number-input`. An input of kind `number` holds a bounded finite number in `[min, max]`, with finite `min < max`, an optional positive `step`, and `default` in `[min, max]`.
+  A reader rejects an input of kind `number` whose `min` is not below its `max`, whose `step` is not positive, or whose `default` lies outside `[min, max]`.
+  A value outside `[min, max]` is not of the kind of its input, and a reader rejects it under rule `input`.
+  A writer lists the feature `inputs.number` in `requires` (section 4) for a scene with an input of kind `number`.
 - `input-scope`. In a shown panel, `{"input": id}` reads the panel's value when the input is per-panel, and the shared value otherwise.
   A missing value is the input's default.
   A panel's value for a shared input is never read, and a writer rejects such a value in `initial` (section 2.8).
@@ -400,6 +404,19 @@ The rules for declared panels and layers follow.
   {"kind": "inset_box", "panel": "closeup", "color": "#ffffff", "opacity": 0.5, "width": 1, "dash": [4, 3], "min_size": 12}
   ```
 
+- `morph`. A `morph` layer deforms declared lines and rectangular regions in the complex plane under the conformal rolling-ribbon homotopy `h_alpha(s)`.
+  For `alpha` in `[0, 1]` and positive period `T`, write `c(alpha) = alpha * ((1 - alpha) * T + alpha)` and `w = alpha * s * T`.
+  When `alpha < 1e-5` or `|w| < 1e-4`, evaluate `h_alpha(s) = alpha + (s * T / ((1 - alpha) * T + alpha)) * (1 + w / 2 + w^2 / 6 + w^3 / 24)`, and otherwise evaluate `h_alpha(s) = alpha + (exp(w) - 1) / c(alpha)`.
+  The `alpha` of the layer is a number or a keyframed value (rule `keyframes`), and its `period` is a positive number or `{"input": id}`, which refers to an input of kind `number`.
+  Coordinates in `items` are either a finite number or `{"nyquist": k}`, which evaluates to `k * pi / T`.
+  Each item of kind `"line"` maps `samples` points uniformly from `from` to `to`, and each item of kind `"region"` maps `(nu + 1) * (nv + 1)` grid points across intervals `u` and `v` in row-major order.
+  A line has 64 samples by default and at least 2, and the `samples` of a region are `[nu, nv]`, each at least 1 and 24 by default.
+  Each evaluated point is `(x, y, 0)` in the display frame of the panel, where `x` and `y` are the real and the imaginary part of `h_alpha(s)`.
+  A reader rejects a `map` other than `"conformal_exp"`, an `alpha` outside `[0, 1]`, a `period` that is not positive or that refers to an input of another kind, and `samples` below these minimums.
+  A keyframe of `alpha` outside `[0, 1]` is rejected under rule `keyframes`.
+  Any item whose `visible` toggle is false is omitted from the evaluated items list.
+  A writer lists the feature `layers.morph` in `requires` (section 4) for a scene with a `morph` layer.
+
 The other keys of a declared panel and of its layers, such as a color, a width, an opacity, an `axes` or a `grid` layer, and every key of a camera but its `keyframes`, are for drawing only.
 They are not read in the evaluation of section 3, hence they are not covered by any case of the conformance corpus.
 A few of them still bind the data, as follows.
@@ -464,6 +481,12 @@ Readouts do not have a template language, i.e. a readout is the list of its part
 The rule for controls follows.
 
 - `control`. A reader rejects a control of an unknown kind, a control whose `input` is not declared, and a control whose input is of a kind that the control does not set.
+  A slider sets an input of kind `parameter` with a `domain`, or an input of kind `number` without a `domain`.
+  A toggle control may carry a fixed `color`, and a slider, a tabs, a toggle, or an action control may carry `show_range: [t_0, t_1]` to show the control only while the timeline lies in `[t_0, t_1]`.
+  A reader rejects a `show_range` that is not two finite times with `t_0 <= t_1`.
+- `action-control`. An `action` control carries a `label`, a start time `from` (a step id or finite seconds), and a stop target `to` (a step id or finite seconds).
+  A reader rejects a `from` or a `to` that is the id of a step that the scene does not declare (rule `steps`), or a time outside `[0, L]`, where `L` is the length of a loop (section 2.11).
+  A writer lists the feature `controls.action` in `requires` (section 4) for a scene with an `action` control.
 
 ### 2.10 Export
 
@@ -599,6 +622,7 @@ All positions have three components and are float64.
 A shown panel whose camera has keyframes (rule `camera-keyframes`) also has the key `camera`, `{"center": [a, b], "width": w, "height": h}`, the window at the frame index, with `height` `null` unless the keyframes give it, or `null` when the camera does not have a window then.
 A label layer (rule `label`) gives `{"kind": "label", "position": [x, y, z]}`, the position of its anchor in the display frame or `null`.
 A points layer (rule `points`) gives `{"kind": "points", "set": id, "members": [{"index": 3, "points": [[x, y, z], ...]}]}`, the given samples of each member, with `set` `null` and `members` empty when its set query does not match any set.
+A morph layer (rule `morph`) gives `{"kind": "morph", "alpha": alpha, "items": [...]}` with each visible line as `{"kind": "line", "points": [[x, y, 0], ...]}` and each visible region as `{"kind": "region", "grid": [nu, nv], "points": [[x, y, 0], ...]}`.
 
 The example shows one shown panel `p1` in the frame `inertial` with five layers.
 The `trajectories` layer gives member 3 of the set `family-7-periapsis` as the polyline `line` with a `head`.
@@ -617,7 +641,7 @@ A layer omitted by rule `visible` does not appear in the list.
 ## 4. Features
 
 A feature is a named part of the format that is listed in `requires` (rule `version`) by a scene that uses it, so that a reader that does not implement the part rejects the scene instead of drawing it wrongly.
-The features of version 0.5 are the following.
+The features of version 0.6 are the following.
 
 - `layers.arrows` is the `arrow` layer (rule `arrow`).
 - `layers.inset_box` is the `inset_box` layer (rule `inset-box`).
@@ -629,11 +653,14 @@ The features of version 0.5 are the following.
 - `camera.keyframes_3d` is the keyframes of a `3d` camera (rule `camera-keyframes-3d`).
 - `layers.label` is the `label` layer (rule `label`).
 - `layers.points` is the `points` layer (rule `points`).
+- `inputs.number` is an input of kind `number` (rule `number-input`).
+- `layers.morph` is the `morph` layer (rule `morph`).
+- `controls.action` is the `action` control (rule `action-control`).
 
 Several keys are not features, since a reader that ignores one of them still draws every trajectory, only at another scale, from another side, at another pace, or at another opacity.
-They are the `aspect` of a `2d` camera, the `fit` of a `trajectories` layer, the `stretch` and the `auto_rotate` of a `3d` camera, the `seconds` and the `end` of the clock, the keyframed values of opacity, of a marker's size, and of a split's ratio, the parts of rule `timeline-parts`, the `steps` (rule `steps`), the markers, glows, dashes, fills, and threshold colors of a `trajectories` layer, the color of the marker of a `points` layer, the box of an axes layer, the margin and the opacity of a declared panel, the image of a body, the font and the gutter of the theme, and the overlays.
+They are the `aspect` of a `2d` camera, the `fit` of a `trajectories` layer, the `stretch` and the `auto_rotate` of a `3d` camera, the `seconds` and the `end` of the clock, the keyframed values of opacity, of a marker's size, and of a split's ratio, the parts of rule `timeline-parts`, the `steps` (rule `steps`), the markers, glows, dashes, fills, and threshold colors of a `trajectories` layer, the color of the marker of a `points` layer, the box of an axes layer, the margin and the opacity of a declared panel, the image of a body, the font and the gutter of the theme, the `color` and `show_range` keys of controls, and the overlays.
 
 The following features do not exist yet.
 They are reserved here so that they can be listed in `requires` once they exist.
 They are `panels.plot`, `frames.quaternion` (an orientation from a quaternion channel), `frames.body_axis` (an axis from one body to another), `bodies.trajectory`, and `bodies.radius`.
-They are not part of version 0.5.
+They are not part of version 0.6.

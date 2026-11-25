@@ -147,10 +147,6 @@ export type Input =
        */
       bounds?: [[number, number], [number, number]];
       /**
-       * Whether the 2D picker pad starts with conjugate-pair symmetry locked, true by default.
-       */
-      conjugate_lock?: boolean;
-      /**
        * With "shared", the default, the input has one value for the whole page, and with "per_panel" it has one value per shown panel. (rule `input-scope`)
        */
       scope?: 'shared' | 'per_panel';

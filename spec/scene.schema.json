@@ -690,10 +690,6 @@
                 }
               }
             },
-            "conjugate_lock": {
-              "description": "Whether the 2D picker pad starts with conjugate-pair symmetry locked, true by default.",
-              "type": "boolean"
-            },
             "scope": {
               "description": "With \"shared\", the default, the input has one value for the whole page, and with \"per_panel\" it has one value per shown panel. (rule `input-scope`)",
               "enum": [

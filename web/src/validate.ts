@@ -43,17 +43,19 @@ import {
   type PointsLayer,
   type MorphCoord,
   type MorphLayer,
+  type SurfaceLayer,
   type LayerClock,
   type Marker,
   type ColorSpec,
+  type Control,
   type TrajectorySet,
   type TextPart,
   type Box,
 } from './scene.js';
 
-const LAYER_KINDS = ['trajectories', 'arrow', 'inset_box', 'body', 'axes', 'grid', 'label', 'points', 'morph'];
+const LAYER_KINDS = ['trajectories', 'arrow', 'inset_box', 'body', 'axes', 'grid', 'label', 'points', 'morph', 'surface'];
 const SHAPES = ['disc', 'ring', 'square', 'diamond', 'triangle', 'star', 'cross', 'plus'];
-const CONTROL_KINDS = ['slider', 'tabs', 'toggle', 'action', 'playback'];
+const CONTROL_KINDS = ['slider', 'tabs', 'toggle', 'points_2d', 'action', 'playback'];
 const COLORMAPS = ['viridis', 'plasma', 'magma', 'cividis', 'blues', 'reds'];
 
 const checkId = (id: string, what: string): void => {
@@ -107,6 +109,7 @@ const LAYER_KEYS: Record<string, readonly string[]> = {
   label: ['kind', 'text', 'at', 'offset', 'leader', 'clock', 'visible', ...TEXT_KEYS],
   points: ['kind', 'sets', 'members', 'marker', 'reveal', 'before', 'after', 'clock', 'fit', 'opacity', 'visible'],
   morph: ['kind', 'map', 'alpha', 'period', 'items', 'opacity', 'visible'],
+  surface: ['kind', 'source', 'scale', 'clamp', 'height_scale', 'colormap', 'color_range', 'grooves', 'roc', 'slices', 'markers', 'grow', 'opacity', 'visible'],
 };
 const CLOCK_KEYS = ['mode', 'channels', 'labels', 'frame_count', 'range', 'revolutions', 'seconds', 'keyframes', 'end'];
 const THEME_KEYS = ['background', 'foreground', 'grid', 'font', 'gutter'];
@@ -196,6 +199,15 @@ function checkParts(scene: Scene, parts: unknown, what: string): void {
     if (typeof p === 'string') continue;
     if (p === null || typeof p !== 'object') fail('control', `${what} has a part ${JSON.stringify(p)}`);
     if ('input' in p) checkInputRef(scene, p.input, null, 'control');
+    if ('roc_status' in p) {
+      const rs = p.roc_status;
+      if (rs === null || typeof rs !== 'object') fail('control', `${what} has invalid roc_status ${JSON.stringify(rs)}`);
+      checkInputRef(scene, rs.poles.input, 'points_2d', 'control');
+      if (rs.period !== undefined && typeof rs.period !== 'number') checkInputRef(scene, rs.period.input, 'number', 'control');
+      else if (typeof rs.period === 'number' && (!Number.isFinite(rs.period) || rs.period <= 0))
+        fail('control', `${what} has nonpositive roc_status period ${rs.period}`);
+      continue;
+    }
     if ('channel' in p && p.channel === INDEX_CHANNEL) fail('control', `${what} has a channel part naming ${INDEX_CHANNEL}, which is not allowed in a readout`);
     if ('timed_text' in p) {
       if (!Array.isArray(p.timed_text)) fail('timeline-parts', `${what} has timed_text ${JSON.stringify(p.timed_text)}, not a list of [t, text] pairs`);
@@ -445,6 +457,99 @@ function checkMorphLayer(scene: Scene, id: string, layer: MorphLayer): void {
   }
 }
 
+type Points2dControl = Extract<Control, { kind: 'points_2d' }>;
+
+/** Checks a preset of a `points_2d` control (rule `control`), i.e. a proper rational function within the counts of the inputs that hold it. */
+function checkPreset(scene: Scene, control: Points2dControl, preset: NonNullable<Points2dControl['presets']>[number]): void {
+  const what = `preset ${JSON.stringify(preset?.id)} of a points_2d control`;
+  const pairs = (v: unknown): v is [number, number][] => Array.isArray(v) && v.every((pt) => Array.isArray(pt) && pt.length === 2 && pt.every(finite));
+  if (preset === null || typeof preset !== 'object' || !pairs(preset.poles) || (preset.zeros !== undefined && !pairs(preset.zeros)))
+    fail('control', `${what} does not hold lists of [x, y] pairs`);
+  const [poles, zeros] = [preset.poles.length, preset.zeros?.length ?? 0];
+  if (poles < 1 || poles > 6 || zeros > 5) fail('control', `${what} has ${poles} poles and ${zeros} zeros, outside [1, 6] and [0, 5]`);
+  if (zeros > poles) fail('control', `${what} has ${zeros} zeros and ${poles} poles, which is improper`);
+  if (preset.gain !== undefined && !finite(preset.gain)) fail('control', `${what} has a gain that is not finite`);
+  for (const [id, count, name] of [
+    [control.input, poles, 'poles'],
+    [control.secondary_input, zeros, 'zeros'],
+  ] as const) {
+    const def = id === undefined ? undefined : inputDef(scene, id);
+    if (def?.kind !== 'points_2d' || (name === 'zeros' && preset.zeros === undefined)) continue;
+    const [lo, hi] = [def.min_points ?? 0, def.max_points ?? 6];
+    if (count < lo || count > hi) fail('control', `${what} has ${count} ${name}, outside the counts [${lo}, ${hi}] of input ${id}`);
+  }
+}
+
+function checkSurfaceLayer(scene: Scene, id: string, layer: SurfaceLayer, data?: DataStore): void {
+  const src = layer.source;
+  if (src === null || typeof src !== 'object') fail('surface', `panel ${id}: surface layer lacks source`);
+  if (src.kind === 'grid') {
+    if (!(finite(src.x[0]) && finite(src.x[1]) && src.x[0] < src.x[1] && finite(src.y[0]) && finite(src.y[1]) && src.y[0] < src.y[1]))
+      fail('surface', `panel ${id}: surface grid domain is invalid`);
+    if (data !== undefined) {
+      if (!data.has(src.array)) fail('surface', `panel ${id}: surface grid array ${JSON.stringify(src.array)} is missing from data.tyd`);
+      const arr = data.array(src.array);
+      if ((arr.dtype !== 'float32' && arr.dtype !== 'float64') || arr.shape.length !== 2 || arr.shape[0]! < 2 || arr.shape[1]! < 2)
+        fail('surface', `panel ${id}: surface grid array ${src.array} must be 2d float32/float64 of at least 2x2`);
+    }
+  } else if (src.kind === 'rational_s' || src.kind === 'rational_z') {
+    checkInputRef(scene, src.poles.input, 'points_2d', 'surface');
+    // the function that the inputs default to is one that the evaluator takes
+    const polesDef = inputDef(scene, src.poles.input);
+    const poles = polesDef?.kind === 'points_2d' ? polesDef.default.length : 1;
+    if (poles < 1 || poles > 6) fail('surface', `panel ${id}: the poles of a surface default to ${poles} points, outside [1, 6]`);
+    if (src.zeros !== undefined) {
+      checkInputRef(scene, src.zeros.input, 'points_2d', 'surface');
+      const zerosDef = inputDef(scene, src.zeros.input);
+      const zeros = zerosDef?.kind === 'points_2d' ? zerosDef.default.length : 0;
+      if (zeros > 5) fail('surface', `panel ${id}: the zeros of a surface default to ${zeros} points, outside [0, 5]`);
+      if (zeros > poles) fail('surface', `panel ${id}: a surface defaults to ${zeros} zeros and ${poles} poles, which is improper`);
+    }
+    if (src.gain !== undefined && typeof src.gain !== 'number') checkInputRef(scene, src.gain.input, 'number', 'surface');
+    else if (typeof src.gain === 'number' && !finite(src.gain)) fail('surface', `panel ${id}: surface gain is not finite`);
+    if (src.kind === 'rational_z' && src.period === undefined) fail('surface', `panel ${id}: rational_z surface requires period`);
+    if (src.period !== undefined && typeof src.period !== 'number') checkInputRef(scene, src.period.input, 'number', 'surface');
+    else if (typeof src.period === 'number' && (!finite(src.period) || src.period <= 0)) fail('surface', `panel ${id}: surface period is not positive`);
+    if (!(finite(src.x[0]) && finite(src.x[1]) && src.x[0] < src.x[1] && finite(src.y[0]) && finite(src.y[1]) && src.y[0] < src.y[1]))
+      fail('surface', `panel ${id}: surface domain is invalid`);
+    if (
+      src.resolution !== undefined &&
+      (!Array.isArray(src.resolution) || src.resolution.length !== 2 || src.resolution.some((n) => !Number.isInteger(n) || n < 2))
+    )
+      fail('surface', `panel ${id}: surface resolution is invalid`);
+  } else fail('surface', `panel ${id}: unknown surface source ${JSON.stringify((src as { kind: unknown }).kind)}`);
+  if (layer.scale !== undefined && typeof layer.scale !== 'string') {
+    checkInputRef(scene, layer.scale.input, 'choice', 'surface');
+    const c = inputDef(scene, layer.scale.input);
+    if (c?.kind === 'choice' && c.values.some((v) => v !== 'linear' && v !== 'log')) fail('surface', `panel ${id}: surface scale choice must hold linear/log`);
+  } else if (typeof layer.scale === 'string' && layer.scale !== 'linear' && layer.scale !== 'log') {
+    fail('surface', `panel ${id}: surface scale is ${JSON.stringify(layer.scale)}, not linear or log`);
+  }
+  if (layer.clamp !== undefined && (!finite(layer.clamp.max) || layer.clamp.max <= 0 || !finite(layer.clamp.softness) || layer.clamp.softness <= 0))
+    fail('surface', `panel ${id}: surface clamp requires positive max and softness`);
+  if (layer.height_scale !== undefined && (!finite(layer.height_scale) || layer.height_scale <= 0))
+    fail('surface', `panel ${id}: surface height_scale must be positive`);
+  if (layer.colormap !== undefined && !COLORMAPS.includes(layer.colormap)) fail('surface', `panel ${id}: surface colormap ${layer.colormap} is unknown`);
+  if (
+    layer.color_range !== undefined &&
+    (!Array.isArray(layer.color_range) || layer.color_range.length !== 2 || !layer.color_range.every(finite) || layer.color_range[0] === layer.color_range[1])
+  )
+    fail('surface', `panel ${id}: surface color_range must be two distinct numbers`);
+  if (layer.roc?.visible !== undefined) checkInputRef(scene, layer.roc.visible.input, 'toggle', 'visible');
+  checkKeyframed(layer.roc?.opacity, `panel ${id}: surface roc opacity`, isOpacity, 'surface');
+  if (layer.slices?.continuous?.visible !== undefined) checkInputRef(scene, layer.slices.continuous.visible.input, 'toggle', 'visible');
+  checkKeyframed(layer.slices?.continuous?.opacity, `panel ${id}: continuous slice opacity`, isOpacity, 'surface');
+  if (layer.slices?.discrete?.visible !== undefined) checkInputRef(scene, layer.slices.discrete.visible.input, 'toggle', 'visible');
+  if (layer.slices?.discrete?.count !== undefined && typeof layer.slices.discrete.count !== 'number')
+    checkInputRef(scene, layer.slices.discrete.count.input, 'number', 'surface');
+  checkKeyframed(layer.slices?.discrete?.opacity, `panel ${id}: discrete slice opacity`, isOpacity, 'surface');
+  if (layer.slices?.clip !== undefined && typeof layer.slices.clip !== 'boolean') fail('surface', `panel ${id}: surface slices clip must be a boolean`);
+  if (layer.markers?.visible !== undefined) checkInputRef(scene, layer.markers.visible.input, 'toggle', 'visible');
+  checkKeyframed(layer.markers?.opacity, `panel ${id}: surface markers opacity`, isOpacity, 'surface');
+  checkKeyframed(layer.grow, `panel ${id}: a surface layer's grow`, isOpacity, 'surface');
+  checkKeyframed(layer.opacity, `panel ${id}: a surface layer's opacity`, isOpacity, 'surface');
+}
+
 /** Checks the color of a trajectories layer or of a points layer's marker (section 2.7). */
 function checkColor(scene: Scene, id: string, color: ColorSpec | undefined): void {
   if (typeof color !== 'object') return;
@@ -563,7 +668,23 @@ export function validate(scene: Scene, data?: DataStore, state?: State): string[
       if (!finite(v!.min) || !finite(v!.max) || !(v!.min < v!.max)) fail('number-input', `number input ${name} requires finite min < max`);
       if (v!.step !== undefined && (!finite(v!.step) || v!.step <= 0)) fail('number-input', `number input ${name} requires positive step`);
       if (!finite(v!.default) || v!.default < v!.min || v!.default > v!.max) fail('number-input', `number input ${name} default is outside [min, max]`);
-    } else fail('input', `input ${name} has kind ${JSON.stringify((v as { kind: unknown }).kind)}, not parameter, choice, toggle, or number`);
+    } else if (v!.kind === 'points_2d') {
+      const minP = v!.min_points ?? 0;
+      const maxP = v!.max_points ?? 6;
+      if (!Number.isInteger(minP) || minP < 0 || !Number.isInteger(maxP) || maxP < minP)
+        fail('points-2d', `points_2d input ${name} has invalid min_points/max_points`);
+      if (v!.bounds !== undefined) {
+        const [[x0, x1], [y0, y1]] = v!.bounds;
+        if (!(finite(x0) && finite(x1) && x0 < x1 && finite(y0) && finite(y1) && y0 < y1)) fail('points-2d', `points_2d input ${name} has invalid bounds`);
+      }
+      if (
+        !Array.isArray(v!.default) ||
+        v!.default.length < minP ||
+        v!.default.length > maxP ||
+        !v!.default.every((pt) => Array.isArray(pt) && pt.length === 2 && finite(pt[0]) && finite(pt[1]))
+      )
+        fail('points-2d', `points_2d input ${name} default does not fit point bounds`);
+    } else fail('input', `input ${name} has kind ${JSON.stringify((v as { kind: unknown }).kind)}, not parameter, choice, toggle, number, or points_2d`);
   }
   const clock = scene.clock;
   if (clock.mode !== 'fraction' && clock.mode !== 'epoch') fail('clock', `the clock mode is ${JSON.stringify(clock.mode)}, not fraction or epoch`);
@@ -666,6 +787,7 @@ export function validate(scene: Scene, data?: DataStore, state?: State): string[
       else if (layer.kind === 'label') checkLabelLayer(scene, id, layer);
       else if (layer.kind === 'points') checkPointsLayer(scene, id, layer);
       else if (layer.kind === 'morph') checkMorphLayer(scene, id, layer);
+      else if (layer.kind === 'surface') checkSurfaceLayer(scene, id, layer, data);
       else if (layer.kind === 'body') {
         if (!Object.hasOwn(scene.bodies ?? {}, layer.body)) fail('body-layer', `panel ${id} draws ${layer.body}, which is not a body`);
         if (layer.trail !== undefined) checkTrail(id, layer.trail);
@@ -716,6 +838,14 @@ export function validate(scene: Scene, data?: DataStore, state?: State): string[
     else if (c.kind === 'toggle') {
       checkInputRef(scene, c.input, 'toggle', 'control');
       if (c.color !== undefined && !COLOR.test(c.color)) fail('control', `toggle control color ${JSON.stringify(c.color)} is not #rrggbb`);
+    } else if (c.kind === 'points_2d') {
+      checkInputRef(scene, c.input, 'points_2d', 'control');
+      if (c.secondary_input !== undefined) checkInputRef(scene, c.secondary_input, 'points_2d', 'control');
+      if (c.gain_input !== undefined) checkInputRef(scene, c.gain_input, 'number', 'control');
+      if (c.period_input !== undefined) checkInputRef(scene, c.period_input, 'number', 'control');
+      if (c.preset_input !== undefined) checkInputRef(scene, c.preset_input, 'choice', 'control');
+      if (c.show_time_domain !== undefined) checkInputRef(scene, c.show_time_domain, 'toggle', 'control');
+      for (const preset of c.presets ?? []) checkPreset(scene, c, preset);
     } else if (c.kind === 'action') {
       const checkTarget = (v: unknown) => {
         if (typeof v === 'number') {

@@ -29,6 +29,16 @@ export function fits(v: Input, value: unknown): boolean {
   if (v.kind === 'parameter') return typeof value === 'number' && Number.isFinite(value);
   if (v.kind === 'number') return typeof value === 'number' && Number.isFinite(value) && value >= v.min && value <= v.max;
   if (v.kind === 'toggle') return typeof value === 'boolean';
+  if (v.kind === 'points_2d') {
+    if (!Array.isArray(value)) return false;
+    const min = v.min_points ?? 0;
+    const max = v.max_points ?? 6;
+    if (value.length < min || value.length > max) return false;
+    return value.every(
+      (pt) =>
+        Array.isArray(pt) && pt.length === 2 && typeof pt[0] === 'number' && Number.isFinite(pt[0]) && typeof pt[1] === 'number' && Number.isFinite(pt[1]),
+    );
+  }
   return typeof value === 'string' && v.values.includes(value);
 }
 

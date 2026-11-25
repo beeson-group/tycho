@@ -16,6 +16,7 @@ import {
   insetBoxLayer,
   morphLayer,
   pointsLayer,
+  surfaceLayer,
   targetPoint,
   trajectoriesLayer,
   type Reference,
@@ -81,6 +82,8 @@ export function evaluate(scene: Scene, data: DataStore, state: State, frameIndex
         layers.push(labelLayer(env, layer, id === null ? null : sets.get(id), reference));
       } else if (layer.kind === 'morph') {
         layers.push(morphLayer(env, layer));
+      } else if (layer.kind === 'surface') {
+        layers.push(surfaceLayer(env, layer, data));
       } else {
         layers.push({ kind: layer.kind });
       }
@@ -92,7 +95,7 @@ export function evaluate(scene: Scene, data: DataStore, state: State, frameIndex
   return { panels };
 }
 
-const LAYER_KINDS = ['trajectories', 'arrow', 'inset_box', 'body', 'axes', 'grid', 'label', 'points', 'morph'];
+const LAYER_KINDS = ['trajectories', 'arrow', 'inset_box', 'body', 'axes', 'grid', 'label', 'points', 'morph', 'surface'];
 
 /** The lists of camera keyframes that passed `checkCameraKeyframes`, each with whether it was checked for a camera of free aspect. */
 const checkedKeyframes = new WeakMap<object, boolean>();

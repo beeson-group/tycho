@@ -91,6 +91,16 @@ export class Store {
 
 // pure updates of a snapshot
 
+function cloneInputValue(v: InputValue): InputValue {
+  return Array.isArray(v) ? v.map(([x, y]) => [x, y]) : v;
+}
+
+function sameInputValue(a: InputValue, b: InputValue): boolean {
+  if (a === b) return true;
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+  return a.every((pt, i) => pt[0] === b[i]![0] && pt[1] === b[i]![1]);
+}
+
 /**
  * Sets an input in the shown panel when the input is per-panel, and in the state's shared inputs otherwise
  * (rule `input-scope`). A value that does not fit the input leaves the state as it is.
@@ -98,14 +108,15 @@ export class Store {
 export function withInput(scene: Scene, state: State, id: string, value: InputValue, panel?: string): State {
   const v = inputDef(scene, id);
   if (v === undefined || !fits(v, value)) return state;
+  const clean = cloneInputValue(value);
   if (v.scope === 'per_panel') {
     if (panel === undefined || !Object.hasOwn(state.panels, panel)) return state;
     const p = state.panels[panel]!;
-    if (p.inputs !== undefined && Object.hasOwn(p.inputs, id) && p.inputs[id] === value) return state;
-    return withPanel(state, panel, { ...p, inputs: put(p.inputs, id, value) });
+    if (p.inputs !== undefined && Object.hasOwn(p.inputs, id) && sameInputValue(p.inputs[id]!, clean)) return state;
+    return withPanel(state, panel, { ...p, inputs: put(p.inputs, id, clean) });
   }
-  if (state.inputs !== undefined && Object.hasOwn(state.inputs, id) && state.inputs[id] === value) return state;
-  return { ...state, inputs: put(state.inputs, id, value) };
+  if (state.inputs !== undefined && Object.hasOwn(state.inputs, id) && sameInputValue(state.inputs[id]!, clean)) return state;
+  return { ...state, inputs: put(state.inputs, id, clean) };
 }
 
 export function withChannel(state: State, channel: string): State {
@@ -274,7 +285,7 @@ function keepValues(scene: Scene, stored: unknown, scope: 'shared' | 'per_panel'
   for (const [id, value] of Object.entries(stored)) {
     const v = inputDef(scene, id);
     if (v === undefined || (v.scope ?? 'shared') !== scope || !fits(v, value)) continue;
-    out[id] = value as InputValue;
+    out[id] = cloneInputValue(value as InputValue);
   }
   return out;
 }

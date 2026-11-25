@@ -2502,7 +2502,7 @@ def containers():
 
 
 def complex_domains():
-    """Schema 0.6 morph and number-input cases computed independently from closed forms."""
+    """Schema 0.6 morph, surface, number, and points_2d cases computed independently from closed forms."""
     import cmath
     import math
 
@@ -2513,8 +2513,18 @@ def complex_domains():
     scene.clock("epoch", channels=["t"], frame_count=10, range=(0.0, 10.0), seconds=10.0)
 
     T_in = scene.number("T", min=0.25, max=2.0, step=0.05, default=1.0)
+    poles_in = scene.points_2d("poles", default=[[-0.7, 0.0]], min_points=1, max_points=6, bounds=[[-3.0, 2.0], [-3.5, 3.5]])
+    zeros_in = scene.points_2d("zeros", default=[], min_points=0, max_points=5, bounds=[[-3.0, 2.0], [-3.5, 3.5]])
+    gain_in = scene.number("gain", min=-10.0, max=10.0, default=1.0)
+    scale_in = scene.choice("scale", ["linear", "log"], default="linear")
     show_extra = scene.toggle("extra", default=True)
 
+    grid_arr = np.array([[0.0, 1.0, 2.0, 5.0], [0.5, 2.0, 4.0, 10.0], [1.0, 3.0, 6.0, 12.0]], dtype=np.float64)
+    scene.array("grid2d", grid_arr, dtype="float64")
+
+    x_dom = [-2.0, 2.0]
+    y_dom = [-2.0, 2.0]
+    res = [3, 3]
     scene.panel(
         "main",
         frame=s_frame,
@@ -2531,11 +2541,51 @@ def complex_domains():
                     pytycho.morph_line([1e-5, 0.0], [2e-5, 1e-5], samples=2),
                 ],
             ),
+            pytycho.surface(
+                {"kind": "grid", "array": "grid2d", "x": [0.0, 3.0], "y": [0.0, 2.0]},
+                scale=scale_in,
+                clamp={"max": 4.0, "softness": 0.5},
+                height_scale=2.0,
+                grow=pytycho.keyframes((0.0, 0.5), (9.0, 1.0)),
+            ),
+            pytycho.surface(
+                {
+                    "kind": "rational_s",
+                    "poles": poles_in,
+                    "zeros": zeros_in,
+                    "gain": gain_in,
+                    "period": T_in,
+                    "x": x_dom,
+                    "y": y_dom,
+                    "resolution": res,
+                },
+                scale=scale_in,
+                clamp={"max": 4.0, "softness": 0.5},
+            ),
+            pytycho.surface(
+                {
+                    "kind": "rational_z",
+                    "poles": poles_in,
+                    "zeros": zeros_in,
+                    "gain": gain_in,
+                    "period": T_in,
+                    "x": x_dom,
+                    "y": y_dom,
+                    "resolution": res,
+                },
+                scale=scale_in,
+                clamp={"max": 4.0, "softness": 0.5},
+            ),
         ],
     )
     scene.show("p1", panel="main")
     doc = scene.to_document()
     data = scene.to_container()
+
+    def sc_clamp(r, ceil_max=4.0, soft=0.5):
+        t = (ceil_max - r) / soft
+        sp = t + math.log1p(math.exp(-t)) if t > 0.0 else math.log1p(math.exp(t))
+        return max(0.0, ceil_max - soft * sp)
 
     def h_alpha(u, v, alpha, T):
         if alpha == 0.0:
@@ -2545,12 +2595,23 @@ def complex_domains():
         z = alpha + (cmath.exp(w) - 1.0) / (alpha * d)
         return [z.real, z.imag, 0.0]
 
-    def analytic_case(name, inputs, frame_idx):
+    def eval_poly_c(coeffs, z):
+        acc = 0j
+        for c in reversed(coeffs):
+            acc = acc * z + complex(c[0], c[1])
+        return acc
+
+    def analytic_case(name, inputs, frame_idx, z_num_fn, z_den_roots):
         st = copy.deepcopy(doc["initial"])
         st["inputs"] = dict(inputs)
         T = inputs.get("T", 1.0)
+        poles = inputs.get("poles", [[-0.7, 0.0]])
+        zeros = inputs.get("zeros", [])
+        gain = inputs.get("gain", 1.0)
+        scale_mode = inputs.get("scale", "linear")
         extra = inputs.get("extra", True)
         alpha = {0: 0.0, 5: 0.5, 9: 1.0}[frame_idx]
+        grow = {0: 0.5, 5: 0.5 + 0.5 * (5.0 / 9.0), 9: 1.0}[frame_idx]
 
         m_items = [
             {
@@ -2569,6 +2630,36 @@ def complex_domains():
         )
         m_items.append({"kind": "line", "points": [h_alpha(1e-5, 0.0, alpha, T), h_alpha(2e-5, 1e-5, alpha, T)]})
 
+        grid_h = [sc_clamp(math.log1p(float(v)) if scale_mode == "log" else float(v)) * 2.0 * grow for v in grid_arr.ravel()]
+        xs = np.linspace(x_dom[0], x_dom[1], res[0])
+        ys = np.linspace(y_dom[0], y_dom[1], res[1])
+        s_heights = []
+        for y in ys:
+            for x in xs:
+                s = complex(x, y)
+                num = complex(gain)
+                for z0 in zeros:
+                    num *= s - complex(z0[0], z0[1])
+                den = 1.0 + 0.0j
+                for p0 in poles:
+                    den *= s - complex(p0[0], p0[1])
+                an, ad = abs(num), abs(den)
+                mag = (0.0 if an < 1e-12 else 1e12) if ad < 1e-12 * max(1.0, an) else an / ad
+                s_heights.append(sc_clamp(math.log1p(mag) if scale_mode == "log" else mag))
+
+        z_num, z_den = z_num_fn(T)
+        z_poles = [[r.real, r.imag] for r in z_den_roots(T)]
+        z_heights = []
+        for y in ys:
+            for x in xs:
+                z = complex(x, y)
+                num = eval_poly_c(z_num, z)
+                den = eval_poly_c(z_den, z)
+                an, ad = abs(num), abs(den)
+                mag = (0.0 if an < 1e-12 else 1e12) if ad < 1e-12 * max(1.0, an) else an / ad
+                z_heights.append(sc_clamp(math.log1p(mag) if scale_mode == "log" else mag))
+
+        sigma_max = max(p[0] for p in poles)
         return {
             "name": name,
             "source": "analytic",
@@ -2581,6 +2672,27 @@ def complex_domains():
                         "frame": "s_plane",
                         "layers": [
                             {"kind": "morph", "alpha": alpha, "items": m_items},
+                            {"kind": "surface", "source": "grid", "grid": [4, 3], "heights": grid_h},
+                            {
+                                "kind": "surface",
+                                "source": "rational_s",
+                                "sigma_max": sigma_max,
+                                "converges": sigma_max < -1e-9,
+                                "grid": res,
+                                "heights": s_heights,
+                            },
+                            {
+                                "kind": "surface",
+                                "source": "rational_z",
+                                "sigma_max": sigma_max,
+                                "r_max": math.exp(sigma_max * T),
+                                "converges": sigma_max < -1e-9,
+                                "z_poles": z_poles,
+                                "z_num": z_num,
+                                "z_den": z_den,
+                                "grid": res,
+                                "heights": z_heights,
+                            },
                         ],
                     }
                 }
@@ -2588,10 +2700,122 @@ def complex_domains():
         }
 
     cases = [
-        analytic_case("alpha=0 (T=1.0)", {"T": 1.0, "extra": True}, 0),
-        analytic_case("alpha=0.5 (T=0.5, extra=false)", {"T": 0.5, "extra": False}, 5),
-        analytic_case("alpha=1.0 (T=0.75)", {"T": 0.75, "extra": True}, 9),
+        # 1. exp(-a t), T = 1.5, alpha = 0 (exact identity h_0(s) = s)
+        analytic_case(
+            "exp(-a t) morph alpha=0 and rational s/z",
+            {"T": 1.5, "poles": [[-0.7, 0.0]], "zeros": [], "gain": 1.0, "extra": True},
+            0,
+            lambda T: ([[0.0, 0.0], [1.0, 0.0]], [[-math.exp(-0.7 * T), 0.0], [1.0, 0.0]]),
+            lambda T: [complex(math.exp(-0.7 * T), 0.0)],
+        ),
+        # 2. u(t), alpha = 0.5, extra hidden
+        analytic_case(
+            "u(t) step morph alpha=0.5 extra hidden",
+            {"T": 1.2, "poles": [[0.0, 0.0]], "zeros": [], "gain": 1.0, "extra": False},
+            5,
+            lambda _T: ([[0.0, 0.0], [1.0, 0.0]], [[-1.0, 0.0], [1.0, 0.0]]),
+            lambda _T: [1.0 + 0j],
+        ),
+        # 3. t -> T z / (z - 1)^2, alpha = 1.0
+        analytic_case(
+            "ramp t double pole morph alpha=1",
+            {"T": 1.5, "poles": [[0.0, 0.0], [0.0, 0.0]], "zeros": [], "gain": 1.0},
+            9,
+            lambda T: ([[0.0, 0.0], [T, 0.0], [0.0, 0.0]], [[1.0, 0.0], [-2.0, 0.0], [1.0, 0.0]]),
+            lambda _T: [1.0 + 0j, 1.0 + 0j],
+        ),
+        # 4. t^2 / 2 -> T^2 z (z + 1) / (2 (z - 1)^3)
+        analytic_case(
+            "quadratic t^2/2 triple pole log scale",
+            {"T": 1.4, "poles": [[0.0, 0.0], [0.0, 0.0], [0.0, 0.0]], "zeros": [], "gain": 1.0, "scale": "log"},
+            9,
+            lambda T: (
+                [[0.0, 0.0], [0.5 * T * T, 0.0], [0.5 * T * T, 0.0], [0.0, 0.0]],
+                [[-1.0, 0.0], [3.0, 0.0], [-3.0, 0.0], [1.0, 0.0]],
+            ),
+            lambda _T: [1.0 + 0j, 1.0 + 0j, 1.0 + 0j],
+        ),
+        # 5. cos(a t) -> z (z - cos(a T)) / (z^2 - 2 cos(a T) z + 1)
+        analytic_case(
+            "cos(a t) marginal pair with zero at origin",
+            {"T": 0.8, "poles": [[0.0, 1.2], [0.0, -1.2]], "zeros": [[0.0, 0.0]], "gain": 1.0},
+            9,
+            lambda T: (
+                [[0.0, 0.0], [-math.cos(1.2 * T), 0.0], [1.0, 0.0]],
+                [[1.0, 0.0], [-2.0 * math.cos(1.2 * T), 0.0], [1.0, 0.0]],
+            ),
+            lambda T: [cmath.exp(1.2j * T), cmath.exp(-1.2j * T)],
+        ),
+        # 6. sin(a t) -> z sin(a T) / (z^2 - 2 cos(a T) z + 1)
+        analytic_case(
+            "sin(a t) marginal pair",
+            {"T": 0.8, "poles": [[0.0, 1.2], [0.0, -1.2]], "zeros": [], "gain": 1.2},
+            9,
+            lambda T: (
+                [[0.0, 0.0], [math.sin(1.2 * T), 0.0], [0.0, 0.0]],
+                [[1.0, 0.0], [-2.0 * math.cos(1.2 * T), 0.0], [1.0, 0.0]],
+            ),
+            lambda T: [cmath.exp(1.2j * T), cmath.exp(-1.2j * T)],
+        ),
+        # 7. e^{-a t} sin(b t)
+        analytic_case(
+            "e^(-a t) sin(b t) damped pair",
+            {"T": 0.9, "poles": [[-0.4, 1.1], [-0.4, -1.1]], "zeros": [], "gain": 1.1},
+            9,
+            lambda T: (
+                [[0.0, 0.0], [math.exp(-0.4 * T) * math.sin(1.1 * T), 0.0], [0.0, 0.0]],
+                [[math.exp(-0.8 * T), 0.0], [-2.0 * math.exp(-0.4 * T) * math.cos(1.1 * T), 0.0], [1.0, 0.0]],
+            ),
+            lambda T: [cmath.exp((-0.4 + 1.1j) * T), cmath.exp((-0.4 - 1.1j) * T)],
+        ),
+        # 8. e^{-a t} cos(b t)
+        analytic_case(
+            "e^(-a t) cos(b t) damped pair with real zero",
+            {"T": 0.9, "poles": [[-0.4, 1.1], [-0.4, -1.1]], "zeros": [[-0.4, 0.0]], "gain": 1.0},
+            9,
+            lambda T: (
+                [[0.0, 0.0], [-math.exp(-0.4 * T) * math.cos(1.1 * T), 0.0], [1.0, 0.0]],
+                [[math.exp(-0.8 * T), 0.0], [-2.0 * math.exp(-0.4 * T) * math.cos(1.1 * T), 0.0], [1.0, 0.0]],
+            ),
+            lambda T: [cmath.exp((-0.4 + 1.1j) * T), cmath.exp((-0.4 - 1.1j) * T)],
+        ),
+        # 9. unpaired complex pole -> z / (z - e^{p T})
+        analytic_case(
+            "unpaired complex pole",
+            {"T": 0.75, "poles": [[-0.5, 1.2]], "zeros": [], "gain": 1.0},
+            9,
+            lambda T: (
+                [[0.0, 0.0], [1.0, 0.0]],
+                [[-cmath.exp((-0.5 + 1.2j) * T).real, -cmath.exp((-0.5 + 1.2j) * T).imag], [1.0, 0.0]],
+            ),
+            lambda T: [cmath.exp((-0.5 + 1.2j) * T)],
+        ),
+        # 10. biproper m = n = 1: 2 (s + 0.2)/(s + 0.8) = 2 - 1.2/(s + 0.8) -> (0.8 z - 2 e^{-0.8 T})/(z - e^{-0.8 T})
+        analytic_case(
+            "biproper single pole and single zero",
+            {"T": 1.0, "poles": [[-0.8, 0.0]], "zeros": [[-0.2, 0.0]], "gain": 2.0},
+            9,
+            lambda T: (
+                [[-2.0 * math.exp(-0.8 * T), 0.0], [0.8, 0.0]],
+                [[-math.exp(-0.8 * T), 0.0], [1.0, 0.0]],
+            ),
+            lambda T: [complex(math.exp(-0.8 * T), 0.0)],
+        ),
+        # 11. unstable RHP pole sigma = +0.3 -> converges = False
+        analytic_case(
+            "unstable pole converges=false",
+            {"T": 1.0, "poles": [[0.3, 0.0]], "zeros": [], "gain": 1.0},
+            9,
+            lambda T: ([[0.0, 0.0], [1.0, 0.0]], [[-math.exp(0.3 * T), 0.0], [1.0, 0.0]]),
+            lambda T: [complex(math.exp(0.3 * T), 0.0)],
+        ),
     ]
+
+    def with_surface(source, change):
+        """The panels of the scene with ``change`` applied to its first surface layer of this source kind."""
+        layers = copy.deepcopy(doc["panels"]["main"]["layers"])
+        change(next(layer for layer in layers if layer["kind"] == "surface" and layer["source"]["kind"] == source))
+        return {"panels": {"main": {"layers": layers}}}
 
     rejections = [
         {
@@ -2609,9 +2833,25 @@ def complex_domains():
             "rule": "keyframes",
             "scene": {
                 "panels": {
-                    "main": {"layers": [{**doc["panels"]["main"]["layers"][0], "alpha": {"keyframes": [[0.0, 0.0], [5.0, 2.0]]}}]},
+                    "main": {
+                        "layers": [
+                            {**doc["panels"]["main"]["layers"][0], "alpha": {"keyframes": [[0.0, 0.0], [5.0, 2.0]]}},
+                            *doc["panels"]["main"]["layers"][1:],
+                        ]
+                    },
                 }
             },
+        },
+        {
+            "name": "points-2d: empty poles list violates min_points",
+            "rule": "input",
+            "state": {**doc["initial"], "inputs": {"poles": []}},
+        },
+        {
+            "name": "input: seven points for an input of kind points_2d without max_points, which is 6 by default",
+            "rule": "input",
+            "scene": {"inputs": {"poles": {"max_points": None}}},
+            "state": {**doc["initial"], "inputs": {"poles": [[-0.1 * k, 0.0] for k in range(1, 8)]}},
         },
         {
             "name": "morph: unknown map kind",
@@ -2624,6 +2864,48 @@ def complex_domains():
                     }
                 }
             },
+        },
+        {
+            "name": "surface: improper transfer function (more zeros than poles)",
+            "rule": "surface",
+            "state": {**doc["initial"], "inputs": {"poles": [[-1.0, 0.0]], "zeros": [[-0.5, 0.0], [-0.2, 0.0]]}},
+        },
+        {
+            "name": "surface: rational_z missing required period",
+            "rule": "surface",
+            "scene": {
+                "panels": {
+                    "main": {
+                        **doc["panels"]["main"],
+                        "layers": [
+                            {
+                                "kind": "surface",
+                                "source": {"kind": "rational_z", "poles": {"input": "poles"}, "x": [-2, 2], "y": [-2, 2]},
+                            }
+                        ],
+                    }
+                }
+            },
+        },
+        {
+            "name": "surface: a rational surface over a domain whose x interval is empty",
+            "rule": "surface",
+            "scene": with_surface("rational_s", lambda layer: layer["source"].update(x=[1.0, 1.0])),
+        },
+        {
+            "name": "surface: a rational surface with a resolution below 2",
+            "rule": "surface",
+            "scene": with_surface("rational_s", lambda layer: layer["source"].update(resolution=[1, 8])),
+        },
+        {
+            "name": "surface: a clamp whose softness is not positive",
+            "rule": "surface",
+            "scene": with_surface("rational_s", lambda layer: layer.update(clamp={"max": 5.0, "softness": 0.0})),
+        },
+        {
+            "name": "surface: a height_scale that is not positive",
+            "rule": "surface",
+            "scene": with_surface("rational_z", lambda layer: layer.update(height_scale=0.0)),
         },
     ]
 

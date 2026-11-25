@@ -649,13 +649,32 @@ def _text_part(p: Any) -> Any:
         return p.to_json()
     if not isinstance(p, Mapping):
         raise SceneError(f"control: a part is text, an input, a channel, an attribute, or a dict, not {p!r}")
-    kinds = [k for k in ("input", "parameter", "attr", "channel", "clock", "keyframes", "timed_text", "sub", "sup") if k in p]
+    kinds = [k for k in ("input", "parameter", "attr", "channel", "clock", "keyframes", "timed_text", "sub", "sup", "roc_status") if k in p]
     if len(kinds) != 1:
         raise SceneError(
             f"control: the part {dict(p)!r} names {len(kinds)} of input, parameter, attr, channel, clock, keyframes, timed_text, "
-            "sub, and sup, not one"
+            "sub, sup, and roc_status, not one"
         )
     kind = kinds[0]
+    if kind == "roc_status":
+        if extra := set(p) - {"roc_status"}:
+            raise SceneError(f"control: a roc_status part has unknown keys {sorted(extra)}")
+        spec = p["roc_status"]
+        if not isinstance(spec, Mapping) or "poles" not in spec:
+            raise SceneError(f"control: a roc_status part requires poles, not {spec!r}")
+        if extra := set(spec) - {"poles", "period"}:
+            raise SceneError(f"control: a roc_status spec has unknown keys {sorted(extra)}")
+        poles_ref = spec["poles"]["input"] if isinstance(spec["poles"], Mapping) and set(spec["poles"]) == {"input"} else spec["poles"]
+        rs: dict[str, Any] = {"poles": _input_ref(poles_ref, "control: a roc_status poles", "points_2d")}
+        if "period" in spec and spec["period"] is not None:
+            per = spec["period"]
+            if isinstance(per, Input):
+                rs["period"] = _input_ref(per, "control: a roc_status period", "number")
+            elif isinstance(per, Mapping) and set(per) == {"input"}:
+                rs["period"] = _input_ref(per["input"], "control: a roc_status period", "number")
+            else:
+                rs["period"] = _positive(per, "a roc_status period", "control")
+        return {"roc_status": rs}
     if kind in ("sub", "sup"):
         if extra := set(p) - {kind}:
             raise SceneError(f"timeline-parts: a {kind} part has unknown keys {sorted(extra)}")
@@ -751,6 +770,11 @@ def timed_text(*pairs: Any) -> dict[str, Any]:
     """The part ``{"timed_text": [[t, text], ...]}``, the text of the last pair whose time has passed (rule `timeline-parts`), e.g. a
     caption that changes at each step."""
     return _text_part({"timed_text": [list(p) for p in pairs]})
+
+
+def roc_status(poles: Any, period: Any = 1.0) -> dict[str, Any]:
+    """The readout part ``{"roc_status": {"poles": ..., "period": ...}}`` summarizing the causal ROC and convergence."""
+    return _text_part({"roc_status": {"poles": poles, "period": period}})
 
 
 def _anchor(value: Any) -> dict[str, Any]:
@@ -864,7 +888,7 @@ def _check_layer(layer: Any) -> dict[str, Any]:
         raise SceneError(f"panel: a layer is a dict with a kind, not {layer!r}")
     kind = _enum(
         layer["kind"],
-        ("trajectories", "arrow", "inset_box", "body", "axes", "grid", "label", "points", "morph"),
+        ("trajectories", "arrow", "inset_box", "body", "axes", "grid", "label", "points", "morph", "surface"),
         "panel: a layer kind",
     )
     out: dict[str, Any] = {"kind": kind}
@@ -1123,7 +1147,7 @@ def _check_layer(layer: Any) -> dict[str, Any]:
             out["fit"] = _bool(layer["fit"], "a points layer's fit", "panel")
         if "opacity" in layer:
             out["opacity"] = _opacity(layer["opacity"], "a points layer's opacity")
-    else:
+    elif kind == "morph":
         allowed |= {"map", "alpha", "period", "items", "opacity"}
         out["map"] = _enum(layer.get("map"), ("conformal_exp",), "morph: a morph layer's map")
         out["alpha"] = _opacity(layer.get("alpha"), "a morph layer's alpha")
@@ -1134,6 +1158,59 @@ def _check_layer(layer: Any) -> dict[str, Any]:
         out["items"] = [_check_morph_item(it) for it in raw_items]
         if "opacity" in layer:
             out["opacity"] = _opacity(layer["opacity"], "a morph layer's opacity")
+    else:
+        allowed |= {
+            "source",
+            "scale",
+            "clamp",
+            "height_scale",
+            "colormap",
+            "color_range",
+            "grooves",
+            "roc",
+            "slices",
+            "markers",
+            "grow",
+            "opacity",
+        }
+        out["source"] = _check_surface_source(layer.get("source"))
+        if "scale" in layer:
+            sc = layer["scale"]
+            if isinstance(sc, Mapping) and set(sc) == {"input"}:
+                out["scale"] = _input_ref(sc["input"], "surface: a surface scale", "choice")
+            elif isinstance(sc, Input):
+                out["scale"] = _input_ref(sc, "surface: a surface scale", "choice")
+            else:
+                out["scale"] = _enum(sc, ("linear", "log"), "surface: a surface scale")
+        if "clamp" in layer:
+            cl = layer["clamp"]
+            if not isinstance(cl, Mapping) or set(cl) != {"max", "softness"}:
+                raise SceneError(f"surface: clamp must have max and softness, not {cl!r}")
+            out["clamp"] = {
+                "max": _positive(cl["max"], "surface clamp max", "surface"),
+                "softness": _positive(cl["softness"], "surface clamp softness", "surface"),
+            }
+        if "height_scale" in layer:
+            out["height_scale"] = _positive(layer["height_scale"], "surface height_scale", "surface")
+        if "colormap" in layer:
+            out["colormap"] = _enum(layer["colormap"], COLORMAPS, "surface: a surface colormap")
+        if "color_range" in layer:
+            cr = _pair(layer["color_range"], "surface color_range", "surface")
+            if cr[0] == cr[1]:
+                raise SceneError("surface: color_range endpoints must differ")
+            out["color_range"] = cr
+        if "grooves" in layer:
+            out["grooves"] = _check_grooves(layer["grooves"])
+        if "roc" in layer:
+            out["roc"] = _check_roc(layer["roc"])
+        if "slices" in layer:
+            out["slices"] = _check_slices(layer["slices"])
+        if "markers" in layer:
+            out["markers"] = _check_markers(layer["markers"])
+        if "grow" in layer:
+            out["grow"] = _opacity(layer["grow"], "a surface layer's grow")
+        if "opacity" in layer:
+            out["opacity"] = _opacity(layer["opacity"], "a surface layer's opacity")
     if extra := set(layer) - allowed:
         raise SceneError(f"panel: a {kind} layer has unknown keys {sorted(extra)}")
     return out
@@ -1214,6 +1291,146 @@ def _check_morph_item(item: Any) -> dict[str, Any]:
             out["reveal_origin"] = [_morph_coord(ro[0]), _morph_coord(ro[1])]
     if extra := set(item) - allowed:
         raise SceneError(f"morph: {kind} item has unknown keys {sorted(extra)}")
+    return out
+
+
+def _domain_pair(vals: Any, what: str) -> list[float]:
+    p = _pair(vals, what, "surface")
+    if not p[0] < p[1]:
+        raise SceneError(f"surface: {what} requires lo < hi, got {p}")
+    return p
+
+
+def _check_surface_source(src: Any) -> dict[str, Any]:
+    if not isinstance(src, Mapping) or "kind" not in src:
+        raise SceneError(f"surface: source must be a dict with kind, not {src!r}")
+    skind = _enum(src["kind"], ("grid", "rational_s", "rational_z"), "surface: source kind")
+    if skind == "grid":
+        if extra := set(src) - {"kind", "array", "x", "y"}:
+            raise SceneError(f"surface: grid source has unknown keys {sorted(extra)}")
+        return {
+            "kind": "grid",
+            "array": _text(src.get("array"), "surface grid array name"),
+            "x": _domain_pair(src.get("x"), "grid x"),
+            "y": _domain_pair(src.get("y"), "grid y"),
+        }
+    allowed = {"kind", "poles", "zeros", "gain", "period", "x", "y", "resolution"}
+    if extra := set(src) - allowed:
+        raise SceneError(f"surface: {skind} source has unknown keys {sorted(extra)}")
+    poles_val = src.get("poles")
+    poles_id = poles_val["input"] if isinstance(poles_val, Mapping) and set(poles_val) == {"input"} else poles_val
+    out: dict[str, Any] = {
+        "kind": skind,
+        "poles": _input_ref(poles_id, "surface: poles", "points_2d"),
+        "x": _domain_pair(src.get("x"), "surface x"),
+        "y": _domain_pair(src.get("y"), "surface y"),
+    }
+    if "zeros" in src and src["zeros"] is not None:
+        zv = src["zeros"]
+        zid = zv["input"] if isinstance(zv, Mapping) and set(zv) == {"input"} else zv
+        out["zeros"] = _input_ref(zid, "surface: zeros", "points_2d")
+    if "gain" in src and src["gain"] is not None:
+        out["gain"] = _number_or_ref(src["gain"], "surface: gain", positive=False)
+    if skind == "rational_z" or ("period" in src and src["period"] is not None):
+        out["period"] = _number_or_ref(src.get("period"), "surface: period", positive=True)
+    if "resolution" in src and src["resolution"] is not None:
+        res = src["resolution"]
+        if isinstance(res, (str, bytes, Mapping)) or not isinstance(res, Sequence) or len(res) != 2:
+            raise SceneError("surface: resolution must be two integers >= 2")
+        nx, ny = _integer(res[0], "surface: nx"), _integer(res[1], "surface: ny")
+        if nx < 2 or ny < 2:
+            raise SceneError("surface: resolution counts must be at least 2")
+        out["resolution"] = [nx, ny]
+    return out
+
+
+def _check_grooves(g: Any) -> dict[str, Any]:
+    if not isinstance(g, Mapping) or set(g) - {"step", "color", "opacity"}:
+        raise SceneError(f"surface: grooves invalid {g!r}")
+    out: dict[str, Any] = {}
+    if "step" in g:
+        st = _pair(g["step"], "grooves step", "surface")
+        if min(st) <= 0.0:
+            raise SceneError("surface: grooves step must be positive")
+        out["step"] = st
+    if "color" in g:
+        out["color"] = _color(g["color"], "surface grooves color")
+    if "opacity" in g:
+        out["opacity"] = _unit_interval(g["opacity"], "surface grooves opacity")
+    return out
+
+
+def _check_roc(r: Any) -> dict[str, Any]:
+    if not isinstance(r, Mapping) or set(r) - {"visible", "color", "opacity"}:
+        raise SceneError(f"surface: roc invalid {r!r}")
+    out: dict[str, Any] = {}
+    if "visible" in r and r["visible"] is not None:
+        v = r["visible"]
+        out["visible"] = v if isinstance(v, Mapping) and set(v) == {"input"} else _input_ref(v, "visible: roc visible", "toggle")
+    if "color" in r:
+        out["color"] = _color(r["color"], "surface roc color")
+    if "opacity" in r:
+        out["opacity"] = _opacity(r["opacity"], "surface roc opacity")
+    return out
+
+
+def _check_slices(s: Any) -> dict[str, Any]:
+    if not isinstance(s, Mapping) or set(s) - {"continuous", "discrete", "clip"}:
+        raise SceneError(f"surface: slices invalid {s!r}")
+    out: dict[str, Any] = {}
+    if "continuous" in s and s["continuous"] is not None:
+        c = s["continuous"]
+        if not isinstance(c, Mapping) or set(c) - {"visible", "color", "divergent_color", "opacity"}:
+            raise SceneError(f"surface: continuous slice invalid {c!r}")
+        co: dict[str, Any] = {}
+        if "visible" in c and c["visible"] is not None:
+            v = c["visible"]
+            co["visible"] = v if isinstance(v, Mapping) and set(v) == {"input"} else _input_ref(v, "visible: continuous slice", "toggle")
+        if "color" in c:
+            co["color"] = _color(c["color"], "continuous slice color")
+        if "divergent_color" in c:
+            co["divergent_color"] = _color(c["divergent_color"], "continuous slice divergent_color")
+        if "opacity" in c:
+            co["opacity"] = _opacity(c["opacity"], "continuous slice opacity")
+        out["continuous"] = co
+    if "discrete" in s and s["discrete"] is not None:
+        d = s["discrete"]
+        if not isinstance(d, Mapping) or set(d) - {"visible", "count", "color", "opacity"}:
+            raise SceneError(f"surface: discrete slice invalid {d!r}")
+        do: dict[str, Any] = {}
+        if "visible" in d and d["visible"] is not None:
+            v = d["visible"]
+            do["visible"] = v if isinstance(v, Mapping) and set(v) == {"input"} else _input_ref(v, "visible: discrete slice", "toggle")
+        if "count" in d and d["count"] is not None:
+            cnt = d["count"]
+            if isinstance(cnt, Mapping) and set(cnt) == {"input"}:
+                do["count"] = _input_ref(cnt["input"], "surface: discrete slice count", "number")
+            elif isinstance(cnt, Input):
+                do["count"] = _input_ref(cnt, "surface: discrete slice count", "number")
+            else:
+                iv = _integer(cnt, "surface: discrete slice count")
+                if iv < 2:
+                    raise SceneError("surface: discrete slice count must be >= 2")
+                do["count"] = iv
+        if "color" in d:
+            do["color"] = _color(d["color"], "discrete slice color")
+        if "opacity" in d:
+            do["opacity"] = _opacity(d["opacity"], "discrete slice opacity")
+        out["discrete"] = do
+    if "clip" in s and s["clip"] is not None:
+        out["clip"] = _bool(s["clip"], "surface slices clip", "surface")
+    return out
+
+
+def _check_markers(m: Any) -> dict[str, Any]:
+    if not isinstance(m, Mapping) or set(m) - {"visible", "opacity"}:
+        raise SceneError(f"surface: markers invalid {m!r}")
+    out: dict[str, Any] = {}
+    if "visible" in m and m["visible"] is not None:
+        v = m["visible"]
+        out["visible"] = v if isinstance(v, Mapping) and set(v) == {"input"} else _input_ref(v, "visible: surface markers", "toggle")
+    if "opacity" in m:
+        out["opacity"] = _opacity(m["opacity"], "surface markers opacity")
     return out
 
 
@@ -1567,6 +1784,43 @@ def morph(
     return _check_layer(layer)
 
 
+def surface(
+    source: Mapping[str, Any],
+    *,
+    scale: Any = None,
+    clamp: Mapping[str, float] | None = None,
+    height_scale: float | None = None,
+    colormap: str | None = None,
+    color_range: Sequence[float] | None = None,
+    grooves: Mapping[str, Any] | None = None,
+    roc: Mapping[str, Any] | None = None,
+    slices: Mapping[str, Any] | None = None,
+    markers: Mapping[str, Any] | None = None,
+    grow: Any = None,
+    opacity: Any = None,
+    visible: Any = None,
+) -> dict[str, Any]:
+    """A surface layer drawing a three-dimensional height field over a two-dimensional domain."""
+    layer: dict[str, Any] = {"kind": "surface", "source": dict(source)}
+    for key, value in (
+        ("scale", scale),
+        ("clamp", clamp),
+        ("height_scale", height_scale),
+        ("colormap", colormap),
+        ("color_range", None if color_range is None else list(color_range)),
+        ("grooves", grooves),
+        ("roc", roc),
+        ("slices", slices),
+        ("markers", markers),
+        ("grow", grow),
+        ("opacity", opacity),
+        ("visible", visible),
+    ):
+        if value is not None:
+            layer[key] = value
+    return _check_layer(layer)
+
+
 def split(dir: str, ratio: float, a: Any, b: Any, keyframes: Any = None) -> dict[str, Any]:
     """A layout split. A leaf is the id of a shown panel. ``keyframes`` are keyframes of the ratio, with values in [0, 1]
     (section 2.11)."""
@@ -1828,6 +2082,21 @@ def entry(
 # trajectory sets
 
 
+def _check_points2d_list(value: Any, what: str, min_p: int, max_p: int | None) -> list[list[float]]:
+    if isinstance(value, np.ndarray):
+        value = value.tolist()
+    if isinstance(value, (str, bytes, Mapping)) or not isinstance(value, Sequence):
+        raise SceneError(f"points-2d: {what} must be a list of [x, y] pairs, not {value!r}")
+    out: list[list[float]] = []
+    for pt in (p.tolist() if isinstance(p, np.ndarray) else p for p in value):
+        if isinstance(pt, (str, bytes, Mapping)) or not isinstance(pt, Sequence) or len(pt) != 2:
+            raise SceneError(f"points-2d: coordinate {pt!r} in {what} is not a pair")
+        out.append([_finite(pt[0], what), _finite(pt[1], what)])
+    if len(out) < min_p or (max_p is not None and len(out) > max_p):
+        raise SceneError(f"points-2d: {what} length {len(out)} lies outside [{min_p}, {max_p}]")
+    return out
+
+
 class TrajectorySet:
     """A collection of trajectories that share a frame. Each :meth:`add` gives one trajectory."""
 
@@ -2022,6 +2291,43 @@ class Scene:
         self._steps: list[dict[str, Any]] = []
         self._overlays: list[dict[str, Any]] = []
         self._images: dict[str, bytes] = {}
+        self._arrays: dict[str, tuple[np.ndarray, str]] = {}
+
+    def array(self, name: str, values: Any, *, dtype: str = "float32") -> str:
+        """Stores a two-dimensional height array in ``data.tyd`` for a surface grid source."""
+        name = _text(name, "surface: array name")
+        if dtype not in ("float32", "float64"):
+            raise SceneError(f"array-dtype: array {name!r} dtype must be float32 or float64, not {dtype!r}")
+        arr = np.asarray(values, dtype=np.float64)
+        if arr.ndim != 2 or arr.shape[0] < 2 or arr.shape[1] < 2:
+            raise SceneError(f"surface: grid array {name!r} must have 2d shape with at least 2x2 samples, got {arr.shape}")
+        # a value that is finite in float64 may overflow in float32
+        with np.errstate(over="ignore"):
+            stored = arr.astype(dtype)
+        if not np.all(np.isfinite(stored)):
+            raise SceneError(f"finite-number: grid array {name!r} has non-finite values as {dtype}")
+        self._arrays[name] = (stored, dtype)
+        return name
+
+    def _check_rational_defaults(self, src: Mapping[str, Any], where: str) -> list[str]:
+        """The failures of a rational surface whose inputs default to a function that the evaluators reject (rule `surface`)."""
+
+        def default(ref: Mapping[str, Any]) -> list[Any] | None:
+            spec = self._inputs.get(ref["input"])
+            return spec["default"] if spec is not None and spec["kind"] == "points_2d" else None
+
+        poles = default(src["poles"])
+        zeros = default(src["zeros"]) if "zeros" in src else []
+        if poles is None or zeros is None:
+            return []
+        out: list[str] = []
+        if not 1 <= len(poles) <= 6:
+            out.append(f"surface: the poles of {where} default to {len(poles)} points, outside [1, 6]")
+        if len(zeros) > 5:
+            out.append(f"surface: the zeros of {where} default to {len(zeros)} points, outside [0, 5]")
+        if len(zeros) > len(poles):
+            out.append(f"surface: {where} defaults to {len(zeros)} zeros and {len(poles)} poles, which is improper")
+        return out
 
     def _new(self, table: Mapping[str, Any], value: str, what: str) -> str:
         _check_id(value, what)
@@ -2245,6 +2551,35 @@ class Scene:
             spec["step"] = _positive(step, f"step of number input {id!r}", "number-input")
         return self._declare_input(id, spec)
 
+    def points_2d(
+        self,
+        id: str,
+        *,
+        default: Sequence[Sequence[float]],
+        min_points: int | None = None,
+        max_points: int | None = None,
+        bounds: Sequence[Sequence[float]] | None = None,
+        scope: str = "shared",
+    ) -> Input:
+        """A mutable list of two-dimensional point coordinates."""
+        min_p = 0 if min_points is None else _integer(min_points, "points-2d: min_points")
+        max_p = 6 if max_points is None else _integer(max_points, "points-2d: max_points")
+        if min_p < 0 or max_p < min_p:
+            raise SceneError(f"points-2d: input {id!r} has invalid counts [{min_p}, {max_p}]")
+        pts = _check_points2d_list(default, f"default of {id!r}", min_p, max_p)
+        spec: dict[str, Any] = {"kind": "points_2d", "default": pts, "scope": scope}
+        if min_points is not None:
+            spec["min_points"] = min_p
+        if max_points is not None:
+            spec["max_points"] = max_p
+        if bounds is not None:
+            if isinstance(bounds, (str, bytes, Mapping)) or not isinstance(bounds, Sequence) or len(bounds) != 2:
+                raise SceneError(f"points-2d: bounds of {id!r} must be [[x0, x1], [y0, y1]]")
+            bx = _domain_pair(bounds[0], f"bounds x of {id!r}")
+            by = _domain_pair(bounds[1], f"bounds y of {id!r}")
+            spec["bounds"] = [bx, by]
+        return self._declare_input(id, spec)
+
     def clock(
         self,
         mode: str = "fraction",
@@ -2376,6 +2711,8 @@ class Scene:
             return value.id
         if isinstance(value, str):
             return value
+        if isinstance(value, Sequence):
+            return _check_points2d_list(value, what, 0, None)
         return _finite(value, what)
 
     def layout(self, node: Any) -> None:
@@ -2429,6 +2766,60 @@ class Scene:
         }
         if color is not None:
             ctrl["color"] = _color(color, "control: toggle color")
+        self._add_show_range(ctrl, show_range)
+        self._controls.append(ctrl)
+
+    def points_2d_control(
+        self,
+        input: Any,
+        *,
+        label: str,
+        secondary_input: Any = None,
+        gain_input: Any = None,
+        period_input: Any = None,
+        preset_input: Any = None,
+        conjugate_lock: bool | None = None,
+        presets: Sequence[Mapping[str, Any]] | None = None,
+        show_time_domain: Any = None,
+        show_range: Sequence[float] | None = None,
+    ) -> None:
+        """A two-dimensional pole-zero picker pad control."""
+        ctrl: dict[str, Any] = {
+            "kind": "points_2d",
+            "input": _input_ref(input, "control: points_2d control", "points_2d")["input"],
+            "label": _text(label, "a label"),
+        }
+        if secondary_input is not None:
+            ctrl["secondary_input"] = _input_ref(secondary_input, "control: secondary_input", "points_2d")["input"]
+        if gain_input is not None:
+            ctrl["gain_input"] = _input_ref(gain_input, "control: gain_input", "number")["input"]
+        if period_input is not None:
+            ctrl["period_input"] = _input_ref(period_input, "control: period_input", "number")["input"]
+        if preset_input is not None:
+            ctrl["preset_input"] = _input_ref(preset_input, "control: preset_input", "choice")["input"]
+        if conjugate_lock is not None:
+            ctrl["conjugate_lock"] = _bool(conjugate_lock, "control: conjugate_lock", "control")
+        if presets is not None:
+            clean_presets = []
+            for p in presets:
+                if not isinstance(p, Mapping) or set(p) - {"id", "label", "poles", "zeros", "gain"}:
+                    raise SceneError(f"control: invalid preset {p!r}")
+                item: dict[str, Any] = {
+                    "id": _check_id(_id(p.get("id")), "preset id"),
+                    "label": _text(p.get("label"), "preset label"),
+                    "poles": _check_points2d_list(p.get("poles"), "preset poles", 1, 6),
+                }
+                if "zeros" in p and p["zeros"] is not None:
+                    item["zeros"] = _check_points2d_list(p["zeros"], "preset zeros", 0, 5)
+                    if len(item["zeros"]) > len(item["poles"]):
+                        counts = f"{len(item['zeros'])} zeros and {len(item['poles'])} poles"
+                        raise SceneError(f"control: preset {item['id']!r} has {counts}, which is improper")
+                if "gain" in p and p["gain"] is not None:
+                    item["gain"] = _finite(p["gain"], "preset gain")
+                clean_presets.append(item)
+            ctrl["presets"] = clean_presets
+        if show_time_domain is not None:
+            ctrl["show_time_domain"] = _input_ref(show_time_domain, "control: show_time_domain", "toggle")["input"]
         self._add_show_range(ctrl, show_range)
         self._controls.append(ctrl)
 
@@ -2566,7 +2957,9 @@ class Scene:
                 ("layers.label", any(layer["kind"] == "label" for layer in layers)),
                 ("layers.points", any(layer["kind"] == "points" for layer in layers)),
                 ("inputs.number", any(spec["kind"] == "number" for spec in self._inputs.values())),
+                ("inputs.points_2d", any(spec["kind"] == "points_2d" for spec in self._inputs.values())),
                 ("layers.morph", any(layer["kind"] == "morph" for layer in layers)),
+                ("layers.surface", any(layer["kind"] == "surface" for layer in layers)),
                 ("controls.action", any(c["kind"] == "action" for c in self._controls)),
             )
             if used
@@ -2836,6 +3229,40 @@ class Scene:
                 for item in layer["items"]:
                     if "visible" in item:
                         out += self._check_input(item["visible"]["input"], "toggle", f"visible: a morph item of {where}")
+            elif layer["kind"] == "surface":
+                src = layer["source"]
+                if src["kind"] == "grid":
+                    if src["array"] not in self._arrays:
+                        out.append(f"surface: {where} names grid array {src['array']!r}, which was not added to the scene")
+                else:
+                    out += self._check_input(src["poles"]["input"], "points_2d", f"surface: poles of {where}")
+                    if "zeros" in src:
+                        out += self._check_input(src["zeros"]["input"], "points_2d", f"surface: zeros of {where}")
+                    out += self._check_rational_defaults(src, where)
+                    if "gain" in src and isinstance(src["gain"], Mapping):
+                        out += self._check_input(src["gain"]["input"], "number", f"surface: gain of {where}")
+                    if "period" in src and isinstance(src["period"], Mapping):
+                        out += self._check_input(src["period"]["input"], "number", f"surface: period of {where}")
+                if isinstance(layer.get("scale"), Mapping):
+                    sc_iid = layer["scale"]["input"]
+                    out += self._check_input(sc_iid, "choice", f"surface: scale of {where}")
+                    if sc_iid in self._inputs and any(v not in ("linear", "log") for v in self._inputs[sc_iid].get("values", [])):
+                        out.append(f"surface: {where} scale choice {sc_iid!r} may only hold 'linear' or 'log'")
+                if "roc" in layer and "visible" in layer["roc"]:
+                    out += self._check_input(layer["roc"]["visible"]["input"], "toggle", f"visible: roc of {where}")
+                if "markers" in layer and "visible" in layer["markers"]:
+                    out += self._check_input(layer["markers"]["visible"]["input"], "toggle", f"visible: markers of {where}")
+                if "slices" in layer:
+                    if "continuous" in layer["slices"] and "visible" in layer["slices"]["continuous"]:
+                        out += self._check_input(
+                            layer["slices"]["continuous"]["visible"]["input"], "toggle", f"visible: continuous slice of {where}"
+                        )
+                    if "discrete" in layer["slices"]:
+                        ds = layer["slices"]["discrete"]
+                        if "visible" in ds:
+                            out += self._check_input(ds["visible"]["input"], "toggle", f"visible: discrete slice of {where}")
+                        if "count" in ds and isinstance(ds["count"], Mapping):
+                            out += self._check_input(ds["count"]["input"], "number", f"surface: discrete slice count of {where}")
         for key in (panel.get("camera") or {}).get("keyframes", []):
             for target in key.get("follow", []):
                 i = target["layer"]
@@ -2906,6 +3333,11 @@ class Scene:
                     out.append(f"input: {where} sets number input {iid!r} to {value!r}, outside [{spec['min']}, {spec['max']}]")
                 elif spec["kind"] == "toggle" and not isinstance(value, bool):
                     out.append(f"input: {where} sets toggle {iid!r} to {value!r}, which is not a boolean")
+                elif spec["kind"] == "points_2d":
+                    try:
+                        _check_points2d_list(value, f"{where} input {iid!r}", spec.get("min_points", 0), spec.get("max_points", 6))
+                    except SceneError as exc:
+                        out.append(str(exc))
 
         held(state.get("inputs", {}), "the initial state", "shared")
         for sid, shown_panel in state["panels"].items():
@@ -3169,6 +3601,29 @@ class Scene:
                 elif isinstance(v, (int, float)) and not (0.0 <= float(v) <= float(seconds)):
                     out.append(f"action-control: action target time {v} lies outside [0, {seconds}]")
             return out
+        if ckind == "points_2d":
+            out = self._check_input(control["input"], "points_2d", "control: a points_2d control")
+            if "secondary_input" in control:
+                out += self._check_input(control["secondary_input"], "points_2d", "control: secondary_input")
+            if "gain_input" in control:
+                out += self._check_input(control["gain_input"], "number", "control: gain_input")
+            if "period_input" in control:
+                out += self._check_input(control["period_input"], "number", "control: period_input")
+            if "preset_input" in control:
+                out += self._check_input(control["preset_input"], "choice", "control: preset_input")
+            if "show_time_domain" in control:
+                out += self._check_input(control["show_time_domain"], "toggle", "control: show_time_domain")
+            # a preset outside the counts of its inputs could not be applied
+            for preset in control.get("presets", []):
+                for key, iid in (("poles", control["input"]), ("zeros", control.get("secondary_input"))):
+                    spec = self._inputs.get(iid) if iid is not None else None
+                    if key not in preset or spec is None or spec["kind"] != "points_2d":
+                        continue
+                    lo, hi = spec.get("min_points", 0), spec.get("max_points", 6)
+                    if not lo <= len(preset[key]) <= hi:
+                        counts = f"{len(preset[key])} {key}, outside the counts [{lo}, {hi}] of input {iid!r}"
+                        out.append(f"control: preset {preset['id']!r} has {counts}")
+            return out
         if ckind == "slider":
             out = self._check_input(control["input"], None, "control: a slider control")
             if out:
@@ -3212,6 +3667,11 @@ class Scene:
         for part in parts:
             if "input" in part:
                 out += self._check_input(part["input"], None, "control: a readout")
+            if "roc_status" in part:
+                rs = part["roc_status"]
+                out += self._check_input(rs["poles"]["input"], "points_2d", "control: a roc_status part")
+                if "period" in rs and isinstance(rs["period"], Mapping):
+                    out += self._check_input(rs["period"]["input"], "number", "control: a roc_status period")
         relative = [p for p in parts if any(k in p for k in ("parameter", "attr", "channel"))]
         if not relative:
             return out
@@ -3254,6 +3714,8 @@ class Scene:
                 w.add_array(f"{ts.id}/parameters/{n}", np.array([p[n] for p in ts.parameters]), dtype="float64")
         for name, raw in self._images.items():
             w.add_array(name, np.frombuffer(raw, dtype=np.uint8), dtype="uint8")
+        for name, (arr, dtype) in self._arrays.items():
+            w.add_array(name, arr, dtype=dtype)
         return w.to_bytes()
 
     def write(self, tys_path: str | os.PathLike[str], tyd_path: str | os.PathLike[str]) -> None:

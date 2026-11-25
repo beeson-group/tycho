@@ -34,6 +34,8 @@ def test_06_morph_builders_and_validation_errors():
         scene.number("bad_step", min=0.0, max=1.0, step=0.0, default=0.5)
     with pytest.raises(ty.SceneError, match="number-input"):
         scene.number("bad_default", min=0.0, max=1.0, default=2.0)
+    with pytest.raises(ty.SceneError, match=r"^morph: a morph period is 0.0, not positive"):
+        ty.morph(alpha=0.0, period=0.0, items=[])
 
     n = scene.number("T", min=0.1, max=2.0, default=1.0)
     tog = scene.toggle("vis", default=True)

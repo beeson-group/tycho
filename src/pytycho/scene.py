@@ -1144,7 +1144,10 @@ def _number_or_ref(value: Any, what: str, *, positive: bool) -> Any:
         return _input_ref(value, what, "number")
     if isinstance(value, Mapping) and set(value) == {"input"}:
         return _input_ref(value["input"], what, "number")
-    return _positive(value, what, what.split(":", 1)[0]) if positive else _finite(value, what)
+    if not positive:
+        return _finite(value, what)
+    rule, _, name = what.partition(": ")
+    return _positive(value, name, rule)
 
 
 def _morph_coord(value: Any) -> Any:

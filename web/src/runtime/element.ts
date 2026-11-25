@@ -933,8 +933,6 @@ export class TychoViewerElement extends Base {
     this.overlayObserver?.disconnect();
     this.overlayObserver = null;
     this.dropRenderer();
-    for (const p of this.pickers) p.dispose();
-    this.pickers = [];
     this.canvas?.remove();
     this.canvas = null;
     this.paintCanvas?.remove();

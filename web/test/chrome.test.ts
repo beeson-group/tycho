@@ -1148,6 +1148,21 @@ describe('a viewer embedded on a page, under a DOM stand-in', () => {
     });
   });
 
+  it('keeps the pole-zero pad when the viewer leaves the page and comes back, and builds one pad per load', async () => {
+    const c = loadCorpus('complex-domains');
+    const text = JSON.stringify({ ...c.scene, controls: [{ kind: 'points_2d', input: 'poles', secondary_input: 'zeros', label: 'Poles and zeros' }] });
+    const bytes = new Uint8Array(readFileSync(new URL('../../spec/conformance/complex-domains/data.tyd', import.meta.url)));
+    const { v } = viewer();
+    await v.load(text, bytes);
+    const pads = () => byClass(v.shadowRoot as FakeElement, 'picker').length;
+    expect([v.statusEl.hidden, pads()]).toEqual([true, 1]);
+    v.disconnectedCallback();
+    v.connectedCallback();
+    expect(pads()).toBe(1);
+    await v.load(text, bytes);
+    expect(pads()).toBe(1);
+  });
+
   it('inherits the font of the host in the chrome, with a fixed size for legibility', () => {
     const css = readFileSync(new URL('../src/runtime/element.ts', import.meta.url), 'utf8');
     expect(css).toMatch(/:host \{[^}]*font-family: inherit;[^}]*font-size: 13px;/);

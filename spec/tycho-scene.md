@@ -245,6 +245,8 @@ The rules for inputs and references follow.
 - `input`. A reader rejects an input without a known kind or a default, a reference to an input that is not declared, and a value that is not of its input's kind.
   A value of the wrong kind (e.g. a boolean or a string for an input of kind `parameter`, or a number for a toggle) is never cast to the right kind.
 - `number-input`. An input of kind `number` holds a bounded finite number in `[min, max]`, with finite `min < max`, an optional positive `step`, and `default` in `[min, max]`.
+  A reader rejects an input of kind `number` whose `min` is not below its `max`, whose `step` is not positive, or whose `default` lies outside `[min, max]`.
+  A value outside `[min, max]` is not of the kind of its input, and a reader rejects it under rule `input`.
   A writer lists the feature `inputs.number` in `requires` (section 4) for a scene with an input of kind `number`.
 - `input-scope`. In a shown panel, `{"input": id}` reads the panel's value when the input is per-panel, and the shared value otherwise.
   A missing value is the input's default.
@@ -405,8 +407,13 @@ The rules for declared panels and layers follow.
 - `morph`. A `morph` layer deforms declared lines and rectangular regions in the complex plane under the conformal rolling-ribbon homotopy `h_alpha(s)`.
   For `alpha` in `[0, 1]` and positive period `T`, write `c(alpha) = alpha * ((1 - alpha) * T + alpha)` and `w = alpha * s * T`.
   When `alpha < 1e-5` or `|w| < 1e-4`, evaluate `h_alpha(s) = alpha + (s * T / ((1 - alpha) * T + alpha)) * (1 + w / 2 + w^2 / 6 + w^3 / 24)`, and otherwise evaluate `h_alpha(s) = alpha + (exp(w) - 1) / c(alpha)`.
+  The `alpha` of the layer is a number or a keyframed value (rule `keyframes`), and its `period` is a positive number or `{"input": id}`, which refers to an input of kind `number`.
   Coordinates in `items` are either a finite number or `{"nyquist": k}`, which evaluates to `k * pi / T`.
   Each item of kind `"line"` maps `samples` points uniformly from `from` to `to`, and each item of kind `"region"` maps `(nu + 1) * (nv + 1)` grid points across intervals `u` and `v` in row-major order.
+  A line has 64 samples by default and at least 2, and the `samples` of a region are `[nu, nv]`, each at least 1 and 24 by default.
+  Each evaluated point is `(x, y, 0)` in the display frame of the panel, where `x` and `y` are the real and the imaginary part of `h_alpha(s)`.
+  A reader rejects a `map` other than `"conformal_exp"`, an `alpha` outside `[0, 1]`, a `period` that is not positive or that refers to an input of another kind, and `samples` below these minimums.
+  A keyframe of `alpha` outside `[0, 1]` is rejected under rule `keyframes`.
   Any item whose `visible` toggle is false is omitted from the evaluated items list.
   A writer lists the feature `layers.morph` in `requires` (section 4) for a scene with a `morph` layer.
 
@@ -475,8 +482,10 @@ The rule for controls follows.
 
 - `control`. A reader rejects a control of an unknown kind, a control whose `input` is not declared, and a control whose input is of a kind that the control does not set.
   A slider sets an input of kind `parameter` with a `domain`, or an input of kind `number` without a `domain`.
-  A toggle control may carry a fixed `color`, and any control may carry `show_range: [t_0, t_1]` to show the control only while the timeline lies in `[t_0, t_1]`.
+  A toggle control may carry a fixed `color`, and a slider, a tabs, a toggle, or an action control may carry `show_range: [t_0, t_1]` to show the control only while the timeline lies in `[t_0, t_1]`.
+  A reader rejects a `show_range` that is not two finite times with `t_0 <= t_1`.
 - `action-control`. An `action` control carries a `label`, a start time `from` (a step id or finite seconds), and a stop target `to` (a step id or finite seconds).
+  A reader rejects a `from` or a `to` that is the id of a step that the scene does not declare (rule `steps`), or a time outside `[0, L]`, where `L` is the length of a loop (section 2.11).
   A writer lists the feature `controls.action` in `requires` (section 4) for a scene with an `action` control.
 
 ### 2.10 Export

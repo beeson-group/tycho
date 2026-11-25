@@ -304,7 +304,7 @@ input[type=range]:disabled { opacity: 0.4; cursor: default; }
 .picker-toggle { border: 0; background: none; color: var(--dim); cursor: pointer; padding: 0 4px; font-size: 11px; line-height: 1.4; }
 .picker-toggle:hover { color: var(--fg); }
 /* the body scrolls in a panel area that is shorter than the pad, so that the head with its toggle stays in reach */
-.picker-body { display: flex; flex-direction: column; gap: 6px; padding: 8px; min-height: 0; overflow: hidden auto; overscroll-behavior: contain; }
+.picker-body { display: flex; flex-direction: column; gap: 6px; padding: 8px; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
 .picker-body > * { flex: none; }
 .pz-canvas, .pz-time { display: block; border: 1px solid var(--line); border-radius: 4px; touch-action: none; }
 .pz-canvas { cursor: crosshair; }

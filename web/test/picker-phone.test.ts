@@ -33,7 +33,7 @@ interface Pad {
   /** Whether the point in the middle of the toggle belongs to the toggle, hence a tap there reaches it. */
   toggleOnTop: boolean;
   /** The buttons and the checkboxes with their labels, each after the body of the pad was scrolled to it. */
-  controls: { name: string; box: Box; onTop: boolean }[];
+  controls: { name: string; box: Box; topmost: boolean }[];
   /** The canvas of the pad, after the body of the pad was scrolled to it. */
   canvas: Box;
 }
@@ -112,7 +112,7 @@ tycho-viewer { display: block; width: 100%; height: 100%; }
     return chrome.evaluate(`(async () => {
       const root = document.querySelector('tycho-viewer').shadowRoot;
       const box = (e) => { const r = e.getBoundingClientRect(); return { left: r.left, top: r.top, right: r.right, bottom: r.bottom }; };
-      const onTop = (e) => {
+      const topmost = (e) => {
         const r = e.getBoundingClientRect();
         const hit = root.elementFromPoint((r.left + r.right) / 2, (r.top + r.bottom) / 2);
         return hit !== null && (e === hit || e.contains(hit));
@@ -123,7 +123,7 @@ tycho-viewer { display: block; width: 100%; height: 100%; }
       for (const e of picker.querySelectorAll('.pz-btn, .pz-lock, .pz-snap')) {
         if (picker.classList.contains('collapsed')) break;
         e.scrollIntoView({ block: 'nearest' });
-        controls.push({ name: e.textContent, box: box(e), onTop: onTop(e) });
+        controls.push({ name: e.textContent, box: box(e), topmost: topmost(e) });
       }
       const canvas = picker.querySelector('.pz-canvas');
       canvas.scrollIntoView({ block: 'nearest' });
@@ -133,7 +133,7 @@ tycho-viewer { display: block; width: 100%; height: 100%; }
         area: box(root.querySelector('.panel-area')),
         pad: box(picker),
         toggle: box(toggle),
-        toggleOnTop: onTop(toggle),
+        toggleOnTop: topmost(toggle),
         controls,
         canvas: box(canvas),
       };
@@ -187,7 +187,7 @@ tycho-viewer { display: block; width: 100%; height: 100%; }
       expect(opened.controls.map((c) => c.name)).toEqual(['Conjugate', 'Snap', '+Pole', '+Zero', 'Del']);
       for (const c of opened.controls) {
         expect(inside(c.box, opened.area), `${c.name} of ${at}`).toBe(true);
-        expect(c.onTop, `${c.name} of ${at}`).toBe(true);
+        expect(c.topmost, `${c.name} of ${at}`).toBe(true);
         expect(c.box.bottom - c.box.top, `${c.name} of ${at}`).toBeGreaterThanOrEqual(TOUCH);
       }
     },
@@ -204,7 +204,7 @@ tycho-viewer { display: block; width: 100%; height: 100%; }
     expect(opened.collapsed, at).toBe(false);
     expect(inside(opened.pad, opened.area), at).toBe(true);
     expect(inside(opened.toggle, opened.area) && opened.toggleOnTop, at).toBe(true);
-    for (const c of opened.controls) expect(inside(c.box, opened.area) && c.onTop, `${c.name} of ${at}`).toBe(true);
+    for (const c of opened.controls) expect(inside(c.box, opened.area) && c.topmost, `${c.name} of ${at}`).toBe(true);
   }, 60000);
 
   it('keeps its look on a desktop, where it starts open at 244 px with small buttons', async () => {

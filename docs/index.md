@@ -58,7 +58,7 @@ A [second](guide/html.md) explains what the page holds, how it is embedded in an
 :link: gallery
 :link-type: doc
 
-The gallery holds the pages that pytycho writes for the three examples, Broucke's families of periodic orbits in the elliptic restricted three-body problem, the invariant manifolds of three Earth–Moon periodic orbits, and the continuous-to-discrete complex domains mapping.
+The gallery holds the pages that pytycho writes for the examples, i.e. Broucke's families of periodic orbits in the elliptic restricted three-body problem, the invariant manifolds of three Earth–Moon periodic orbits, and the map from the s-plane to the z-plane.
 :::
 
 :::{grid-item-card} Scene reference

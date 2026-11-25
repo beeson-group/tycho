@@ -90,9 +90,9 @@ Two panels then appear side by side under 3d cameras to show the continuous Lapl
 The controls of the page are the following.
 
 - Sliders set the sampling period `T` and discrete sample count `N`, and a button replays the conformal morph.
-- Tabs switch the pole-zero preset and choose linear or logarithmic magnitude scaling.
+- A select chooses the pole-zero preset, and tabs choose a linear or a logarithmic scale of the magnitude.
 - Toggles show and hide the stability regions, aliasing strips, causal region of convergence (ROC), continuous and discrete Fourier slices, and the time-domain signal.
-- A two-dimensional pole-zero picker moves, adds, and removes poles and zeros on the s-plane while updating both magnitude surfaces and the time-domain response.
+- In the pole-zero picker, poles and zeros of the s-plane are moved, added, and removed, and both magnitude surfaces and the time-domain response follow.
 
 ```{only} s_to_z_page and s_to_z_poster
 <a href="examples/s-to-z.html"><img class="tycho-poster" src="examples/s-to-z.png" alt="A still of the complex domains page"></a>

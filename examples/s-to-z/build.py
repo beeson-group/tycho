@@ -1,9 +1,11 @@
-"""Interactive s-to-z complex domains page built with TyCHO 0.6.
+"""The map ``z = exp(s * T)`` from the s-plane to the z-plane, as one TyCHO page.
 
-Demonstrates the continuous-to-discrete conformal mapping ``z = exp(s * T)``, the
-continuous Laplace and causal impulse-invariant Z-transform magnitude surfaces, causal
-region of convergence, Fourier slices, and a live 2D pole-zero picker. Imports only
-NumPy, pytycho, and the Python standard library.
+The page shows the conformal map from the continuous to the discrete domain, the magnitude surfaces of the Laplace
+transform and of the causal impulse-invariant Z-transform, the causal region of convergence, Fourier slices, and a
+pole-zero picker. The script writes ``s-to-z.tys``, ``s-to-z.tyd``, and ``s-to-z.html`` next to itself, or into the
+folder given by ``--out``. With ``--slide`` it writes the variant for a slide of a talk, ``s-to-z-slide.html``, under
+the viewer's ``minimal="slide"``. It does not read an input file, and it imports only NumPy, pytycho, and the standard
+library.
 """
 
 from __future__ import annotations
@@ -325,10 +327,8 @@ def build_scene(*, slide: bool = False) -> ty.Scene:
     picker_y_bounds = [-3.2, 3.2]
     period = scene.number("T", min=0.25, max=2.0, step=0.05, default=1.0)
     sample_n = scene.number("N", min=4, max=64, step=1, default=16)
-    poles = scene.points_2d(
-        "poles", default=[[-0.8, 0.0]], min_points=1, max_points=6, bounds=[picker_x_bounds, picker_y_bounds], conjugate_lock=True
-    )
-    zeros = scene.points_2d("zeros", default=[], min_points=0, max_points=5, bounds=[picker_x_bounds, picker_y_bounds], conjugate_lock=True)
+    poles = scene.points_2d("poles", default=[[-0.8, 0.0]], min_points=1, max_points=6, bounds=[picker_x_bounds, picker_y_bounds])
+    zeros = scene.points_2d("zeros", default=[], min_points=0, max_points=5, bounds=[picker_x_bounds, picker_y_bounds])
     gain = scene.number("gain", min=-10.0, max=10.0, step=0.1, default=1.0)
     preset = (
         None

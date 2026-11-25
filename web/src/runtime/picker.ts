@@ -133,12 +133,7 @@ export class PoleZeroPicker {
     this.headerTitle = makeEl('span', 'picker-title', control.label);
     this.headerToggle = makeEl('button', 'picker-toggle');
     this.headerToggle.type = 'button';
-    this.headerToggle.addEventListener('click', () => {
-      this.collapsed = !this.collapsed;
-      this.el.classList.toggle('collapsed', this.collapsed);
-      this.syncHeader();
-      if (!this.collapsed) this.draw();
-    });
+    this.headerToggle.addEventListener('click', () => this.setCollapsed(!this.collapsed));
     head.append(this.headerTitle, this.headerToggle);
 
     this.bodyEl = makeEl('div', 'picker-body');
@@ -200,6 +195,18 @@ export class PoleZeroPicker {
     this.bodyEl.append(this.padCanvas, togglesRow, row, this.coordsEl, this.timeCanvas);
     this.el.append(head, this.bodyEl);
     this.syncHeader();
+  }
+
+  private setCollapsed(collapsed: boolean): void {
+    this.collapsed = collapsed;
+    this.el.classList.toggle('collapsed', collapsed);
+    this.syncHeader();
+    if (!collapsed) this.draw();
+  }
+
+  /** Collapses a pad whose body the panel area is too short to show whole. */
+  collapseIfCut(): void {
+    if (!this.collapsed && this.bodyEl.scrollHeight > this.bodyEl.clientHeight + 1) this.setCollapsed(true);
   }
 
   private syncHeader(): void {

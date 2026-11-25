@@ -117,6 +117,9 @@ const ORBIT_KEYS: readonly { keys: readonly string[]; does: string; turn?: true 
   { keys: ['F'], does: 'reset' },
 ];
 
+/** The pages on which a pole-zero pad starts collapsed, i.e. a narrow one, and a phone on its side. */
+const PICKER_COLLAPSED = '(max-width: 720px), (pointer: coarse) and (orientation: landscape) and (max-height: 500px)';
+
 const STYLE = `
 :host { display: block; position: relative; background: var(--bg); color: var(--fg);
   font-family: inherit; font-size: 13px; font-style: normal; font-weight: 400; line-height: 1.4; letter-spacing: normal;
@@ -290,16 +293,19 @@ input[type=range]:disabled { opacity: 0.4; cursor: default; }
 .readout .line { white-space: pre-wrap; font-variant-numeric: tabular-nums; }
 .readout.warn .line, .readout b.warn { color: var(--accent); }
 
-.picker { position: absolute; right: 10px; bottom: 10px; z-index: 6; width: 244px; max-width: calc(100% - 20px);
+.picker { position: absolute; right: 10px; bottom: 10px; z-index: 6; display: flex; flex-direction: column; width: 244px;
+  max-width: calc(100% - 20px); max-height: calc(100% - 20px);
   background: var(--header); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
   border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.32); overflow: hidden; }
 .picker.collapsed { width: auto; }
-.picker-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 8px;
+.picker-head { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 8px;
   border-bottom: 1px solid var(--line); font-size: 12px; font-weight: 600; }
 .picker.collapsed .picker-head { border-bottom: 0; }
 .picker-toggle { border: 0; background: none; color: var(--dim); cursor: pointer; padding: 0 4px; font-size: 11px; line-height: 1.4; }
 .picker-toggle:hover { color: var(--fg); }
-.picker-body { display: flex; flex-direction: column; gap: 6px; padding: 8px; }
+/* the body scrolls in a panel area that is shorter than the pad, so that the head with its toggle stays in reach */
+.picker-body { display: flex; flex-direction: column; gap: 6px; padding: 8px; min-height: 0; overflow: hidden auto; overscroll-behavior: contain; }
+.picker-body > * { flex: none; }
 .pz-canvas, .pz-time { display: block; border: 1px solid var(--line); border-radius: 4px; touch-action: none; }
 .pz-canvas { cursor: crosshair; }
 .pz-toggles { display: flex; align-items: center; gap: 12px; font-size: 11px; }
@@ -307,6 +313,18 @@ input[type=range]:disabled { opacity: 0.4; cursor: default; }
 .pz-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: 11px; }
 .pz-btn { flex: 1 1 0; justify-content: center; padding: 2px 6px; font-size: 11px; }
 .pz-info { font-size: 11px; color: var(--dim); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (pointer: coarse) {
+  .picker-head { padding: 0 0 0 8px; }
+  .picker-toggle { min-width: 36px; min-height: 36px; font-size: 13px; }
+  .pz-btn, .pz-lock, .pz-snap { min-height: 36px; }
+}
+/* a phone on its side is too short for the pad in one column, hence the controls stand beside the canvas */
+@media (pointer: coarse) and (orientation: landscape) and (max-height: 500px) {
+  .picker:not(.collapsed) { width: auto; }
+  .picker-body { display: grid; grid-template-columns: auto 224px; grid-template-rows: repeat(3, max-content) 68px; gap: 6px 8px;
+    justify-content: center; }
+  .pz-canvas { grid-row: 1 / span 4; }
+}
 
 footer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 8px 14px 10px; }
 .cap { display: flex; align-items: center; gap: 4px; padding: 3px; min-height: 36px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
@@ -349,7 +367,7 @@ footer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; pad
   footer { padding: 6px 10px 8px; gap: 6px 8px; }
   .cap.steps { max-width: 100%; }
   .cap.steps select { max-width: 155px; }
-  .picker { right: 8px; bottom: 8px; }
+  .picker { right: 8px; bottom: 8px; max-height: calc(100% - 16px); }
   .picker:not(.collapsed) { left: 8px; right: 8px; width: auto; max-width: none; }
   .picker-body { align-items: center; }
 }
@@ -912,6 +930,7 @@ export class TychoViewerElement extends Base {
     this.lastLayout = null;
     for (const pid of [...this.panelDom.keys()]) this.removePanelDom(pid);
     this.onChange('state');
+    for (const p of this.pickers) p.collapseIfCut();
     if (this.store.playing) this.onChange('playing');
     this.syncShown();
   }
@@ -1974,7 +1993,7 @@ export class TychoViewerElement extends Base {
     this.sceneWidgets = [];
     for (const p of this.pickers) p.dispose();
     this.pickers = [];
-    const mobile = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 720px)').matches;
+    const mobile = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia(PICKER_COLLAPSED).matches;
     for (const c of scene.controls ?? []) {
       if (c.kind === 'playback') continue;
       if (c.kind === 'points_2d') {

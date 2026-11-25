@@ -20,7 +20,7 @@ pytycho and `@beeson-group/tycho` are released together from one tag, and both p
 
 Run the steps below from the repository root of a checkout of the tag, with the runtime built, the two inputs of step 2 in `examples/broucke/` and `examples/manifolds/`, and Google Chrome and ffmpeg installed.
 
-1. Build the three example pages.
+1. Build the example pages.
    ```sh
    uv run python examples/broucke/build.py
    uv run python examples/manifolds/build.py
@@ -39,7 +39,11 @@ Run the steps below from the repository root of a checkout of the tag, with the 
    ```
 4. Upload the pages, the posters, the inputs, and the GIF to the release.
    ```sh
-   gh release upload vX.Y.Z examples/broucke/broucke.html examples/broucke/broucke.png examples/broucke/broucke-input.tyd examples/manifolds/manifolds.html examples/manifolds/manifolds.png examples/manifolds/manifolds-input.tyd examples/s-to-z/s-to-z.html examples/s-to-z/s-to-z.png --clobber --repo beeson-group/tycho
+   gh release upload vX.Y.Z \
+     examples/broucke/broucke.html examples/broucke/broucke.png examples/broucke/broucke-input.tyd \
+     examples/manifolds/manifolds.html examples/manifolds/manifolds.png examples/manifolds/manifolds-input.tyd \
+     examples/s-to-z/s-to-z.html examples/s-to-z/s-to-z.png \
+     --clobber --repo beeson-group/tycho
    gh release upload vX.Y.Z broucke.gif --repo beeson-group/tycho
    ```
 5. Delete `broucke-palette.png` and `broucke.gif` from the repository root, since they are not gitignored there.

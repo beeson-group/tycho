@@ -269,6 +269,35 @@ export function evalPoly(coeffs: readonly Cpx[], w: Cpx): Cpx {
   return acc;
 }
 
+/**
+ * The roots of a polynomial with ascending complex coefficients, by a fixed number of Durand-Kerner steps. The leading coefficients
+ * that vanish against the largest one do not count toward the degree, and a multiple root is found to about the square root of the
+ * rounding error.
+ */
+export function polyRoots(coeffs: readonly [number, number][], steps = 80): [number, number][] {
+  const largest = Math.max(0, ...coeffs.map(([re, im]) => Math.hypot(re, im)));
+  let degree = coeffs.length - 1;
+  while (degree > 0 && Math.hypot(coeffs[degree]![0], coeffs[degree]![1]) <= 1e-12 * largest) degree--;
+  if (degree < 1 || largest === 0) return [];
+  const lead = cpx(coeffs[degree]![0], coeffs[degree]![1]);
+  const monic = coeffs.slice(0, degree + 1).map(([re, im]) => cDiv(cpx(re, im), lead));
+  // every root lies within the bound of Cauchy, and the starting points lie on a circle inside it, turned off the real axis
+  const radius = 1 + Math.max(...monic.slice(0, degree).map(cAbs));
+  const roots: Cpx[] = Array.from({ length: degree }, (_, k) => {
+    const angle = (2 * Math.PI * k) / degree + 0.4;
+    return cpx(0.5 * radius * Math.cos(angle), 0.5 * radius * Math.sin(angle));
+  });
+  for (let step = 0; step < steps; step++) {
+    for (let i = 0; i < degree; i++) {
+      let den = cpx(1, 0);
+      for (let j = 0; j < degree; j++) if (j !== i) den = cMul(den, cSub(roots[i]!, roots[j]!));
+      if (cAbs(den) === 0) continue;
+      roots[i] = cSub(roots[i]!, cDiv(evalPoly(monic, roots[i]!), den));
+    }
+  }
+  return roots.map((r) => [r.re, r.im]);
+}
+
 /** Magnitude |F(x + j y)| of proper rational Laplace transform. */
 export function evalRationalS(poles: readonly [number, number][], zeros: readonly [number, number][], gain: number, x: number, y: number): number {
   const s = cpx(x, y);

@@ -6,7 +6,7 @@
  */
 import * as THREE from 'three';
 import { fail } from '../errors.js';
-import { evalRationalS, evalRationalZ, impulseInvariantZ, mapHeight } from '../evaluate/complex.js';
+import { evalRationalS, evalRationalZ, impulseInvariantZ, mapHeight, polyRoots } from '../evaluate/complex.js';
 import { resolveNumber, resolvePoints2d, SURFACE_RESOLUTION, type LayerEnv } from '../evaluate/layers.js';
 import { inputDef, inputValue } from '../evaluate/resolve.js';
 import { opacityAt, timeAt } from '../evaluate/timeline.js';
@@ -475,6 +475,8 @@ export class SurfaceDraw implements Draw {
   private cachedConverges = true;
   private cachedZPoles: [number, number][] = [];
   private cachedZNum: [number, number][] = [];
+  /** The zeros of a rational surface in z, i.e. the roots of its numerator. */
+  private cachedZZeros: [number, number][] = [];
 
   constructor(ctx: DrawContext, layer: SurfaceLayer, key: string) {
     this.key = key;
@@ -777,7 +779,7 @@ export class SurfaceDraw implements Draw {
       this.group.add(this.poleSprites.points);
 
       this.zeroSprites = new MarkerSprites({ shape: 'ring', color: themed(ctx.theme.foreground, ctx.theme) }, 11, false);
-      this.zeroSprites.grow(5);
+      this.zeroSprites.grow(6);
       this.group.add(this.zeroSprites.points);
     }
   }
@@ -841,6 +843,7 @@ export class SurfaceDraw implements Draw {
         this.cachedConverges = zRes.converges;
         this.cachedZPoles = zRes.z_poles;
         this.cachedZNum = zRes.z_num;
+        this.cachedZZeros = polyRoots(zRes.z_num);
         let maxR = 1;
         for (const [zr, zi] of zRes.z_poles) maxR = Math.max(maxR, Math.hypot(zr, zi));
         u.uZScaleInv!.value = 1 / maxR;
@@ -1087,11 +1090,7 @@ export class SurfaceDraw implements Draw {
             zPos.setXYZ(zShown++, zx, zy, 0.026);
           }
         } else {
-          // For z-plane rational surfaces, display s-plane zeros mapped via exp(z * T)
-          for (const [zr, zi] of zeros) {
-            const em = Math.exp(zr * period);
-            const zx = em * Math.cos(zi * period);
-            const zy = em * Math.sin(zi * period);
+          for (const [zx, zy] of this.cachedZZeros) {
             if (zx < x0 - 0.5 || zx > x1 + 0.5 || zy < y0 - 0.5 || zy > y1 + 0.5) continue;
             zPos.setXYZ(zShown++, zx, zy, 0.026);
           }

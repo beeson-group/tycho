@@ -246,7 +246,7 @@ The rules for inputs and references follow.
   A value of the wrong kind (e.g. a boolean or a string for an input of kind `parameter`, or a number for a toggle) is never cast to the right kind.
 - `number-input`. An input of kind `number` holds a bounded finite number in `[min, max]`, with finite `min < max`, an optional positive `step`, and `default` in `[min, max]`.
   A writer lists the feature `inputs.number` in `requires` (section 4) for a scene with an input of kind `number`.
-- `points-2d`. An input of kind `points_2d` holds a list of `[x, y]` pairs of finite numbers, with optional integer counts `min_points >= 0` and `max_points >= min_points`, optional bounds `[[x_min, x_max], [y_min, y_max]]`, and optional `conjugate_lock`.
+- `points-2d`. An input of kind `points_2d` holds a list of `[x, y]` pairs of finite numbers, with optional integer counts `min_points >= 0`, 0 by default, and `max_points >= min_points`, 6 by default, and optional bounds `[[x_min, x_max], [y_min, y_max]]`.
   A value fits the input only when every entry is a pair of finite numbers and the list length lies in `[min_points, max_points]`.
   A writer lists the feature `inputs.points_2d` in `requires` (section 4) for a scene with an input of kind `points_2d`.
 - `input-scope`. In a shown panel, `{"input": id}` reads the panel's value when the input is per-panel, and the shared value otherwise.
@@ -416,7 +416,15 @@ The rules for declared panels and layers follow.
 - `surface`. A `surface` layer evaluates a 3D height field over a 2D domain `[x0, x1] x [y0, y1]`, either from a stored 2D float32 or float64 array of shape `(ny, nx)` (`ny >= 2`, `nx >= 2`) in `data.tyd` (`kind: "grid"`) or from a rational transform (`kind: "rational_s"` or `"rational_z"`).
   For `"rational_s"` and `"rational_z"`, `poles` refers to a `points_2d` input with `1 <= n <= 6` poles, and optional `zeros` refers to a `points_2d` input with `0 <= m <= 5` zeros and `m <= n`.
   The `"rational_s"` surface evaluates `|g * prod(s - z_j) / prod(s - p_k)|`, and `"rational_z"` evaluates the exact causal impulse-invariant Z-transform `|F(z)|` using a companion state-space realization `(A, b, c, d_inf)`, matrix exponential `M = exp(A * T)`, denominator `Q(z) = prod(z - exp(p_k * T))`, and numerator polynomial extracted from `M` via the Cayley-Hamilton recurrence.
+  A rational surface is sampled at `nx * ny` points, where its `resolution` is `[nx, ny]`, each at least 2 and 64 by default.
+  Sample `(i, j)` lies at `x_i = x0 + i / (nx - 1) * (x1 - x0)` and `y_j = y0 + j / (ny - 1) * (y1 - y0)`, and the evaluated `heights` hold the samples row by row, with `j` as the outer index, as the rows of a stored array do.
+  Where the numerator `N` and the denominator `D` of a rational surface at a sample satisfy `|D| < 1e-12 * max(1, |N|)`, the magnitude is `1e12`, or 0 when `|N| < 1e-12` as well.
+  The evaluated layer of a rational surface also gives `sigma_max`, the largest real part of the poles, and `converges`, which is true when `sigma_max < -1e-9`, and for `"rational_z"` it gives `r_max = exp(sigma_max * T)`.
   For raw magnitude `m >= 0`, `scale` `"linear"` uses `r = m` and `"log"` uses `r = ln(1 + m)`, after which optional `clamp` applies a smooth ceiling and `height_scale` and `grow` scale the height.
+  Under `"log"`, a stored value below 0 of a `"grid"` source is taken as 0.
+  A `clamp` with `max` `C > 0` and `softness` `w > 0` maps `r` to `max(0, C - w * ln(1 + exp((C - r) / w)))`.
+  The `height_scale` is positive and 1 by default, and `grow` is a number or a keyframed value (rule `keyframes`) in `[0, 1]`, 1 by default.
+  A reader rejects a `"grid"` source whose array is missing, is not of dtype float32 or float64, or is smaller than 2 by 2, a domain with `x0 >= x1` or `y0 >= y1`, a `resolution` below 2, `poles` or `zeros` outside the counts above, a `"rational_z"` source without a `period`, a `period` that is not positive, a `clamp` without a positive `max` and a positive `softness`, and a `height_scale` that is not positive.
   A writer lists the feature `layers.surface` in `requires` (section 4) for a scene with a `surface` layer.
 
 The other keys of a declared panel and of its layers, such as a color, a width, an opacity, an `axes` or a `grid` layer, and every key of a camera but its `keyframes`, are for drawing only.
@@ -469,6 +477,8 @@ Each part is a string, shown as it is, or one of the following.
 
 - `{"input": id}` is the value of an input.
 - `{"parameter": name}` is the value of the named parameter for the current trajectory, and `@index` is accepted as the name.
+- `{"roc_status": {"poles": {"input": id}, "period": T}}` is a text on the region of convergence of the causal signal whose poles the input of kind `points_2d` holds.
+  The text gives `sigma_max`, `r_max`, and whether the signal `converges`, as rule `surface` defines them, and `T` is a positive number or `{"input": id}` of an input of kind `number`, 1 by default.
 - `{"attr": name, "factor": a, "offset": b}` is an attribute, as in section 2.2.
 - `{"channel": name}` is the value of the named channel at the current fraction along.
 - `{"clock": "frame_index"}` is the frame index, i.e. the remainder `i` in `[0, frame_count)`.
@@ -486,6 +496,10 @@ The rule for controls follows.
   A slider sets an input of kind `parameter` with a `domain`, or an input of kind `number` without a `domain`.
   A toggle control may carry a fixed `color`, and any control may carry `show_range: [t_0, t_1]` to show the control only while the timeline lies in `[t_0, t_1]`.
   A `points_2d` control edits an input of kind `points_2d`, with optional `secondary_input` of kind `points_2d`, optional `gain_input` and `period_input` of kind `number`, optional `preset_input` of kind `choice`, optional `presets`, and optional `show_time_domain` toggle input.
+  Its `input` holds the poles of a rational function, and its `secondary_input` the zeros.
+  With `conjugate_lock`, true by default, the control starts with each point off the real axis paired with its complex conjugate.
+  Each of the `presets` carries an `id`, a `label`, 1 to 6 `poles`, optional `zeros`, at most 5 and not more than its poles, and an optional finite `gain`.
+  A reader rejects a preset outside these counts, and a preset whose `poles` or `zeros` lie outside the counts of the input that holds them.
 - `action-control`. An `action` control carries a `label`, a start time `from` (a step id or finite seconds), and a stop target `to` (a step id or finite seconds).
   A writer lists the feature `controls.action` in `requires` (section 4) for a scene with an `action` control.
 
@@ -654,13 +668,13 @@ The features of version 0.6 are the following.
 - `layers.label` is the `label` layer (rule `label`).
 - `layers.points` is the `points` layer (rule `points`).
 - `inputs.number` is an input of kind `number` (rule `number-input`).
-- `inputs.points_2d` is an input of kind `points_2d` (rule `points-2d`).
+- `inputs.points_2d` is an input of kind `points_2d`, and the `points_2d` control that edits it (rules `points-2d` and `control`).
 - `layers.morph` is the `morph` layer (rule `morph`).
 - `layers.surface` is the `surface` layer (rule `surface`).
 - `controls.action` is the `action` control (rule `action-control`).
 
 Several keys are not features, since a reader that ignores one of them still draws every trajectory, only at another scale, from another side, at another pace, or at another opacity.
-They are the `aspect` of a `2d` camera, the `fit` of a `trajectories` layer, the `stretch` and the `auto_rotate` of a `3d` camera, the `seconds` and the `end` of the clock, the keyframed values of opacity, of a marker's size, and of a split's ratio, the parts of rule `timeline-parts`, the `steps` (rule `steps`), the markers, glows, dashes, fills, and threshold colors of a `trajectories` layer, the color of the marker of a `points` layer, the box of an axes layer, the margin and the opacity of a declared panel, the image of a body, the font and the gutter of the theme, the `color` and `show_range` keys of controls, the `points_2d` picker control, the `roc_status` readout part, and the overlays.
+They are the `aspect` of a `2d` camera, the `fit` of a `trajectories` layer, the `stretch` and the `auto_rotate` of a `3d` camera, the `seconds` and the `end` of the clock, the keyframed values of opacity, of a marker's size, and of a split's ratio, the parts of rule `timeline-parts`, the `steps` (rule `steps`), the markers, glows, dashes, fills, and threshold colors of a `trajectories` layer, the color of the marker of a `points` layer, the box of an axes layer, the margin and the opacity of a declared panel, the image of a body, the font and the gutter of the theme, the `color` and `show_range` keys of controls, the `roc_status` readout part, and the overlays.
 
 The following features do not exist yet.
 They are reserved here so that they can be listed in `requires` once they exist.

@@ -118,6 +118,7 @@ myst_substitutions = {
     "spec_link": f"[`schema/{SCENE_FORMAT}/tycho-scene.md`](site:schema/{SCENE_FORMAT}/tycho-scene.md)",
 }
 for _page in EXAMPLE_PAGES:
+    # the tags of `only` and the MyST substitutions are read as Jinja names, which do not take a hyphen
     _key = _page.replace("-", "_")
     _path = EXAMPLES / f"{_page}.html"
     if _path.is_file():

@@ -164,7 +164,7 @@ def test_s_to_z_example_builds_a_valid_scene(tmp_path):
     build = _example("s-to-z")
     runtime = None if (ROOT / "src" / "pytycho" / "_static" / "tycho.js").is_file() else ""
     html_path = build.build(tmp_path, write_page=True, runtime=runtime)
-    doc = json.loads((tmp_path / "s-to-z.tys").read_text())
+    doc = json.loads((tmp_path / "s-to-z.tys").read_text(encoding="utf-8"))
     assert doc["version"] == "0.6"
     assert len(doc["steps"]) == 10
     jsonschema = pytest.importorskip("jsonschema")
@@ -183,7 +183,7 @@ def test_s_to_z_example_builds_a_valid_scene(tmp_path):
     assert "<script src=" not in html
 
     slide_html_path = build.build(tmp_path, write_page=True, slide=True, runtime=runtime)
-    slide_doc = json.loads((tmp_path / "s-to-z-slide.tys").read_text())
+    slide_doc = json.loads((tmp_path / "s-to-z-slide.tys").read_text(encoding="utf-8"))
     jsonschema.validate(slide_doc, SCHEMA)
     assert slide_doc["clock"]["seconds"] == 25.0
     assert slide_doc["clock"]["end"] == "stop"

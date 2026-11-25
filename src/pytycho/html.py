@@ -72,24 +72,33 @@ def build_html(
     title: str | None = None,
     runtime: str | None = None,
     kiosk: bool = False,
+    minimal: bool | str = False,
 ) -> str:
     """Renders the page as a string.
 
     ``document`` is the scene as a dict or as the text of ``scene.tys``. ``title`` defaults to the
-    scene's title. ``kiosk`` hides the controls and autoplays, for slides. ``runtime`` overrides the
-    bundled runtime, for development. Raises :class:`ValueError` when the base64 of the scene or
-    of the data is longer than :data:`MAX_STRING`.
+    scene's title. ``kiosk`` hides the controls and autoplays, for slides. ``minimal`` applies the
+    viewer's ``minimal`` attribute, either as a flag or a token string such as ``"slide"``.
+    ``runtime`` overrides the bundled runtime, for development. Raises :class:`ValueError` when
+    the base64 of the scene or of the data is longer than :data:`MAX_STRING`.
     """
     if title is None:
-        title = (json.loads(document) if isinstance(document, str) else document).get("title", "TyCHO")
+        title = (json.loads(document) if isinstance(document, str) else document).get("title") or "TyCHO"
     js = runtime if runtime is not None else runtime_js()
     if "</script" in js.lower():
         raise ValueError("the runtime bundle contains a closing script tag")
     scene_b64, data_b64 = _encoded(document, container)
     page = _resource("template.html")
+    attrs = ""
+    if kiosk:
+        attrs += " kiosk"
+    if minimal is True:
+        attrs += " minimal"
+    elif isinstance(minimal, str) and minimal:
+        attrs += f' minimal="{html_escape.escape(minimal)}"'
     for key, value in (
         ("{{TITLE}}", html_escape.escape(str(title))),
-        ("{{VIEWER}}", _viewer(scene_b64, data_b64, " kiosk" if kiosk else "")),
+        ("{{VIEWER}}", _viewer(scene_b64, data_b64, attrs)),
         ("{{RUNTIME}}", js),  # last, so that a placeholder inside the runtime is not substituted
     ):
         page = page.replace(key, value)

@@ -907,6 +907,8 @@ describe('a viewer embedded on a page, under a DOM stand-in', () => {
     });
     it('keeps the Add panel group and the icons of the panel headers under minimal="panels", for a slide on which panels are added by hand', async () => {
       expect((await live({ minimal: 'panels' })).v.root.className).toBe('root minimal keep-panels');
+      expect((await live({ minimal: 'slide' })).v.root.className).toBe('root minimal slide');
+      expect((await live({ minimal: 'panels slide' })).v.root.className).toBe('root minimal keep-panels slide');
       expect((await live({ minimal: 'controls' })).v.root.className).toBe('root minimal');
     });
     it('links a colorbar to its parameter input in kiosk mode too, so that a click on the bar of a kiosk page sets the eccentricity', async () => {

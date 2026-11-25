@@ -595,10 +595,16 @@ def test_build_embed_holds_the_element_its_blocks_and_attributes_but_not_the_run
     assert "customElements" not in embed
 
 
-def test_build_html_and_build_embed_write_the_same_element():
+def test_build_html_and_build_embed_write_the_same_element(tmp_path):
     scene = rotating_loop()
     document, data = scene.to_document(), scene.to_container()
     assert ty.build_embed(document, data, kiosk=True) in ty.build_html(document, data, runtime="", kiosk=True)
+    assert ty.build_embed(document, data, minimal="slide") in ty.build_html(document, data, runtime="", minimal="slide")
+    out = tmp_path / "slide.html"
+    scene.write_html(out, title="Slide Title", minimal="slide", runtime="")
+    page = out.read_text(encoding="utf-8")
+    assert "<title>Slide Title</title>" in page
+    assert '<tycho-viewer minimal="slide">' in page
 
 
 @pytest.mark.parametrize("attributes", [{"theme": "sepia"}, {"scene": "a.tys"}, {"data": "a.tyd"}, {"onload x": "container"}])
